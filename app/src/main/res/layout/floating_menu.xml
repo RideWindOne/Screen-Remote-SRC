@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="48dp"
+    android:orientation="horizontal"
+    android:background="@drawable/floating_menu_bg"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp"
+    android:gravity="center_vertical">
+
+    <!-- 返回键 -->
+    <ImageButton
+        android:id="@+id/btn_back"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_back"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Back" />
+
+    <!-- 主页键 -->
+    <ImageButton
+        android:id="@+id/btn_home"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_home"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Home" />
+
+    <!-- 最近任务（多任务） -->
+    <ImageButton
+        android:id="@+id/btn_recent"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_recent"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Recents" />
+
+    <!-- 键盘 -->
+    <ImageButton
+        android:id="@+id/btn_keyboard"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_keyboard"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Keyboard" />
+
+    <!-- 更多菜单 -->
+    <ImageButton
+        android:id="@+id/btn_menu"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_menu"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Options" />
+
+    <!-- 断开连接 -->
+    <ImageButton
+        android:id="@+id/btn_close"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_close"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Disconnect" />
+
+</LinearLayout>

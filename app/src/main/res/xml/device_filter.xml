@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ADB 设备过滤器 -->
+    <!-- class="255" (Vendor Specific), subclass="66" (ADB), protocol="1" (ADB) -->
+    <usb-device class="255" subclass="66" protocol="1" />
+</resources>

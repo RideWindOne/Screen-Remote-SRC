@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 内部文件目录：日志文件、ADB 密钥 -->
+    <files-path
+        name="files"
+        path="." />
+    
+    <!-- 外部文件目录：用户导出的文件 -->
+    <external-files-path
+        name="external_files"
+        path="." />
+</paths>
