@@ -11,7 +11,6 @@ import kotlin.collections.filter
  * 用于将扁平的分组列表转换为层级树形结构，便于 UI 展示。
  */
 object GroupTreeUtils {
-
     /**
      * 构建分组树形结构
      *
@@ -44,17 +43,22 @@ object GroupTreeUtils {
         val groupMap = groups.associateBy { it.path }
         val rootNodes = mutableListOf<GroupTreeNode>()
 
-        fun buildNode(path: String, level: Int): GroupTreeNode? {
+        fun buildNode(
+            path: String,
+            level: Int,
+        ): GroupTreeNode? {
             val group = groupMap[path] ?: return null
-            val children = groups
-                .filter { it.parentPath == path }
-                .sortedBy { it.name }
-                .mapNotNull { buildNode(it.path, level + 1) }
+            val children =
+                groups
+                    .filter { it.parentPath == path }
+                    .sortedBy { it.name }
+                    .mapNotNull { buildNode(it.path, level + 1) }
             return GroupTreeNode(group, children, false, level)
         }
 
         // 构建根节点的子节点
-        groups.filter { it.parentPath == "/" }
+        groups
+            .filter { it.parentPath == "/" }
             .sortedBy { it.name }
             .forEach { group ->
                 buildNode(group.path, 0)?.let { rootNodes.add(it) }

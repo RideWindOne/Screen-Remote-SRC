@@ -20,22 +20,28 @@ data class CodecInfo(
     val name: String,
     val type: String,
     val isEncoder: Boolean,
-    val capabilities: String
+    val capabilities: String,
 )
 
 enum class FilterType {
-    ALL, DECODER, ENCODER
+    ALL,
+    DECODER,
+    ENCODER,
 }
 
 enum class CodecTypeFilter {
-    ALL, OPUS, AAC, FLAC, RAW
+    ALL,
+    OPUS,
+    AAC,
+    FLAC,
+    RAW,
 }
 
 fun getAudioCodecs(
     txtSampleRate: String,
     txtMaxChannels: String,
     txtActual: String,
-    txtNoDetails: String
+    txtNoDetails: String,
 ): List<CodecInfo> {
     val result = mutableListOf<CodecInfo>()
 
@@ -47,39 +53,40 @@ fun getAudioCodecs(
 
             for (type in supportedTypes) {
                 if (type.startsWith("audio/")) {
-                    val capabilities = try {
-                        val caps = codecInfo.getCapabilitiesForType(type)
-                        buildString {
-                            val audioC = caps.audioCapabilities
-                            if (audioC != null) {
-                                append("$txtSampleRate: ")
-                                val rates = audioC.supportedSampleRateRanges
-                                if (rates != null && rates.isNotEmpty()) {
-                                    val lower = rates.first().lower
-                                    val upper = rates.first().upper
+                    val capabilities =
+                        try {
+                            val caps = codecInfo.getCapabilitiesForType(type)
+                            buildString {
+                                val audioC = caps.audioCapabilities
+                                if (audioC != null) {
+                                    append("$txtSampleRate: ")
+                                    val rates = audioC.supportedSampleRateRanges
+                                    if (rates != null && rates.isNotEmpty()) {
+                                        val lower = rates.first().lower
+                                        val upper = rates.first().upper
 
-                                    if (type == "audio/opus" && lower == 8000 && upper == 8000) {
-                                        append("8000-48000 Hz ($txtActual)")
-                                    } else {
-                                        append("$lower-$upper Hz")
+                                        if (type == "audio/opus" && lower == 8000 && upper == 8000) {
+                                            append("8000-48000 Hz ($txtActual)")
+                                        } else {
+                                            append("$lower-$upper Hz")
+                                        }
                                     }
-                                }
 
-                                val maxChannels = audioC.maxInputChannelCount
-                                append(" | $txtMaxChannels: $maxChannels")
+                                    val maxChannels = audioC.maxInputChannelCount
+                                    append(" | $txtMaxChannels: $maxChannels")
+                                }
                             }
+                        } catch (_: Exception) {
+                            txtNoDetails
                         }
-                    } catch (_: Exception) {
-                        txtNoDetails
-                    }
 
                     result.add(
                         CodecInfo(
                             name = codecInfo.name,
                             type = type,
                             isEncoder = codecInfo.isEncoder,
-                            capabilities = capabilities
-                        )
+                            capabilities = capabilities,
+                        ),
                     )
                 }
             }
@@ -88,7 +95,10 @@ fun getAudioCodecs(
 
         for (codecInfo in result) {
             if (codecInfo.name.contains("opus", ignoreCase = true) && !codecInfo.isEncoder) {
-                LogManager.d(LogTags.CODEC_TEST_SCREEN, "Opus 解码器: ${codecInfo.name}, 类型: ${codecInfo.type}, 能力: ${codecInfo.capabilities}")
+                LogManager.d(
+                    LogTags.CODEC_TEST_SCREEN,
+                    "Opus 解码器: ${codecInfo.name}, 类型: ${codecInfo.type}, 能力: ${codecInfo.capabilities}",
+                )
             }
         }
 
@@ -100,10 +110,12 @@ fun getAudioCodecs(
     return result
 }
 
-suspend fun testAudioDecoder(mimeType: String, decoderName: String, tts: TextToSpeech?) = withContext(Dispatchers.IO) {
+suspend fun testAudioDecoder(
+    mimeType: String,
+    decoderName: String,
+    tts: TextToSpeech?,
+) = withContext(Dispatchers.IO) {
     try {
-        LogManager.d(LogTags.CODEC_TEST_SCREEN, "开始测试解码器: $mimeType 解码器: $decoderName")
-
         val ttsResult = generateTTSAudio(tts)
         var pcmData: ByteArray
         var ttsSampleRate: Int
@@ -113,28 +125,24 @@ suspend fun testAudioDecoder(mimeType: String, decoderName: String, tts: TextToS
             pcmData = ttsResult.first
             ttsSampleRate = ttsResult.second
             ttsChannelCount = ttsResult.third
-            LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS 原始音频: $ttsSampleRate Hz, $ttsChannelCount 声道, ${pcmData.size} 字节")
         } else {
-            LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 生成失败，使用哔声")
             ttsSampleRate = 48000
             ttsChannelCount = 2
             pcmData = generateBeep(sampleRate = ttsSampleRate, channels = ttsChannelCount)
         }
 
-        val targetSampleRate = when (mimeType) {
-            "audio/3gpp" -> 8000
-            "audio/amr-wb" -> 16000
-            else -> 48000
-        }
+        val targetSampleRate =
+            when (mimeType) {
+                "audio/3gpp" -> 8000
+                "audio/amr-wb" -> 16000
+                else -> 48000
+            }
 
         val targetChannelCount = if (mimeType.startsWith("audio/amr")) 1 else 2
 
         if (ttsSampleRate != targetSampleRate || ttsChannelCount != targetChannelCount) {
-            LogManager.d(LogTags.CODEC_TEST_SCREEN, "重采样: $ttsSampleRate Hz -> $targetSampleRate Hz, $ttsChannelCount -> $targetChannelCount 声道")
             pcmData = resamplePCM(pcmData, ttsSampleRate, ttsChannelCount, targetSampleRate, targetChannelCount)
         }
-
-        LogManager.d(LogTags.CODEC_TEST_SCREEN, "目标格式: $targetSampleRate Hz, $targetChannelCount 声道, ${pcmData.size} 字节")
 
         if (mimeType == "audio/raw") {
             playRawAudio(pcmData, targetSampleRate, targetChannelCount)
@@ -142,17 +150,19 @@ suspend fun testAudioDecoder(mimeType: String, decoderName: String, tts: TextToS
         }
 
         val encoder = MediaCodec.createEncoderByType(mimeType)
-        val encoderFormat = MediaFormat.createAudioFormat(mimeType, targetSampleRate, targetChannelCount).apply {
-            setInteger(MediaFormat.KEY_BIT_RATE, 128000)
-            when (mimeType) {
-                MediaFormat.MIMETYPE_AUDIO_AAC -> {
-                    setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-                }
-                MediaFormat.MIMETYPE_AUDIO_FLAC -> {
-                    setInteger(MediaFormat.KEY_FLAC_COMPRESSION_LEVEL, 5)
+        val encoderFormat =
+            MediaFormat.createAudioFormat(mimeType, targetSampleRate, targetChannelCount).apply {
+                setInteger(MediaFormat.KEY_BIT_RATE, 128000)
+                when (mimeType) {
+                    MediaFormat.MIMETYPE_AUDIO_AAC -> {
+                        setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+                    }
+
+                    MediaFormat.MIMETYPE_AUDIO_FLAC -> {
+                        setInteger(MediaFormat.KEY_FLAC_COMPRESSION_LEVEL, 5)
+                    }
                 }
             }
-        }
         encoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         encoder.start()
 
@@ -206,6 +216,7 @@ suspend fun testAudioDecoder(mimeType: String, decoderName: String, tts: TextToS
                         outputDone = true
                     }
                 }
+
                 outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                     val format = encoder.outputFormat
                     if (csdData == null) {
@@ -236,17 +247,29 @@ suspend fun testAudioDecoder(mimeType: String, decoderName: String, tts: TextToS
         decoder.configure(decoderFormat, null, null, 0)
         decoder.start()
 
-        val channelConfig = if (targetChannelCount == 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
-        val bufferSize = AudioTrack.getMinBufferSize(targetSampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT) * 2
-        val audioTrack = AudioTrack.Builder()
-            .setAudioFormat(AudioFormat.Builder()
-                .setSampleRate(targetSampleRate)
-                .setChannelMask(channelConfig)
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .build())
-            .setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
+        val channelConfig =
+            if (targetChannelCount ==
+                2
+            ) {
+                AudioFormat.CHANNEL_OUT_STEREO
+            } else {
+                AudioFormat.CHANNEL_OUT_MONO
+            }
+        val bufferSize =
+            AudioTrack.getMinBufferSize(targetSampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT) * 2
+        val audioTrack =
+            AudioTrack
+                .Builder()
+                .setAudioFormat(
+                    AudioFormat
+                        .Builder()
+                        .setSampleRate(targetSampleRate)
+                        .setChannelMask(channelConfig)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .build(),
+                ).setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
 
         audioTrack.play()
 
@@ -297,57 +320,92 @@ suspend fun testAudioDecoder(mimeType: String, decoderName: String, tts: TextToS
         audioTrack.release()
         decoder.stop()
         decoder.release()
-
-        LogManager.d(LogTags.CODEC_TEST_SCREEN, "✅ 测试成功: $mimeType")
-
     } catch (e: Exception) {
-        LogManager.e(LogTags.CODEC_TEST_SCREEN, "❌ 测试失败: $mimeType 解码器: $decoderName - ${e.message}", e)
+        LogManager.e(LogTags.CODEC_TEST_SCREEN, "测试失败: $mimeType - ${e.message}", e)
     }
 }
 
-private fun playRawAudio(pcmData: ByteArray, sampleRate: Int, channelCount: Int) {
+private fun playRawAudio(
+    pcmData: ByteArray,
+    sampleRate: Int,
+    channelCount: Int,
+) {
     val channelConfig = if (channelCount == 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
     val bufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT) * 2
-    val audioTrack = AudioTrack.Builder()
-        .setAudioFormat(AudioFormat.Builder()
-            .setSampleRate(sampleRate)
-            .setChannelMask(channelConfig)
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-            .build())
-        .setBufferSizeInBytes(bufferSize)
-        .setTransferMode(AudioTrack.MODE_STREAM)
-        .build()
+    val audioTrack =
+        AudioTrack
+            .Builder()
+            .setAudioFormat(
+                AudioFormat
+                    .Builder()
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(channelConfig)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .build(),
+            ).setBufferSizeInBytes(bufferSize)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
 
     audioTrack.play()
     audioTrack.write(pcmData, 0, pcmData.size)
     Thread.sleep(1500)
     audioTrack.stop()
     audioTrack.release()
-
-    LogManager.d(LogTags.CODEC_TEST_SCREEN, "✅ RAW 音频播放完成")
 }
 
 private suspend fun generateTTSAudio(tts: TextToSpeech?): Triple<ByteArray, Int, Int>? =
     withContext(Dispatchers.IO) {
-        if (tts == null) return@withContext null
+        if (tts == null) {
+            LogManager.w(LogTags.CODEC_TEST_SCREEN, "TTS 实例为 null")
+            return@withContext null
+        }
 
         val file = java.io.File.createTempFile("tts", ".wav")
         try {
             var done = false
+            var hasError = false
+
             @Suppress("OVERRIDE_DEPRECATION")
-            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-                override fun onDone(utteranceId: String?) { done = true }
-                override fun onError(utteranceId: String?) { done = true }
-            })
+            tts.setOnUtteranceProgressListener(
+                object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS 开始合成")
+                    }
+
+                    override fun onDone(utteranceId: String?) {
+                        LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS 合成完成")
+                        done = true
+                    }
+
+                    override fun onError(utteranceId: String?) {
+                        LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 合成出错 (onError 回调)")
+                        done = true
+                        hasError = true
+                    }
+                },
+            )
 
             val result = tts.synthesizeToFile("Hello World", null, file, "tts_gen")
+            LogManager.d(LogTags.CODEC_TEST_SCREEN, "synthesizeToFile 返回: $result (SUCCESS=${TextToSpeech.SUCCESS})")
+
             if (result == TextToSpeech.SUCCESS) {
                 var waitCount = 0
                 while (!done && waitCount < 50) {
                     delay(100)
                     waitCount++
                 }
+
+                if (!done) {
+                    LogManager.w(LogTags.CODEC_TEST_SCREEN, "TTS 合成超时（5秒）")
+                    return@withContext null
+                }
+
+                if (hasError) {
+                    LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 合成失败")
+                    return@withContext null
+                }
+
+                LogManager.d(LogTags.CODEC_TEST_SCREEN, "文件存在: ${file.exists()}, 大小: ${file.length()} 字节")
 
                 if (file.exists() && file.length() > 44) {
                     val wavData = file.readBytes()
@@ -360,20 +418,32 @@ private suspend fun generateTTSAudio(tts: TextToSpeech?): Triple<ByteArray, Int,
                     val pcmData = wavData.copyOfRange(44, wavData.size)
 
                     val duration = pcmData.size / (sampleRate * channels * 2.0)
-                    LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS 生成音频: $sampleRate Hz, $channels 声道, ${pcmData.size} 字节 (${"%.2f".format(duration)} 秒)")
+                    LogManager.d(
+                        LogTags.CODEC_TEST_SCREEN,
+                        "TTS 生成音频: $sampleRate Hz, $channels 声道, ${pcmData.size} 字节 (${"%.2f".format(duration)} 秒)",
+                    )
 
                     return@withContext Triple(pcmData, sampleRate, channels)
+                } else {
+                    LogManager.w(LogTags.CODEC_TEST_SCREEN, "文件无效或太小")
                 }
+            } else {
+                LogManager.e(LogTags.CODEC_TEST_SCREEN, "synthesizeToFile 返回失败: $result")
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 生成失败: ${e.message}", e)
+            LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 异常: ${e.message}", e)
         } finally {
             file.delete()
         }
         return@withContext null
     }
 
-private fun generateBeep(frequency: Double = 800.0, sampleRate: Int, channels: Int, duration: Double = 0.5): ByteArray {
+private fun generateBeep(
+    frequency: Double = 800.0,
+    sampleRate: Int,
+    channels: Int,
+    duration: Double = 0.5,
+): ByteArray {
     val numSamples = (sampleRate * duration).toInt()
     val buffer = ByteBuffer.allocate(numSamples * channels * 2)
 
@@ -392,7 +462,7 @@ private fun resamplePCM(
     srcRate: Int,
     srcChannels: Int,
     dstRate: Int,
-    dstChannels: Int
+    dstChannels: Int,
 ): ByteArray {
     val srcSamples = input.size / (srcChannels * 2)
     val dstSamples = (srcSamples * dstRate.toDouble() / srcRate).toInt()

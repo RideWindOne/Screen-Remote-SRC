@@ -1,6 +1,6 @@
 /*
  * USB 设备选择对话框
- * 
+ *
  * 功能：
  * - 扫描并显示可用的 USB 设备
  * - 请求 USB 权限
@@ -45,14 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.AppTextSizes
+import com.mobile.scrcpy.android.core.designsystem.component.DialogContainer
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
+import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.infrastructure.adb.usb.UsbDeviceInfo
 import kotlinx.coroutines.launch
 
-import com.mobile.scrcpy.android.core.i18n.CommonTexts
 /**
  * USB 设备选择对话框
- * 
+ *
  * @param onDismiss 关闭对话框回调
  * @param onScanDevices 扫描设备回调
  * @param onConnectDevice 连接设备回调
@@ -65,56 +66,52 @@ fun UsbDeviceDialog(
     onScanDevices: suspend () -> Unit,
     onConnectDevice: suspend (UsbDevice) -> Result<String>,
     usbDevices: List<UsbDeviceInfo>,
-    isScanning: Boolean
+    isScanning: Boolean,
 ) {
     val scope = rememberCoroutineScope()
     var isConnecting by remember { mutableStateOf(false) }
     var connectingDeviceId by remember { mutableStateOf<String?>(null) }
-    
+
     // 自动扫描一次
     LaunchedEffect(Unit) {
         onScanDevices()
     }
-    
+
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO)
-                .fillMaxHeight(0.7f),
-            shape = RoundedCornerShape(AppDimens.windowCornerRadius),
-            color = MaterialTheme.colorScheme.surface
-        ) {
+        DialogContainer(maxHeightRatio = 0.7f) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(AppDimens.paddingStandard)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = AppDimens.paddingStandard, end = AppDimens.paddingStandard),
             ) {
                 // 标题栏
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = AppDimens.paddingStandard),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = AppDimens.paddingStandard),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = AdbTexts.USB_DEVICE_LIST_TITLE.get(),
                         fontSize = AppTextSizes.title,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
-                    
+
                     TextButton(
                         onClick = onDismiss,
-                        enabled = !isConnecting
+                        enabled = !isConnecting,
                     ) {
                         Text(CommonTexts.BUTTON_CLOSE.get())
                     }
                 }
-                
+
                 HorizontalDivider()
 
                 Spacer(modifier = Modifier.height(AppDimens.spacingStandard))
-                
+
                 // 扫描按钮
                 Button(
                     onClick = {
@@ -123,44 +120,49 @@ fun UsbDeviceDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isScanning && !isConnecting
+                    enabled = !isScanning && !isConnecting,
                 ) {
                     if (isScanning) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text(
-                        if (isScanning) AdbTexts.USB_SCANNING_DEVICES.get()
-                        else AdbTexts.USB_SCAN_BUTTON.get()
+                        if (isScanning) {
+                            AdbTexts.USB_SCANNING_DEVICES.get()
+                        } else {
+                            AdbTexts.USB_SCAN_BUTTON.get()
+                        },
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(AppDimens.spacingStandard))
-                
+
                 // 设备列表
                 if (usbDevices.isEmpty() && !isScanning) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = AppTextSizes.body
+                            fontSize = AppTextSizes.body,
                         )
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(usbDevices.size) { index ->
                             val deviceInfo = usbDevices[index]
@@ -176,12 +178,12 @@ fun UsbDeviceDialog(
                                         val result = onConnectDevice(deviceInfo.device)
                                         isConnecting = false
                                         connectingDeviceId = null
-                                        
+
                                         if (result.isSuccess) {
                                             onDismiss()
                                         }
                                     }
-                                }
+                                },
                             )
                         }
                     }

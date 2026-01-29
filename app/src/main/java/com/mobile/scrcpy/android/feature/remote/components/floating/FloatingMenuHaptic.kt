@@ -21,9 +21,9 @@ internal object HapticHelper {
         vibrator = ApiCompatHelper.getVibratorCompat(context)
 
         if (vibrator?.hasVibrator() == true) {
-            Log.d(LogTags.FLOATING_CONTROLLER, "✅ Vibrator 初始化成功")
+            Log.d(LogTags.FLOATING_CONTROLLER, "Vibrator 初始化成功")
         } else {
-            Log.w(LogTags.FLOATING_CONTROLLER, "⚠️ 设备不支持触感")
+            Log.w(LogTags.FLOATING_CONTROLLER, "设备不支持触感")
         }
     }
 
@@ -43,14 +43,20 @@ internal object HapticHelper {
 internal fun performHapticFeedbackCompat(feedbackConstant: Int) {
     // 映射 HapticFeedbackConstants 到触感类型
     val rejectConstant = ApiCompatHelper.getHapticFeedbackConstant("reject")
-    val type = when (feedbackConstant) {
-        HapticFeedbackConstants.CLOCK_TICK,
-        HapticFeedbackConstants.KEYBOARD_TAP,
-        HapticFeedbackConstants.VIRTUAL_KEY -> "tick"
-        HapticFeedbackConstants.CONTEXT_CLICK -> "click"
-        HapticFeedbackConstants.LONG_PRESS,
-        rejectConstant -> "heavy"
-        else -> "tick"
-    }
+    val type =
+        when (feedbackConstant) {
+            HapticFeedbackConstants.CLOCK_TICK,
+            HapticFeedbackConstants.KEYBOARD_TAP,
+            HapticFeedbackConstants.VIRTUAL_KEY,
+            -> "tick"
+
+            HapticFeedbackConstants.CONTEXT_CLICK -> "click"
+
+            HapticFeedbackConstants.LONG_PRESS,
+            rejectConstant,
+            -> "heavy"
+
+            else -> "tick"
+        }
     HapticHelper.vibrate(type)
 }

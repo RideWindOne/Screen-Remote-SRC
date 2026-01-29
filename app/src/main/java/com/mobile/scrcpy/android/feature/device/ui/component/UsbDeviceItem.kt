@@ -28,12 +28,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.AppTextSizes
+import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import com.mobile.scrcpy.android.infrastructure.adb.usb.UsbDeviceInfo
 
-import com.mobile.scrcpy.android.core.i18n.AdbTexts
 /**
  * USB 设备列表项 - 通用组件
- * 
+ *
  * @param deviceInfo USB 设备信息
  * @param isSelected 是否选中（用于选择模式）
  * @param isConnecting 是否正在连接（用于连接模式）
@@ -48,106 +48,112 @@ fun UsbDeviceItem(
     isConnecting: Boolean = false,
     showConnectButton: Boolean = false,
     showPermissionHint: Boolean = true,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
-            .clickable(enabled = !isConnecting) { onClick() },
-        color = if (isSelected) 
-            MaterialTheme.colorScheme.primaryContainer 
-        else 
-            MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
+                .clickable(enabled = !isConnecting) { onClick() },
+        color =
+            if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+        tonalElevation = 2.dp,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // USB 图标
             Icon(
                 imageVector = Icons.Default.Usb,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = if (deviceInfo.hasPermission) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                tint =
+                    if (deviceInfo.hasPermission) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
-            
+
             Spacer(modifier = Modifier.width(12.dp))
-            
+
             // 设备信息
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = deviceInfo.getDisplayName(),
                     fontSize = AppTextSizes.body,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 // 序列号
                 if (deviceInfo.serialNumber.isNotBlank()) {
                     Text(
                         text = "${AdbTexts.USB_SERIAL_NUMBER.get()}: ${deviceInfo.serialNumber}",
                         fontSize = AppTextSizes.caption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
                     Text(
                         text = "${AdbTexts.USB_SERIAL_NUMBER.get()}: ",
                         fontSize = AppTextSizes.caption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                
+
                 // 权限状态
                 if (showPermissionHint) {
                     Spacer(modifier = Modifier.height(2.dp))
-                    
+
                     Row(
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = "${AdbTexts.USB_PERMISSION.get()}: ",
                             fontSize = AppTextSizes.caption,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        
+
                         if (deviceInfo.hasPermission) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = Color(0xFF4CAF50)
+                                tint = Color(0xFF4CAF50),
                             )
                             Text(
                                 text = AdbTexts.USB_PERMISSION_GRANTED_STATUS.get(),
                                 fontSize = AppTextSizes.caption,
-                                color = Color(0xFF4CAF50)
+                                color = Color(0xFF4CAF50),
                             )
                         } else {
                             Text(
                                 text = "${AdbTexts.USB_PERMISSION_NOT_GRANTED_STATUS.get()} (${AdbTexts.USB_CLICK_TO_REQUEST_PERMISSION.get()})",
                                 fontSize = AppTextSizes.caption,
-                                color = MaterialTheme.colorScheme.error
+                                color = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
                 }
             }
-            
+
             // 右侧操作区域
             if (isConnecting) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.dp,
                 )
             } else if (showConnectButton && deviceInfo.hasPermission) {
                 TextButton(onClick = onClick) {
@@ -158,7 +164,7 @@ fun UsbDeviceItem(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }

@@ -17,8 +17,9 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class PreferencesManager(private val context: Context) {
-    
+class PreferencesManager(
+    private val context: Context,
+) {
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val LANGUAGE = stringPreferencesKey("language")
@@ -28,31 +29,34 @@ class PreferencesManager(private val context: Context) {
         val FILE_TRANSFER_PATH = stringPreferencesKey("file_transfer_path")
         val ENABLE_FLOATING_HAPTIC_FEEDBACK = booleanPreferencesKey("enable_floating_haptic_feedback")
     }
-    
-    val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { preferences ->
-        AppSettings(
-            themeMode = preferences[Keys.THEME_MODE]?.let { 
-                try {
-                    ThemeMode.valueOf(it)
-                } catch (_: IllegalArgumentException) {
-                    ThemeMode.SYSTEM
-                }
-            } ?: ThemeMode.SYSTEM,
-            language = preferences[Keys.LANGUAGE]?.let {
-                try {
-                    AppLanguage.valueOf(it)
-                } catch (_: IllegalArgumentException) {
-                    AppLanguage.AUTO
-                }
-            } ?: AppLanguage.AUTO,
-            keepAliveMinutes = preferences[Keys.KEEP_ALIVE_MINUTES] ?: 5,
-            showOnLockScreen = preferences[Keys.SHOW_ON_LOCK_SCREEN] ?: false,
-            enableActivityLog = preferences[Keys.ENABLE_ACTIVITY_LOG] ?: true,
-            fileTransferPath = preferences[Keys.FILE_TRANSFER_PATH] ?: DEFAULT_FILE_TRANSFER_PATH,
-            enableFloatingHapticFeedback = preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] ?: true
-        )
-    }
-    
+
+    val settingsFlow: Flow<AppSettings> =
+        context.dataStore.data.map { preferences ->
+            AppSettings(
+                themeMode =
+                    preferences[Keys.THEME_MODE]?.let {
+                        try {
+                            ThemeMode.valueOf(it)
+                        } catch (_: IllegalArgumentException) {
+                            ThemeMode.SYSTEM
+                        }
+                    } ?: ThemeMode.SYSTEM,
+                language =
+                    preferences[Keys.LANGUAGE]?.let {
+                        try {
+                            AppLanguage.valueOf(it)
+                        } catch (_: IllegalArgumentException) {
+                            AppLanguage.AUTO
+                        }
+                    } ?: AppLanguage.AUTO,
+                keepAliveMinutes = preferences[Keys.KEEP_ALIVE_MINUTES] ?: 5,
+                showOnLockScreen = preferences[Keys.SHOW_ON_LOCK_SCREEN] ?: false,
+                enableActivityLog = preferences[Keys.ENABLE_ACTIVITY_LOG] ?: true,
+                fileTransferPath = preferences[Keys.FILE_TRANSFER_PATH] ?: DEFAULT_FILE_TRANSFER_PATH,
+                enableFloatingHapticFeedback = preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] ?: true,
+            )
+        }
+
     suspend fun updateSettings(settings: AppSettings) {
         context.dataStore.edit { preferences ->
             preferences[Keys.THEME_MODE] = settings.themeMode.name

@@ -18,13 +18,13 @@ data class ScrcpyOptions(
     val videoCodec: String = "h264",
     val audioCodec: String = "opus",
     val audioEncoder: String? = null,
-    val audioBufferMs: Int? = null
+    val audioBufferMs: Int? = null,
 ) {
     /**
      * 转换为 scrcpy-server 启动参数
      */
-    fun toServerArgs(): List<String> {
-        return buildList {
+    fun toServerArgs(): List<String> =
+        buildList {
             add("log_level=info")
             add("max_size=$maxSize")
             add("video_bit_rate=$bitRate")
@@ -39,7 +39,7 @@ data class ScrcpyOptions(
                 add("video_encoder=$encoderName")
             }
             add("power_off_on_close=$powerOffOnClose")
-            
+
             // 音频参数
             if (enableAudio) {
                 add("audio_codec=$audioCodec")
@@ -54,23 +54,19 @@ data class ScrcpyOptions(
                 add("audio=false")
             }
         }
-    }
 }
 
 /**
  * 解析 maxSize 字符串为整数
  */
-fun String.parseMaxSize(): Int? {
-    return when {
+fun String.parseMaxSize(): Int? =
+    when {
         this.isEmpty() -> null
         this == "0" -> null
         else -> this.toIntOrNull()?.takeIf { it > 0 }
     }
-}
 
 /**
  * 将 maxSize 整数转换为字符串（用于存储）
  */
-fun Int?.toMaxSizeString(): String {
-    return this?.toString() ?: ""
-}
+fun Int?.toMaxSizeString(): String = this?.toString() ?: ""

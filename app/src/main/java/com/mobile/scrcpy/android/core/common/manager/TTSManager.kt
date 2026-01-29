@@ -40,19 +40,21 @@ object TTSManager {
                 if (status == TextToSpeech.SUCCESS) {
                     ttsInstance?.apply {
                         language = Locale.US
-                        setSpeechRate(1.0f)  // 语速：0.5-2.0，默认 1.0
-                        setPitch(1.0f)       // 音调：0.5-2.0，默认 1.0
+                        setSpeechRate(1.0f)
+                        setPitch(1.0f)
                     }
                     isInitialized = true
                     LogManager.d(LogTags.TTS_MANAGER, "TTS 初始化成功")
                 } else {
-                    LogManager.e(LogTags.TTS_MANAGER, "TTS 初始化失败: status=$status")
+                    LogManager.w(LogTags.TTS_MANAGER, "TTS 初始化失败，可能未安装 TTS 引擎")
+                    ttsInstance = null
                 }
                 isInitializing = false
             }
         } catch (e: Exception) {
             LogManager.e(LogTags.TTS_MANAGER, "TTS 初始化异常: ${e.message}", e)
             isInitializing = false
+            ttsInstance = null
         }
     }
     

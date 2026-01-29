@@ -2,27 +2,33 @@ package com.mobile.scrcpy.android.infrastructure.media.audio
 
 import android.media.MediaCodec
 import android.media.MediaFormat
-import java.nio.ByteBuffer
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import java.nio.ByteBuffer
 
 /**
  * AudioFormatHandler - 音频格式处理器
  * 负责配置包验证、解码器创建和配置
  */
 class AudioFormatHandler {
-
     /**
      * 验证配置包格式
      */
-    fun validateConfigPacket(codec: String, data: ByteArray): Boolean {
-        return when (codec.lowercase()) {
+    fun validateConfigPacket(
+        codec: String,
+        data: ByteArray,
+    ): Boolean =
+        when (codec.lowercase()) {
             "opus" -> validateOpusConfig(data)
-            "aac" -> data.size == 2  // AudioSpecificConfig: 2 字节
-            "flac" -> data.size == 34  // STREAMINFO: 34 字节
+
+            "aac" -> data.size == 2
+
+            // AudioSpecificConfig: 2 字节
+            "flac" -> data.size == 34
+
+            // STREAMINFO: 34 字节
             else -> false
         }
-    }
 
     /**
      * 验证 Opus 配置包
@@ -44,17 +50,18 @@ class AudioFormatHandler {
         val version = data[8].toInt() and 0xFF
         val channels = data[9].toInt() and 0xFF
         val preSkip = (data[10].toInt() and 0xFF) or ((data[11].toInt() and 0xFF) shl 8)
-        val sampleRate = (data[12].toInt() and 0xFF) or
-                        ((data[13].toInt() and 0xFF) shl 8) or
-                        ((data[14].toInt() and 0xFF) shl 16) or
-                        ((data[15].toInt() and 0xFF) shl 24)
+        val sampleRate =
+            (data[12].toInt() and 0xFF) or
+                ((data[13].toInt() and 0xFF) shl 8) or
+                ((data[14].toInt() and 0xFF) shl 16) or
+                ((data[15].toInt() and 0xFF) shl 24)
         val outputGain = (data[16].toInt() and 0xFF) or ((data[17].toInt() and 0xFF) shl 8)
         val channelMapping = data[18].toInt() and 0xFF
 
         LogManager.d(
             LogTags.AUDIO_DECODER,
             "OpusHead 详细: version=$version, channels=$channels, preSkip=$preSkip, " +
-            "sampleRate=$sampleRate, outputGain=$outputGain, channelMapping=$channelMapping"
+                "sampleRate=$sampleRate, outputGain=$outputGain, channelMapping=$channelMapping",
         )
 
         return true
@@ -63,9 +70,8 @@ class AudioFormatHandler {
     /**
      * 检查是否为 OpusHead 配置包
      */
-    fun isOpusHead(data: ByteArray): Boolean {
-        return data.size == 19 && String(data.copyOfRange(0, 8), Charsets.US_ASCII) == "OpusHead"
-    }
+    fun isOpusHead(data: ByteArray): Boolean =
+        data.size == 19 && String(data.copyOfRange(0, 8), Charsets.US_ASCII) == "OpusHead"
 
     /**
      * 创建解码器
@@ -74,7 +80,7 @@ class AudioFormatHandler {
         codec: String,
         sampleRate: Int,
         channelCount: Int,
-        configData: ByteArray?
+        configData: ByteArray?,
     ): MediaCodec? {
         return try {
             val mime = getMediaMimeType(codec) ?: return null
@@ -96,7 +102,6 @@ class AudioFormatHandler {
 
                 LogManager.d(LogTags.AUDIO_DECODER, "解码器创建成功: ${mediaCodec.name}")
                 return mediaCodec
-
             } catch (e: Exception) {
                 LogManager.e(LogTags.AUDIO_DECODER, "配置解码器失败: ${e.message}", e)
                 try {
@@ -105,7 +110,6 @@ class AudioFormatHandler {
                 }
                 return null
             }
-
         } catch (e: Exception) {
             LogManager.e(LogTags.AUDIO_DECODER, "创建解码器失败: ${e.message}", e)
             null
@@ -115,17 +119,25 @@ class AudioFormatHandler {
     /**
      * 获取 MIME 类型
      */
-    private fun getMediaMimeType(codec: String): String? {
-        return when (codec.lowercase()) {
-            "opus" -> MediaFormat.MIMETYPE_AUDIO_OPUS
-            "aac" -> MediaFormat.MIMETYPE_AUDIO_AAC
-            "flac" -> MediaFormat.MIMETYPE_AUDIO_FLAC
+    private fun getMediaMimeType(codec: String): String? =
+        when (codec.lowercase()) {
+            "opus" -> {
+                MediaFormat.MIMETYPE_AUDIO_OPUS
+            }
+
+            "aac" -> {
+                MediaFormat.MIMETYPE_AUDIO_AAC
+            }
+
+            "flac" -> {
+                MediaFormat.MIMETYPE_AUDIO_FLAC
+            }
+
             else -> {
                 LogManager.e(LogTags.AUDIO_DECODER, "不支持的编码格式: $codec")
                 null
             }
         }
-    }
 
     /**
      * 创建 MediaFormat
@@ -134,7 +146,7 @@ class AudioFormatHandler {
         mime: String,
         sampleRate: Int,
         channelCount: Int,
-        configData: ByteArray?
+        configData: ByteArray?,
     ): MediaFormat {
         val format = MediaFormat.createAudioFormat(mime, sampleRate, channelCount)
 

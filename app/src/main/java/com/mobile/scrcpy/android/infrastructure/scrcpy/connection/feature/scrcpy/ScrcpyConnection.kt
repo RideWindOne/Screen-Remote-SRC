@@ -1,10 +1,12 @@
 package com.mobile.scrcpy.android.infrastructure.scrcpy.connection.feature.scrcpy
 
 import android.content.Context
-import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
+import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.domain.model.ConnectionProgress
 import com.mobile.scrcpy.android.core.domain.model.ConnectionStep
 import com.mobile.scrcpy.android.core.domain.model.StepStatus
+import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
 import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionMetadataReader
@@ -17,7 +19,7 @@ import java.net.Socket
 
 /**
  * Scrcpy 连接管理器 - 负责建立和管理 Scrcpy 连接
- * 
+ *
  * 这是一个协调器类，将连接管理的各个职责委托给专门的组件：
  * - ConnectionStateMachine: 状态管理和进度跟踪
  * - ConnectionSocketManager: Socket 连接管理
@@ -28,22 +30,23 @@ import java.net.Socket
 class ScrcpyConnection(
     private val context: Context,
     private val adbConnectionManager: AdbConnectionManager,
-    private val localPort: Int = 27183
+    private val localPort: Int = 27183,
 ) {
     // 组件
     private val stateMachine = ConnectionStateMachine()
     private val socketManager = ConnectionSocketManager(localPort)
     private val metadataReader = ConnectionMetadataReader(socketManager)
     private val shellMonitor = ConnectionShellMonitor()
-    private val lifecycle = ConnectionLifecycle(
-        context,
-        adbConnectionManager,
-        localPort,
-        stateMachine,
-        socketManager,
-        metadataReader,
-        shellMonitor
-    )
+    private val lifecycle =
+        ConnectionLifecycle(
+            context,
+            adbConnectionManager,
+            localPort,
+            stateMachine,
+            socketManager,
+            metadataReader,
+            shellMonitor,
+        )
 
     // 公开属性
     val videoSocket: Socket?
@@ -68,9 +71,11 @@ class ScrcpyConnection(
         step: ConnectionStep,
         status: StepStatus,
         message: String = "",
-        error: String? = null
+        error: String? = null,
     ) {
+        LogManager.d(LogTags.SCRCPY_CLIENT, "更新进度: step=${step.name}, status=${status.name}, message=$message")
         stateMachine.updateProgress(step, status, message, error)
+        LogManager.d(LogTags.SCRCPY_CLIENT, "当前进度列表大小: ${stateMachine.connectionProgress.value.size}")
     }
 
     /**
@@ -92,14 +97,15 @@ class ScrcpyConnection(
         videoEncoder: String,
         enableAudio: Boolean,
         audioCodec: String,
+        keyFrameInterval: Int,
         audioEncoder: String,
         stayAwake: Boolean,
         turnScreenOff: Boolean,
         powerOffOnClose: Boolean,
         skipAdbConnect: Boolean,
-        onVideoResolution: (Int, Int) -> Unit
-    ): Result<Pair<VideoStream?, AudioStream?>> {
-        return lifecycle.connect(
+        onVideoResolution: (Int, Int) -> Unit,
+    ): Result<Pair<VideoStream?, AudioStream?>> =
+        lifecycle.connect(
             deviceId,
             maxSize,
             bitRate,
@@ -109,13 +115,13 @@ class ScrcpyConnection(
             enableAudio,
             audioCodec,
             audioEncoder,
+            keyFrameInterval,
             stayAwake,
             turnScreenOff,
             powerOffOnClose,
             skipAdbConnect,
-            onVideoResolution
+            onVideoResolution,
         )
-    }
 
     /**
      * 监控 shell 输出
@@ -127,7 +133,5 @@ class ScrcpyConnection(
     /**
      * 断开连接
      */
-    suspend fun disconnect(deviceId: String?): Result<Boolean> {
-        return lifecycle.disconnect(deviceId)
-    }
+    suspend fun disconnect(deviceId: String?): Result<Boolean> = lifecycle.disconnect(deviceId)
 }

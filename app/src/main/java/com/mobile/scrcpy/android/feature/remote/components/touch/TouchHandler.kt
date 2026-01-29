@@ -18,7 +18,7 @@ class TouchHandler(
     private val screenWidth: Int,
     private val screenHeight: Int,
     private val remoteWidth: Int,
-    private val remoteHeight: Int
+    private val remoteHeight: Int,
 ) {
     private var longPressJob: Job? = null
     private var isLongPressed = false
@@ -41,9 +41,9 @@ class TouchHandler(
                     x = x,
                     y = y,
                     screenWidth = remoteWidth,
-                    screenHeight = remoteHeight
+                    screenHeight = remoteHeight,
                 )
-                
+
                 // 启动长按检测
                 startLongPressDetection(x, y, pointerId)
             }
@@ -58,9 +58,9 @@ class TouchHandler(
                     x = x,
                     y = y,
                     screenWidth = remoteWidth,
-                    screenHeight = remoteHeight
+                    screenHeight = remoteHeight,
                 )
-                
+
                 // 取消长按检测（多指操作）
                 cancelLongPressDetection()
             }
@@ -77,10 +77,10 @@ class TouchHandler(
                         x = x,
                         y = y,
                         screenWidth = remoteWidth,
-                        screenHeight = remoteHeight
+                        screenHeight = remoteHeight,
                     )
                 }
-                
+
                 // 移动时取消长按检测
                 if (!isLongPressed) {
                     cancelLongPressDetection()
@@ -97,7 +97,7 @@ class TouchHandler(
                     x = x,
                     y = y,
                     screenWidth = remoteWidth,
-                    screenHeight = remoteHeight
+                    screenHeight = remoteHeight,
                 )
             }
 
@@ -111,9 +111,9 @@ class TouchHandler(
                     x = x,
                     y = y,
                     screenWidth = remoteWidth,
-                    screenHeight = remoteHeight
+                    screenHeight = remoteHeight,
                 )
-                
+
                 // 清理长按状态
                 cancelLongPressDetection()
                 isLongPressed = false
@@ -129,9 +129,9 @@ class TouchHandler(
                     x = x,
                     y = y,
                     screenWidth = remoteWidth,
-                    screenHeight = remoteHeight
+                    screenHeight = remoteHeight,
                 )
-                
+
                 cancelLongPressDetection()
                 isLongPressed = false
             }
@@ -143,16 +143,21 @@ class TouchHandler(
     /**
      * 启动长按检测
      */
-    private fun startLongPressDetection(x: Int, y: Int, pointerId: Long) {
+    private fun startLongPressDetection(
+        x: Int,
+        y: Int,
+        pointerId: Long,
+    ) {
         cancelLongPressDetection()
         isLongPressed = false
-        
-        longPressJob = coroutineScope.launch {
-            delay(longPressDelay)
-            // 长按触发
-            isLongPressed = true
-            onLongPress(x, y, pointerId)
-        }
+
+        longPressJob =
+            coroutineScope.launch {
+                delay(longPressDelay)
+                // 长按触发
+                isLongPressed = true
+                onLongPress(x, y, pointerId)
+            }
     }
 
     /**
@@ -166,7 +171,11 @@ class TouchHandler(
     /**
      * 长按回调
      */
-    private suspend fun onLongPress(x: Int, y: Int, pointerId: Long) {
+    private suspend fun onLongPress(
+        x: Int,
+        y: Int,
+        pointerId: Long,
+    ) {
         // 可以在这里添加长按反馈（如震动）
         // 长按事件已经通过 ACTION_DOWN 发送，这里可以添加额外的处理
     }
@@ -174,21 +183,20 @@ class TouchHandler(
     /**
      * 将屏幕坐标转换为远程设备坐标（X 轴）
      */
-    private fun scaleX(x: Float): Int {
-        return (x * remoteWidth / screenWidth).toInt().coerceIn(0, remoteWidth)
-    }
+    private fun scaleX(x: Float): Int = (x * remoteWidth / screenWidth).toInt().coerceIn(0, remoteWidth)
 
     /**
      * 将屏幕坐标转换为远程设备坐标（Y 轴）
      */
-    private fun scaleY(y: Float): Int {
-        return (y * remoteHeight / screenHeight).toInt().coerceIn(0, remoteHeight)
-    }
+    private fun scaleY(y: Float): Int = (y * remoteHeight / screenHeight).toInt().coerceIn(0, remoteHeight)
 
     /**
      * 更新屏幕尺寸
      */
-    fun updateScreenSize(width: Int, height: Int) {
+    fun updateScreenSize(
+        width: Int,
+        height: Int,
+    ) {
         // 可以在这里更新 screenWidth 和 screenHeight
         // 但由于是 val，需要重新创建 TouchHandler 实例
     }

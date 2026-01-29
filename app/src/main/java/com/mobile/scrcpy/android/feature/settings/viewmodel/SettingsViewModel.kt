@@ -16,17 +16,17 @@ import kotlinx.coroutines.launch
  * 职责：应用设置读写
  */
 class SettingsViewModel(
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
 ) : ViewModel() {
-
     // ============ 设置数据 ============
 
-    val settings: StateFlow<AppSettings> = preferencesManager.settingsFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
-            initialValue = AppSettings()
-        )
+    val settings: StateFlow<AppSettings> =
+        preferencesManager.settingsFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
+                initialValue = AppSettings(),
+            )
 
     // ============ 设置更新 ============
 
@@ -39,13 +39,11 @@ class SettingsViewModel(
     // ============ Factory ============
 
     companion object {
-        fun provideFactory(
-            preferencesManager: PreferencesManager
-        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return SettingsViewModel(preferencesManager) as T
+        fun provideFactory(preferencesManager: PreferencesManager): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    SettingsViewModel(preferencesManager) as T
             }
-        }
     }
 }

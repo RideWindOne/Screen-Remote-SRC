@@ -1,29 +1,33 @@
 package com.mobile.scrcpy.android.infrastructure.media.audio
 
 import android.media.MediaCodec
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * AudioDecoder - 音频解码器
  * 支持 Opus、AAC、FLAC、RAW 四种格式
- * 
+ *
  * 职责：
  * - 协调格式处理器和 AudioTrack 管理器
  * - 管理解码循环和生命周期
  */
-class AudioDecoder(volumeScale: Float = 1.0f) {
+class AudioDecoder(
+    volumeScale: Float = 1.0f,
+) {
     private val decoderLock = Any()
     private val formatHandler = AudioFormatHandler()
     private val trackManager = AudioTrackManager(volumeScale)
 
     @Volatile private var decoder: MediaCodec? = null
+
     @Volatile private var isRunning = false
+
     @Volatile private var isStopped = false
 
-    var onConnectionLost: (() -> Unit)? = null  // 连接丢失回调
+    var onConnectionLost: (() -> Unit)? = null // 连接丢失回调
 
     suspend fun start(audioStream: AudioStream) =
         withContext(Dispatchers.IO) {
@@ -43,12 +47,12 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
                 } else {
                     decodeAndPlay(audioStream, codec, sampleRate, channelCount)
                 }
-
             } catch (e: Exception) {
                 LogManager.e(LogTags.AUDIO_DECODER, "音频解码失败: ${e.message}", e)
                 // 检查是否是连接丢失
                 if (e.message?.contains("Socket closed") == true ||
-                    e.message?.contains("Stream closed") == true) {
+                    e.message?.contains("Stream closed") == true
+                ) {
                     LogManager.w(LogTags.AUDIO_DECODER, "音频连接丢失，触发回调")
                     onConnectionLost?.invoke()
                 }
@@ -87,7 +91,11 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
     /**
      * RAW 格式直接播放
      */
-    private fun playRawAudio(audioStream: AudioStream, sampleRate: Int, channelCount: Int) {
+    private fun playRawAudio(
+        audioStream: AudioStream,
+        sampleRate: Int,
+        channelCount: Int,
+    ) {
         val track = trackManager.createAudioTrack(sampleRate, channelCount)
         if (track == null) {
             LogManager.e(LogTags.AUDIO_DECODER, "无法创建 AudioTrack")
@@ -112,11 +120,20 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
                         if (written < 0) {
                             LogManager.e(LogTags.AUDIO_DECODER, "AudioTrack 写入失败: $written")
                         } else if (packetCount <= 10 || packetCount % 100 == 0) {
-                            LogManager.d(LogTags.AUDIO_DECODER, "RAW 音频包 #$packetCount: size=${packet.payload.size}, written=$written")
+                            LogManager.d(
+                                LogTags.AUDIO_DECODER,
+                                "RAW 音频包 #$packetCount: size=${packet.payload.size}, written=$written",
+                            )
                         }
                     }
-                    is dadb.AdbShellPacket.Exit -> break
-                    else -> continue
+
+                    is dadb.AdbShellPacket.Exit -> {
+                        break
+                    }
+
+                    else -> {
+                        continue
+                    }
                 }
             } catch (e: Exception) {
                 if (isRunning && !isStopped) {
@@ -132,7 +149,12 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
     /**
      * 解码并播放（Opus/AAC/FLAC）
      */
-    private fun decodeAndPlay(audioStream: AudioStream, codec: String, sampleRate: Int, channelCount: Int) {
+    private fun decodeAndPlay(
+        audioStream: AudioStream,
+        codec: String,
+        sampleRate: Int,
+        channelCount: Int,
+    ) {
         // 读取第一个包
         val firstPacket = audioStream.read()
         if (firstPacket !is dadb.AdbShellPacket.StdOut || firstPacket.payload.isEmpty()) {
@@ -141,7 +163,10 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
         }
 
         val firstData = firstPacket.payload
-        LogManager.d(LogTags.AUDIO_DECODER, "第一个包: size=${firstData.size}, data=${firstData.take(16).joinToString(" ") { "%02X".format(it) }}...")
+        LogManager.d(
+            LogTags.AUDIO_DECODER,
+            "第一个包: size=${firstData.size}, data=${firstData.take(16).joinToString(" ") { "%02X".format(it) }}...",
+        )
 
         // 判断是否为配置包
         var configData: ByteArray? = null
@@ -189,17 +214,18 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
         decodeLoop(audioStream, firstAudioPacket)
     }
 
-
-
     /**
      * 解码循环
      */
-    private fun decodeLoop(audioStream: AudioStream, firstAudioPacket: ByteArray? = null) {
+    private fun decodeLoop(
+        audioStream: AudioStream,
+        firstAudioPacket: ByteArray? = null,
+    ) {
         val bufferInfo = MediaCodec.BufferInfo()
         var frameCount = 0
         var inputCount = 0
         var outputCount = 0
-        var pts = 0L  // 使用递增的时间戳
+        var pts = 0L // 使用递增的时间戳
 
         LogManager.d(LogTags.AUDIO_DECODER, "解码循环开始")
 
@@ -219,7 +245,7 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
                                 0,
                                 firstAudioPacket.size,
                                 pts,
-                                0
+                                0,
                             )
                             pts += 20000
                             inputCount++
@@ -284,13 +310,16 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
                                             0,
                                             packet.payload.size,
                                             pts,
-                                            0
+                                            0,
                                         )
-                                        pts += 20000  // 20ms = 20000us
+                                        pts += 20000 // 20ms = 20000us
                                         inputCount++
 
                                         if (inputCount <= 5 || inputCount % 100 == 0) {
-                                            LogManager.d(LogTags.AUDIO_DECODER, "帧 #$frameCount 已送入解码器 (total=$inputCount, pts=${pts/1000}ms)")
+                                            LogManager.d(
+                                                LogTags.AUDIO_DECODER,
+                                                "帧 #$frameCount 已送入解码器 (total=$inputCount, pts=${pts / 1000}ms)",
+                                            )
                                         }
                                     }
                                 }
@@ -299,13 +328,19 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
 
                         if (shouldBreak) break
                     }
-                    is dadb.AdbShellPacket.Exit -> break
-                    else -> continue
-                }
 
+                    is dadb.AdbShellPacket.Exit -> {
+                        break
+                    }
+
+                    else -> {
+                        continue
+                    }
+                }
             } catch (e: IllegalStateException) {
                 if (e.message?.contains("executing state") == true ||
-                    e.message?.contains("Released state") == true) {
+                    e.message?.contains("Released state") == true
+                ) {
                     break
                 }
                 throw e
@@ -346,12 +381,20 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
             // 调试：第一次调用时打印结果
             if (drainedCount == 0 && loopCount == 0) {
                 when (outputIndex) {
-                    MediaCodec.INFO_TRY_AGAIN_LATER -> LogManager.d(LogTags.AUDIO_DECODER, "⏳ 第一次 dequeue: INFO_TRY_AGAIN_LATER")
-                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> LogManager.d(LogTags.AUDIO_DECODER, "📋 第一次 dequeue: INFO_OUTPUT_FORMAT_CHANGED")
-                    else -> if (outputIndex >= 0) {
-                        LogManager.d(LogTags.AUDIO_DECODER, "✅ 第一次 dequeue: 有效 index=$outputIndex")
-                    } else {
-                        LogManager.d(LogTags.AUDIO_DECODER, "❓ 第一次 dequeue: 未知值=$outputIndex")
+                    MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                        LogManager.d(LogTags.AUDIO_DECODER, "⏳ 第一次 dequeue: INFO_TRY_AGAIN_LATER")
+                    }
+
+                    MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        LogManager.d(LogTags.AUDIO_DECODER, "📋 第一次 dequeue: INFO_OUTPUT_FORMAT_CHANGED")
+                    }
+
+                    else -> {
+                        if (outputIndex >= 0) {
+                            LogManager.d(LogTags.AUDIO_DECODER, "第一次 dequeue: 有效 index=$outputIndex")
+                        } else {
+                            LogManager.d(LogTags.AUDIO_DECODER, "❓ 第一次 dequeue: 未知值=$outputIndex")
+                        }
                     }
                 }
             }
@@ -379,21 +422,31 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
                             if (written < 0) {
                                 LogManager.e(LogTags.AUDIO_DECODER, "AudioTrack 写入失败: $written")
                             } else if (drainedCount <= 10 || drainedCount % 100 == 0) {
-                                LogManager.d(LogTags.AUDIO_DECODER, "🔊 音频输出 #$drainedCount: size=${bufferInfo.size}, written=$written, pts=${bufferInfo.presentationTimeUs/1000}ms")
+                                LogManager.d(
+                                    LogTags.AUDIO_DECODER,
+                                    "🔊 音频输出 #$drainedCount: size=${bufferInfo.size}, written=$written, pts=${bufferInfo.presentationTimeUs / 1000}ms",
+                                )
                             }
                         } else {
-                            LogManager.w(LogTags.AUDIO_DECODER, "输出缓冲区为空或大小为0: buffer=$outputBuffer, size=${bufferInfo.size}")
+                            LogManager.w(
+                                LogTags.AUDIO_DECODER,
+                                "输出缓冲区为空或大小为0: buffer=$outputBuffer, size=${bufferInfo.size}",
+                            )
                         }
 
                         codec.releaseOutputBuffer(outputIndex, false)
                         outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
                     }
+
                     outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         val format = codec.outputFormat
                         LogManager.d(LogTags.AUDIO_DECODER, "输出格式变化: $format")
                         outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
                     }
-                    else -> break
+
+                    else -> {
+                        break
+                    }
                 }
 
                 if (loopCount > 100) {
@@ -403,10 +456,10 @@ class AudioDecoder(volumeScale: Float = 1.0f) {
             }
 
             return drainedCount
-
         } catch (e: IllegalStateException) {
             if (e.message?.contains("executing state") == true ||
-                e.message?.contains("Released state") == true) {
+                e.message?.contains("Released state") == true
+            ) {
                 return 0
             }
             throw e
@@ -424,5 +477,6 @@ interface AudioStream : AutoCloseable {
     val codec: String
     val sampleRate: Int
     val channelCount: Int
+
     fun read(): dadb.AdbShellPacket
 }

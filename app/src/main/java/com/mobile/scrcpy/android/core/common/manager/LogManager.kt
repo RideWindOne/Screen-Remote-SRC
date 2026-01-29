@@ -164,6 +164,24 @@ object LogManager {
         }
     }
     
+    fun clearOldLogs() {
+        val ctx = context ?: return
+        val logDir = File(ctx.filesDir, LOG_DIR)
+        if (!logDir.exists()) return
+        
+        val currentLogFile = logFile
+        logDir.listFiles()?.forEach { file ->
+            if (file != currentLogFile && file.extension == "log") {
+                try {
+                    file.delete()
+                    i(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_SUCCESS.get()}: ${file.name}")
+                } catch (e: Exception) {
+                    e(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_FAILED.get()}: ${file.name}", e)
+                }
+            }
+        }
+    }
+    
     fun deleteLogFile(file: File): Boolean {
         return try {
             if (file == logFile) {

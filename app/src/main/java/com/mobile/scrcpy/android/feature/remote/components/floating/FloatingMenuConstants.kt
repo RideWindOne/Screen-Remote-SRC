@@ -43,7 +43,7 @@ internal const val RESET_ANIMATION_DURATION_MS = 200L
 internal const val EDGE_SNAP_THRESHOLD_DP = 40f
 
 /** 贴边后露出的宽度（dp），隐藏2/3，露出1/3 */
-internal const val EDGE_VISIBLE_WIDTH_DP = 15f  // BALL_A_SIZE_DP / 3 = 15dp
+internal const val EDGE_VISIBLE_WIDTH_DP = 15f // BALL_A_SIZE_DP / 3 = 15dp
 
 /** 拖出距离阈值（dp），拖动超过此距离时取消贴边 */
 internal const val EDGE_DRAG_OUT_THRESHOLD_DP = 30f

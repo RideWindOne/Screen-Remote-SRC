@@ -25,7 +25,6 @@ internal class SocketForwarder(
     private val hostPort: Int,
     private val targetSocket: String, // 例如: "localabstract:scrcpy_12345678" 或 "tcp:27183"
 ) : AutoCloseable {
-
     private var state: State = State.STOPPED
     private var serverThread: Thread? = null
     private var server: ServerSocket? = null
@@ -39,19 +38,21 @@ internal class SocketForwarder(
         moveToState(State.STARTING)
 
         clientExecutor = Executors.newCachedThreadPool()
-        serverThread = thread {
-            try {
-                handleForwarding()
-            } catch (ignored: SocketException) {
-                // Do nothing
-            } catch (e: IOException) {
-                // Log error if needed
-            } finally {
-                moveToState(State.STOPPED)
+        serverThread =
+            thread {
+                try {
+                    handleForwarding()
+                } catch (ignored: SocketException) {
+                    // Do nothing
+                } catch (e: IOException) {
+                    // Log error if needed
+                } finally {
+                    moveToState(State.STOPPED)
+                }
             }
-        }
 
-        waitFor(10, 10000) {  // 增加超时到 10 秒
+        waitFor(10, 10000) {
+            // 增加超时到 10 秒
             state == State.STARTED
         }
     }
@@ -71,17 +72,18 @@ internal class SocketForwarder(
                     // 支持 localabstract:, localreserved:, localfilesystem: 等
                     val adbStream = dadb.open(targetSocket)
 
-                    val readerThread = thread {
-                        forward(
-                            client.getInputStream().source(),
-                            adbStream.sink
-                        )
-                    }
+                    val readerThread =
+                        thread {
+                            forward(
+                                client.getInputStream().source(),
+                                adbStream.sink,
+                            )
+                        }
 
                     try {
                         forward(
                             adbStream.source,
-                            client.sink().buffer()
+                            client.sink().buffer(),
                         )
                     } finally {
                         adbStream.close()
@@ -106,7 +108,8 @@ internal class SocketForwarder(
         }
 
         // Make sure that we are not stopping the server while it is in a transient state
-        waitFor(10, 10000) {  // 增加超时到 10 秒
+        waitFor(10, 10000) {
+            // 增加超时到 10 秒
             state == State.STARTED
         }
 
@@ -120,12 +123,16 @@ internal class SocketForwarder(
         clientExecutor?.awaitTermination(5, TimeUnit.SECONDS)
         clientExecutor = null
 
-        waitFor(10, 10000) {  // 增加超时到 10 秒
+        waitFor(10, 10000) {
+            // 增加超时到 10 秒
             state == State.STOPPED
         }
     }
 
-    private fun forward(source: Source, sink: BufferedSink) {
+    private fun forward(
+        source: Source,
+        sink: BufferedSink,
+    ) {
         try {
             while (!Thread.interrupted()) {
                 try {
@@ -153,10 +160,14 @@ internal class SocketForwarder(
         STARTING,
         STARTED,
         STOPPING,
-        STOPPED
+        STOPPED,
     }
 
-    private fun waitFor(intervalMs: Int, timeoutMs: Int, test: () -> Boolean) {
+    private fun waitFor(
+        intervalMs: Int,
+        timeoutMs: Int,
+        test: () -> Boolean,
+    ) {
         val start = System.currentTimeMillis()
         var lastCheck = start
         while (!test()) {

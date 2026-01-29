@@ -14,7 +14,6 @@ import androidx.lifecycle.ViewModelProvider
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager
 import com.mobile.scrcpy.android.core.data.datastore.PreferencesManager
-import com.mobile.scrcpy.android.core.domain.model.AppSettings
 import com.mobile.scrcpy.android.feature.session.ui.feature.session.MainScreen
 import com.mobile.scrcpy.android.feature.settings.viewmodel.SettingsViewModel
 import com.mobile.scrcpy.android.core.designsystem.theme.ScreenRemoteTheme

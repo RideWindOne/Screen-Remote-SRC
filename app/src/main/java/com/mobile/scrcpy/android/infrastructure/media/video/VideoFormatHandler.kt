@@ -3,19 +3,18 @@ package com.mobile.scrcpy.android.infrastructure.media.video
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.view.Surface
-import java.nio.ByteBuffer
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
+import java.nio.ByteBuffer
 
 /**
  * VideoFormatHandler - 视频格式处理器
  * 负责不同编码格式的配置和重配置
  */
 class VideoFormatHandler(
-    private val codecManager: VideoCodecManager
+    private val codecManager: VideoCodecManager,
 ) {
-    
     var onVideoSizeChanged: ((width: Int, height: Int, rotation: Int) -> Unit)? = null
 
     /**
@@ -28,7 +27,7 @@ class VideoFormatHandler(
         sps: ByteArray,
         pps: ByteArray,
         surface: Surface?,
-        dummySurface: Surface?
+        dummySurface: Surface?,
     ) {
         try {
             val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
@@ -49,14 +48,13 @@ class VideoFormatHandler(
 
             val isSurfaceBound = (surface != null && surface.isValid)
             if (isSurfaceBound) {
-                LogManager.d(LogTags.VIDEO_DECODER, "✓ 解码器配置完成，Surface 已绑定")
+                LogManager.d(LogTags.VIDEO_DECODER, "解码器配置完成，Surface 已绑定")
             } else {
-                LogManager.d(LogTags.VIDEO_DECODER, "✓ 解码器配置完成（使用 dummy Surface）")
+                LogManager.d(LogTags.VIDEO_DECODER, "解码器配置完成（使用 dummy Surface）")
             }
 
             // 从输出格式获取真实尺寸
             updateVideoSizeFromOutputFormat(decoder.outputFormat)
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "配置解码器失败: ${e.message}", e)
         }
@@ -72,10 +70,10 @@ class VideoFormatHandler(
         sps: ByteArray,
         pps: ByteArray,
         surface: Surface?,
-        dummySurface: Surface?
+        dummySurface: Surface?,
     ): MediaCodec? {
         try {
-            LogManager.d(LogTags.VIDEO_DECODER, "🔄 重新配置解码器")
+            LogManager.d(LogTags.VIDEO_DECODER, "重新配置解码器")
 
             oldDecoder?.stop()
             oldDecoder?.release()
@@ -88,7 +86,6 @@ class VideoFormatHandler(
 
             configureH264(newDecoder, width, height, sps, pps, surface, dummySurface)
             return newDecoder
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "重新配置解码器失败: ${e.message}", e)
             return null
@@ -106,7 +103,7 @@ class VideoFormatHandler(
         sps: ByteArray,
         pps: ByteArray,
         surface: Surface?,
-        dummySurface: Surface?
+        dummySurface: Surface?,
     ) {
         try {
             val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
@@ -128,11 +125,10 @@ class VideoFormatHandler(
 
             val isSurfaceBound = (surface != null && surface.isValid)
             if (isSurfaceBound) {
-                LogManager.d(LogTags.VIDEO_DECODER, "✓ H.265 解码器配置完成，Surface 已绑定")
+                LogManager.d(LogTags.VIDEO_DECODER, "H.265 解码器配置完成，Surface 已绑定")
             } else {
-                LogManager.d(LogTags.VIDEO_DECODER, "✓ H.265 解码器配置完成（使用 dummy Surface）")
+                LogManager.d(LogTags.VIDEO_DECODER, "H.265 解码器配置完成（使用 dummy Surface）")
             }
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "配置 H.265 解码器失败: ${e.message}", e)
         }
@@ -149,10 +145,10 @@ class VideoFormatHandler(
         sps: ByteArray,
         pps: ByteArray,
         surface: Surface?,
-        dummySurface: Surface?
+        dummySurface: Surface?,
     ): MediaCodec? {
         try {
-            LogManager.d(LogTags.VIDEO_DECODER, "🔄 重新配置 H.265 解码器: ${width}x${height}")
+            LogManager.d(LogTags.VIDEO_DECODER, "重新配置 H.265 解码器: ${width}x$height")
 
             oldDecoder?.stop()
             oldDecoder?.release()
@@ -164,9 +160,8 @@ class VideoFormatHandler(
             }
 
             configureH265(newDecoder, width, height, vps, sps, pps, surface, dummySurface)
-            LogManager.d(LogTags.VIDEO_DECODER, "✓ H.265 解码器重新配置完成")
+            LogManager.d(LogTags.VIDEO_DECODER, "H.265 解码器重新配置完成")
             return newDecoder
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "重新配置 H.265 解码器失败: ${e.message}", e)
             return null
@@ -181,7 +176,7 @@ class VideoFormatHandler(
         width: Int,
         height: Int,
         surface: Surface?,
-        dummySurface: Surface?
+        dummySurface: Surface?,
     ) {
         try {
             val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
@@ -199,11 +194,10 @@ class VideoFormatHandler(
 
             val isSurfaceBound = (surface != null && surface.isValid)
             if (isSurfaceBound) {
-                LogManager.d(LogTags.VIDEO_DECODER, "✓ AV1 解码器配置完成，Surface 已绑定")
+                LogManager.d(LogTags.VIDEO_DECODER, "AV1 解码器配置完成，Surface 已绑定")
             } else {
-                LogManager.d(LogTags.VIDEO_DECODER, "✓ AV1 解码器配置完成（使用 dummy Surface）")
+                LogManager.d(LogTags.VIDEO_DECODER, "AV1 解码器配置完成（使用 dummy Surface）")
             }
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "配置 AV1 解码器失败: ${e.message}", e)
         }
@@ -217,10 +211,10 @@ class VideoFormatHandler(
         width: Int,
         height: Int,
         surface: Surface?,
-        dummySurface: Surface?
+        dummySurface: Surface?,
     ): MediaCodec? {
         try {
-            LogManager.d(LogTags.VIDEO_DECODER, "🔄 重新配置 AV1 解码器: ${width}x${height}")
+            LogManager.d(LogTags.VIDEO_DECODER, "重新配置 AV1 解码器: ${width}x$height")
 
             oldDecoder?.stop()
             oldDecoder?.release()
@@ -232,9 +226,8 @@ class VideoFormatHandler(
             }
 
             configureAV1(newDecoder, width, height, surface, dummySurface)
-            LogManager.d(LogTags.VIDEO_DECODER, "✓ AV1 解码器重新配置完成")
+            LogManager.d(LogTags.VIDEO_DECODER, "AV1 解码器重新配置完成")
             return newDecoder
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "重新配置 AV1 解码器失败: ${e.message}", e)
             return null
@@ -269,11 +262,10 @@ class VideoFormatHandler(
                 realHeight = outputFormat.getInteger(MediaFormat.KEY_HEIGHT)
             }
 
-            LogManager.d(LogTags.VIDEO_DECODER, "视频尺寸: ${realWidth}x${realHeight}")
-            
+            LogManager.d(LogTags.VIDEO_DECODER, "视频尺寸: ${realWidth}x$realHeight")
+
             val rotation = if (realWidth > realHeight) 90 else 0
             onVideoSizeChanged?.invoke(realWidth, realHeight, rotation)
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "获取输出格式失败: ${e.message}")
         }

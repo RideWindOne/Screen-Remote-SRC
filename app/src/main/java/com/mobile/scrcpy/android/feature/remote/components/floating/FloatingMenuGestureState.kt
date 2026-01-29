@@ -8,9 +8,8 @@ import android.os.Looper
  * 负责管理手势识别过程中的所有状态变量
  */
 internal class FloatingMenuGestureState {
-    
     // ==================== 手势基础状态 ====================
-    
+
     var downTime = 0L
     var downRawX = 0f
     var downRawY = 0f
@@ -19,63 +18,68 @@ internal class FloatingMenuGestureState {
     var hasMoved = false
     var isLongPress = false
     var canEnterLongPress = false
-    
+
     // ==================== 长按检测 ====================
-    
+
     var longPressHandler: Handler? = null
     var longPressRunnable: Runnable? = null
     var reservedFunctionHandler: Handler? = null
     var reservedFunctionRunnable: Runnable? = null
-    
+
     // ==================== B 球位置（长按转圈中心） ====================
-    
+
     var ballBCenterX = 0f
     var ballBCenterY = 0f
-    
+
     // ==================== 角度记录（转圈功能） ====================
-    
+
     var lastAngle: Double? = null
-    
+
     // ==================== 按下偏移量（保持跟手） ====================
-    
+
     var downOffsetX = 0f
     var downOffsetY = 0f
-    
+
     // ==================== 贴边状态 ====================
-    
+
     var isSnappedToEdge = false
     var snappedEdge: Edge? = null
-    
+
     enum class Edge {
-        LEFT, RIGHT, TOP, BOTTOM
+        LEFT,
+        RIGHT,
+        TOP,
+        BOTTOM,
     }
-    
+
     // ==================== 边缘触感状态 ====================
-    
+
     var hasTriggeredEdgeHaptic = false
-    
+
     // ==================== 方向识别 ====================
-    
+
     var detectedDirection: Direction? = null
-    var directionLocked = false  // 已废弃，保留兼容
-    
-    enum class Direction(val actionName: String) {
+    var directionLocked = false // 已废弃，保留兼容
+
+    enum class Direction(
+        val actionName: String,
+    ) {
         UP("桌面"),
         DOWN("通知栏"),
         LEFT("返回"),
-        RIGHT("后台任务")
+        RIGHT("后台任务"),
     }
-    
+
     // ==================== 扇形区域触感状态 ====================
-    
+
     var lastHapticDirection: Direction? = null
     var directionEnterTime = 0L
     var hasTriggeredHapticInCurrentDirection = false
-    
+
     // ==================== 菜单状态 ====================
-    
+
     var isMenuShown = false
-    
+
     /**
      * 重置手势状态（松开或取消时调用）
      */
@@ -93,7 +97,7 @@ internal class FloatingMenuGestureState {
         directionEnterTime = 0L
         hasTriggeredHapticInCurrentDirection = false
     }
-    
+
     /**
      * 取消长按延迟任务
      */
@@ -101,7 +105,7 @@ internal class FloatingMenuGestureState {
         longPressRunnable?.let { longPressHandler?.removeCallbacks(it) }
         reservedFunctionRunnable?.let { reservedFunctionHandler?.removeCallbacks(it) }
     }
-    
+
     /**
      * 初始化 Handler
      */
@@ -109,7 +113,7 @@ internal class FloatingMenuGestureState {
         longPressHandler = Handler(Looper.getMainLooper())
         reservedFunctionHandler = Handler(Looper.getMainLooper())
     }
-    
+
     /**
      * 清理资源
      */

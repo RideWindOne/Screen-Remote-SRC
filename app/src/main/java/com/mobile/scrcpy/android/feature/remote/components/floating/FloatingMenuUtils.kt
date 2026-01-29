@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.mobile.scrcpy.android.core.common.LogTags
 
-
 /**
  * 屏幕旋转时重新定位小球
  * 旋转后屏幕宽高互换，原坐标可能超出范围导致小球不可见
@@ -14,7 +13,7 @@ import com.mobile.scrcpy.android.core.common.LogTags
  */
 internal fun repositionBallsOnRotation(
     context: Context,
-    reference: BallSystemReference
+    reference: BallSystemReference,
 ) {
     val (ballA, ballB, _, _) = reference
     val displayMetrics = context.resources.displayMetrics
@@ -28,7 +27,8 @@ internal fun repositionBallsOnRotation(
 
     Log.d(
         LogTags.FLOATING_CONTROLLER_MSG,
-        "🔄 屏幕旋转检测 (${if (isLandscape) "横屏" else "竖屏"})，当前小球位置: A=(${paramsA.x}, ${paramsA.y}), B=(${paramsB.x}, ${paramsB.y})")
+        "屏幕旋转检测 (${if (isLandscape) "横屏" else "竖屏"})，当前小球位置: A=(${paramsA.x}, ${paramsA.y}), B=(${paramsB.x}, ${paramsB.y})",
+    )
 
     // TODO: 屏幕旋转，增强用户体验，让小球移动到底部/右侧
     /*
@@ -37,7 +37,7 @@ internal fun repositionBallsOnRotation(
     val ballACenterOffsetY = (BALL_B_SIZE_DP - BALL_A_SIZE_DP) * density / 2f
 
     Log.d(LogTags.FLOATING_CONTROLLER_MSG,
-        "🔄 屏幕旋转检测 (${if (isLandscape) "横屏" else "竖屏"})，等待 1 秒后重新定位小球")
+        "屏幕旋转检测 (${if (isLandscape) "横屏" else "竖屏"})，等待 1 秒后重新定位小球")
 
     // 等待 1 秒后再移动小球
     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -59,7 +59,7 @@ internal fun repositionBallsOnRotation(
         val targetAY = targetBY + ballACenterOffsetY
 
         Log.d(LogTags.FLOATING_CONTROLLER_MSG,
-            "🔄 开始重定位: 从(${paramsB.x}, ${paramsB.y}) → (${targetBX.toInt()}, ${targetBY.toInt()}) (${if (isLandscape) "横屏右侧" else "竖屏底部"})")
+            "开始重定位: 从(${paramsB.x}, ${paramsB.y}) → (${targetBX.toInt()}, ${targetBY.toInt()}) (${if (isLandscape) "横屏右侧" else "竖屏底部"})")
 
         // 平滑移动到目标位置
         val startAX = paramsA.x
@@ -89,11 +89,11 @@ internal fun repositionBallsOnRotation(
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     Log.d(LogTags.FLOATING_CONTROLLER_MSG,
-                        "✅ 重定位完成: A=(${paramsA.x}, ${paramsA.y}), B=(${paramsB.x}, ${paramsB.y})")
+                        "重定位完成: A=(${paramsA.x}, ${paramsA.y}), B=(${paramsB.x}, ${paramsB.y})")
                 }
             })
             start()
         }
     }, 1000L) // 延迟 1 秒
-    */
+     */
 }

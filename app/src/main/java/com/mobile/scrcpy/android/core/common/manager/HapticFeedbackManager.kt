@@ -16,14 +16,14 @@ import kotlinx.coroutines.launch
  */
 object HapticFeedbackManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    
+
     /**
      * 触感反馈开关状态（全局）
      */
     @Volatile
     var isEnabled: Boolean = true
         private set
-    
+
     /**
      * 初始化触感反馈管理器
      * 在 Application.onCreate() 中调用
@@ -35,8 +35,8 @@ object HapticFeedbackManager {
                 val preferencesManager = PreferencesManager(context)
                 val settings = preferencesManager.settingsFlow.first()
                 isEnabled = settings.enableFloatingHapticFeedback
-                
-                Log.d(LogTags.APP, "🔧 触感反馈管理器初始化: ${if (isEnabled) "开启" else "关闭"}")
+
+                Log.d(LogTags.APP, "触感反馈管理器初始化: ${if (isEnabled) "开启" else "关闭"}")
             } catch (e: Exception) {
                 Log.e(LogTags.APP, "❌ 触感反馈管理器初始化失败: ${e.message}", e)
                 // 初始化失败时使用默认值（开启）
@@ -44,13 +44,13 @@ object HapticFeedbackManager {
             }
         }
     }
-    
+
     /**
      * 更新触感反馈开关状态
      * 在设置页面修改时调用
      */
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        Log.d(LogTags.APP, "🔧 触感反馈开关更新: ${if (enabled) "开启" else "关闭"}")
+        Log.d(LogTags.APP, "触感反馈开关更新: ${if (enabled) "开启" else "关闭"}")
     }
 }

@@ -19,24 +19,16 @@ import androidx.compose.ui.unit.dp
 fun ConnectionProgressBox(progressText: @Composable () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
         // 进度文字靠左上角显示，无背景
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-        ) {
+        Box(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
             progressText()
         }
 
         // 转圈圈在底部居中（距离底部 50dp）
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 46.3.dp)
-        ) {
+        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 46.3.dp)) {
             CircularProgressIndicator(
                 color = Color.White,
                 modifier = Modifier.size(50.dp),
-                strokeWidth = 4.dp
+                strokeWidth = 4.dp,
             )
         }
     }

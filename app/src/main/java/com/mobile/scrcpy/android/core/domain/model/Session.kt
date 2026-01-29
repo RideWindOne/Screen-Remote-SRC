@@ -10,12 +10,16 @@ data class ScrcpySession(
     val deviceId: String? = null,
     val isConnected: Boolean = false,
     val hasWifi: Boolean = false,
-    val hasWarning: Boolean = false
+    val hasWarning: Boolean = false,
 )
 
 /**
  * 会话颜色
  */
 enum class SessionColor {
-    BLUE, RED, GREEN, ORANGE, PURPLE
+    BLUE,
+    RED,
+    GREEN,
+    ORANGE,
+    PURPLE,
 }

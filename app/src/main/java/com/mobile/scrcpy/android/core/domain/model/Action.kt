@@ -7,12 +7,13 @@ data class ScrcpyAction(
     val id: String,
     val name: String,
     val type: ActionType,
-    val commands: List<String>
+    val commands: List<String>,
 )
 
 /**
  * 动作类型
  */
 enum class ActionType {
-    CONVERSATION, AUTOMATION
+    CONVERSATION,
+    AUTOMATION,
 }

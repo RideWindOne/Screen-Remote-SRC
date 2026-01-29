@@ -17,31 +17,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
-import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
 import com.mobile.scrcpy.android.core.designsystem.component.MessageList
 import com.mobile.scrcpy.android.core.designsystem.component.MessageListState
-
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
+
 @Composable
 fun ConnectionStateOverlay(
     connectionState: ConnectionState,
     messageListState: MessageListState,
     onReconnect: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
 ) {
+    // 调试日志
+    // LogManager.d(LogTags.REMOTE_DISPLAY, "ConnectionStateOverlay: state=${connectionState::class.simpleName}")
+
     when {
         connectionState is ConnectionState.Connecting ||
-                connectionState is ConnectionState.Reconnecting ||
-                connectionState !is ConnectionState.Connected &&
-                connectionState !is ConnectionState.Error -> {
+            connectionState is ConnectionState.Reconnecting ||
+            connectionState !is ConnectionState.Connected &&
+            connectionState !is ConnectionState.Error -> {
             ConnectionProgressBox {
                 MessageList(
                     state = messageListState,
-                    title = when (connectionState) {
-                        is ConnectionState.Reconnecting -> "Reconnecting..."
-                        else -> CommonTexts.STATUS_CONNECTING.get()
-                    }
+                    title =
+                        when (connectionState) {
+                            is ConnectionState.Reconnecting -> "Reconnecting..."
+                            is ConnectionState.Connecting -> CommonTexts.STATUS_CONNECTING.get()
+                            else -> CommonTexts.STATUS_CONNECTING.get()
+                        },
                 )
             }
         }
@@ -51,43 +58,46 @@ fun ConnectionStateOverlay(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(20.dp),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 32.dp)
-                        .padding(bottom = 85.dp)
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 32.dp)
+                            .padding(bottom = 85.dp),
                 ) {
                     Text(
                         text = rememberText(CommonTexts.CONNECTION_FAILED_TITLE),
                         color = Color.White,
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
                     )
                     Text(
                         text = connectionState.message,
                         color = Color.White.copy(alpha = 0.8f),
                         style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
                     )
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         Button(
                             onClick = onReconnect,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF007AFF)
-                            )
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF007AFF),
+                                ),
                         ) {
                             Text(
-                                rememberText(CommonTexts.BUTTON_RECONNECT)
+                                rememberText(CommonTexts.BUTTON_RECONNECT),
                             )
                         }
                         OutlinedButton(
                             onClick = onClose,
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color.White
-                            )
+                            colors =
+                                ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color.White,
+                                ),
                         ) {
                             Text(
-                                rememberText(CommonTexts.BUTTON_CANCEL_CONNECTION)
+                                rememberText(CommonTexts.BUTTON_CANCEL_CONNECTION),
                             )
                         }
                     }

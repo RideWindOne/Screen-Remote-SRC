@@ -39,149 +39,154 @@ import com.mobile.scrcpy.android.app.ScreenRemoteApp
 import com.mobile.scrcpy.android.core.common.AppColors
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.AppTextSizes
+import com.mobile.scrcpy.android.core.designsystem.component.DialogContainer
 import com.mobile.scrcpy.android.core.designsystem.component.DialogHeader
-import kotlinx.coroutines.launch
-
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.LogTexts
+import kotlinx.coroutines.launch
+
 /**
  * USB 设备选择对话框（用于会话编辑）
  */
 @Composable
 fun UsbDeviceSelectionDialog(
     currentSerialNumber: String,
-    onDeviceSelected: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDeviceSelected: (serialNumber: String, deviceName: String) -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val adbConnectionManager = remember { 
-        ScreenRemoteApp.instance.adbConnectionManager 
-    }
-    
+    val adbConnectionManager =
+        remember {
+            ScreenRemoteApp.instance.adbConnectionManager
+        }
+
     val usbDevices by adbConnectionManager.getUsbDevices().collectAsState()
     var isScanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    
+
     // 自动扫描一次
     LaunchedEffect(Unit) {
         isScanning = true
         adbConnectionManager.scanUsbDevices()
         isScanning = false
     }
-    
+
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
-        )
+        properties =
+            DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+            ),
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(AppDimens.windowCornerRadius),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // 使用通用 DialogHeader
-                DialogHeader(
-                    title = AdbTexts.USB_SELECT_DEVICE.get(),
-                    onDismiss = onDismiss,
-                    showBackButton = false,
-                    leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
-                    trailingContent = {
-                        // 右上角刷新按钮
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    isScanning = true
-                                    adbConnectionManager.scanUsbDevices()
-                                    isScanning = false
-                                }
-                            },
-                            enabled = !isScanning
-                        ) {
-                            if (isScanning) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = LogTexts.LOG_REFRESH_BUTTON.get(),
-                                    tint = AppColors.iOSBlue
-                                )
+        DialogContainer {
+            // 使用通用 DialogHeader
+            DialogHeader(
+                title = AdbTexts.USB_SELECT_DEVICE.get(),
+                onDismiss = onDismiss,
+                showBackButton = false,
+                leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
+                trailingContent = {
+                    // 右上角刷新按钮
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                isScanning = true
+                                adbConnectionManager.scanUsbDevices()
+                                isScanning = false
                             }
-                        }
-                    }
-                )
-                
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(AppDimens.paddingStandard)
-                ) {
-                    // 设备列表
-                    if (usbDevices.isEmpty() && !isScanning) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = AppTextSizes.body
+                        },
+                        enabled = !isScanning,
+                    ) {
+                        if (isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = LogTexts.LOG_REFRESH_BUTTON.get(),
+                                tint = AppColors.iOSBlue,
                             )
                         }
-                    } else {
-                        Column(
-                            modifier = Modifier
+                    }
+                },
+            )
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = AppDimens.paddingStandard, end = AppDimens.paddingStandard),
+            ) {
+                // 设备列表
+                if (usbDevices.isEmpty() && !isScanning) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(150.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = AppTextSizes.body,
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier =
+                            Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 300.dp)
                                 .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            usbDevices.forEach { deviceInfo ->
-                                UsbDeviceItem(
-                                    deviceInfo = deviceInfo,
-                                    isSelected = deviceInfo.serialNumber == currentSerialNumber,
-                                    showPermissionHint = true,
-                                    onClick = {
-                                        // 如果没有权限，先请求权限
-                                        if (!deviceInfo.hasPermission) {
-                                            scope.launch {
-                                                val permissionResult = adbConnectionManager.requestUsbPermission(deviceInfo.device)
-                                                if (permissionResult.isSuccess) {
-                                                    // 权限授予后，重新扫描设备列表
-                                                    adbConnectionManager.scanUsbDevices()
-                                                    // 只有序列号不为空才返回上一级
-                                                    if (deviceInfo.serialNumber.isNotBlank()) {
-                                                        onDeviceSelected(deviceInfo.serialNumber)
-                                                    }
-                                                } else {
-                                                    // 权限被拒绝，显示提示
-                                                    android.widget.Toast.makeText(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        usbDevices.forEach { deviceInfo ->
+                            UsbDeviceItem(
+                                deviceInfo = deviceInfo,
+                                isSelected = deviceInfo.serialNumber == currentSerialNumber,
+                                showPermissionHint = true,
+                                onClick = {
+                                    // 如果没有权限，先请求权限
+                                    if (!deviceInfo.hasPermission) {
+                                        scope.launch {
+                                            val permissionResult =
+                                                adbConnectionManager.requestUsbPermission(
+                                                    deviceInfo.device,
+                                                )
+                                            if (permissionResult.isSuccess) {
+                                                // 权限授予后，重新扫描设备列表
+                                                adbConnectionManager.scanUsbDevices()
+                                                // 只有序列号不为空才返回上一级
+                                                if (deviceInfo.serialNumber.isNotBlank()) {
+                                                    onDeviceSelected(
+                                                        deviceInfo.serialNumber,
+                                                        deviceInfo.getDisplayName(),
+                                                    )
+                                                }
+                                            } else {
+                                                // 权限被拒绝，显示提示
+                                                android.widget.Toast
+                                                    .makeText(
                                                         context,
                                                         AdbTexts.USB_PERMISSION_DENIED.get(),
-                                                        android.widget.Toast.LENGTH_SHORT
+                                                        android.widget.Toast.LENGTH_SHORT,
                                                     ).show()
-                                                }
-                                            }
-                                        } else {
-                                            // 已有权限，只有序列号不为空才返回上一级
-                                            if (deviceInfo.serialNumber.isNotBlank()) {
-                                                onDeviceSelected(deviceInfo.serialNumber)
                                             }
                                         }
+                                    } else {
+                                        // 已有权限，只有序列号不为空才返回上一级
+                                        if (deviceInfo.serialNumber.isNotBlank()) {
+                                            onDeviceSelected(deviceInfo.serialNumber, deviceInfo.getDisplayName())
+                                        }
                                     }
-                                )
-                            }
+                                },
+                            )
                         }
                     }
                 }

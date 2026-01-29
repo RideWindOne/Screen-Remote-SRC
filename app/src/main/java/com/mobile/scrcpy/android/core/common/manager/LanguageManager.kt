@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import com.mobile.scrcpy.android.core.data.datastore.PreferencesManager
 import com.mobile.scrcpy.android.core.domain.model.AppLanguage
+import com.mobile.scrcpy.android.core.domain.model.AppSettings
+import com.mobile.scrcpy.android.core.i18n.TextPair
 import java.util.Locale
 
 /**
@@ -80,7 +82,7 @@ object LanguageManager {
 fun rememberText(chinese: String, english: String): String {
     val context = LocalContext.current
     val preferencesManager = PreferencesManager(context)
-    val settings by preferencesManager.settingsFlow.collectAsState(initial = com.mobile.scrcpy.android.core.domain.model.AppSettings())
+    val settings by preferencesManager.settingsFlow.collectAsState(initial = AppSettings())
     
     // 更新语言管理器
     LanguageManager.setLanguage(settings.language)
@@ -93,6 +95,6 @@ fun rememberText(chinese: String, english: String): String {
  * 会自动响应语言变化
  */
 @Composable
-fun rememberText(textPair: com.mobile.scrcpy.android.core.i18n.TextPair): String {
+fun rememberText(textPair: TextPair): String {
     return rememberText(textPair.chinese, textPair.english)
 }

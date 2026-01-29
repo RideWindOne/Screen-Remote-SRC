@@ -13,7 +13,7 @@ data class DeviceInfo(
     val manufacturer: String,
     val androidVersion: String,
     val serialNumber: String,
-    val connectionType: ConnectionType = ConnectionType.TCP
+    val connectionType: ConnectionType = ConnectionType.TCP,
 )
 
 /**
@@ -21,7 +21,7 @@ data class DeviceInfo(
  */
 data class VideoEncoderInfo(
     override val name: String,
-    override val mimeType: String
+    override val mimeType: String,
 ) : EncoderInfo
 
 /**
@@ -29,5 +29,5 @@ data class VideoEncoderInfo(
  */
 data class AudioEncoderInfo(
     override val name: String,
-    override val mimeType: String
+    override val mimeType: String,
 ) : EncoderInfo

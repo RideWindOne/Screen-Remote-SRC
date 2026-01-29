@@ -14,10 +14,10 @@ import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
  */
 class VideoCodecManager(
     private val videoCodec: String,
-    cachedDecoderName: String? = null
+    cachedDecoderName: String? = null,
 ) {
     private var selectedDecoderName: String? = cachedDecoderName
-    
+
     var onDecoderSelected: ((decoderName: String) -> Unit)? = null
 
     val mimeType: String
@@ -29,7 +29,10 @@ class VideoCodecManager(
     /**
      * 创建解码器 - 优先使用缓存，避免重复检测
      */
-    fun createDecoder(width: Int, height: Int): MediaCodec? {
+    fun createDecoder(
+        width: Int,
+        height: Int,
+    ): MediaCodec? {
         try {
             val format = MediaFormat.createVideoFormat(mimeType, width, height)
 
@@ -68,20 +71,18 @@ class VideoCodecManager(
                     onDecoderSelected?.invoke(info.name)
                     LogManager.d(LogTags.VIDEO_DECODER, "硬件解码: ${info.name}")
                     return MediaCodec.createByCodecName(info.name)
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
 
             // 回退
             LogManager.w(LogTags.VIDEO_DECODER, "使用默认解码器")
             return MediaCodec.createDecoderByType(mimeType)
-
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "创建解码器失败", e)
             return null
         }
     }
 
-    private fun isLikelyHardware(info: MediaCodecInfo): Boolean {
-        return ApiCompatHelper.isHardwareAccelerated(info)
-    }
+    private fun isLikelyHardware(info: MediaCodecInfo): Boolean = ApiCompatHelper.isHardwareAccelerated(info)
 }

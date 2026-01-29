@@ -18,7 +18,12 @@ typealias BallSystemReference = Tuple4<View, View, WindowManager, FloatingMenuGe
 /**
  * 辅助数据类
  */
-data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+data class Tuple4<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D,
+)
 
 /**
  * 显示双球体系统：A（小球）+ B（大球），都用 WindowManager 实现
@@ -29,7 +34,7 @@ data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fou
 fun showDualBallSystem(
     context: Context,
     viewModel: MainViewModel,
-    scope: kotlinx.coroutines.CoroutineScope
+    scope: kotlinx.coroutines.CoroutineScope,
 ): BallSystemReference {
     // 读取触感反馈开关状态（只读取一次）
     val hapticEnabled = viewModel.settings.value.enableFloatingHapticFeedback
@@ -37,7 +42,7 @@ fun showDualBallSystem(
     // 仅在开关开启时初始化触感反馈
     if (hapticEnabled) {
         HapticHelper.init(context)
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "✅ 触感反馈已启用")
+        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "触感反馈已启用")
     } else {
         Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🔕 触感反馈已禁用")
     }
@@ -84,20 +89,21 @@ fun showDualBallSystem(
     windowManager.addView(ballA, paramsA)
 
     // 设置触摸事件
-    val gestureHandler = FloatingMenuGestureHandler(
-        context = context,
-        ballA = ballA,
-        ballB = ballB,
-        windowManager = windowManager,
-        paramsA = paramsA,
-        paramsB = paramsB,
-        viewModel = viewModel,
-        scope = scope,
-        hapticEnabled = hapticEnabled  // 传递触感开关状态
-    )
+    val gestureHandler =
+        FloatingMenuGestureHandler(
+            context = context,
+            ballA = ballA,
+            ballB = ballB,
+            windowManager = windowManager,
+            paramsA = paramsA,
+            paramsB = paramsB,
+            viewModel = viewModel,
+            scope = scope,
+            hapticEnabled = hapticEnabled, // 传递触感开关状态
+        )
     ballA.setOnTouchListener(gestureHandler)
 
-    Log.d(LogTags.FLOATING_CONTROLLER_MSG, "✅ 双球体系统已创建（${if (isLandscape) "横屏" else "竖屏"}）")
+    Log.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已创建（${if (isLandscape) "横屏" else "竖屏"}）")
     return Tuple4(ballA, ballB, windowManager, gestureHandler)
 }
 
@@ -117,7 +123,7 @@ fun hideDualBallSystem(reference: BallSystemReference?) {
             if (ballB.isAttachedToWindow) {
                 windowManager.removeView(ballB)
             }
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "✅ 双球体系统已移除")
+            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已移除")
         } catch (e: Exception) {
             Log.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
         }
@@ -127,27 +133,32 @@ fun hideDualBallSystem(reference: BallSystemReference?) {
 /**
  * 创建球体 View
  */
-internal fun createBall(context: Context, sizeDp: Int): View {
+internal fun createBall(
+    context: Context,
+    sizeDp: Int,
+): View {
     val density = context.resources.displayMetrics.density
     val sizePx = (sizeDp * density).toInt()
     val radius = sizePx / 2f
 
     // 球颜色（使用iOS经典灰色）
-    val ballColorsNormal = arrayOf(
-        android.graphics.Color.argb(153, 58, 58, 60),  // 外层 60%
-        android.graphics.Color.argb(102, 44, 44, 46),  // 第二层 40%
-        android.graphics.Color.argb(64, 28, 28, 30),   // 第三层 25%
-        android.graphics.Color.argb(100, 255, 255, 255) // 25% 白色
-    )
+    val ballColorsNormal =
+        arrayOf(
+            android.graphics.Color.argb(153, 58, 58, 60), // 外层 60%
+            android.graphics.Color.argb(102, 44, 44, 46), // 第二层 40%
+            android.graphics.Color.argb(64, 28, 28, 30), // 第三层 25%
+            android.graphics.Color.argb(100, 255, 255, 255), // 25% 白色
+        )
 
     val layerFactors = floatArrayOf(1.0f, 0.75f, 0.60f, 0.40f) // 让每层更小，创造更明显的立体效果
 
     // 预分配 Paint 对象以避免在 onDraw 中重复创建
-    val paints = ballColorsNormal.map { color ->
-        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = color
+    val paints =
+        ballColorsNormal.map { color ->
+            android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                this.color = color
+            }
         }
-    }
 
     return object : View(context) {
         override fun onDraw(canvas: android.graphics.Canvas) {
@@ -156,7 +167,9 @@ internal fun createBall(context: Context, sizeDp: Int): View {
             val centerY = height / 2f
             for (i in ballColorsNormal.indices) {
                 val paint = paints[i]
-                for (j in 0..3) { canvas.drawCircle(centerX, centerY, radius * layerFactors[j], paint) }
+                for (j in 0..3) {
+                    canvas.drawCircle(centerX, centerY, radius * layerFactors[j], paint)
+                }
             }
         }
     }.apply {
@@ -169,7 +182,11 @@ internal fun createBall(context: Context, sizeDp: Int): View {
 /**
  * 创建 WindowManager 参数
  */
-internal fun createWindowParams(context: Context, sizeDp: Int, isFocusable: Boolean): WindowManager.LayoutParams {
+internal fun createWindowParams(
+    context: Context,
+    sizeDp: Int,
+    isFocusable: Boolean,
+): WindowManager.LayoutParams {
     val density = context.resources.displayMetrics.density
     val sizePx = (sizeDp * density).toInt()
 
@@ -177,8 +194,13 @@ internal fun createWindowParams(context: Context, sizeDp: Int, isFocusable: Bool
         // 应用内悬浮窗使用 TYPE_APPLICATION
         type = WindowManager.LayoutParams.TYPE_APPLICATION
         format = PixelFormat.TRANSLUCENT
-        flags = if (isFocusable) { WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        } else { WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE }
+        flags =
+            if (isFocusable) {
+                // 可触摸，不设置 FLAG_NOT_FOCUSABLE，让悬浮球能接收返回键
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+            } else {
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            }
         width = sizePx
         height = sizePx
         gravity = Gravity.TOP or Gravity.START

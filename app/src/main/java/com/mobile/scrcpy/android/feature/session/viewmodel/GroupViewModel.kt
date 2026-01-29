@@ -11,9 +11,6 @@ import com.mobile.scrcpy.android.feature.session.data.repository.GroupData
 import com.mobile.scrcpy.android.feature.session.data.repository.GroupRepository
 import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
 import com.mobile.scrcpy.android.feature.session.data.repository.SessionRepository
-
-
-
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,17 +26,17 @@ import java.util.UUID
  */
 class GroupViewModel(
     private val groupRepository: GroupRepository,
-    private val sessionRepository: SessionRepository
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
-
     // ============ 分组数据 ============
 
-    val groups: StateFlow<List<DeviceGroup>> = groupRepository.groupsFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
-            initialValue = emptyList()
-        )
+    val groups: StateFlow<List<DeviceGroup>> =
+        groupRepository.groupsFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
+                initialValue = emptyList(),
+            )
 
     // ============ 分组筛选状态 ============
 
@@ -53,39 +50,49 @@ class GroupViewModel(
 
     // ============ 筛选后的会话列表 ============
 
-    private val sessionDataList: StateFlow<List<SessionData>> = sessionRepository.sessionDataFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
-            initialValue = emptyList()
-        )
+    private val sessionDataList: StateFlow<List<SessionData>> =
+        sessionRepository.sessionDataFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
+                initialValue = emptyList(),
+            )
 
-    val filteredSessions: StateFlow<List<SessionData>> = combine(
-        sessionDataList,
-        _selectedGroupPath,
-        groups
-    ) { sessions, groupPath, groupsList ->
-        when (groupPath) {
-            DefaultGroups.ALL_DEVICES -> sessions
-            DefaultGroups.UNGROUPED -> sessions.filter { it.groupIds.isEmpty() }
-            else -> sessions.filter { session ->
-                // 检查 groupIds 是否包含当前分组或其子分组
-                val currentGroup = groupsList.find { it.path == groupPath }
-                if (currentGroup != null) {
-                    session.groupIds.any { groupId ->
-                        val group = groupsList.find { it.id == groupId }
-                        group != null && (group.path == groupPath || group.path.startsWith("$groupPath/"))
+    val filteredSessions: StateFlow<List<SessionData>> =
+        combine(
+            sessionDataList,
+            _selectedGroupPath,
+            groups,
+        ) { sessions, groupPath, groupsList ->
+            when (groupPath) {
+                DefaultGroups.ALL_DEVICES -> {
+                    sessions
+                }
+
+                DefaultGroups.UNGROUPED -> {
+                    sessions.filter { it.groupIds.isEmpty() }
+                }
+
+                else -> {
+                    sessions.filter { session ->
+                        // 检查 groupIds 是否包含当前分组或其子分组
+                        val currentGroup = groupsList.find { it.path == groupPath }
+                        if (currentGroup != null) {
+                            session.groupIds.any { groupId ->
+                                val group = groupsList.find { it.id == groupId }
+                                group != null && (group.path == groupPath || group.path.startsWith("$groupPath/"))
+                            }
+                        } else {
+                            false
+                        }
                     }
-                } else {
-                    false
                 }
             }
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
-        initialValue = emptyList()
-    )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(AppConstants.STATEFLOW_SUBSCRIBE_TIMEOUT_MS),
+            initialValue = emptyList(),
+        )
 
     // ============ 分组选择 ============
 
@@ -111,19 +118,19 @@ class GroupViewModel(
     fun addGroup(
         name: String,
         parentPath: String,
-        description: String = "",
-        type: GroupType = GroupType.SESSION
+        type: GroupType = GroupType.SESSION,
     ) {
         viewModelScope.launch {
             val path = if (parentPath == "/") "/$name" else "$parentPath/$name"
-            val groupData = GroupData(
-                id = UUID.randomUUID().toString(),
-                name = name,
-                type = type.name,
-                path = path,
-                parentPath = parentPath,
-                description = description
-            )
+            val groupData =
+                GroupData(
+                    id = UUID.randomUUID().toString(),
+                    name = name,
+                    type = type.name,
+                    path = path,
+                    parentPath = parentPath,
+                    description = "",
+                )
             groupRepository.addGroup(groupData)
         }
     }
@@ -133,15 +140,16 @@ class GroupViewModel(
      */
     fun updateGroup(group: DeviceGroup) {
         viewModelScope.launch {
-            val groupData = GroupData(
-                id = group.id,
-                name = group.name,
-                type = group.type.name,
-                path = group.path,
-                parentPath = group.parentPath,
-                description = group.description,
-                createdAt = group.createdAt
-            )
+            val groupData =
+                GroupData(
+                    id = group.id,
+                    name = group.name,
+                    type = group.type.name,
+                    path = group.path,
+                    parentPath = group.parentPath,
+                    description = group.description,
+                    createdAt = group.createdAt,
+                )
             groupRepository.updateGroup(groupData)
         }
     }
@@ -175,12 +183,12 @@ class GroupViewModel(
     companion object {
         fun provideFactory(
             groupRepository: GroupRepository,
-            sessionRepository: SessionRepository
-        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return GroupViewModel(groupRepository, sessionRepository) as T
+            sessionRepository: SessionRepository,
+        ): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    GroupViewModel(groupRepository, sessionRepository) as T
             }
-        }
     }
 }

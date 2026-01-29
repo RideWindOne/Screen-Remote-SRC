@@ -8,6 +8,7 @@ import com.mobile.scrcpy.android.feature.session.data.repository.SessionReposito
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -15,11 +16,10 @@ import kotlinx.coroutines.launch
  * 职责：会话 CRUD、对话框状态、编解码器缓存
  */
 class SessionViewModel(
-    private val sessionRepository: SessionRepository
+    private val sessionRepository: SessionRepository,
 ) : ViewModel() {
-
     // ============ 对话框状态 ============
-    
+
     private val _showAddSessionDialog = MutableStateFlow(false)
     val showAddSessionDialog: StateFlow<Boolean> = _showAddSessionDialog.asStateFlow()
 
@@ -34,8 +34,21 @@ class SessionViewModel(
     }
 
     fun showEditSessionDialog(sessionId: String) {
-        _editingSessionId.value = sessionId
-        _showAddSessionDialog.value = true
+        // 如果当前正在编辑其他会话，先关闭对话框再打开新的
+        // 这样可以确保不会丢失原始数据（临时编辑数据会被丢弃）
+        if (_showAddSessionDialog.value && _editingSessionId.value != sessionId) {
+            _showAddSessionDialog.value = false
+            _editingSessionId.value = null
+            // 使用延迟确保对话框完全关闭后再打开新的
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(100)
+                _editingSessionId.value = sessionId
+                _showAddSessionDialog.value = true
+            }
+        } else {
+            _editingSessionId.value = sessionId
+            _showAddSessionDialog.value = true
+        }
     }
 
     fun hideAddSessionDialog() {
@@ -76,6 +89,63 @@ class SessionViewModel(
     }
 
     /**
+     * 复制会话，生成新名字（原名 + _N）
+     * @param sessionData 要复制的会话数据
+     */
+    fun copySession(sessionData: SessionData) {
+        viewModelScope.launch {
+            // 获取所有会话
+            val allSessions = sessionRepository.sessionDataFlow.first()
+
+            // 生成新名字（原名 + _N）
+            val newName = generateCopyName(sessionData.name, allSessions)
+
+            // 创建新会话（新 ID，新名字）
+            val newSession =
+                sessionData.copy(
+                    id =
+                        java.util.UUID
+                            .randomUUID()
+                            .toString(),
+                    name = newName,
+                )
+
+            sessionRepository.addSession(newSession)
+        }
+    }
+
+    /**
+     * 生成复制会话的名字（原名 + _N）
+     * 例如：会话1 -> 会话1_2, 会话1_2 -> 会话1_3
+     */
+    private fun generateCopyName(
+        originalName: String,
+        existingSessions: List<SessionData>,
+    ): String {
+        val existingNames = existingSessions.map { it.name }.toSet()
+
+        // 提取基础名字（去掉 _N 后缀）
+        val baseName = originalName.replace(Regex("_\\d+$"), "")
+
+        // 查找所有相同基础名字的会话
+        val pattern = Regex("^${Regex.escape(baseName)}(?:_(\\d+))?$")
+        val existingNumbers =
+            existingNames.mapNotNull { name ->
+                pattern
+                    .matchEntire(name)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.toIntOrNull() ?: 0
+            }
+
+        // 找到最大的数字，生成新的数字
+        val maxNumber = existingNumbers.maxOrNull() ?: 0
+        val newNumber = maxNumber + 1
+
+        return "${baseName}_$newNumber"
+    }
+
+    /**
      * 更新会话的编解码器缓存
      * @param sessionId 会话 ID
      * @param videoDecoder 视频解码器名称（null 表示不更新）
@@ -84,15 +154,16 @@ class SessionViewModel(
     suspend fun updateCodecCache(
         sessionId: String,
         videoDecoder: String? = null,
-        audioDecoder: String? = null
+        audioDecoder: String? = null,
     ) {
         val currentData = sessionRepository.getSessionData(sessionId) ?: return
 
-        val updatedData = currentData.copy(
-            cachedVideoDecoder = videoDecoder ?: currentData.cachedVideoDecoder,
-            cachedAudioDecoder = audioDecoder ?: currentData.cachedAudioDecoder,
-            codecCacheTimestamp = System.currentTimeMillis()
-        )
+        val updatedData =
+            currentData.copy(
+                cachedVideoDecoder = videoDecoder ?: currentData.cachedVideoDecoder,
+                cachedAudioDecoder = audioDecoder ?: currentData.cachedAudioDecoder,
+                codecCacheTimestamp = System.currentTimeMillis(),
+            )
 
         sessionRepository.updateSession(updatedData)
     }
@@ -100,13 +171,10 @@ class SessionViewModel(
     // ============ Factory ============
 
     companion object {
-        fun provideFactory(
-            sessionRepository: SessionRepository
-        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return SessionViewModel(sessionRepository) as T
+        fun provideFactory(sessionRepository: SessionRepository): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T = SessionViewModel(sessionRepository) as T
             }
-        }
     }
 }

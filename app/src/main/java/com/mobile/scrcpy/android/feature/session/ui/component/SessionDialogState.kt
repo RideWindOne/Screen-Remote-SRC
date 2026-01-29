@@ -11,42 +11,48 @@ import java.util.UUID
 /**
  * 会话对话框状态管理
  */
-class SessionDialogState(sessionData: SessionData? = null) {
+class SessionDialogState(
+    sessionData: SessionData? = null,
+) {
     // 基本信息
     var sessionName by mutableStateOf(sessionData?.name ?: "")
     var host by mutableStateOf(
-        if (sessionData?.isUsbConnection() == true) "" 
-        else sessionData?.host ?: ""
+        if (sessionData?.isUsbConnection() == true) {
+            ""
+        } else {
+            sessionData?.host ?: ""
+        },
     )
-    var port by mutableStateOf(sessionData?.port ?: "5555")
+    var port by mutableStateOf(sessionData?.port ?: "")
     var color by mutableStateOf(sessionData?.color ?: "BLUE")
-    
+
     // USB 模式
     var isUsbMode by mutableStateOf(sessionData?.isUsbConnection() ?: false)
     var usbSerialNumber by mutableStateOf(
-        sessionData?.getUsbSerialNumber() ?: ""
+        sessionData?.getUsbSerialNumber() ?: "",
     )
-    
+
     // 分组
     var selectedGroupIds by mutableStateOf(sessionData?.groupIds ?: emptyList())
-    
+
     // 连接选项
     var forceAdb by mutableStateOf(sessionData?.forceAdb ?: false)
-    
+
     // 视频配置
     var maxSize by mutableStateOf(sessionData?.maxSize ?: "")
     var bitrate by mutableStateOf(sessionData?.bitrate ?: "")
     var maxFps by mutableStateOf(sessionData?.maxFps ?: "")
     var videoCodec by mutableStateOf(sessionData?.videoCodec ?: ScrcpyConstants.DEFAULT_VIDEO_CODEC)
     var videoEncoder by mutableStateOf(sessionData?.videoEncoder ?: "")
-    
+
     // 音频配置
     var enableAudio by mutableStateOf(sessionData?.enableAudio ?: false)
     var audioCodec by mutableStateOf(sessionData?.audioCodec ?: ScrcpyConstants.DEFAULT_AUDIO_CODEC)
     var audioEncoder by mutableStateOf(sessionData?.audioEncoder ?: "")
     var audioVolume by mutableFloatStateOf(1.0f)
-    
+
     // 其他选项
+    var keyFrameInterval by mutableStateOf(sessionData?.keyFrameInterval ?: 2)
     var stayAwake by mutableStateOf(sessionData?.stayAwake ?: false)
     var turnScreenOff by mutableStateOf(sessionData?.turnScreenOff ?: true)
     var powerOffOnClose by mutableStateOf(sessionData?.powerOffOnClose ?: false)
@@ -55,24 +61,27 @@ class SessionDialogState(sessionData: SessionData? = null) {
     var enableHardwareDecoding by mutableStateOf(true)
     var followRemoteOrientation by mutableStateOf(false)
     var showNewDisplay by mutableStateOf(false)
-    
+
     // UI 状态
+    var showKeyFrameIntervalMenu by mutableStateOf(false)
     var showVideoCodecMenu by mutableStateOf(false)
     var showAudioCodecMenu by mutableStateOf(false)
     var showEncoderOptionsDialog by mutableStateOf(false)
     var showAudioEncoderDialog by mutableStateOf(false)
     var showUsbDeviceDialog by mutableStateOf(false)
-    
+    var showGroupSelector by mutableStateOf(false)
+
     /**
      * 转换为 SessionData
      */
     fun toSessionData(existingId: String? = null): SessionData {
-        val finalHost = if (isUsbMode) {
-            "usb:$usbSerialNumber"
-        } else {
-            host
-        }
-        
+        val finalHost =
+            if (isUsbMode) {
+                "usb:$usbSerialNumber"
+            } else {
+                host
+            }
+
         return SessionData(
             id = existingId ?: UUID.randomUUID().toString(),
             name = sessionName,
@@ -88,14 +97,25 @@ class SessionDialogState(sessionData: SessionData? = null) {
             enableAudio = enableAudio,
             audioCodec = audioCodec,
             audioEncoder = audioEncoder,
+            keyFrameInterval = keyFrameInterval,
             stayAwake = stayAwake,
             turnScreenOff = turnScreenOff,
             powerOffOnClose = powerOffOnClose,
             useFullScreen = useFullScreen,
-            groupIds = selectedGroupIds
+            groupIds = selectedGroupIds,
         )
     }
-    
+
+    /**
+     * 检查是否有有效的设备连接信息
+     */
+    fun hasValidDevice(): Boolean =
+        if (isUsbMode) {
+            usbSerialNumber.isNotBlank()
+        } else {
+            host.isNotBlank()
+        }
+
     /**
      * 验证输入
      */

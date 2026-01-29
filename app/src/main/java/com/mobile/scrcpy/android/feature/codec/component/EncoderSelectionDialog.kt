@@ -1,16 +1,21 @@
 package com.mobile.scrcpy.android.feature.codec.component
 
-import android.annotation.SuppressLint
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,24 +26,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
-import com.mobile.scrcpy.android.core.designsystem.component.DialogHeader
+import com.mobile.scrcpy.android.core.common.AppDimens
+import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
+import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
+import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenu
+import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
-import kotlinx.coroutines.launch
-
 import com.mobile.scrcpy.android.core.i18n.CodecTexts
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
+import com.mobile.scrcpy.android.feature.codec.ui.CodecTestScreen
+import com.mobile.scrcpy.android.feature.session.ui.component.CompactTextField
+import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
+import kotlinx.coroutines.launch
+
 /**
  * 通用编码器选择对话框
- * 
+ *
  * @param encoderType 编码器类型（视频或音频）
  * @param host 设备主机地址
  * @param port 设备端口
@@ -46,7 +57,6 @@ import com.mobile.scrcpy.android.core.i18n.SessionTexts
  * @param onDismiss 关闭对话框回调
  * @param onEncoderSelected 选择编码器回调
  */
-@SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun EncoderSelectionDialog(
     encoderType: EncoderType,
@@ -54,17 +64,14 @@ fun EncoderSelectionDialog(
     port: String,
     currentEncoder: String = "",
     onDismiss: () -> Unit,
-    onEncoderSelected: (String) -> Unit = {}
+    onEncoderSelected: (String) -> Unit = {},
 ) {
-    val configuration = LocalConfiguration.current
-    val screenHeight = configuration.screenHeightDp.dp
-    val dialogHeight = screenHeight * 0.8f
-
     var selectedEncoder by remember { mutableStateOf(currentEncoder) }
     var customEncoderName by remember { mutableStateOf(currentEncoder) }
     var detectedEncoders by remember { mutableStateOf<List<EncoderInfo>>(emptyList()) }
     var isDetecting by remember { mutableStateOf(false) }
     var detectError by remember { mutableStateOf<String?>(null) }
+    var showCodecTestScreen by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -89,7 +96,7 @@ fun EncoderSelectionDialog(
                 val connectResult = adbConnectionManager.connectDevice(host, port.toIntOrNull() ?: 5555)
 
                 if (connectResult.isFailure) {
-                    detectError = "${CommonTexts.ERROR_CONNECTION_FAILED.get()}: ${connectResult.exceptionOrNull()?.message}"
+                    detectError = "${connectResult.exceptionOrNull()?.message}"
                     isDetecting = false
                     return@launch
                 }
@@ -111,9 +118,11 @@ fun EncoderSelectionDialog(
                                 detectError = config.noEncodersStatus
                             }
                         } else {
-                            detectError = "${SessionTexts.ERROR_DETECTION_FAILED.get()}: ${result.exceptionOrNull()?.message}"
+                            detectError =
+                                "${SessionTexts.ERROR_DETECTION_FAILED.get()}: ${result.exceptionOrNull()?.message}"
                         }
                     }
+
                     EncoderType.AUDIO -> {
                         val result = connection.detectAudioEncoders(context)
                         if (result.isSuccess) {
@@ -122,7 +131,8 @@ fun EncoderSelectionDialog(
                                 detectError = config.noEncodersStatus
                             }
                         } else {
-                            detectError = "${SessionTexts.ERROR_DETECTION_FAILED.get()}: ${result.exceptionOrNull()?.message}"
+                            detectError =
+                                "${SessionTexts.ERROR_DETECTION_FAILED.get()}: ${result.exceptionOrNull()?.message}"
                         }
                     }
                 }
@@ -134,124 +144,106 @@ fun EncoderSelectionDialog(
         }
     }
 
+    // 保存选择的函数
+    fun saveSelection() {
+        val encoder =
+            when {
+                selectedEncoder.isNotEmpty() -> selectedEncoder
+                customEncoderName.isNotEmpty() -> customEncoderName
+                else -> ""
+            }
+        onEncoderSelected(encoder)
+        onDismiss()
+    }
+
     // 自动检测一次
     LaunchedEffect(Unit) {
         detectEncoders()
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true
+    // 搜索和筛选状态
+    var searchText by remember { mutableStateOf("") }
+    var codecTypeFilter by remember { mutableStateOf(config.filterOptions.first()) }
+
+    // 显示编解码器测试屏幕
+    if (showCodecTestScreen) {
+        CodecTestScreen(
+            onBack = { showCodecTestScreen = false },
         )
+        return
+    }
+
+    DialogPage(
+        title = config.title,
+        onDismiss = { saveSelection() },
+        showBackButton = true,
+        rightButtonText = SessionTexts.ENCODER_REFRESH_BUTTON.get(),
+        onRightButtonClick = { detectEncoders() },
+        rightButtonEnabled = !isDetecting,
+        maxHeightRatio = 0.8f,
+        enableScroll = true,
+        horizontalPadding = 16.dp,
+        verticalSpacing = 8.dp,
     ) {
+        // 编码器选项
+        SectionTitle(SessionTexts.SECTION_ENCODER_OPTIONS.get())
+
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .height(dialogHeight),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.background
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Column {
-                DialogHeader(
-                    title = config.title,
-                    onDismiss = onDismiss,
-                    showBackButton = true,
-                    rightButtonText = CommonTexts.BUTTON_DONE.get(),
-                    onRightButtonClick = {
-                        val encoder = when {
-                            selectedEncoder.isNotEmpty() -> selectedEncoder
-                            customEncoderName.isNotEmpty() -> customEncoderName
-                            else -> ""
-                        }
-                        onEncoderSelected(encoder)
-                        onDismiss()
-                    }
+                EncoderOptionsSection(
+                    selectedEncoder = selectedEncoder,
+                    customEncoderName = customEncoderName,
+                    onDefaultEncoderSelected = {
+                        selectedEncoder = ""
+                        customEncoderName = ""
+                    },
+                    onCustomEncoderNameChange = {
+                        customEncoderName = it
+                        selectedEncoder = ""
+                    },
+                    showCodecTest = config.showCodecTest,
+                    onCodecTestClick = { showCodecTestScreen = true },
                 )
+            }
+        }
 
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(10.dp)
-                ) {
-                    // 搜索和筛选状态
-                    var searchText by remember { mutableStateOf("") }
-                    var codecTypeFilter by remember { mutableStateOf(config.filterOptions.first()) }
-                    
-                    // 编码器选项
-                    SectionTitle(SessionTexts.SECTION_ENCODER_OPTIONS.get())
-                    EncoderOptionsSection(
-                        selectedEncoder = selectedEncoder,
-                        customEncoderName = customEncoderName,
-                        onDefaultEncoderSelected = {
-                            selectedEncoder = ""
-                            customEncoderName = ""
-                        },
-                        onCustomEncoderNameChange = {
-                            customEncoderName = it
-                            selectedEncoder = ""
-                        },
-                        showCodecTest = config.showCodecTest
-                    )
+        // 检测到的编码器
+        SectionTitle(config.sectionTitle)
+        when {
+            isDetecting -> {
+                DetectingCard(
+                    status = config.detectingStatus,
+                    host = host,
+                    port = port,
+                )
+            }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+            detectError != null -> {
+                ErrorCard(error = detectError!!)
+            }
 
-                    // 检测到的编码器
-                    SectionTitle(config.sectionTitle)
+            detectedEncoders.isEmpty() -> {
+                EmptyCard(message = config.noEncodersStatus)
+            }
 
-                    when {
-                        isDetecting -> {
-                            DetectingCard(
-                                status = config.detectingStatus,
-                                host = host,
-                                port = port
-                            )
-                        }
-                        detectError != null -> {
-                            ErrorCard(error = detectError!!)
-                        }
-                        detectedEncoders.isEmpty() -> {
-                            EmptyCard(message = config.noEncodersStatus)
-                        }
-                        else -> {
-                            EncoderListSection(
-                                encoders = detectedEncoders,
-                                searchText = searchText,
-                                onSearchTextChange = { searchText = it },
-                                codecTypeFilter = codecTypeFilter,
-                                onCodecTypeFilterChange = { codecTypeFilter = it },
-                                filterOptions = config.filterOptions,
-                                selectedEncoder = selectedEncoder,
-                                onEncoderSelected = { encoder ->
-                                    selectedEncoder = encoder.name
-                                    customEncoderName = encoder.name
-                                },
-                                encoderType = encoderType
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // 刷新编码器按钮
-                    Button(
-                        onClick = { detectEncoders() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        enabled = !isDetecting,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF007AFF),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(SessionTexts.ENCODER_REFRESH_BUTTON.get())
-                    }
-                }
+            else -> {
+                EncoderListSection(
+                    encoders = detectedEncoders,
+                    searchText = searchText,
+                    onSearchTextChange = { searchText = it },
+                    codecTypeFilter = codecTypeFilter,
+                    onCodecTypeFilterChange = { codecTypeFilter = it },
+                    filterOptions = config.filterOptions,
+                    selectedEncoder = selectedEncoder,
+                    onEncoderSelected = { encoder ->
+                        selectedEncoder = encoder.name
+                        customEncoderName = encoder.name
+                    },
+                    encoderType = encoderType,
+                )
             }
         }
     }
@@ -264,28 +256,26 @@ fun EncoderSelectionDialog(
 private fun DetectingCard(
     status: String,
     host: String,
-    port: String
+    port: String,
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(16.dp),
         ) {
             Text(
                 text = status,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "$host:${port.ifBlank { "5555" }}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
         }
     }
@@ -297,17 +287,15 @@ private fun DetectingCard(
 @Composable
 private fun ErrorCard(error: String) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFFFFEBEE)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFFFFEBEE),
     ) {
         Text(
             text = error,
             modifier = Modifier.padding(16.dp),
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFC62828)
+            color = Color(0xFFC62828),
         )
     }
 }
@@ -318,17 +306,15 @@ private fun ErrorCard(error: String) {
 @Composable
 private fun EmptyCard(message: String) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Text(
             text = message,
             modifier = Modifier.padding(16.dp),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -342,46 +328,76 @@ private fun EncoderOptionsSection(
     customEncoderName: String,
     onDefaultEncoderSelected: () -> Unit,
     onCustomEncoderNameChange: (String) -> Unit,
-    showCodecTest: Boolean
+    showCodecTest: Boolean,
+    onCodecTestClick: () -> Unit = {},
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         // 默认编码器选项
-        androidx.compose.material3.RadioButton(
-            selected = selectedEncoder.isEmpty() && customEncoderName.isEmpty(),
-            onClick = onDefaultEncoderSelected
-        )
-        Text(
-            text = SessionTexts.LABEL_DEFAULT_ENCODER.get(),
-            style = MaterialTheme.typography.bodyMedium
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(AppDimens.listItemHeight)
+                    .clickable(onClick = onDefaultEncoderSelected)
+                    .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = SessionTexts.LABEL_DEFAULT_ENCODER.get(),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Icon(
+                imageVector =
+                    if (selectedEncoder.isEmpty() && customEncoderName.isEmpty()) {
+                        Icons.Default.CheckCircle
+                    } else {
+                        Icons.Default.RadioButtonUnchecked
+                    },
+                contentDescription = null,
+                tint =
+                    if (selectedEncoder.isEmpty() && customEncoderName.isEmpty()) {
+                        Color(0xFF007AFF)
+                    } else {
+                        Color(0xFFE5E5EA)
+                    },
+                modifier = Modifier.size(22.dp),
+            )
+        }
+
+        AppDivider()
+
         // 自定义编码器输入
-        androidx.compose.material3.OutlinedTextField(
+        CompactTextField(
             value = customEncoderName,
             onValueChange = onCustomEncoderNameChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(SessionTexts.PLACEHOLDER_CUSTOM_ENCODER.get()) },
-            singleLine = true
+            placeholder = SessionTexts.PLACEHOLDER_CUSTOM_ENCODER.get(),
+            keyboardType = KeyboardType.Text,
         )
-        
+
         // 编解码器测试按钮（仅音频编码器显示）
         if (showCodecTest) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { /* TODO: 打开编解码器测试页面 */ },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+            AppDivider()
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(AppDimens.listItemHeight)
+                        .clickable { onCodecTestClick() }
+                        .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(SessionTexts.LABEL_TEST_AUDIO_DECODER.get())
+                Text(
+                    text = SessionTexts.LABEL_TEST_AUDIO_DECODER.get(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color(0xFF007AFF),
+                )
+                Text(
+                    text = "›",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFFE5E5EA),
+                )
             }
         }
     }
@@ -400,97 +416,152 @@ private fun EncoderListSection(
     filterOptions: List<String>,
     selectedEncoder: String,
     onEncoderSelected: (EncoderInfo) -> Unit,
-    encoderType: EncoderType
+    encoderType: EncoderType,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        // 搜索框
-        androidx.compose.material3.OutlinedTextField(
-            value = searchText,
-            onValueChange = onSearchTextChange,
+        // 搜索框和筛选选项在一行
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(SessionTexts.PLACEHOLDER_SEARCH_ENCODER.get()) },
-            singleLine = true
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // 筛选选项
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            filterOptions.forEach { option ->
-                androidx.compose.material3.FilterChip(
-                    selected = codecTypeFilter == option,
-                    onClick = { onCodecTypeFilterChange(option) },
-                    label = { Text(option) }
+            // 搜索框
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.weight(1f),
+            ) {
+                CompactTextField(
+                    value = searchText,
+                    onValueChange = onSearchTextChange,
+                    placeholder = SessionTexts.PLACEHOLDER_SEARCH_ENCODER.get(),
+                    keyboardType = KeyboardType.Text,
                 )
             }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // 编码器列表
-        val filteredEncoders = encoders.filter { encoder ->
-            val matchesSearch = searchText.isEmpty() || 
-                encoder.name.contains(searchText, ignoreCase = true) ||
-                encoder.mimeType.contains(searchText, ignoreCase = true)
-            
-            val matchesFilter = codecTypeFilter == filterOptions.first() || 
-                encoder.mimeType.contains(codecTypeFilter, ignoreCase = true)
-            
-            matchesSearch && matchesFilter
-        }
-        
-        filteredEncoders.forEach { encoder ->
+
+            // 筛选选项
+            var showFilterMenu by remember { mutableStateOf(false) }
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = if (selectedEncoder == encoder.name) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surface
-                },
-                onClick = { onEncoderSelected(encoder) }
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier =
+                    Modifier
+                        .widthIn(min = 60.dp, max = 80.dp)
+                        .wrapContentWidth(),
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp)
+                Row(
+                    modifier =
+                        Modifier
+                            .height(AppDimens.listItemHeight)
+                            .clickable { showFilterMenu = true }
+                            .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = encoder.name,
+                        text = codecTypeFilter,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (selectedEncoder == encoder.name) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
-                    Text(
-                        text = encoder.mimeType,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (selectedEncoder == encoder.name) {
-                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
+                }
+                IOSStyledDropdownMenu(
+                    expanded = showFilterMenu,
+                    offset = DpOffset(0.dp, 100.dp),
+                    onDismissRequest = { showFilterMenu = false },
+                ) {
+                    filterOptions.forEach { option ->
+                        IOSStyledDropdownMenuItem(
+                            text = option,
+                            onClick = {
+                                onCodecTypeFilterChange(option)
+                                showFilterMenu = false
+                            },
+                        )
+                    }
                 }
             }
         }
-        
-        // 显示筛选结果统计
-        Text(
-            text = "${CodecTexts.CODEC_TEST_FOUND_COUNT.get()} ${filteredEncoders.size} ${
-                if (encoderType == EncoderType.VIDEO) 
-                    CodecTexts.CODEC_TEST_AUDIO_CODECS.get() 
-                else 
-                    CodecTexts.CODEC_TEST_AUDIO_CODECS.get()
-            }",
-            modifier = Modifier.padding(vertical = 8.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 编码器列表
+        val filteredEncoders =
+            encoders.filter { encoder ->
+                val matchesSearch =
+                    searchText.isEmpty() ||
+                        encoder.name.contains(searchText, ignoreCase = true) ||
+                        encoder.mimeType.contains(searchText, ignoreCase = true)
+
+                val matchesFilter =
+                    matchesCodecFilter(
+                        encoder.mimeType,
+                        codecTypeFilter,
+                        filterOptions.first(),
+                    )
+
+                matchesSearch && matchesFilter
+            }
+
+        if (filteredEncoders.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+                Column {
+                    filteredEncoders.forEachIndexed { index, encoder ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onEncoderSelected(encoder) }
+                                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = encoder.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = encoder.mimeType,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (selectedEncoder == encoder.name) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
+                        if (index < filteredEncoders.size - 1) {
+                            AppDivider()
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 显示筛选结果统计
+            Text(
+                text = "${CodecTexts.CODEC_TEST_FOUND_COUNT.get()} ${filteredEncoders.size} ${
+                    if (encoderType == EncoderType.VIDEO) {
+                        CodecTexts.CODEC_TEST_VIDEO_CODECS.get()
+                    } else {
+                        CodecTexts.CODEC_TEST_AUDIO_CODECS.get()
+                    }
+                }",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            EmptyCard(message = SessionTexts.STATUS_NO_ENCODERS_DETECTED.get())
+        }
     }
 }

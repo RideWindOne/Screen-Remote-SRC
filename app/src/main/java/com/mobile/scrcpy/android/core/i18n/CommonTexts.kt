@@ -15,7 +15,7 @@ object CommonTexts {
     val BUTTON_CLOSE = TextPair("关闭", "Close")
     val BUTTON_RECONNECT = TextPair("重新连接", "Reconnect")
     val BUTTON_CANCEL_CONNECTION = TextPair("取消连接", "Cancel")
-    
+
     // 通用标签
     val LABEL_STATUS = TextPair("状态", "Status")
     val ERROR_LABEL = TextPair("错误", "Error")
@@ -24,7 +24,7 @@ object CommonTexts {
     val LABEL_USING = TextPair("使用", "Using")
     val LABEL_ITEMS = TextPair("个", "items")
     val LABEL_CHARACTERS = TextPair("字符", "characters")
-    
+
     // 时间单位
     val TIME_1_MINUTE = TextPair("1 分钟", "1 minute")
     val TIME_5_MINUTES = TextPair("5 分钟", "5 minutes")
@@ -32,9 +32,13 @@ object CommonTexts {
     val TIME_30_MINUTES = TextPair("30 分钟", "30 minutes")
     val TIME_1_HOUR = TextPair("1 小时", "1 hour")
     val TIME_ALWAYS = TextPair("始终", "Always")
-    
+
     // 连接状态
     val STATUS_CONNECTING = TextPair("正在连接...", "Connecting...")
     val ERROR_CONNECTION_FAILED = TextPair("连接失败", "Connection failed")
     val CONNECTION_FAILED_TITLE = TextPair("连接失败", "Connection Failed")
+
+    // 帮助提示
+    val HELP_ICON_DESCRIPTION = TextPair("帮助", "Help")
+    val HELP_DIALOG_TITLE = TextPair("说明", "Help")
 }

@@ -7,14 +7,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
-import com.mobile.scrcpy.android.infrastructure.media.audio.AudioDecoder
-import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
+import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectionViewModel
 import com.mobile.scrcpy.android.feature.session.viewmodel.SessionViewModel
+import com.mobile.scrcpy.android.infrastructure.media.audio.AudioDecoder
+import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 /**
  * 音频解码器管理器
  * 负责音频解码器的生命周期管理
@@ -23,7 +23,7 @@ class AudioDecoderManager(
     private val connectionViewModel: ConnectionViewModel,
     private val sessionViewModel: SessionViewModel,
     private val sessionId: String,
-    private val audioVolume: Float
+    private val audioVolume: Float,
 ) {
     var audioDecoder: AudioDecoder? = null
         private set
@@ -39,7 +39,7 @@ class AudioDecoderManager(
      */
     suspend fun startDecoder(
         stream: AudioStream,
-        scope: kotlinx.coroutines.CoroutineScope
+        scope: kotlinx.coroutines.CoroutineScope,
     ) {
         if (isAudioDecoderStarting) return
 
@@ -48,15 +48,16 @@ class AudioDecoderManager(
             LogManager.d(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_START_AUDIO_DECODER.get()}: codec=$codec")
 
             // 使用通用 AudioDecoder (支持 opus/raw/aac/flac)
-            val decoder = AudioDecoder(volumeScale = audioVolume).apply {
-                // 连接丢失回调
-                onConnectionLost = {
-                    LogManager.w(LogTags.AUDIO_DECODER, "⚠️ ${RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.get()}")
-                    scope.launch(Dispatchers.Main) {
-                        connectionViewModel.handleConnectionLost()
+            val decoder =
+                AudioDecoder(volumeScale = audioVolume).apply {
+                    // 连接丢失回调
+                    onConnectionLost = {
+                        LogManager.w(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.get()}")
+                        scope.launch(Dispatchers.Main) {
+                            connectionViewModel.handleConnectionLost()
+                        }
                     }
                 }
-            }
             audioDecoder = decoder
 
             // 使用 Dispatchers.IO 的独立协程，不受 LaunchedEffect 取消影响
@@ -68,14 +69,22 @@ class AudioDecoderManager(
                     LogManager.d(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_DECODER_CANCELLED.get())
                     stopDecoder(decoder)
                 } catch (e: Exception) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_AUDIO_DECODER_FAILED.get()}: ${e.message}", e)
+                    LogManager.e(
+                        LogTags.AUDIO_DECODER,
+                        "${RemoteTexts.REMOTE_AUDIO_DECODER_FAILED.get()}: ${e.message}",
+                        e,
+                    )
                     stopDecoder(decoder)
                 }
             }
 
             currentAudioStream = stream
         } catch (e: Exception) {
-            LogManager.e(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_INIT_AUDIO_DECODER_FAILED.get()}: ${e.message}", e)
+            LogManager.e(
+                LogTags.AUDIO_DECODER,
+                "${RemoteTexts.REMOTE_INIT_AUDIO_DECODER_FAILED.get()}: ${e.message}",
+                e,
+            )
             audioDecoder = null
         }
     }
@@ -109,13 +118,14 @@ fun rememberAudioDecoderManager(
     sessionViewModel: SessionViewModel,
     sessionId: String,
     audioStream: AudioStream?,
-    audioVolume: Float
+    audioVolume: Float,
 ): AudioDecoderManager {
     val scope = rememberCoroutineScope()
 
-    val manager = remember(audioVolume) {
-        AudioDecoderManager(connectionViewModel, sessionViewModel, sessionId, audioVolume)
-    }
+    val manager =
+        remember(audioVolume) {
+            AudioDecoderManager(connectionViewModel, sessionViewModel, sessionId, audioVolume)
+        }
 
     // 音频解码器启动 - 监听 audioStream 变化
     LaunchedEffect(audioStream) {
@@ -152,7 +162,11 @@ fun rememberAudioDecoderManager(
                 try {
                     manager.stopCurrentDecoder()
                 } catch (e: Exception) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}", e)
+                    LogManager.e(
+                        LogTags.AUDIO_DECODER,
+                        "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
+                        e,
+                    )
                 }
             }
         }

@@ -4,7 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,20 +42,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
-import com.mobile.scrcpy.android.core.domain.model.ScrcpySession
-import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectStatus
-import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
 import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenuItem
-
+import com.mobile.scrcpy.android.core.domain.model.ScrcpySession
+import com.mobile.scrcpy.android.core.domain.model.SessionColor
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
+import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectStatus
+import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
+import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
+
 @Composable
 fun SessionsScreen(viewModel: MainViewModel) {
     val sessionDataList by viewModel.sessionDataList.collectAsState()
@@ -66,7 +71,7 @@ fun SessionsScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
 
     var sessionToDelete by remember { mutableStateOf<ScrcpySession?>(null) }
-    
+
     // 双语文本
     val txtConfirmDelete = rememberText(SessionTexts.SESSION_CONFIRM_DELETE)
     val txtDelete = rememberText(SessionTexts.SESSION_DELETE)
@@ -78,12 +83,13 @@ fun SessionsScreen(viewModel: MainViewModel) {
         AlertDialog(
             onDismissRequest = { sessionToDelete = null },
             title = { Text(txtConfirmDelete) },
-            text = { 
-                val message = if (LanguageManager.isChinese()) {
-                    "确定要删除会话 \"${session.name}\" 吗？"
-                } else {
-                    "Are you sure you want to delete session \"${session.name}\"?"
-                }
+            text = {
+                val message =
+                    if (LanguageManager.isChinese()) {
+                        "确定要删除会话 \"${session.name}\" 吗？"
+                    } else {
+                        "Are you sure you want to delete session \"${session.name}\"?"
+                    }
                 Text(message)
             },
             confirmButton = {
@@ -98,7 +104,7 @@ fun SessionsScreen(viewModel: MainViewModel) {
                 TextButton(onClick = { sessionToDelete = null }) {
                     Text(txtCancel)
                 }
-            }
+            },
         )
     }
 
@@ -109,22 +115,24 @@ fun SessionsScreen(viewModel: MainViewModel) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(filteredSessions) { index, sessionData ->
                     SessionCard(
-                        session = ScrcpySession(
-                            id = sessionData.id,
-                            name = sessionData.name,
-                            color = com.mobile.scrcpy.android.core.domain.model.SessionColor.valueOf(sessionData.color),
-                            isConnected = connectedSessionId == sessionData.id,
-                            hasWifi = sessionData.host.isNotBlank(),
-                            hasWarning = false
-                        ),
+                        session =
+                            ScrcpySession(
+                                id = sessionData.id,
+                                name = sessionData.name,
+                                color = SessionColor.valueOf(sessionData.color),
+                                isConnected = connectedSessionId == sessionData.id,
+                                hasWifi = sessionData.host.isNotBlank(),
+                                hasWarning = false,
+                            ),
                         sessionData = sessionData,
                         index = index,
                         isConnected = connectedSessionId == sessionData.id,
-                        isConnecting = connectStatus is ConnectStatus.Connecting &&
+                        isConnecting =
+                            connectStatus is ConnectStatus.Connecting &&
                                 (connectStatus as? ConnectStatus.Connecting)?.sessionId == sessionData.id,
                         onClick = {
                             viewModel.connectSession(sessionData.id)
@@ -133,26 +141,20 @@ fun SessionsScreen(viewModel: MainViewModel) {
                             viewModel.connectSession(sessionData.id)
                         },
                         onEdit = { viewModel.showEditSessionDialog(sessionData.id) },
-                        onCopyUrl = { data ->
-                            val clipboard =
-                                context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val url = buildUrlScheme(data)
-                            val clip = ClipData.newPlainText("URL Scheme", url)
-                            clipboard.setPrimaryClip(clip)
-                            android.widget.Toast.makeText(
-                                context,
-                                txtUrlCopied,
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                        onCopy = { data ->
+                            viewModel.copySession(data)
                         },
-                        onDelete = { sessionToDelete = ScrcpySession(
-                            id = sessionData.id,
-                            name = sessionData.name,
-                            color = com.mobile.scrcpy.android.core.domain.model.SessionColor.valueOf(sessionData.color),
-                            isConnected = false,
-                            hasWifi = false,
-                            hasWarning = false
-                        ) }
+                        onDelete = {
+                            sessionToDelete =
+                                ScrcpySession(
+                                    id = sessionData.id,
+                                    name = sessionData.name,
+                                    color = SessionColor.valueOf(sessionData.color),
+                                    isConnected = false,
+                                    hasWifi = false,
+                                    hasWarning = false,
+                                )
+                        },
                     )
                 }
             }
@@ -188,7 +190,7 @@ fun buildUrlScheme(sessionData: SessionData): String {
     val port = if (sessionData.port.isNotBlank()) ":${sessionData.port}" else ""
     val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
 
-    return "scrcpy2://${sessionData.host}${port}${query}"
+    return "scrcpy2://${sessionData.host}${port}$query"
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -202,12 +204,14 @@ fun SessionCard(
     onClick: () -> Unit = {},
     onConnect: () -> Unit = {},
     onEdit: () -> Unit = {},
-    onCopyUrl: (SessionData) -> Unit = {},
-    onDelete: () -> Unit = {}
+    onCopy: (SessionData) -> Unit = {},
+    onDelete: () -> Unit = {},
 ) {
     val cardColor = getCardColorByIndex(index)
     var showMenu by remember { mutableStateOf(false) }
-    
+    var menuOffsetX by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+
     // 双语文本
     val txtClickToConnect = rememberText(SessionTexts.SESSION_CLICK_TO_CONNECT)
     val txtConnected = rememberText(SessionTexts.SESSION_CONNECTED)
@@ -217,83 +221,96 @@ fun SessionCard(
     val txtCopySession = rememberText(SessionTexts.SESSION_COPY)
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp)
-            .combinedClickable(
-                enabled = !isConnecting,
-                onClick = onClick,
-                onLongClick = { showMenu = true }
-            ),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {
+                            if (!isConnecting) onClick()
+                        },
+                        onLongPress = { offset ->
+                            if (!isConnecting) {
+                                with(density) {
+                                    menuOffsetX = offset.x.toDp() - (size.width / 2f).toDp() + 25.dp
+                                }
+                                showMenu = true
+                            }
+                        },
+                    )
+                },
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = cardColor
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors =
+            CardDefaults.cardColors(
+                containerColor = cardColor,
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp, 10.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(10.dp, 10.dp),
         ) {
             Row(
                 modifier = Modifier.align(Alignment.TopStart),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
                     imageVector = Icons.Default.Android,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
                 )
                 Text(
                     text = session.name,
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
 
             Row(
                 modifier = Modifier.align(Alignment.TopEnd),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Wifi,
                             contentDescription = "WiFi",
                             tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                         if (isConnected) {
                             Text(
                                 text = "${(0..20).random()}ms",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF00FF00),
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
                             )
                             Icon(
                                 imageVector = Icons.Default.FlashOn,
                                 contentDescription = "Connected",
                                 tint = Color(0xFF00FF00),
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(13.dp),
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Warning,
                                 contentDescription = "Disconnected",
                                 tint = Color(0xFFFFD700),
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(13.dp),
                             )
                         }
                     }
@@ -305,40 +322,42 @@ fun SessionCard(
                 text = if (isConnected) txtConnected else txtClickToConnect,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.align(Alignment.BottomStart),
-                color = Color.White.copy(alpha = 0.9f)
+                color = Color.White.copy(alpha = 0.9f),
             )
 
             // 长按菜单
             if (showMenu && sessionData != null) {
                 Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 40.dp, end = 10.dp)
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .offset(menuOffsetX, 50.dp),
                 ) {
                     IOSStyledDropdownMenu(
+                        offset = DpOffset(0.dp, 0.dp),
                         expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                        onDismissRequest = { showMenu = false },
                     ) {
                         IOSStyledDropdownMenuItem(
                             text = txtConnect,
                             onClick = {
                                 showMenu = false
                                 onConnect()
-                            }
+                            },
                         )
                         IOSStyledDropdownMenuItem(
                             text = txtEditSession,
                             onClick = {
                                 showMenu = false
                                 onEdit()
-                            }
+                            },
                         )
                         IOSStyledDropdownMenuItem(
                             text = txtCopySession,
                             onClick = {
                                 showMenu = false
-                                onCopyUrl(sessionData)
-                            }
+                                onCopy(sessionData)
+                            },
                         )
                         IOSStyledDropdownMenuItem(
                             text = txtDeleteSession,
@@ -346,7 +365,7 @@ fun SessionCard(
                                 showMenu = false
                                 onDelete()
                             },
-                            textColor = MaterialTheme.colorScheme.error
+                            textColor = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -356,16 +375,17 @@ fun SessionCard(
 }
 
 fun getCardColorByIndex(index: Int): Color {
-    val colors = listOf(
-        Color(0xFF4A90E2),
-        Color(0xFFFF6B6B),
-        Color(0xFF4ECDC4),
-        Color(0xFFFFBE0B),
-        Color(0xFF9B59B6),
-        Color(0xFF2ECC71),
-        Color(0xFFFF8C42),
-        Color(0xFF3498DB)
-    )
+    val colors =
+        listOf(
+            Color(0xFF4A90E2),
+            Color(0xFFFF6B6B),
+            Color(0xFF4ECDC4),
+            Color(0xFFFFBE0B),
+            Color(0xFF9B59B6),
+            Color(0xFF2ECC71),
+            Color(0xFFFF8C42),
+            Color(0xFF3498DB),
+        )
     return colors[index % colors.size]
 }
 
@@ -373,24 +393,24 @@ fun getCardColorByIndex(index: Int): Color {
 fun EmptySessionsView() {
     val txtNoSessions = rememberText(SessionTexts.SESSION_NO_SESSIONS)
     val txtEmptyHint = rememberText(SessionTexts.SESSION_EMPTY_HINT)
-    
+
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Icon(
             imageVector = Icons.Default.Wifi,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = txtNoSessions,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -398,17 +418,15 @@ fun EmptySessionsView() {
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = 32.dp),
         )
     }
 }
 
-//fun SessionColor.toComposeColor(): Color = when (this) {
+// fun SessionColor.toComposeColor(): Color = when (this) {
 //    SessionColor.BLUE -> Color(0xFF4A90E2)
 //    SessionColor.RED -> Color(0xFFE85D75)
 //    SessionColor.GREEN -> Color(0xFF50C878)
 //    SessionColor.ORANGE -> Color(0xFFFF9F40)
 //    SessionColor.PURPLE -> Color(0xFF9B59B6)
-//}
-
-
+// }

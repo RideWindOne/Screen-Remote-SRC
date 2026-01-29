@@ -33,14 +33,16 @@ import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import com.mobile.scrcpy.android.core.data.datastore.PreferencesManager
+import com.mobile.scrcpy.android.core.designsystem.component.MessageItem
+import com.mobile.scrcpy.android.core.designsystem.component.rememberMessageListState
 import com.mobile.scrcpy.android.core.domain.model.getDisplayText
 import com.mobile.scrcpy.android.core.domain.model.getIcon
-import com.mobile.scrcpy.android.infrastructure.scrcpy.client.feature.scrcpy.ScrcpyClient
-import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
+import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 import com.mobile.scrcpy.android.feature.remote.components.audio.rememberAudioDecoderManager
 import com.mobile.scrcpy.android.feature.remote.components.connection.ConnectionStateOverlay
 import com.mobile.scrcpy.android.feature.remote.components.floating.AutoFloatingMenu
 import com.mobile.scrcpy.android.feature.remote.components.touch.KeyboardInputHandler
+import com.mobile.scrcpy.android.feature.remote.components.video.VideoDisplayArea
 import com.mobile.scrcpy.android.feature.remote.components.video.rememberVideoDecoderManager
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectionViewModel
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ControlViewModel
@@ -48,49 +50,44 @@ import com.mobile.scrcpy.android.feature.session.data.repository.SessionReposito
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 import com.mobile.scrcpy.android.feature.session.viewmodel.SessionViewModel
 import com.mobile.scrcpy.android.feature.settings.viewmodel.SettingsViewModel
-import com.mobile.scrcpy.android.core.designsystem.component.MessageItem
-import com.mobile.scrcpy.android.core.designsystem.component.rememberMessageListState
+import com.mobile.scrcpy.android.infrastructure.scrcpy.client.feature.scrcpy.ScrcpyClient
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
 import kotlinx.coroutines.launch
-import com.mobile.scrcpy.android.feature.remote.components.video.VideoDisplayArea
 
-import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 @SuppressLint("ClickableViewAccessibility", "ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RemoteDisplayScreen(
     sessionId: String,
-    onClose: () -> Unit
+    mainViewModel: MainViewModel,
+    onClose: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    
+
     // 获取依赖
     val sessionRepository = remember { SessionRepository(context) }
     val adbConnectionManager = remember { ScreenRemoteApp.instance.adbConnectionManager }
     val preferencesManager = remember { PreferencesManager(context) }
-    val scrcpyClient = remember {
-        ScrcpyClient(context, adbConnectionManager)
-    }
-    
-    // 创建 ViewModels
-    val connectionVM: ConnectionViewModel = viewModel(
-        factory = ConnectionViewModel.provideFactory(scrcpyClient, sessionRepository)
-    )
-    val controlVM: ControlViewModel = viewModel(
-        factory = ControlViewModel.provideFactory(scrcpyClient, adbConnectionManager)
-    )
-    val sessionVM: SessionViewModel = viewModel(
-        factory = SessionViewModel.provideFactory(sessionRepository)
-    )
-    val settingsVM: SettingsViewModel = viewModel(
-        factory = SettingsViewModel.provideFactory(preferencesManager)
-    )
-    
-    // 创建 MainViewModel（用于 FloatingMenu）
-    val mainVM: MainViewModel = viewModel(
-        factory = MainViewModel.provideFactory()
-    )
-    
+
+    // 使用 MainViewModel 中的实例
+    val scrcpyClient = mainViewModel.scrcpyClient
+    val connectionVM = mainViewModel.connectionViewModel
+
+    // 创建其他 ViewModels
+    val controlVM: ControlViewModel =
+        viewModel(
+            factory = ControlViewModel.provideFactory(scrcpyClient, adbConnectionManager),
+        )
+    val sessionVM: SessionViewModel =
+        viewModel(
+            factory = SessionViewModel.provideFactory(sessionRepository),
+        )
+    val settingsVM: SettingsViewModel =
+        viewModel(
+            factory = SettingsViewModel.provideFactory(preferencesManager),
+        )
+
     // 收集状态
     val videoStream by connectionVM.getVideoStream().collectAsState()
     val audioStream by connectionVM.getAudioStream().collectAsState()
@@ -100,7 +97,7 @@ fun RemoteDisplayScreen(
     val sessionData by remember {
         sessionRepository.getSessionDataFlow(sessionId)
     }.collectAsState(initial = null)
-    
+
     val keyboardController = LocalSoftwareKeyboardController.current
     val configuration = LocalConfiguration.current
 
@@ -129,13 +126,14 @@ fun RemoteDisplayScreen(
                 val messageId = progress.step.name
                 val existingMessage = messageListState.messages.find { it.id == messageId }
 
-                val newMessage = MessageItem(
-                    id = messageId,
-                    icon = progress.status.getIcon(),
-                    title = progress.step.getDisplayText(),
-                    subtitle = progress.message,
-                    error = progress.error
-                )
+                val newMessage =
+                    MessageItem(
+                        id = messageId,
+                        icon = progress.status.getIcon(),
+                        title = progress.step.getDisplayText(),
+                        subtitle = progress.message,
+                        error = progress.error,
+                    )
 
                 if (existingMessage == null) {
                     messageListState.addMessage(newMessage)
@@ -157,16 +155,18 @@ fun RemoteDisplayScreen(
     var lifecycleState by remember { mutableStateOf(Lifecycle.Event.ON_ANY) }
 
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            lifecycleState = event
-            if (event == Lifecycle.Event.ON_RESUME) {
-                scope.launch {
-                    try {
-                        controlVM.wakeUpScreen()
-                    } catch (e: Exception) { }
+        val observer =
+            LifecycleEventObserver { _, event ->
+                lifecycleState = event
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    scope.launch {
+                        try {
+                            controlVM.wakeUpScreen()
+                        } catch (e: Exception) {
+                        }
+                    }
                 }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -191,7 +191,22 @@ fun RemoteDisplayScreen(
 
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
-                "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.get()}: A${if (isALandscape) RemoteTexts.REMOTE_LANDSCAPE.get() else RemoteTexts.REMOTE_PORTRAIT.get()}, B${if (isBLandscape) RemoteTexts.REMOTE_LANDSCAPE.get() else RemoteTexts.REMOTE_PORTRAIT.get()}, ${RemoteTexts.REMOTE_ASPECT_RATIO.get()}=${videoAspectRatio}, ${RemoteTexts.REMOTE_SCALE_STRATEGY.get()}: ${if (matchHeightFirst) RemoteTexts.REMOTE_FILL_HEIGHT.get() else RemoteTexts.REMOTE_FILL_WIDTH.get()}"
+                "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.get()}: A${if (isALandscape) {
+                    RemoteTexts.REMOTE_LANDSCAPE
+                        .get()
+                } else {
+                    RemoteTexts.REMOTE_PORTRAIT.get()
+                }}, B${if (isBLandscape) {
+                    RemoteTexts.REMOTE_LANDSCAPE
+                        .get()
+                } else {
+                    RemoteTexts.REMOTE_PORTRAIT.get()
+                }}, ${RemoteTexts.REMOTE_ASPECT_RATIO.get()}=$videoAspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.get()}: ${if (matchHeightFirst) {
+                    RemoteTexts.REMOTE_FILL_HEIGHT
+                        .get()
+                } else {
+                    RemoteTexts.REMOTE_FILL_WIDTH.get()
+                }}",
             )
         }
     }
@@ -203,42 +218,73 @@ fun RemoteDisplayScreen(
         sessionViewModel = sessionVM,
         sessionId = sessionId,
         audioStream = audioStream,
-        audioVolume = audioVolume
+        audioVolume = audioVolume,
     )
 
     // 视频解码器管理
-    val videoDecoderManager = rememberVideoDecoderManager(
-        connectionViewModel = connectionVM,
-        sessionViewModel = sessionVM,
-        sessionId = sessionId,
-        sessionData = sessionData,
-        videoStream = videoStream,
-        surfaceHolder = surfaceHolder,
-        lifecycleState = lifecycleState,
-        onVideoSizeChanged = { w, h, aspectRatio ->
-            videoWidth = w
-            videoHeight = h
-            videoAspectRatio = aspectRatio
-        }
-    )
+    val videoDecoderManager =
+        rememberVideoDecoderManager(
+            connectionViewModel = connectionVM,
+            sessionViewModel = sessionVM,
+            sessionId = sessionId,
+            sessionData = sessionData,
+            videoStream = videoStream,
+            surfaceHolder = surfaceHolder,
+            lifecycleState = lifecycleState,
+            onVideoSizeChanged = { w, h, aspectRatio ->
+                videoWidth = w
+                videoHeight = h
+                videoAspectRatio = aspectRatio
+            },
+        )
 
-    // 拦截返回键，传递给远程设备
-    BackHandler(enabled = connectionState is ConnectionState.Connected) {
-        scope.launch {
-            controlVM.sendKeyEvent(4) // KEYCODE_BACK
+    // 拦截返回键
+    // - 连接中/重连中：取消连接并返回主目录
+    // - 已连接：传递给远程设备
+    BackHandler(
+        enabled =
+            connectionState is ConnectionState.Connected ||
+                connectionState is ConnectionState.Connecting ||
+                connectionState is ConnectionState.Reconnecting,
+    ) {
+        when (connectionState) {
+            is ConnectionState.Connected -> {
+                // 已连接：发送返回键给远程设备
+                scope.launch {
+                    val result = controlVM.sendKeyEvent(4) // KEYCODE_BACK
+                    if (result.isFailure) {
+                        LogManager.e(
+                            LogTags.REMOTE_DISPLAY,
+                            "发送返回键失败: ${result.exceptionOrNull()?.message}",
+                        )
+                    }
+                }
+            }
+
+            is ConnectionState.Connecting,
+            is ConnectionState.Reconnecting,
+            -> {
+                // 连接中/重连中：取消连接并返回主目录
+                connectionVM.cancelConnect()
+            }
+
+            else -> {
+                // 其他状态：不处理
+            }
         }
     }
 
     // 主界面布局
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // 悬浮球（仅在视频流存在且开关开启时显示）
             if (videoStream != null && settings.enableFloatingMenu) {
-                AutoFloatingMenu(viewModel = mainVM)
+                AutoFloatingMenu(viewModel = mainViewModel)
             }
 
             // 视频显示区域
@@ -250,7 +296,7 @@ fun RemoteDisplayScreen(
                 configuration = configuration,
                 surfaceHolder = surfaceHolder,
                 onSurfaceHolderChanged = { surfaceHolder = it },
-                videoDecoderManager = videoDecoderManager
+                videoDecoderManager = videoDecoderManager,
             )
 
             // 连接状态覆盖层
@@ -258,7 +304,7 @@ fun RemoteDisplayScreen(
                 connectionState = connectionState,
                 messageListState = messageListState,
                 onReconnect = { connectionVM.connectSession(sessionId) },
-                onClose = onClose
+                onClose = onClose,
             )
 
             // 键盘输入处理
@@ -266,7 +312,7 @@ fun RemoteDisplayScreen(
                 KeyboardInputHandler(
                     controlViewModel = controlVM,
                     keyboardController = keyboardController,
-                    onDismiss = { showKeyboardInput = false }
+                    onDismiss = { showKeyboardInput = false },
                 )
             }
         }

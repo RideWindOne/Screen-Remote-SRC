@@ -30,15 +30,16 @@ fun VideoDisplayArea(
     configuration: android.content.res.Configuration,
     surfaceHolder: SurfaceHolder?,
     onSurfaceHolderChanged: (SurfaceHolder?) -> Unit,
-    videoDecoderManager: VideoDecoderManager
+    videoDecoderManager: VideoDecoderManager,
 ) {
     val scope = rememberCoroutineScope()
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+        contentAlignment = Alignment.Center,
     ) {
         val containerAspectRatio =
             configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
@@ -58,20 +59,23 @@ fun VideoDisplayArea(
                 onSurfaceTextureDestroyed = {
                     surfaceTexture = null
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .aspectRatio(
-                        videoAspectRatio,
-                        matchHeightConstraintsFirst = matchHeightFirst
-                    )
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .aspectRatio(
+                            videoAspectRatio,
+                            matchHeightConstraintsFirst = matchHeightFirst,
+                        ),
             )
         } else {
             VideoSurfaceView(
                 onSurfaceCreated = { holder ->
                     onSurfaceHolderChanged(holder)
+                    videoDecoderManager.setSurfaceImmediate(holder)
                 },
                 onSurfaceChanged = { holder, _, _ ->
                     onSurfaceHolderChanged(holder)
+                    videoDecoderManager.setSurfaceImmediate(holder)
                 },
                 onSurfaceDestroyed = { _ ->
                     videoDecoderManager.videoDecoder?.setSurface(null)
@@ -85,15 +89,25 @@ fun VideoDisplayArea(
                         val x = (event.x / view.width * deviceWidth).toInt()
                         val y = (event.y / view.height * deviceHeight).toInt()
 
-                        val action = when (event.actionMasked) {
-                            android.view.MotionEvent.ACTION_DOWN -> 0
-                            android.view.MotionEvent.ACTION_UP -> {
-                                view.performClick()
-                                1
+                        val action =
+                            when (event.actionMasked) {
+                                android.view.MotionEvent.ACTION_DOWN -> {
+                                    0
+                                }
+
+                                android.view.MotionEvent.ACTION_UP -> {
+                                    view.performClick()
+                                    1
+                                }
+
+                                android.view.MotionEvent.ACTION_MOVE -> {
+                                    2
+                                }
+
+                                else -> {
+                                    return@VideoSurfaceView false
+                                }
                             }
-                            android.view.MotionEvent.ACTION_MOVE -> 2
-                            else -> return@VideoSurfaceView false
-                        }
 
                         scope.launch {
                             controlViewModel.sendTouchEvent(
@@ -103,18 +117,19 @@ fun VideoDisplayArea(
                                 y = y,
                                 screenWidth = deviceWidth,
                                 screenHeight = deviceHeight,
-                                pressure = event.pressure
+                                pressure = event.pressure,
                             )
                         }
                     }
                     true
                 },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .aspectRatio(
-                        videoAspectRatio,
-                        matchHeightConstraintsFirst = matchHeightFirst
-                    )
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .aspectRatio(
+                            videoAspectRatio,
+                            matchHeightConstraintsFirst = matchHeightFirst,
+                        ),
             )
         }
     }

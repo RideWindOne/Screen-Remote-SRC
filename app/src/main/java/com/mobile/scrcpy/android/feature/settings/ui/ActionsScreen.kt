@@ -22,9 +22,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.manager.rememberText
+import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 
-import com.mobile.scrcpy.android.core.i18n.SessionTexts
 @Composable
 fun ActionsScreen(viewModel: MainViewModel) {
     val actions by viewModel.actions.collectAsState()
@@ -43,24 +43,24 @@ fun ActionsScreen(viewModel: MainViewModel) {
 fun EmptyActionsView() {
     val txtNoActions = rememberText(SessionTexts.ACTIONS_NO_ACTIONS)
     val txtEmptyHint = rememberText(SessionTexts.ACTIONS_EMPTY_HINT)
-    
+
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         Icon(
             imageVector = Icons.Default.TouchApp,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = txtNoActions,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -68,9 +68,7 @@ fun EmptyActionsView() {
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = 32.dp),
         )
     }
 }
-
-

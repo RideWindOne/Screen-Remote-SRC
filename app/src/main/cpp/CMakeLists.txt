@@ -23,9 +23,9 @@ target_link_libraries(
     ${log-lib}
 )
 
-# 导出符号
+# 导出符号并启用 16KB 页面对齐
 set_target_properties(
     scrcpy_adb_bridge
     PROPERTIES
-    LINK_FLAGS "-Wl,--export-dynamic"
+    LINK_FLAGS "-Wl,--export-dynamic -Wl,-z,max-page-size=16384"
 )

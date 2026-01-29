@@ -1,40 +1,41 @@
 package com.mobile.scrcpy.android.core.i18n
 
 /**
- * ADB 相关文本（密钥管理、连接、USB）
+ * ADB 相关文本
  */
 object AdbTexts {
-    // ADB 密钥管理
-    val ADB_KEY_MANAGEMENT_TITLE = TextPair("管理 ADB 密钥", "Manage ADB Keys")
-    val ADB_KEY_DIR_LABEL = TextPair("密钥目录", "Keys Directory")
-    val ADB_PRIVATE_KEY_LABEL = TextPair("私钥 (ADBKEY)", "Private Key (ADBKEY)")
-    val ADB_PUBLIC_KEY_LABEL = TextPair("公钥 (ADBKEY.PUB)", "Public Key (ADBKEY.PUB)")
+    // ========== ADB 密钥管理 ==========
+    val ADB_KEY_MANAGEMENT_TITLE = TextPair("ADB 密钥管理", "ADB Key Management")
+    val ADB_KEY_DIR_LABEL = TextPair("密钥目录", "Key Directory")
+    val ADB_PRIVATE_KEY_LABEL = TextPair("私钥", "Private Key")
+    val ADB_PUBLIC_KEY_LABEL = TextPair("公钥", "Public Key")
     val ADB_KEY_NOT_FOUND = TextPair("未找到密钥", "Keys not found")
+
+    // 密钥操作结果
     val ADB_KEY_SAVE_SUCCESS = TextPair("密钥保存成功", "Keys saved successfully")
     val ADB_KEY_SAVE_FAILED = TextPair("密钥保存失败", "Failed to save keys")
     val ADB_KEY_IMPORT_SUCCESS = TextPair("密钥导入成功", "Keys imported successfully")
     val ADB_KEY_IMPORT_FAILED = TextPair("密钥导入失败", "Failed to import keys")
-    val ADB_KEY_EXPORT_SUCCESS = TextPair("密钥已导出到", "Keys exported to")
+    val ADB_KEY_EXPORT_SUCCESS = TextPair("密钥导出成功", "Keys exported successfully")
     val ADB_KEY_EXPORT_FAILED = TextPair("密钥导出失败", "Failed to export keys")
-    val ADB_KEY_GENERATE_SUCCESS = TextPair("新密钥对生成成功", "New key pair generated successfully")
+    val ADB_KEY_GENERATE_SUCCESS = TextPair("密钥生成成功", "Keys generated successfully")
     val ADB_KEY_GENERATE_FAILED = TextPair("密钥生成失败", "Failed to generate keys")
-    val ADB_KEY_GENERATE_CONFIRM_TITLE = TextPair("生成新的 ADB 密钥对", "Generate New ADB Key Pair")
-    val ADB_KEY_DESTRUCTIVE_OP = TextPair("这是一个破坏性操作！", "This is a destructive operation!")
-    val ADB_KEY_CURRENT_KEYS_DELETED = TextPair("你当前的 ADB 密钥将被永久删除", "Your current ADB keys will be permanently deleted")
-    val ADB_KEY_DEVICES_LOSE_AUTH = TextPair("之前使用当前密钥授权的所有设备将失去授权", "All devices previously authorized with current keys will lose authorization")
-    val ADB_KEY_NEED_REAUTH = TextPair("你需要手动重新授权所有设备", "You need to manually re-authorize all devices")
-    val ADB_KEY_CANNOT_UNDO = TextPair("此操作无法撤销", "This operation cannot be undone")
-    val ADB_KEY_CONFIRM_GENERATE = TextPair("确定要生成新的 ADB 密钥吗？", "Are you sure you want to generate new ADB keys?")
-    val BUTTON_GENERATE_KEYS = TextPair("生成新密钥对", "Generate New Keys")
+
+    // 密钥操作按钮
+    val BUTTON_GENERATE_KEYS = TextPair("生成密钥对", "Generate Key Pair")
     val BUTTON_IMPORT_KEYS = TextPair("导入密钥", "Import Keys")
     val BUTTON_EXPORT_KEYS = TextPair("导出密钥", "Export Keys")
     val BUTTON_SAVE_KEYS = TextPair("保存密钥", "Save Keys")
+
+    // 密钥管理标签
     val LABEL_KEY_INFO = TextPair("密钥信息", "Key Information")
     val LABEL_KEY_OPERATIONS = TextPair("密钥操作", "Key Operations")
-    
+
     // ADB 连接错误
-    val ERROR_ADB_CONNECTION_DISCONNECTED = TextPair("ADB 连接已断开 (ECONNREFUSED)", "ADB connection disconnected (ECONNREFUSED)")
-    val ERROR_ADB_HANDSHAKE_FAILED = TextPair("ADB 握手失败，设备可能未授权或 ADB 服务异常", "ADB handshake failed, device may be unauthorized or ADB service error")
+    val ERROR_ADB_CONNECTION_DISCONNECTED =
+        TextPair("ADB 连接已断开 (ECONNREFUSED)", "ADB connection disconnected (ECONNREFUSED)")
+    val ERROR_ADB_HANDSHAKE_FAILED =
+        TextPair("ADB 握手失败，设备可能未授权或 ADB 服务异常", "ADB handshake failed, device may be unauthorized or ADB service error")
     val ERROR_ADB_CONNECTION_UNAVAILABLE = TextPair("ADB 连接不可用", "ADB connection unavailable")
     val ERROR_ADB_COMMAND_FAILED = TextPair("ADB 命令执行失败", "ADB command execution failed")
     val ERROR_ADB_RECONNECT_FAILED = TextPair("ADB 重连失败", "ADB reconnection failed")
@@ -42,9 +43,8 @@ object AdbTexts {
     val ERROR_CANNOT_GET_ADB_CONNECTION = TextPair("无法获取 ADB 连接", "Cannot get ADB connection")
     val ERROR_DEVICE_NOT_CONNECTED = TextPair("未连接设备", "Device not connected")
     val ERROR_DEVICE_CONNECTION_LOST = TextPair("设备连接已断开", "Device connection lost")
-    
+
     // ADB 连接管理器日志
-    val ADB_MANAGER_INIT = TextPair("ADB 连接管理器初始化", "ADB connection manager initialized")
     val ADB_HEARTBEAT_FAILED = TextPair("心跳检测失败", "Heartbeat check failed")
     val ADB_CONNECTION_DETECTED_DISCONNECTED = TextPair("检测到 ADB 连接断开", "ADB connection disconnected detected")
     val ADB_CLEANUP_INVALID_CONNECTION = TextPair("清理失效连接", "Cleaning up invalid connection")
@@ -52,45 +52,51 @@ object AdbTexts {
     val ADB_GENERATE_NEW_KEYPAIR = TextPair("生成新的 ADB 密钥对", "Generating new ADB key pair")
     val ADB_KEYPAIR_LOADED = TextPair("ADB 密钥对加载成功", "ADB key pair loaded successfully")
     val ADB_KEYPAIR_INIT_FAILED = TextPair("初始化密钥对失败", "Failed to initialize key pair")
-    val ADB_START_CONNECTING = TextPair("开始连接设备", "Starting device connection")
+    val ADB_START_CONNECTING = TextPair("开始连接设备", "Start connecting device")
     val ADB_TARGET_ADDRESS = TextPair("目标地址", "Target address")
     val ADB_KEYPAIR_NOT_INITIALIZED = TextPair("ADB 密钥对未初始化", "ADB key pair not initialized")
-    val ADB_FORCE_RECONNECT_CLEANUP = TextPair("强制重连，清理旧连接", "Force reconnect, cleaning up old connection")
-    val ADB_VERIFYING_CONNECTION = TextPair("发现已存在的连接，验证可用性...", "Found existing connection, verifying availability...")
-    val ADB_CONNECTION_VERIFIED = TextPair("连接验证成功，复用", "Connection verified, reusing")
-    val ADB_CONNECTION_VERIFY_FAILED = TextPair("连接验证失败，清理后重连", "Connection verification failed, cleaning up and reconnecting")
-    val ADB_CREATING_NEW_CONNECTION = TextPair("创建新的 ADB 连接...", "Creating new ADB connection...")
+    val ADB_FORCE_RECONNECT_CLEANUP = TextPair("强制重连：清理旧连接", "Force reconnect: cleaning up old connection")
+    val ADB_VERIFYING_CONNECTION = TextPair("验证连接", "Verifying connection")
+    val ADB_CONNECTION_VERIFIED = TextPair("连接验证成功", "Connection verified")
+    val ADB_CONNECTION_VERIFY_FAILED = TextPair("连接验证失败", "Connection verification failed")
+    val ADB_CREATING_NEW_CONNECTION = TextPair("创建新连接", "Creating new connection")
     val ADB_CONNECTION_REFUSED = TextPair("连接被拒绝", "Connection refused")
-    val ADB_CONNECTION_REFUSED_DETAILS = TextPair(
-        "连接被拒绝，请检查：\n1. 设备 IP 地址是否正确\n2. 设备是否开启 ADB 网络调试\n3. 端口号是否正确（默认 5555）",
-        "Connection refused, please check:\n1. Device IP address is correct\n2. ADB network debugging is enabled on device\n3. Port number is correct (default 5555)"
-    )
-    val ADB_DADB_CREATED = TextPair("Dadb 实例创建成功", "Dadb instance created successfully")
-    val ADB_ADDED_TO_POOL = TextPair("连接已加入连接池", "Connection added to pool")
-    val ADB_GET_DEVICE_INFO_FAILED = TextPair("获取完整设备信息失败", "Failed to get complete device info")
-    val ADB_CONNECTION_SUCCESS = TextPair("设备连接成功", "Device connected successfully")
-    val ADB_CONNECTION_FAILED_TITLE = TextPair("连接设备失败", "Failed to connect device")
+    val ADB_CONNECTION_REFUSED_DETAILS =
+        TextPair(
+            "连接被拒绝，请检查：\n1. 设备是否开启无线调试\n2. IP 地址和端口是否正确\n3. 设备是否在同一网络",
+            "Connection refused. Please check:\n1. Wireless debugging is enabled\n2. IP address and port are correct\n3. Device is on the same network",
+        )
+    val ADB_DADB_CREATED = TextPair("DADB 连接已创建", "DADB connection created")
+    val ADB_ADDED_TO_POOL = TextPair("已添加到连接池", "Added to connection pool")
+    val ADB_GET_DEVICE_INFO_FAILED = TextPair("获取设备信息失败", "Failed to get device info")
+    val ADB_CONNECTION_SUCCESS = TextPair("连接成功", "Connection successful")
+    val ADB_CONNECTION_FAILED_TITLE = TextPair("连接失败", "Connection failed")
+    val ADB_DEVICE_NOT_CONNECTED = TextPair("设备未连接", "Device not connected")
+    val ADB_DISCONNECT_FAILED = TextPair("断开连接失败", "Failed to disconnect")
+    val ADB_DISCONNECT_ALL = TextPair("断开所有设备连接", "Disconnecting all devices")
+    val ADB_CLOSE_CONNECTION_FAILED = TextPair("关闭连接失败", "Failed to close connection")
     val ADB_VERIFYING = TextPair("验证 ADB 连接...", "Verifying ADB connection...")
     val ADB_VERIFY_SUCCESS = TextPair("ADB 连接验证成功", "ADB connection verified successfully")
     val ADB_VERIFY_FAILED = TextPair("ADB 连接验证失败", "ADB connection verification failed")
+    val ADB_VERIFY_TIMEOUT = TextPair("验证超时，请检查设备是否已授权 USB 调试", "Verification timeout, please check if USB debugging is authorized")
     val ADB_CLOSE_DADB_ERROR = TextPair("关闭 dadb 时出错", "Error closing dadb")
-    val ADB_DISCONNECTED_ECONNREFUSED = TextPair("ADB 连接已断开 (ECONNREFUSED)", "ADB connection disconnected (ECONNREFUSED)")
+    val ADB_DISCONNECTED_ECONNREFUSED =
+        TextPair("ADB 连接已断开 (ECONNREFUSED)", "ADB connection disconnected (ECONNREFUSED)")
     val ADB_RECONNECT_DEVICE = TextPair("ADB 连接已断开，请重新连接设备", "ADB connection disconnected, please reconnect device")
-    val ADB_HANDSHAKE_FAILED_OR_INTERRUPTED = TextPair("ADB 握手失败或连接中断", "ADB handshake failed or connection interrupted")
+    val ADB_HANDSHAKE_FAILED_OR_INTERRUPTED =
+        TextPair("ADB 握手失败或连接中断", "ADB handshake failed or connection interrupted")
     val ADB_COMMUNICATION_FAILED = TextPair("ADB 通信失败，连接不可用", "ADB communication failed, connection unavailable")
     val ADB_GET_DEVICE_INFO_FAILED_DETAIL = TextPair("获取设备信息失败", "Failed to get device info")
     val ADB_CANNOT_GET_DEVICE_INFO = TextPair("无法获取设备信息", "Cannot get device info")
     val ADB_DEVICE_DISCONNECTED = TextPair("设备已断开", "Device disconnected")
-    val ADB_DEVICE_NOT_CONNECTED = TextPair("设备未连接", "Device not connected")
-    val ADB_DISCONNECT_FAILED = TextPair("断开设备失败", "Failed to disconnect device")
-    val ADB_DISCONNECT_ALL = TextPair("断开所有设备连接", "Disconnecting all devices")
-    val ADB_CLOSE_CONNECTION_FAILED = TextPair("关闭连接失败", "Failed to close connection")
     val ADB_GET_PUBLIC_KEY_FAILED = TextPair("获取公钥失败", "Failed to get public key")
     val ADB_CANNOT_EXECUTE_COMMAND = TextPair("无法执行命令", "Cannot execute command")
-    val ADB_AUTO_RECONNECT_RETRY = TextPair("ADB 连接已关闭，尝试自动重连后重试", "ADB connection closed, retrying after auto-reconnect")
+    val ADB_AUTO_RECONNECT_RETRY =
+        TextPair("ADB 连接已关闭，尝试自动重连后重试", "ADB connection closed, retrying after auto-reconnect")
     val ADB_AUTO_RECONNECT_SUCCESS = TextPair("自动重连成功，命令执行成功", "Auto-reconnect successful, command executed")
     val ADB_AUTO_RECONNECT_STILL_FAILED = TextPair("自动重连后仍失败", "Still failed after auto-reconnect")
-    val ADB_SOCKET_EXCEPTION_RETRY = TextPair("ADB Socket 异常，尝试自动重连后重试", "ADB Socket exception, retrying after auto-reconnect")
+    val ADB_SOCKET_EXCEPTION_RETRY =
+        TextPair("ADB Socket 异常，尝试自动重连后重试", "ADB Socket exception, retrying after auto-reconnect")
     val ADB_SOCKET_EXCEPTION = TextPair("ADB Socket 异常，无法执行命令", "ADB Socket exception, cannot execute command")
     val ADB_EXECUTE_COMMAND_FAILED = TextPair("执行命令失败", "Failed to execute command")
     val ADB_ASYNC_EXECUTE_FAILED = TextPair("异步执行命令失败", "Failed to execute command asynchronously")
@@ -110,10 +116,12 @@ object AdbTexts {
     val ADB_APK_INSTALL_FAILED = TextPair("APK 安装失败", "Failed to install APK")
     val ADB_APP_UNINSTALL_SUCCESS = TextPair("应用卸载成功", "App uninstalled successfully")
     val ADB_APP_UNINSTALL_FAILED = TextPair("应用卸载失败", "Failed to uninstall app")
-    val ADB_SCRCPY_SERVER_NOT_IN_ASSETS = TextPair("scrcpy-server.jar 不存在于 assets 目录", "scrcpy-server.jar not found in assets directory")
+    val ADB_SCRCPY_SERVER_NOT_IN_ASSETS =
+        TextPair("scrcpy-server.jar 不存在于 assets 目录", "scrcpy-server.jar not found in assets directory")
     val ADB_PUSH_SCRCPY_SERVER_FAILED = TextPair("推送 scrcpy-server.jar 失败", "Failed to push scrcpy-server.jar")
     val ADB_DETECTING_VIDEO_ENCODERS = TextPair("开始检测视频编码器...", "Starting video encoder detection...")
-    val ADB_PUSH_SERVER_FAILED_CANNOT_DETECT = TextPair("推送 scrcpy-server.jar 失败，无法检测编码器", "Failed to push scrcpy-server.jar, cannot detect encoders")
+    val ADB_PUSH_SERVER_FAILED_CANNOT_DETECT =
+        TextPair("推送 scrcpy-server.jar 失败，无法检测编码器", "Failed to push scrcpy-server.jar, cannot detect encoders")
     val ADB_PUSH_FAILED = TextPair("推送失败", "Push failed")
     val ADB_CANNOT_OPEN_SHELL_STREAM = TextPair("无法打开 shell 流", "Cannot open shell stream")
     val ADB_SHELL_STREAM_EXIT = TextPair("Shell 流退出", "Shell stream exited")
@@ -128,29 +136,169 @@ object AdbTexts {
     val ADB_CONNECTION_CLOSED = TextPair("连接已关闭", "Connection closed")
     val ADB_CLOSE_CONNECTION_FAILED_DETAIL = TextPair("关闭连接失败", "Failed to close connection")
     val ADB_DEVICE_ALREADY_CONNECTED = TextPair("设备已连接", "Device already connected")
-    
-    // USB 设备
+
+    // 生成密钥确认对话框
+    val ADB_KEY_GENERATE_CONFIRM_TITLE = TextPair("确认生成新密钥对", "Confirm Generate New Key Pair")
+    val ADB_KEY_DESTRUCTIVE_OP = TextPair("⚠️ 这是一个破坏性操作", "⚠️ This is a destructive operation")
+    val ADB_KEY_CURRENT_KEYS_DELETED = TextPair("当前密钥将被永久删除", "Current keys will be permanently deleted")
+    val ADB_KEY_DEVICES_LOSE_AUTH = TextPair("所有已授权设备将失去信任关系", "All authorized devices will lose trust relationship")
+    val ADB_KEY_NEED_REAUTH = TextPair("需要在每台设备上重新授权", "Need to re-authorize on each device")
+    val ADB_KEY_CANNOT_UNDO = TextPair("此操作无法撤销", "This operation cannot be undone")
+    val ADB_KEY_CONFIRM_GENERATE = TextPair("确定要生成新密钥对吗？", "Are you sure you want to generate new key pair?")
+
+    // 导入密钥提示
+    val ADB_KEY_IMPORT_HINT = TextPair("📋 导入提示", "📋 Import Tips")
+    val ADB_KEY_IMPORT_HINT_MULTISELECT =
+        TextPair(
+            "在文件选择器中，长按第一个文件，然后点击第二个文件即可多选",
+            "In the file picker, long press the first file, then tap the second file to select multiple files",
+        )
+    val ADB_KEY_IMPORT_HINT_BOTH_FILES =
+        TextPair(
+            "需要同时选择 adbkey 和 adbkey.pub 两个文件",
+            "You need to select both adbkey and adbkey.pub files",
+        )
+
+    // 密钥导入错误
+    val ERROR_SELECT_EXACTLY_2_FILES =
+        TextPair("请选择 2 个文件 (adbkey 和 adbkey.pub)", "Please select exactly 2 files (adbkey and adbkey.pub)")
+    val ERROR_IDENTIFY_KEY_FILES = TextPair("无法识别私钥和公钥文件", "Could not identify private key and public key files")
+
+    // ========== 设备配对 ==========
+    val PAIRING_TITLE = TextPair("配对 ADB 设备", "Pair ADB Device")
+    val PAIRING_TAB_QR_CODE = TextPair("生成二维码", "Generate QR Code")
+    val PAIRING_TAB_PAIRING_CODE = TextPair("使用配对码", "Use Pairing Code")
+
+    // 配对说明
+    val PAIRING_INSTRUCTION_TITLE = TextPair("说明", "Instructions")
+    val PAIRING_INSTRUCTION_CONTENT =
+        TextPair(
+            "使用无线 ADB 调试为 Android 设备配对：\n\n1. 打开 Android 设置\n2. 进入 开发者选项\n3. 启用 无线调试\n4. 点击 \"使用配对码配对设备\"\n5. 在下方输入 主机:端口 和 配对码",
+            "Use Wireless ADB Debugging to pair Android devices:\n\n1. Open Android Settings\n2. Enter Developer Options\n3. Enable Wireless Debugging\n4. Tap \"Pair device with pairing code\"\n5. Enter Host:Port and Pairing Code below",
+        )
+
+    // 配对历史
+    val PAIRING_HISTORY_TITLE = TextPair("最近配对记录", "Recent Pairing History")
+    val PAIRING_HISTORY_EMPTY = TextPair("暂无配对记录", "No pairing history")
+    val PAIRING_HISTORY_CLEAR = TextPair("清除历史", "Clear History")
+    val PAIRING_HISTORY_CLEAR_CONFIRM_TITLE = TextPair("清除配对历史", "Clear Pairing History")
+    val PAIRING_HISTORY_CLEAR_CONFIRM_MESSAGE =
+        TextPair(
+            "这将永久删除所有配对历史。此操作不可撤销。",
+            "This will permanently delete all pairing history. This operation cannot be undone.",
+        )
+    val PAIRING_HISTORY_CLEAR_BUTTON = TextPair("清除", "Clear")
+    val PAIRING_HISTORY_CLEARED = TextPair("配对历史已清除", "Pairing history cleared")
+
+    // 配对信息标签
+    val PAIRING_INFO_TITLE = TextPair("配对信息", "Pairing Information")
+    val PAIRING_HOST_PORT_LABEL = TextPair("IP地址和端口", "IP address & Port")
+    val PAIRING_CODE_LABEL = TextPair("WLAN配对码", "Wi-Fi Pairing Code")
+
+    // 二维码配对（我们生成二维码）
+    val QR_CODE_TITLE = TextPair("生成二维码配对", "Generate QR Code to Pair")
+    val QR_CODE_DESCRIPTION =
+        TextPair(
+            "⚠️ 重要提示：\n当前版本的二维码配对功能受限于 Android 系统限制，无法完全实现自动配对。\n\n建议使用「配对码」方式进行配对，更加稳定可靠。\n\n如需使用二维码：\n1. 点击「生成二维码」按钮\n2. 在被控设备上打开「开发者选项」\n3. 启用「无线调试」\n4. 点击「使用二维码配对设备」\n5. 扫描二维码（可能无法识别）",
+            "⚠️ Important Notice:\nThe QR code pairing feature is limited due to Android system restrictions and cannot fully implement automatic pairing.\n\nWe recommend using the 'Pairing Code' method for more stable and reliable pairing.\n\nIf you want to use QR code:\n1. Tap 'Generate QR Code' button\n2. Open 'Developer options' on target device\n3. Enable 'Wireless debugging'\n4. Tap 'Pair device with QR code'\n5. Scan the QR code (may not be recognized)",
+        )
+    val QR_CODE_GENERATE_BUTTON = TextPair("生成二维码（实验性）", "Generate QR Code (Experimental)")
+    val QR_CODE_GENERATING = TextPair("正在生成...", "Generating...")
+    val QR_CODE_GENERATED = TextPair("二维码已生成（实验性功能）", "QR Code Generated (Experimental)")
+    val QR_CODE_SCAN_INSTRUCTION =
+        TextPair(
+            "⚠️ 注意：由于 Android 系统限制，此二维码可能无法被识别\n建议切换到「使用配对码」标签进行配对",
+            "⚠️ Note: Due to Android system limitations, this QR code may not be recognized\nWe recommend switching to 'Use Pairing Code' tab for pairing",
+        )
+    val QR_CODE_WAITING_SCAN =
+        TextPair(
+            "技术说明：\nAndroid 的无线调试配对需要 mDNS 服务支持，当前版本仅生成二维码，无法提供完整的 mDNS 服务。\n\n推荐使用配对码方式进行配对。",
+            "Technical Note:\nAndroid wireless debugging pairing requires mDNS service support. The current version only generates QR codes and cannot provide complete mDNS service.\n\nWe recommend using the pairing code method.",
+        )
+    val QR_CODE_REGENERATE = TextPair("重新生成", "Regenerate")
+    val QR_CODE_MANUAL_PAIRING_NOTE =
+        TextPair(
+            "💡 提示：建议使用「配对码」方式进行配对",
+            "💡 Tip: We recommend using the 'Pairing Code' method",
+        )
+    val QR_CODE_LIMITATION_WARNING =
+        TextPair(
+            "⚠️ 功能限制说明",
+            "⚠️ Feature Limitations",
+        )
+    val QR_CODE_LIMITATION_DETAIL =
+        TextPair(
+            "由于 Android 系统的安全限制，应用层无法完全实现 ADB 配对所需的 mDNS 服务。生成的二维码可能无法被系统识别。\n\n建议使用「配对码」方式，该方式更加稳定可靠。",
+            "Due to Android system security restrictions, the application layer cannot fully implement the mDNS service required for ADB pairing. The generated QR code may not be recognized by the system.\n\nWe recommend using the 'Pairing Code' method, which is more stable and reliable.",
+        )
+
+    // 配对码配对
+    val PAIRING_CODE_TITLE = TextPair("使用配对码配对", "Pair with Pairing Code")
+    val PAIRING_CODE_DESCRIPTION =
+        TextPair(
+            "1. 在被控设备上打开「开发者选项」\n2. 启用「无线调试」\n3. 点击「使用配对码配对设备」\n4. 输入显示的配对信息",
+            "1. Open 'Developer options' on the target device\n2. Enable 'Wireless debugging'\n3. Tap 'Pair device with pairing code'\n4. Enter the displayed pairing information",
+        )
+    val PAIRING_CODE_IP = TextPair("IP 地址", "IP Address")
+    val PAIRING_CODE_PORT = TextPair("端口", "Port")
+    val PAIRING_CODE_CODE = TextPair("配对码", "Pairing Code")
+    val PAIRING_CODE_IP_HINT = TextPair("例如：192.168.1.100", "e.g., 192.168.1.100")
+    val PAIRING_CODE_PORT_HINT = TextPair("例如：37829", "e.g., 37829")
+    val PAIRING_CODE_CODE_HINT = TextPair("6位数字", "6-digit code")
+
+    // 配对状态
+    val PAIRING_STATUS_CONNECTING = TextPair("正在连接...", "Connecting...")
+    val PAIRING_STATUS_PAIRING = TextPair("正在配对...", "Pairing...")
+    val PAIRING_STATUS_SUCCESS = TextPair("配对成功", "Pairing Successful")
+    val PAIRING_STATUS_FAILED = TextPair("配对失败", "Pairing Failed")
+
+    // 配对结果
+    val PAIRING_SUCCESS_MESSAGE =
+        TextPair(
+            "设备配对成功！现在可以在主页面添加会话连接到此设备。",
+            "Device paired successfully! You can now add a session on the main page to connect to this device.",
+        )
+    val PAIRING_FAILED_MESSAGE =
+        TextPair(
+            "配对失败，请检查：\n1. 设备是否在同一网络\n2. 配对信息是否正确\n3. 无线调试是否已启用",
+            "Pairing failed. Please check:\n1. Devices are on the same network\n2. Pairing information is correct\n3. Wireless debugging is enabled",
+        )
+
+    // 按钮
+    val BUTTON_PAIR = TextPair("配对", "Pair")
+    val BUTTON_RETRY = TextPair("重试", "Retry")
+    val BUTTON_CLOSE = TextPair("关闭", "Close")
+
+    // 错误提示
+    val ERROR_INVALID_IP = TextPair("无效的 IP 地址", "Invalid IP address")
+    val ERROR_INVALID_PORT = TextPair("无效的端口号", "Invalid port number")
+    val ERROR_INVALID_CODE = TextPair("配对码必须是6位数字", "Pairing code must be 6 digits")
+    val ERROR_EMPTY_FIELD = TextPair("请填写所有字段", "Please fill in all fields")
+    val ERROR_QR_CODE_INVALID = TextPair("无效的二维码", "Invalid QR code")
+    val ERROR_QR_CODE_PARSE_FAILED = TextPair("二维码解析失败", "Failed to parse QR code")
+    val ERROR_QR_CODE_GENERATE_FAILED = TextPair("二维码生成失败", "Failed to generate QR code")
+
+    // ========== USB 设备管理 ==========
     val USB_SCANNING_DEVICES = TextPair("正在扫描 USB 设备...", "Scanning USB devices...")
-    val USB_FOUND_DEVICES = TextPair("发现设备", "Found devices")
-    val USB_DEVICE_FOUND = TextPair("发现 ADB 设备", "ADB device found")
+    val USB_FOUND_DEVICES = TextPair("找到设备", "Found devices")
+    val USB_DEVICE_FOUND = TextPair("发现设备", "Device found")
+    val USB_SCAN_BUTTON = TextPair("扫描 USB 设备", "Scan USB Devices")
+    val USB_SCAN_FAILED = TextPair("扫描失败", "Scan failed")
+
+    // USB 权限
     val USB_PERMISSION = TextPair("权限", "Permission")
-    val USB_SCAN_FAILED = TextPair("扫描 USB 设备失败", "Failed to scan USB devices")
-    val USB_PERMISSION_ALREADY_GRANTED = TextPair("USB 权限已授予", "USB permission already granted")
-    val USB_REQUESTING_PERMISSION = TextPair("正在请求 USB 权限...", "Requesting USB permission...")
     val USB_PERMISSION_GRANTED = TextPair("USB 权限已授予", "USB permission granted")
     val USB_PERMISSION_DENIED = TextPair("USB 权限被拒绝", "USB permission denied")
-    val USB_PERMISSION_REQUEST_FAILED = TextPair("请求 USB 权限失败", "Failed to request USB permission")
-    val USB_CONNECTING_DEVICE = TextPair("正在连接 USB 设备", "Connecting USB device")
-    val USB_DEVICE_QUERY = TextPair("设备查询", "Device query")
-    val USB_CONNECT_FAILED = TextPair("USB 连接失败", "USB connection failed")
-    val USB_NO_DEVICES_FOUND = TextPair("未找到 USB 设备", "No USB devices found")
-    val USB_SCAN_BUTTON = TextPair("扫描 USB 设备", "Scan USB Devices")
-    val USB_CONNECT_BUTTON = TextPair("连接", "Connect")
-    val USB_DEVICE_LIST_TITLE = TextPair("USB 设备列表", "USB Device List")
-    val USB_SERIAL_NUMBER = TextPair("序列号", "Serial Number")
+    val USB_PERMISSION_ALREADY_GRANTED = TextPair("USB 权限已授予", "USB permission already granted")
+    val USB_REQUESTING_PERMISSION = TextPair("正在请求 USB 权限...", "Requesting USB permission...")
+    val USB_PERMISSION_REQUEST_FAILED = TextPair("USB 权限请求失败", "USB permission request failed")
     val USB_PERMISSION_GRANTED_STATUS = TextPair("已授权", "Granted")
     val USB_PERMISSION_NOT_GRANTED_STATUS = TextPair("未授权", "Not Granted")
     val USB_CLICK_TO_REQUEST_PERMISSION = TextPair("点击请求权限", "Click to request permission")
+    val USB_DEVICE_QUERY = TextPair("设备查询", "Device query")
+    val USB_NO_DEVICES_FOUND = TextPair("未找到 USB 设备", "No USB devices found")
+    val USB_CONNECT_BUTTON = TextPair("连接", "Connect")
+    val USB_DEVICE_LIST_TITLE = TextPair("USB 设备列表", "USB Device List")
     val ERROR_USB_CONNECTION_LOST = TextPair("USB 连接已断开，请重新连接设备", "USB connection lost, please reconnect the device")
     val CONNECTION_TYPE = TextPair("连接类型", "Connection Type")
     val CONNECTION_TYPE_TCP = TextPair("TCP/IP", "TCP/IP")
@@ -158,7 +306,15 @@ object AdbTexts {
     val USB_SELECT_DEVICE = TextPair("选择 USB 设备", "Select USB Device")
     val USB_DEVICE_SELECTED = TextPair("已选择设备", "Device Selected")
     val USB_NO_DEVICE_SELECTED = TextPair("未选择设备", "No Device Selected")
-    
+
+    // USB 连接
+    val USB_CONNECTING_DEVICE = TextPair("正在连接 USB 设备", "Connecting USB device")
+    val USB_SERIAL_NUMBER = TextPair("序列号", "Serial Number")
+    val USB_CONNECT_FAILED = TextPair("USB 连接失败", "USB connection failed")
+
+    // ========== ADB 连接管理 ==========
+    val ADB_MANAGER_INIT = TextPair("ADB 连接管理器初始化", "ADB Connection Manager initialized")
+
     // Scrcpy 连接进度
     val PROGRESS_VERIFYING_ADB = TextPair("验证 ADB 连接", "Verifying ADB connection")
     val PROGRESS_ADB_RECONNECTING = TextPair("ADB 连接已断开，重新连接...", "ADB disconnected, reconnecting...")

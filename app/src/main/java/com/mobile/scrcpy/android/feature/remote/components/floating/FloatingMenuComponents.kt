@@ -30,7 +30,7 @@ import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
  * @param viewModel MainViewModel 实例，用于发送控制信号
  */
 @Composable
-fun AutoFloatingMenu(viewModel:MainViewModel) {
+fun AutoFloatingMenu(viewModel: MainViewModel) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val scope = rememberCoroutineScope()
@@ -39,7 +39,6 @@ fun AutoFloatingMenu(viewModel:MainViewModel) {
 
     // 在 Activity 中创建悬浮球
     LaunchedEffect(Unit) {
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 创建悬浮球")
         ballSystemReference = showDualBallSystem(context, viewModel, scope)
         // 延迟启用旋转监听，避免初始化时的配置抖动
         kotlinx.coroutines.delay(300)
@@ -49,7 +48,7 @@ fun AutoFloatingMenu(viewModel:MainViewModel) {
     // 监听屏幕旋转，重新定位小球
     LaunchedEffect(configuration.orientation) {
         if (isInitialized && ballSystemReference != null) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🔄 屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
+            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
             ballSystemReference?.let { reference ->
                 repositionBallsOnRotation(context, reference)
             }
@@ -73,7 +72,7 @@ fun AutoFloatingMenu(viewModel:MainViewModel) {
  * @param viewModel MainViewModel 实例，用于发送控制信号
  */
 @Composable
-fun AutoFloatingMenuDirect(viewModel:MainViewModel) {
+fun AutoFloatingMenuDirect(viewModel: MainViewModel) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val scope = rememberCoroutineScope()
@@ -92,7 +91,7 @@ fun AutoFloatingMenuDirect(viewModel:MainViewModel) {
     // 监听屏幕旋转，重新定位小球
     LaunchedEffect(configuration.orientation) {
         if (isInitialized && ballSystemReference != null) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🔄 屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
+            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
             // 平滑移动到默认位置，而不是重建
             ballSystemReference?.let { reference ->
                 repositionBallsOnRotation(context, reference)
@@ -126,7 +125,7 @@ fun FloatingMenuController(viewModel: MainViewModel) {
     // 监听屏幕旋转，重新定位小球
     LaunchedEffect(configuration.orientation) {
         if (isFloatingShown && ballSystemReference != null && lastOrientation != configuration.orientation) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🔄 屏幕旋转，检查小球位置 (${lastOrientation} → ${configuration.orientation})")
+            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 ($lastOrientation → ${configuration.orientation})")
             configuration.orientation
             // 平滑移动到默认位置，而不是重建
             ballSystemReference?.let { reference ->
@@ -153,7 +152,7 @@ fun FloatingMenuController(viewModel: MainViewModel) {
         Icon(
             Icons.Default.PlayArrow,
             contentDescription = "测试悬浮窗",
-            tint = if (isFloatingShown) Color(0xFFFF3B30) else Color(0xFF007AFF)
+            tint = if (isFloatingShown) Color(0xFFFF3B30) else Color(0xFF007AFF),
         )
     }
 }

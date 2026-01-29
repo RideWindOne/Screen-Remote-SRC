@@ -17,29 +17,48 @@ import java.net.Socket
  * - PTS 最高位 (bit 63): config packet flag
  * - PTS 次高位 (bit 62): key frame flag
  */
-class ScrcpyAudioStream(private val socket: Socket) : AudioStream {
+class ScrcpyAudioStream(
+    private val socket: Socket,
+) : AudioStream {
     private val dataInputStream = java.io.DataInputStream(socket.inputStream)
 
     override val codec: String
-    override val sampleRate: Int = 48000  // scrcpy 固定 48000
-    override val channelCount: Int = 2    // scrcpy 固定 2
+    override val sampleRate: Int = 48000 // scrcpy 固定 48000
+    override val channelCount: Int = 2 // scrcpy 固定 2
 
     init {
-        socket.soTimeout = 10000  // 10 秒超时
+        socket.soTimeout = 10000 // 10 秒超时
 
         // 1️⃣ 读 AudioHeader (4 bytes, big-endian)
-        val codecId = dataInputStream.readInt()  // uint32 codec (big-endian)
+        val codecId = dataInputStream.readInt() // uint32 codec (big-endian)
 
-        codec = when (codecId) {
-            0x6f707573 -> "opus"  // "opus" 的 ASCII
-            0x00616163 -> "aac"   // "aac" 的 ASCII
-            0x666c6163 -> "flac"  // "flac" 的 ASCII
-            0x00726177 -> "raw"   // "raw" 的 ASCII
-            else -> {
-                LogManager.w("ScrcpyAudioStream", "未知 codec ID: 0x${codecId.toString(16)}, 使用 opus")
-                "opus"
+        codec =
+            when (codecId) {
+                0x6f707573 -> {
+                    "opus"
+                }
+
+                // "opus" 的 ASCII
+                0x00616163 -> {
+                    "aac"
+                }
+
+                // "aac" 的 ASCII
+                0x666c6163 -> {
+                    "flac"
+                }
+
+                // "flac" 的 ASCII
+                0x00726177 -> {
+                    "raw"
+                }
+
+                // "raw" 的 ASCII
+                else -> {
+                    LogManager.w("ScrcpyAudioStream", "未知 codec ID: 0x${codecId.toString(16)}, 使用 opus")
+                    "opus"
+                }
             }
-        }
 
         LogManager.d("ScrcpyAudioStream", "音频配置: codec=$codec, rate=$sampleRate, channels=$channelCount")
     }
@@ -50,7 +69,7 @@ class ScrcpyAudioStream(private val socket: Socket) : AudioStream {
     override fun read(): AdbShellPacket {
         try {
             // 2️⃣ 循环读包：pts(8) + size(4) + payload (全部大端序)
-            val ptsAndFlags = dataInputStream.readLong()   // uint64 pts (包含标志位, big-endian)
+            val ptsAndFlags = dataInputStream.readLong() // uint64 pts (包含标志位, big-endian)
             val packetSize = dataInputStream.readInt() // uint32 size (big-endian)
 
             if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
@@ -71,26 +90,36 @@ class ScrcpyAudioStream(private val socket: Socket) : AudioStream {
 
             // 打印数据包信息（前10个包和每50个包打印一次）
             if (packetCount <= 10 || packetCount % 50 == 0) {
-                val flags = buildString {
-                    if (isConfig) append("CONFIG ")
-                    if (isKeyFrame) append("KEY ")
-                    if (isEmpty()) append("NORMAL")
-                }
+                val flags =
+                    buildString {
+                        if (isConfig) append("CONFIG ")
+                        if (isKeyFrame) append("KEY ")
+                        if (isEmpty()) append("NORMAL")
+                    }
 
                 // 打印前16字节的十六进制数据
                 val previewSize = minOf(16, packet.size)
                 val hexPreview = packet.take(previewSize).joinToString(" ") { "%02X".format(it) }
 
-                LogManager.d("AudioDecoder", "音频包 #$packetCount: size=$packetSize, pts=$actualPts, flags=[$flags], data=$hexPreview...")
+                LogManager.d(
+                    "AudioDecoder",
+                    "音频包 #$packetCount: size=$packetSize, pts=$actualPts, flags=[$flags], data=$hexPreview...",
+                )
 
                 // 如果是小包，打印完整数据
                 if (packetSize <= 10) {
-                    LogManager.w("AudioDecoder", "⚠️ 异常小包 #$packetCount: 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}")
+                    LogManager.w(
+                        "AudioDecoder",
+                        "异常小包 #$packetCount: 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}",
+                    )
                 }
             }
 
             if (isConfig) {
-                LogManager.d("AudioDecoder", "收到配置包 #$packetCount: size=$packetSize, 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}")
+                LogManager.d(
+                    "AudioDecoder",
+                    "收到配置包 #$packetCount: size=$packetSize, 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}",
+                )
             }
 
             return AdbShellPacket.StdOut(packet)
@@ -123,12 +152,13 @@ class ScrcpyAudioStream(private val socket: Socket) : AudioStream {
  */
 class ScrcpySocketStream(
     private val socket: Socket,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    keyFrameInterval: Int = 2,
 ) : VideoStream {
     private val dataInputStream = java.io.DataInputStream(socket.inputStream)
 
     init {
-        socket.soTimeout = 5000 // 5秒超时
+        socket.soTimeout = keyFrameInterval * 1000 // 关键帧间隔转毫秒
     }
 
     @Throws(IOException::class)

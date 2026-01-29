@@ -9,7 +9,6 @@ import java.nio.ByteBuffer
  * 负责 H.264/H.265 NAL 单元的提取和 Frame Meta 解析
  */
 class VideoNalParser {
-    
     companion object {
         // H.264 NAL 类型
         const val H264_NAL_SPS = 7
@@ -43,7 +42,8 @@ class VideoNalParser {
             if (buffer.get(i) == 0.toByte() &&
                 buffer.get(i + 1) == 0.toByte() &&
                 buffer.get(i + 2) == 0.toByte() &&
-                buffer.get(i + 3) == 1.toByte()) {
+                buffer.get(i + 3) == 1.toByte()
+            ) {
                 startPos = i
                 break
             }
@@ -60,7 +60,8 @@ class VideoNalParser {
             if (buffer.get(i) == 0.toByte() &&
                 buffer.get(i + 1) == 0.toByte() &&
                 buffer.get(i + 2) == 0.toByte() &&
-                buffer.get(i + 3) == 1.toByte()) {
+                buffer.get(i + 3) == 1.toByte()
+            ) {
                 endPos = i
                 break
             }
@@ -84,13 +85,12 @@ class VideoNalParser {
     /**
      * 检查是否为 NAL 起始码
      */
-    fun isNalStartCode(data: ByteArray): Boolean {
-        return data.size >= 4 &&
-                data[0] == 0.toByte() &&
-                data[1] == 0.toByte() &&
-                data[2] == 0.toByte() &&
-                data[3] == 1.toByte()
-    }
+    fun isNalStartCode(data: ByteArray): Boolean =
+        data.size >= 4 &&
+            data[0] == 0.toByte() &&
+            data[1] == 0.toByte() &&
+            data[2] == 0.toByte() &&
+            data[3] == 1.toByte()
 
     /**
      * 解析 Frame Meta 消息
@@ -114,28 +114,20 @@ class VideoNalParser {
     /**
      * 获取 H.264 NAL 类型
      */
-    fun getH264NalType(nalUnit: ByteArray): Int {
-        return if (nalUnit.size > 4) nalUnit[4].toInt() and 0x1F else -1
-    }
+    fun getH264NalType(nalUnit: ByteArray): Int = if (nalUnit.size > 4) nalUnit[4].toInt() and 0x1F else -1
 
     /**
      * 获取 H.265 NAL 类型
      */
-    fun getH265NalType(nalUnit: ByteArray): Int {
-        return if (nalUnit.size > 4) (nalUnit[4].toInt() and 0x7E) shr 1 else -1
-    }
+    fun getH265NalType(nalUnit: ByteArray): Int = if (nalUnit.size > 4) (nalUnit[4].toInt() and 0x7E) shr 1 else -1
 
     /**
      * 检查是否为 H.264 关键帧
      */
-    fun isH264KeyFrame(nalType: Int): Boolean {
-        return nalType == H264_NAL_IDR
-    }
+    fun isH264KeyFrame(nalType: Int): Boolean = nalType == H264_NAL_IDR
 
     /**
      * 检查是否为 H.265 关键帧
      */
-    fun isH265KeyFrame(nalType: Int): Boolean {
-        return nalType == H265_NAL_IDR_W_RADL || nalType == H265_NAL_IDR_N_LP
-    }
+    fun isH265KeyFrame(nalType: Int): Boolean = nalType == H265_NAL_IDR_W_RADL || nalType == H265_NAL_IDR_N_LP
 }

@@ -7,12 +7,10 @@ import com.mobile.scrcpy.android.core.common.manager.LanguageManager
  */
 data class TextPair(
     val chinese: String,
-    val english: String
+    val english: String,
 ) {
     /**
      * 根据当前语言获取文本
      */
-    fun get(): String {
-        return LanguageManager.getText(chinese, english)
-    }
+    fun get(): String = LanguageManager.getText(chinese, english)
 }

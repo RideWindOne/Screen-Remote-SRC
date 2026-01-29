@@ -8,7 +8,7 @@ object RemoteTexts {
     val ERROR_CONTROL_NOT_READY = TextPair("控制连接未就绪", "Control connection not ready")
     val ERROR_SEND_FAILED = TextPair("发送失败", "Send failed")
     val ERROR_TEXT_TOO_LONG = TextPair("文本过长（最大 300 字节）", "Text too long (max 300 bytes)")
-    
+
     // RemoteDisplayScreen
     val REMOTE_SWITCH_TO_BACKGROUND = TextPair("切换到后台", "Switch to background")
     val REMOTE_SCREEN_ROTATION_A = TextPair("A旋转", "A rotation")
@@ -38,18 +38,21 @@ object RemoteTexts {
     val REMOTE_DECODER_CANCELLED_UI_CLOSED = TextPair("解码器已取消（界面关闭）", "Decoder cancelled (UI closed)")
     val REMOTE_DECODER_START_FAILED = TextPair("解码器启动失败", "Decoder start failed")
     val REMOTE_INIT_DECODER_FAILED = TextPair("初始化解码器失败", "Failed to initialize decoder")
-    val REMOTE_DECODER_CONTINUE_RUNNING = TextPair("解码器继续运行，socket 保持活跃", "Decoder continues running, socket stays active")
+    val REMOTE_DECODER_CONTINUE_RUNNING =
+        TextPair("解码器继续运行，socket 保持活跃", "Decoder continues running, socket stays active")
     val REMOTE_RESUME_TO_FOREGROUND = TextPair("恢复到前台", "Resume to foreground")
-    val REMOTE_FOREGROUND_RESUME_INVALID_SURFACE = TextPair("前台恢复但 Surface 无效", "Foreground resumed but Surface invalid")
+    val REMOTE_FOREGROUND_RESUME_INVALID_SURFACE =
+        TextPair("前台恢复但 Surface 无效", "Foreground resumed but Surface invalid")
     val REMOTE_START_CLEANUP_RESOURCES = TextPair("开始清理资源...", "Starting resource cleanup...")
     val REMOTE_CLEANUP_COMPLETE = TextPair("资源清理完成", "Resource cleanup complete")
     val REMOTE_CLEANUP_EXCEPTION = TextPair("资源清理异常", "Resource cleanup exception")
     val REMOTE_SURFACE_READY = TextPair("Surface 已就绪", "Surface ready")
     val REMOTE_SURFACE_DESTROYED = TextPair("Surface 已销毁", "Surface destroyed")
-    val REMOTE_SURFACE_RESTORED = TextPair("Surface 已恢复，设置为就绪并恢复渲染", "Surface restored, set to ready and resume rendering")
+    val REMOTE_SURFACE_RESTORED =
+        TextPair("Surface 已恢复，设置为就绪并恢复渲染", "Surface restored, set to ready and resume rendering")
     val REMOTE_SURFACE_UNAVAILABLE = TextPair("Surface 不可用", "Surface unavailable")
     val REMOTE_FOCUS_REQUEST_FAILED = TextPair("请求焦点失败", "Focus request failed")
-    
+
     // ScrcpyClient
     val SCRCPY_NATIVE_LIB_LOAD_FAILED = TextPair("Native 库加载失败", "Native library load failed")
     val SCRCPY_ADB_CONNECTION_UNAVAILABLE = TextPair("ADB 连接不可用", "ADB connection unavailable")
@@ -88,8 +91,13 @@ object RemoteTexts {
     val SCRCPY_VIDEO_STREAM_TIMEOUT = TextPair("视频流超时", "Video stream timeout")
     val SCRCPY_WAITED = TextPair("已等待", "Waited")
     val SCRCPY_TOTAL_PACKETS = TextPair("总包数", "Total packets")
-    val SCRCPY_DEVICE_MAY_SLEEP = TextPair("设备可能息屏，继续等待视频流恢复（控制流正常）", "Device may be sleeping, continue waiting for video stream (control stream normal)")
-    val SCRCPY_CONTROL_STREAM_DISCONNECTED = TextPair("控制流也断开，判定为连接断开", "Control stream also disconnected, determined as disconnected")
+    val SCRCPY_DEVICE_MAY_SLEEP =
+        TextPair(
+            "设备可能息屏，继续等待视频流恢复（控制流正常）",
+            "Device may be sleeping, continue waiting for video stream (control stream normal)",
+        )
+    val SCRCPY_CONTROL_STREAM_DISCONNECTED =
+        TextPair("控制流也断开，判定为连接断开", "Control stream also disconnected, determined as disconnected")
     val SCRCPY_CONNECTION_DISCONNECTED = TextPair("连接断开", "Connection disconnected")
     val SCRCPY_VIDEO_STREAM_CLOSED = TextPair("视频流已关闭", "Video stream closed")
     val SCRCPY_TOTAL_RECEIVED_PACKETS = TextPair("总共接收", "Total received")

@@ -4,16 +4,18 @@ package com.mobile.scrcpy.android.core.domain.model
  * 主题模式
  */
 enum class ThemeMode {
-    SYSTEM, DARK, LIGHT
+    SYSTEM,
+    DARK,
+    LIGHT,
 }
 
 /**
  * 应用语言
  */
 enum class AppLanguage {
-    AUTO,      // 跟随系统
-    CHINESE,   // 中文
-    ENGLISH    // English
+    AUTO, // 跟随系统
+    CHINESE, // 中文
+    ENGLISH, // English
 }
 
 /**
@@ -27,5 +29,5 @@ data class AppSettings(
     val enableActivityLog: Boolean = true,
     val fileTransferPath: String = "",
     val enableFloatingMenu: Boolean = true,
-    val enableFloatingHapticFeedback: Boolean = true
+    val enableFloatingHapticFeedback: Boolean = true,
 )

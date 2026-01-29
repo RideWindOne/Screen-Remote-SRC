@@ -38,84 +38,87 @@ fun LogFileItem(
     file: File,
     isCurrent: Boolean = false,
     onView: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy年MM月dd日 HH:mm", Locale.getDefault()) }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.Top,
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = file.name,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     text = dateFormat.format(Date(file.lastModified())),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(
-                    modifier = Modifier
-                        .clickable(onClick = onView)
-                        .padding(vertical = 2.dp),
+                    modifier =
+                        Modifier
+                            .clickable(onClick = onView)
+                            .padding(vertical = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = Icons.Default.Description,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                     Text(
                         text = LogTexts.LOG_VIEW_BUTTON.get(),
                         color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Box(
                     modifier = Modifier.width(60.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = formatFileSize(file.length()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
                     )
                 }
                 if (isCurrent) {
                     Button(
                         onClick = onView,
-                        modifier = Modifier
-                            .width(60.dp)
-                            .height(24.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        modifier =
+                            Modifier
+                                .width(60.dp)
+                                .height(24.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                     ) {
                         Text(LogTexts.LOG_CURRENT_BUTTON.get(), style = MaterialTheme.typography.bodySmall)
                     }
@@ -124,15 +127,16 @@ fun LogFileItem(
                 }
                 TextButton(
                     onClick = onDelete,
-                    modifier = Modifier
-                        .width(60.dp)
-                        .height(24.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    modifier =
+                        Modifier
+                            .width(60.dp)
+                            .height(24.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                 ) {
                     Text(
                         text = LogTexts.LOG_DELETE_BUTTON.get(),
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
@@ -144,11 +148,10 @@ fun LogFileItem(
     }
 }
 
-fun formatFileSize(size: Long): String {
-    return when {
+fun formatFileSize(size: Long): String =
+    when {
         size < 1024 -> "$size B"
         size < 1024 * 1024 -> "${size / 1024} KB"
         size < 1024 * 1024 * 1024 -> "${size / (1024 * 1024)} MB"
         else -> "${size / (1024 * 1024 * 1024)} GB"
     }
-}

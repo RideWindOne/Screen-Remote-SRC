@@ -48,27 +48,26 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
-import com.mobile.scrcpy.android.feature.remote.ui.RemoteDisplayScreen
-import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
+import com.mobile.scrcpy.android.core.designsystem.component.AddActionDialog
 import com.mobile.scrcpy.android.core.designsystem.component.CompactGroupSelector
+import com.mobile.scrcpy.android.core.designsystem.component.GroupManagementDialog
+import com.mobile.scrcpy.android.core.designsystem.component.PathBreadcrumb
 import com.mobile.scrcpy.android.core.domain.model.GroupType
+import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.feature.codec.ui.CodecTestScreen
+import com.mobile.scrcpy.android.feature.device.ui.component.AdbKeyManagementDialog
+import com.mobile.scrcpy.android.feature.remote.ui.RemoteDisplayScreen
+import com.mobile.scrcpy.android.feature.session.ui.SessionsScreen
+import com.mobile.scrcpy.android.feature.session.ui.component.AddSessionDialog
+import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 import com.mobile.scrcpy.android.feature.settings.ui.AboutScreen
+import com.mobile.scrcpy.android.feature.settings.ui.ActionsScreen
 import com.mobile.scrcpy.android.feature.settings.ui.AppearanceScreen
 import com.mobile.scrcpy.android.feature.settings.ui.LanguageScreen
 import com.mobile.scrcpy.android.feature.settings.ui.LogManagementScreen
 import com.mobile.scrcpy.android.feature.settings.ui.SettingsScreen
-import com.mobile.scrcpy.android.core.designsystem.component.AddActionDialog
-import com.mobile.scrcpy.android.core.designsystem.component.GroupManagementDialog
-import com.mobile.scrcpy.android.core.designsystem.component.PathBreadcrumb
-import kotlin.collections.find
-import com.mobile.scrcpy.android.feature.device.ui.component.AdbKeyManagementDialog
-import com.mobile.scrcpy.android.feature.session.ui.component.AddSessionDialog
-import com.mobile.scrcpy.android.feature.session.ui.SessionsScreen
-import com.mobile.scrcpy.android.feature.settings.ui.ActionsScreen
 import kotlin.collections.filter
-
-import com.mobile.scrcpy.android.core.i18n.SessionTexts
+import kotlin.collections.find
 // import com.mobile.scrcpy.android.ui.components.FloatingMenuController  // 暂时隐藏
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,18 +101,20 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         rememberText(SessionTexts.MAIN_ADD_ACTION)
 
     // 申请通知权限（Android 13+）
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        // 权限结果处理（可选）
-    }
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            // 权限结果处理（可选）
+        }
 
     LaunchedEffect(Unit) {
         if (ApiCompatHelper.needsNotificationPermission()) {
-            val hasPermission = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+            val hasPermission =
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ) == PackageManager.PERMISSION_GRANTED
 
             if (!hasPermission) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -126,13 +127,14 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     if (connectedSessionId != null) {
         RemoteDisplayScreen(
             sessionId = connectedSessionId!!,
+            mainViewModel = viewModel,
             onClose = {
                 // 立即更新状态，使界面切换回主界面
                 // 注意：disconnectFromDevice() 会更新状态，但为了立即响应，先清除状态
                 viewModel.clearConnectStatus()
                 // 异步断开设备连接（会再次更新状态，确保一致性）
                 viewModel.disconnectFromDevice()
-            }
+            },
         )
         return
     }
@@ -143,11 +145,11 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                 title = {
                     Box(
                         modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = txtTitle,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                     }
                 },
@@ -156,7 +158,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "设置",
-                            tint = Color(0xFF007AFF)
+                            tint = Color(0xFF007AFF),
                         )
                     }
                 },
@@ -174,97 +176,134 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                         Icon(
                             Icons.Default.Add,
                             contentDescription = if (selectedTab == 0) txtAddSession else txtAddAction,
-                            tint = Color(0xFF007AFF)
+                            tint = Color(0xFF007AFF),
                         )
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+            modifier =
+                Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 // Tab 切换器 + 分组选择器（整体居中）
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Tab 切换器
                     Box(
-                        modifier = Modifier
-                            .width(132.dp)  // 70 + 60 = 130.dp
-                            .height(38.dp)
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(2.dp)
+                        modifier =
+                            Modifier
+                                .width(132.dp) // 70 + 60 = 130.dp
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(2.dp),
                     ) {
                         // Sessions Tab (左边)
                         Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .width(70.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(15.dp))
-                                .background(if (selectedTab == 0) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                .then(
-                                    if (selectedTab == 0)
-                                        Modifier.zIndex(1f)
-                                    else
-                                        Modifier
-                                ),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .width(70.dp)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(15.dp))
+                                    .background(
+                                        if (selectedTab ==
+                                            0
+                                        ) {
+                                            MaterialTheme.colorScheme.surface
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                    ).then(
+                                        if (selectedTab == 0) {
+                                            Modifier.zIndex(1f)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                            contentAlignment = Alignment.Center,
                         ) {
                             TextButton(
                                 onClick = { selectedTab = 0 },
                                 modifier = Modifier.fillMaxSize(),
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = if (selectedTab == 0) Color(0xFF007AFF) else MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                contentPadding = PaddingValues(0.dp)
+                                colors =
+                                    ButtonDefaults.textButtonColors(
+                                        contentColor =
+                                            if (selectedTab ==
+                                                0
+                                            ) {
+                                                Color(0xFF007AFF)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                    ),
+                                contentPadding = PaddingValues(0.dp),
                             ) {
                                 Text(
                                     text = txtTabSessions,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
                         }
 
                         // Actions Tab (右边)
                         Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .width(60.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(15.dp))
-                                .background(if (selectedTab == 1) MaterialTheme.colorScheme.surface else Color.Transparent)
-                                .then(
-                                    if (selectedTab == 1)
-                                        Modifier.zIndex(1f)
-                                    else
-                                        Modifier
-                                ),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(60.dp)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(15.dp))
+                                    .background(
+                                        if (selectedTab ==
+                                            1
+                                        ) {
+                                            MaterialTheme.colorScheme.surface
+                                        } else {
+                                            Color.Transparent
+                                        },
+                                    ).then(
+                                        if (selectedTab == 1) {
+                                            Modifier.zIndex(1f)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                            contentAlignment = Alignment.Center,
                         ) {
                             TextButton(
                                 onClick = { selectedTab = 1 },
                                 modifier = Modifier.fillMaxSize(),
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = if (selectedTab == 1) Color(0xFF007AFF) else MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                contentPadding = PaddingValues(0.dp)
+                                colors =
+                                    ButtonDefaults.textButtonColors(
+                                        contentColor =
+                                            if (selectedTab ==
+                                                1
+                                            ) {
+                                                Color(0xFF007AFF)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                    ),
+                                contentPadding = PaddingValues(0.dp),
                             ) {
                                 Text(
                                     text = txtTabActions,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
                         }
@@ -272,34 +311,36 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
 
                     // 分组选择器（根据当前标签页显示对应类型的分组）
                     // 即使没有分组，也显示"主页"按钮
-                    val filteredGroups = if (selectedTab == 0) {
-                        // Sessions 标签页：显示 SESSION 类型分组
-                        groups.filter { it.type == GroupType.SESSION }
-                    } else {
-                        // Actions 标签页：显示 AUTOMATION 类型分组
-                        groups.filter { it.type == GroupType.AUTOMATION }
-                    }
-                    
+                    val filteredGroups =
+                        if (selectedTab == 0) {
+                            // Sessions 标签页：显示 SESSION 类型分组
+                            groups.filter { it.type == GroupType.SESSION }
+                        } else {
+                            // Actions 标签页：显示 AUTOMATION 类型分组
+                            groups.filter { it.type == GroupType.AUTOMATION }
+                        }
+
                     // 始终显示分组选择器（即使没有分组，也显示"主页"）
                     CompactGroupSelector(
                         groups = filteredGroups,
                         selectedGroupPath = if (selectedTab == 0) selectedGroupPath else selectedAutomationGroupPath,
-                        onGroupSelected = { 
+                        onGroupSelected = {
                             if (selectedTab == 0) {
                                 viewModel.selectGroup(it)
                             } else {
                                 viewModel.selectAutomationGroup(it)
                             }
-                        }
+                        },
                     )
                 }
             }
 
             // 主内容区域
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
             ) {
                 when (selectedTab) {
                     0 -> SessionsScreen(viewModel)
@@ -317,17 +358,21 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     if (showAddDialog) {
-        val editingSession = editingSessionId?.let { id ->
-            sessionDataList.find { it.id == id }
-        }
-        AddSessionDialog(
-            sessionData = editingSession,
-            availableGroups = groups,
-            onDismiss = { viewModel.hideAddSessionDialog() },
-            onConfirm = { sessionData ->
-                viewModel.saveSessionData(sessionData)
+        val editingSession =
+            editingSessionId?.let { id ->
+                sessionDataList.find { it.id == id }
             }
-        )
+        // 使用 editingSessionId 作为 key，确保切换编辑对象时强制重组
+        androidx.compose.runtime.key(editingSessionId ?: "new") {
+            AddSessionDialog(
+                sessionData = editingSession,
+                availableGroups = groups,
+                onDismiss = { viewModel.hideAddSessionDialog() },
+                onConfirm = { sessionData ->
+                    viewModel.saveSessionData(sessionData)
+                },
+            )
+        }
     }
 
     if (showAddActionDialog) {
@@ -335,7 +380,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onDismiss = { viewModel.hideAddActionDialog() },
             onConfirm = { action ->
                 viewModel.addAction(action)
-            }
+            },
         )
     }
 
@@ -360,39 +405,39 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             },
             onNavigateToGroupManagement = {
                 showGroupManagement = true
-            }
+            },
         )
     }
 
     if (showAbout) {
         AboutScreen(
-            onBack = { showAbout = false }
+            onBack = { showAbout = false },
         )
     }
 
     if (showAppearance) {
         AppearanceScreen(
             viewModel = viewModel,
-            onBack = { showAppearance = false }
+            onBack = { showAppearance = false },
         )
     }
 
     if (showLanguage) {
         LanguageScreen(
             viewModel = viewModel,
-            onBack = { showLanguage = false }
+            onBack = { showLanguage = false },
         )
     }
 
     if (showCodecTest) {
         CodecTestScreen(
-            onBack = { showCodecTest = false }
+            onBack = { showCodecTest = false },
         )
     }
 
     if (showLogManagement) {
         LogManagementScreen(
-            onDismiss = { showLogManagement = false }
+            onDismiss = { showLogManagement = false },
         )
     }
 
@@ -401,23 +446,21 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             groups = groups,
             sessionCounts = viewModel.getSessionCountByGroup(),
             onDismiss = { showGroupManagement = false },
-            onAddGroup = { name, parentPath, description, type ->
-                viewModel.addGroup(name, parentPath, description, type)
+            onAddGroup = { name, parentPath, type ->
+                viewModel.addGroup(name, parentPath, type)
             },
             onUpdateGroup = { group ->
                 viewModel.updateGroup(group)
             },
             onDeleteGroup = { groupId ->
                 viewModel.removeGroup(groupId)
-            }
+            },
         )
     }
 
     if (showAdbKeyManagement) {
         AdbKeyManagementDialog(
-            onDismiss = { showAdbKeyManagement = false }
+            onDismiss = { showAdbKeyManagement = false },
         )
     }
 }
-
-

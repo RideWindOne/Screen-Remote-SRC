@@ -2,59 +2,66 @@ package com.mobile.scrcpy.android.infrastructure.media.audio
 
 import android.media.AudioFormat
 import android.media.AudioTrack
-import java.nio.ByteBuffer
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import java.nio.ByteBuffer
 
 /**
  * AudioTrackManager - AudioTrack 管理器
  * 负责 AudioTrack 创建、音量控制和数据写入
  */
-class AudioTrackManager(private val volumeScale: Float = 1.0f) {
-
+class AudioTrackManager(
+    private val volumeScale: Float = 1.0f,
+) {
     @Volatile private var audioTrack: AudioTrack? = null
 
     /**
      * 创建 AudioTrack
      */
-    fun createAudioTrack(sampleRate: Int, channelCount: Int): AudioTrack? {
-        return try {
-            val channelConfig = if (channelCount == 2) {
-                AudioFormat.CHANNEL_OUT_STEREO
-            } else {
-                AudioFormat.CHANNEL_OUT_MONO
-            }
+    fun createAudioTrack(
+        sampleRate: Int,
+        channelCount: Int,
+    ): AudioTrack? =
+        try {
+            val channelConfig =
+                if (channelCount == 2) {
+                    AudioFormat.CHANNEL_OUT_STEREO
+                } else {
+                    AudioFormat.CHANNEL_OUT_MONO
+                }
 
-            val bufferSize = AudioTrack.getMinBufferSize(
-                sampleRate,
-                channelConfig,
-                AudioFormat.ENCODING_PCM_16BIT
-            ) * 4
+            val bufferSize =
+                AudioTrack.getMinBufferSize(
+                    sampleRate,
+                    channelConfig,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                ) * 4
 
-            val track = AudioTrack.Builder()
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(channelConfig)
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .build()
-                )
-                .setBufferSizeInBytes(bufferSize)
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
+            val track =
+                AudioTrack
+                    .Builder()
+                    .setAudioFormat(
+                        AudioFormat
+                            .Builder()
+                            .setSampleRate(sampleRate)
+                            .setChannelMask(channelConfig)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .build(),
+                    ).setBufferSizeInBytes(bufferSize)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
 
             audioTrack = track
 
             LogManager.d(
                 LogTags.AUDIO_DECODER,
-                "AudioTrack 创建成功: rate=$sampleRate, channels=$channelCount, bufferSize=$bufferSize"
+                "AudioTrack 创建成功: rate=$sampleRate, channels=$channelCount, bufferSize=$bufferSize",
             )
             track
         } catch (e: Exception) {
             LogManager.e(LogTags.AUDIO_DECODER, "创建 AudioTrack 失败: ${e.message}", e)
             null
         }
-    }
 
     /**
      * 启动播放
@@ -83,11 +90,12 @@ class AudioTrackManager(private val volumeScale: Float = 1.0f) {
     fun writeRawData(data: ByteArray): Int {
         val track = audioTrack ?: return -1
 
-        val scaledData = if (volumeScale != 1.0f) {
-            applyVolumeScale(data, volumeScale)
-        } else {
-            data
-        }
+        val scaledData =
+            if (volumeScale != 1.0f) {
+                applyVolumeScale(data, volumeScale)
+            } else {
+                data
+            }
 
         return track.write(scaledData, 0, scaledData.size)
     }
@@ -95,7 +103,10 @@ class AudioTrackManager(private val volumeScale: Float = 1.0f) {
     /**
      * 写入解码后的数据（ByteBuffer）
      */
-    fun writeDecodedData(buffer: ByteBuffer, size: Int): Int {
+    fun writeDecodedData(
+        buffer: ByteBuffer,
+        size: Int,
+    ): Int {
         val track = audioTrack ?: return -1
 
         if (volumeScale != 1.0f) {
@@ -111,7 +122,10 @@ class AudioTrackManager(private val volumeScale: Float = 1.0f) {
      * @param scale 音量缩放系数 (0.1 ~ 2.0)
      * @return 缩放后的数据
      */
-    private fun applyVolumeScale(data: ByteArray, scale: Float): ByteArray {
+    private fun applyVolumeScale(
+        data: ByteArray,
+        scale: Float,
+    ): ByteArray {
         if (scale == 1.0f) return data
 
         val scaledData = ByteArray(data.size)
@@ -143,7 +157,11 @@ class AudioTrackManager(private val volumeScale: Float = 1.0f) {
      * @param size 数据大小
      * @param scale 音量缩放系数 (0.1 ~ 2.0)
      */
-    private fun applyVolumeScaleToBuffer(buffer: ByteBuffer, size: Int, scale: Float) {
+    private fun applyVolumeScaleToBuffer(
+        buffer: ByteBuffer,
+        size: Int,
+        scale: Float,
+    ) {
         if (scale == 1.0f) return
 
         val position = buffer.position()

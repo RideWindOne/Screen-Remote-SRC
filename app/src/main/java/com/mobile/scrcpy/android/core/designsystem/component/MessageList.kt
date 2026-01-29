@@ -21,7 +21,7 @@ data class MessageItem(
     val icon: String,
     val title: String,
     val subtitle: String = "",
-    val error: String? = null
+    val error: String? = null,
 )
 
 /**
@@ -41,7 +41,10 @@ class MessageListState {
     /**
      * 更新消息（根据 id）
      */
-    fun updateMessage(id: String, update: (MessageItem) -> MessageItem) {
+    fun updateMessage(
+        id: String,
+        update: (MessageItem) -> MessageItem,
+    ) {
         val index = _messages.indexOfFirst { it.id == id }
         if (index >= 0) {
             _messages[index] = update(_messages[index])
@@ -60,9 +63,7 @@ class MessageListState {
  * 记住消息列表状态
  */
 @Composable
-fun rememberMessageListState(): MessageListState {
-    return remember { MessageListState() }
-}
+fun rememberMessageListState(): MessageListState = remember { MessageListState() }
 
 /**
  * 消息列表组件
@@ -75,49 +76,49 @@ fun rememberMessageListState(): MessageListState {
 fun MessageList(
     state: MessageListState,
     title: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         // 始终显示标题
         Text(
             text = title,
             color = Color.White,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
 
         // 显示消息列表
         state.messages.forEach { message ->
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = message.icon,
                     color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Column {
                     Text(
                         text = message.title,
                         color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     if (message.subtitle.isNotEmpty()) {
                         Text(
                             text = message.subtitle,
                             color = Color.White.copy(alpha = 0.7f),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     if (message.error != null) {
                         Text(
                             text = message.error,
                             color = Color.Red.copy(alpha = 0.9f),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }

@@ -4,8 +4,8 @@ package com.mobile.scrcpy.android.core.domain.model
  * 设备连接类型
  */
 enum class ConnectionType {
-    TCP,    // TCP/IP 网络连接
-    USB     // USB 有线连接
+    TCP, // TCP/IP 网络连接
+    USB, // USB 有线连接
 }
 
 /**
@@ -18,7 +18,7 @@ data class DeviceConfig(
     val customName: String? = null,
     val autoConnect: Boolean = false,
     val codecCache: CodecCache? = null,
-    val connectionType: ConnectionType = ConnectionType.TCP
+    val connectionType: ConnectionType = ConnectionType.TCP,
 )
 
 /**
@@ -27,18 +27,16 @@ data class DeviceConfig(
 data class CodecCache(
     val videoDecoderName: String? = null,
     val audioDecoderName: String? = null,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val lastUpdated: Long = System.currentTimeMillis(),
 ) {
     companion object {
-        const val CACHE_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000L  // 7天有效期
+        const val CACHE_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000L // 7天有效期
     }
-    
+
     /**
      * 检查缓存是否有效
      */
-    fun isValid(): Boolean {
-        return System.currentTimeMillis() - lastUpdated < CACHE_VALIDITY_MS
-    }
+    fun isValid(): Boolean = System.currentTimeMillis() - lastUpdated < CACHE_VALIDITY_MS
 }
 
 /**
@@ -47,5 +45,5 @@ data class CodecCache(
 data class AdbKeysInfo(
     val keysDir: String,
     val privateKey: String,
-    val publicKey: String
+    val publicKey: String,
 )

@@ -16,22 +16,19 @@ import kotlinx.coroutines.withContext
  */
 class ControlViewModel(
     private val scrcpyClient: ScrcpyClient,
-    private val adbConnectionManager: AdbConnectionManager
+    private val adbConnectionManager: AdbConnectionManager,
 ) : ViewModel() {
-
     // ============ 按键控制 ============
 
-    suspend fun sendKeyEvent(keyCode: Int): Result<Boolean> {
-        return scrcpyClient.sendKeyEvent(keyCode)
-    }
+    suspend fun sendKeyEvent(keyCode: Int): Result<Boolean> = scrcpyClient.sendKeyEvent(keyCode)
 
-    suspend fun sendKeyEvent(keyCode: Int, action: Int, metaState: Int): Result<Boolean> {
-        return scrcpyClient.sendKeyEvent(keyCode, action, 0, metaState)
-    }
+    suspend fun sendKeyEvent(
+        keyCode: Int,
+        action: Int,
+        metaState: Int,
+    ): Result<Boolean> = scrcpyClient.sendKeyEvent(keyCode, action, 0, metaState)
 
-    suspend fun sendText(text: String): Result<Boolean> {
-        return scrcpyClient.sendText(text)
-    }
+    suspend fun sendText(text: String): Result<Boolean> = scrcpyClient.sendText(text)
 
     // ============ 触摸控制 ============
 
@@ -42,10 +39,8 @@ class ControlViewModel(
         y: Int,
         screenWidth: Int,
         screenHeight: Int,
-        pressure: Float = 1.0f
-    ): Result<Boolean> {
-        return scrcpyClient.sendTouchEvent(action, pointerId, x, y, screenWidth, screenHeight, pressure)
-    }
+        pressure: Float = 1.0f,
+    ): Result<Boolean> = scrcpyClient.sendTouchEvent(action, pointerId, x, y, screenWidth, screenHeight, pressure)
 
     /**
      * 发送滑动手势
@@ -60,48 +55,48 @@ class ControlViewModel(
         startY: Int,
         endX: Int,
         endY: Int,
-        duration: Long = 300
-    ): Result<Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val resolution = scrcpyClient.videoResolution.value
-                ?: return@withContext Result.failure(Exception("无法获取视频分辨率"))
-            val (screenWidth, screenHeight) = resolution
+        duration: Long = 300,
+    ): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val resolution =
+                    scrcpyClient.videoResolution.value
+                        ?: return@withContext Result.failure(Exception("无法获取视频分辨率"))
+                val (screenWidth, screenHeight) = resolution
 
-            // 计算滑动步数（每 16ms 一帧，约 60fps）
-            val steps = (duration / 16).toInt().coerceAtLeast(10)
-            val pointerId = 0L
+                // 计算滑动步数（每 16ms 一帧，约 60fps）
+                val steps = (duration / 16).toInt().coerceAtLeast(10)
+                val pointerId = 0L
 
-            // 发送按下事件
-            sendTouchEvent(0, pointerId, startX, startY, screenWidth, screenHeight)
-            delay(16)
-
-            // 发送移动事件
-            for (i in 1..steps) {
-                val progress = i.toFloat() / steps
-                val currentX = (startX + (endX - startX) * progress).toInt()
-                val currentY = (startY + (endY - startY) * progress).toInt()
-                sendTouchEvent(2, pointerId, currentX, currentY, screenWidth, screenHeight)
+                // 发送按下事件
+                sendTouchEvent(0, pointerId, startX, startY, screenWidth, screenHeight)
                 delay(16)
+
+                // 发送移动事件
+                for (i in 1..steps) {
+                    val progress = i.toFloat() / steps
+                    val currentX = (startX + (endX - startX) * progress).toInt()
+                    val currentY = (startY + (endY - startY) * progress).toInt()
+                    sendTouchEvent(2, pointerId, currentX, currentY, screenWidth, screenHeight)
+                    delay(16)
+                }
+
+                // 发送抬起事件
+                sendTouchEvent(1, pointerId, endX, endY, screenWidth, screenHeight)
+
+                Result.success(true)
+            } catch (e: Exception) {
+                LogManager.e(LogTags.CONTROL_VM, "发送滑动手势失败: ${e.message}", e)
+                Result.failure(e)
             }
-
-            // 发送抬起事件
-            sendTouchEvent(1, pointerId, endX, endY, screenWidth, screenHeight)
-
-            Result.success(true)
-        } catch (e: Exception) {
-            LogManager.e(LogTags.CONTROL_VM, "发送滑动手势失败: ${e.message}", e)
-            Result.failure(e)
         }
-    }
 
     // ============ 屏幕控制 ============
 
     /**
      * 唤醒远程设备屏幕
      */
-    suspend fun wakeUpScreen(): Result<Boolean> {
-        return scrcpyClient.wakeUpScreen()
-    }
+    suspend fun wakeUpScreen(): Result<Boolean> = scrcpyClient.wakeUpScreen()
 
     // ============ Shell 命令 ============
 
@@ -114,12 +109,14 @@ class ControlViewModel(
         return withContext(Dispatchers.IO) {
             try {
                 // 获取当前设备 ID
-                val deviceId = scrcpyClient.getCurrentDeviceId()
-                    ?: return@withContext Result.failure(Exception("未连接设备"))
+                val deviceId =
+                    scrcpyClient.getCurrentDeviceId()
+                        ?: return@withContext Result.failure(Exception("未连接设备"))
 
                 // 获取 ADB 连接
-                val connection = adbConnectionManager.getConnection(deviceId)
-                    ?: return@withContext Result.failure(Exception("Device connection lost"))
+                val connection =
+                    adbConnectionManager.getConnection(deviceId)
+                        ?: return@withContext Result.failure(Exception("Device connection lost"))
 
                 // 执行 Shell 命令
                 connection.executeShell(command)
@@ -135,12 +132,12 @@ class ControlViewModel(
     companion object {
         fun provideFactory(
             scrcpyClient: ScrcpyClient,
-            adbConnectionManager: AdbConnectionManager
-        ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return ControlViewModel(scrcpyClient, adbConnectionManager) as T
+            adbConnectionManager: AdbConnectionManager,
+        ): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                    ControlViewModel(scrcpyClient, adbConnectionManager) as T
             }
-        }
     }
 }
