@@ -25,6 +25,12 @@ object SettingsTexts {
     val SETTINGS_SUBMIT_ISSUE = TextPair("提交问题", "Submit Issue")
     val SETTINGS_USER_GUIDE = TextPair("使用指南", "User Guide")
 
+    // 备份与恢复
+    val BACKUP_RESTORE_TITLE = TextPair("备份与恢复", "Backup & Restore")
+    val BACKUP_DATA = TextPair("导出数据", "Export Data")
+    val RESTORE_DATA = TextPair("导入数据", "Import Data")
+    val BACKUP_INFO = TextPair("数据管理", "Data Management")
+
     // 语言设置
     val LANGUAGE_TITLE = TextPair("语言", "Language")
     val LANGUAGE_SECTION_TITLE = TextPair("语言 / Language", "Language / 语言")
@@ -119,5 +125,15 @@ object SettingsTexts {
         TextPair(
             "查看和管理应用日志文件。可以查看日志内容、导出日志文件用于问题反馈，或删除不需要的日志文件以释放空间。",
             "View and manage application log files. You can view log content, export log files for issue reporting, or delete unnecessary log files to free up space.",
+        )
+    val HELP_BACKUP_DATA =
+        TextPair(
+            "将应用设置、会话配置、群组信息和 ADB 密钥导出为 JSON 文件，您可以选择保存位置。可用于数据备份或迁移到其他设备。",
+            "Export app settings, session configurations, group information and ADB keys as JSON file. You can choose where to save it. Can be used for data backup or migration to other devices.",
+        )
+    val HELP_RESTORE_DATA =
+        TextPair(
+            "从您选择的备份文件导入数据，恢复应用设置、会话、群组和 ADB 密钥。注意：导入将覆盖当前所有数据。",
+            "Import previously exported backup file from Downloads folder to restore app settings, sessions, groups and ADB keys. Note: Import will overwrite all current data.",
         )
 }

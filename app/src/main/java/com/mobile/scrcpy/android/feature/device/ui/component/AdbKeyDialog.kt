@@ -65,6 +65,7 @@ import com.mobile.scrcpy.android.app.ScreenRemoteApp
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager.isChinese
 import com.mobile.scrcpy.android.core.common.manager.rememberText
+import com.mobile.scrcpy.android.core.common.util.FilePickerHelper
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
@@ -144,8 +145,8 @@ fun AdbKeyManagementDialog(onDismiss: () -> Unit) {
     var pendingPrivateKeyUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
     val exportPublicKeyLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        FilePickerHelper.rememberExportFileLauncher(
+            mimeType = "application/octet-stream",
         ) { uri ->
             uri?.let { publicKeyUri ->
                 pendingPrivateKeyUri?.let { privateKeyUri ->
@@ -168,8 +169,8 @@ fun AdbKeyManagementDialog(onDismiss: () -> Unit) {
         }
 
     val exportPrivateKeyLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        FilePickerHelper.rememberExportFileLauncher(
+            mimeType = "application/octet-stream",
         ) { uri ->
             uri?.let { privateKeyUri ->
                 pendingPrivateKeyUri = privateKeyUri
@@ -179,8 +180,8 @@ fun AdbKeyManagementDialog(onDismiss: () -> Unit) {
 
     // 文件选择器 - 导入多个文件（提示用户长按多选）
     val importKeysLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.OpenMultipleDocuments(),
+        FilePickerHelper.rememberImportMultipleFilesLauncher(
+            mimeTypes = arrayOf("*/*"),
         ) { uris ->
             if (uris.isNotEmpty()) {
                 scope.launch {

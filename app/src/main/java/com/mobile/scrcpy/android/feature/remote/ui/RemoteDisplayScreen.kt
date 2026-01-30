@@ -282,8 +282,8 @@ fun RemoteDisplayScreen(
                 .background(Color.Black),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 悬浮球（仅在视频流存在且开关开启时显示）
-            if (videoStream != null && settings.enableFloatingMenu) {
+            // 悬浮球（仅在视频流存在时显示）
+            if (videoStream != null) {
                 AutoFloatingMenu(viewModel = mainViewModel)
             }
 

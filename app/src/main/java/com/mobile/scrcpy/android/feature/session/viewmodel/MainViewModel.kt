@@ -34,10 +34,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * MainViewModel 作为协调层，聚合这些专用 ViewModel 的功能
  */
 class MainViewModel : ViewModel() {
-    private val sessionRepository = SessionRepository(ScreenRemoteApp.instance)
+    val sessionRepository = SessionRepository(ScreenRemoteApp.instance)
     private val groupRepository = GroupRepository(ScreenRemoteApp.instance)
     private val preferencesManager = PreferencesManager(ScreenRemoteApp.instance)
-    
+
     // 暴露 scrcpyClient 供 RemoteDisplayScreen 使用
     val scrcpyClient =
         ScrcpyClient(

@@ -110,7 +110,7 @@ class ConnectionLifecycle(
                     "${AdbTexts.PROGRESS_CONNECTING_STREAM.get()} (127.0.0.1:$localPort)",
                 )
 
-                socketManager.connectSockets(enableAudio)
+                socketManager.connectSockets(enableAudio, keyFrameInterval)
 
                 stateMachine.updateProgress(
                     ConnectionStep.CONNECT_SOCKET,

@@ -66,6 +66,7 @@ import com.mobile.scrcpy.android.feature.settings.ui.AppearanceScreen
 import com.mobile.scrcpy.android.feature.settings.ui.LanguageScreen
 import com.mobile.scrcpy.android.feature.settings.ui.LogManagementScreen
 import com.mobile.scrcpy.android.feature.settings.ui.SettingsScreen
+import com.mobile.scrcpy.android.feature.settings.ui.BackupRestoreScreen
 import kotlin.collections.filter
 import kotlin.collections.find
 // import com.mobile.scrcpy.android.ui.components.FloatingMenuController  // 暂时隐藏
@@ -83,6 +84,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var showCodecTest by remember { mutableStateOf(false) }
     var showGroupManagement by remember { mutableStateOf(false) }
     var showAdbKeyManagement by remember { mutableStateOf(false) }
+    var showBackupRestore by remember { mutableStateOf(false) }
     val showAddDialog by viewModel.showAddSessionDialog.collectAsState()
     val editingSessionId by viewModel.editingSessionId.collectAsState()
     val sessionDataList by viewModel.sessionDataList.collectAsState()
@@ -406,6 +408,9 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
             onNavigateToGroupManagement = {
                 showGroupManagement = true
             },
+            onNavigateToBackupRestore = {
+                showBackupRestore = true
+            },
         )
     }
 
@@ -461,6 +466,13 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     if (showAdbKeyManagement) {
         AdbKeyManagementDialog(
             onDismiss = { showAdbKeyManagement = false },
+        )
+    }
+
+    if (showBackupRestore) {
+        BackupRestoreScreen(
+            viewModel = viewModel,
+            onBack = { showBackupRestore = false },
         )
     }
 }

@@ -56,6 +56,7 @@ fun SettingsScreen(
     onNavigateToAdbKeys: () -> Unit = {},
     onNavigateToLogManagement: () -> Unit = {},
     onNavigateToGroupManagement: () -> Unit = {},
+    onNavigateToBackupRestore: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
@@ -125,6 +126,12 @@ fun SettingsScreen(
                 title = txtGroupManage,
                 helpText = helpGroupManage,
                 onClick = onNavigateToGroupManagement,
+            )
+            SettingsDivider()
+            SettingsItem(
+                title = rememberText(SettingsTexts.BACKUP_RESTORE_TITLE),
+                helpText = SettingsTexts.HELP_BACKUP_DATA.get(),
+                onClick = onNavigateToBackupRestore,
             )
             SettingsDivider()
             SettingsItemWithMenu(

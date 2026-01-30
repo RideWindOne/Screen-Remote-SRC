@@ -28,35 +28,42 @@ class ConnectionSocketManager(
     /**
      * 连接所有需要的 Socket
      */
-    suspend fun connectSockets(enableAudio: Boolean) =
-        withContext(Dispatchers.IO) {
-            try {
-                // 连接视频 Socket
-                videoSocket = createAndConnectSocket("video")
-                LogManager.d(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.get()}")
+    suspend fun connectSockets(
+        enableAudio: Boolean,
+        keyFrameInterval: Int,
+    ) = withContext(Dispatchers.IO) {
+        try {
+            // 连接视频 Socket
+            videoSocket = createAndConnectSocket("video", keyFrameInterval)
+            LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.get())
 
-                // 连接音频 Socket（如果启用）
-                if (enableAudio) {
-                    audioSocket = createAndConnectSocket("audio")
-                    LogManager.d(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_AUDIO_SOCKET_CONNECTED.get()}")
-                }
-
-                // 连接控制 Socket
-                controlSocket = createAndConnectSocket("control")
-                LogManager.d(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_CONTROL_SOCKET_CONNECTED.get()}")
-            } catch (e: Exception) {
-                closeAllSockets()
-                throw IOException("${RemoteTexts.SCRCPY_SOCKET_CONNECTION_FAILED.get()}: ${e.message}", e)
+            // 连接音频 Socket（如果启用）
+            if (enableAudio) {
+                audioSocket = createAndConnectSocket("audio", keyFrameInterval)
+                LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_AUDIO_SOCKET_CONNECTED.get())
             }
+
+            // 连接控制 Socket
+            controlSocket = createAndConnectSocket("control", keyFrameInterval)
+            LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_CONTROL_SOCKET_CONNECTED.get())
+        } catch (e: Exception) {
+            closeAllSockets()
+            throw IOException("${RemoteTexts.SCRCPY_SOCKET_CONNECTION_FAILED.get()}: ${e.message}", e)
         }
+    }
 
     /**
      * 创建并连接 Socket
      */
-    private fun createAndConnectSocket(type: String): Socket {
+    private fun createAndConnectSocket(
+        type: String,
+        keyFrameInterval: Int,
+    ): Socket {
         val socket = Socket()
         socket.tcpNoDelay = true
-        socket.soTimeout = 10000 // 10 秒超时
+
+        // 所有 Socket 都使用 keyFrameInterval 作为超时时间
+        socket.soTimeout = keyFrameInterval * 1000
 
         try {
             socket.connect(InetSocketAddress("127.0.0.1", localPort), 5000)
