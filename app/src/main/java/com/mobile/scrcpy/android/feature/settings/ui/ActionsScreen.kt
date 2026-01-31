@@ -28,7 +28,7 @@ import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 @Composable
 fun ActionsScreen(viewModel: MainViewModel) {
     val actions by viewModel.actions.collectAsState()
-    val txtNoActions = rememberText(SessionTexts.ACTIONS_NO_ACTIONS)
+    val txtNoActions = rememberText(SessionTexts.ACTIONS_NO_ACTIONS) // TODO
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (actions.isEmpty()) {

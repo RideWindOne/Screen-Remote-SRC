@@ -4,16 +4,12 @@ import android.content.Context
 import com.mobile.scrcpy.android.core.common.AppConstants
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
-import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
-import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.ScrcpyProtocol
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 
 /**
  * ADB 编码器检测器
@@ -21,30 +17,42 @@ import kotlinx.coroutines.withTimeout
  */
 object AdbEncoderDetector {
     /**
-     * 检测可用的视频编码器
-     * 启动 scrcpy-server 并传入 list_encoders=true 参数，读取设备的编码器列表
-     * @param context Android Context，用于推送 scrcpy-server.jar（如果需要）
+     * 检测设备的视频和音频编码器
+     * @param skipPush 是否跳过 push server 步骤 如果跳过则使用 SCRCPY_SERVER_2_PATH
+     * @return 编码器检测结果
      */
-    suspend fun detectVideoEncoders(
+    suspend fun detectEncoders(
         dadb: Dadb,
         context: Context,
         openShellStream: suspend (String) -> dadb.AdbShellStream?,
-    ): Result<List<VideoEncoderInfo>> =
+        skipPush: Boolean = false,
+    ): Result<EncoderDetectionResult> =
         withContext(Dispatchers.IO) {
             try {
-                LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_DETECTING_VIDEO_ENCODERS.get())
+                LogManager.d(LogTags.ADB_CONNECTION, "检测远程编码器...")
 
-                // 自动推送 scrcpy-server.jar（如果不存在）
-                val pushResult = AdbFileOperations.pushScrcpyServer(dadb, context, AppConstants.SCRCPY_SERVER_PATH)
-                if (pushResult.isFailure) {
-                    LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_PUSH_SERVER_FAILED_CANNOT_DETECT.get())
-                    return@withContext Result.failure(
-                        pushResult.exceptionOrNull() ?: Exception(AdbTexts.ADB_PUSH_FAILED.get()),
-                    )
+                // 自动推送 scrcpy-server.jar（如果不存在且未跳过）
+                if (!skipPush) {
+                    val pushResult = AdbFileOperations.pushScrcpyServer(dadb, context, AppConstants.SCRCPY_SERVER_PATH)
+                    if (pushResult.isFailure) {
+                        LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_PUSH_SERVER_FAILED_CANNOT_DETECT.get())
+                        return@withContext Result.failure(
+                            pushResult.exceptionOrNull() ?: Exception(AdbTexts.ADB_PUSH_FAILED.get()),
+                        )
+                    }
                 }
 
                 // 启动 scrcpy-server 并传入 list_encoders=true 参数
-                val command = ScrcpyProtocol.buildScrcpyServerCommand("list_encoders=true")
+                val command =
+                    ScrcpyProtocol.buildScrcpyServerCommand(
+                        "list_encoders=true",
+                        serverPath =
+                            if (skipPush) {
+                                AppConstants.SCRCPY_SERVER_2_PATH
+                            } else {
+                                AppConstants.SCRCPY_SERVER_PATH
+                            },
+                    )
                 LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
 
                 // 使用 openShellStream 读取输出
@@ -54,91 +62,21 @@ object AdbEncoderDetector {
                     return@withContext Result.failure(Exception(AdbTexts.ADB_CANNOT_OPEN_SHELL_STREAM.get()))
                 }
 
-                val output = readShellStreamOutput(shellStream)
-
-                LogManager.d(
-                    LogTags.ADB_CONNECTION,
-                    "${SessionTexts.LABEL_RECEIVED_OUTPUT.get()} (${output.length} ${CommonTexts.LABEL_CHARACTERS.get()})",
-                )
-
                 // 解析输出
-                val encoders = parseVideoEncoderList(output)
+                val output = readShellStreamOutput(shellStream)
+                val videoEncoders = parseVideoEncoderList(output)
+                val audioEncoders = parseAudioEncoderList(output)
 
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_DETECTED_VIDEO_ENCODERS.get()} ${encoders.size} ${CommonTexts.LABEL_ITEMS.get()}",
+                    "检测到编码器: 视频=${videoEncoders.size}, 音频=${audioEncoders.size}",
                 )
-                if (encoders.isEmpty()) {
-                    LogManager.w(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_NO_ENCODERS_DETECTED_OUTPUT.get()}：\n$output")
-                }
-                Result.success(encoders)
+
+                Result.success(EncoderDetectionResult(videoEncoders, audioEncoders))
             } catch (e: Exception) {
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_DETECT_ENCODERS_FAILED.get()}: ${e.javaClass.simpleName} - ${e.message ?: "未知错误"}",
-                    e,
-                )
-                Result.failure(e)
-            }
-        }
-
-    /**
-     * 检测音频编码器
-     */
-    suspend fun detectAudioEncoders(
-        dadb: Dadb,
-        context: Context,
-        openShellStream: suspend (String) -> dadb.AdbShellStream?,
-    ): Result<List<AudioEncoderInfo>> =
-        withContext(Dispatchers.IO) {
-            try {
-                LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_DETECTING_AUDIO_ENCODERS.get())
-
-                // 自动推送 scrcpy-server.jar（如果不存在）
-                val pushResult = AdbFileOperations.pushScrcpyServer(dadb, context, AppConstants.SCRCPY_SERVER_PATH)
-                if (pushResult.isFailure) {
-                    LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_PUSH_SERVER_FAILED_CANNOT_DETECT.get())
-                    return@withContext Result.failure(
-                        pushResult.exceptionOrNull() ?: Exception(AdbTexts.ADB_PUSH_FAILED.get()),
-                    )
-                }
-
-                // 启动 scrcpy-server 并传入 list_encoders=true 参数
-                val command = ScrcpyProtocol.buildScrcpyServerCommand("list_encoders=true")
-                LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
-
-                // 使用 openShellStream 读取输出
-                val shellStream = openShellStream(command)
-                if (shellStream == null) {
-                    LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_CANNOT_OPEN_SHELL_STREAM.get())
-                    return@withContext Result.failure(Exception(AdbTexts.ADB_CANNOT_OPEN_SHELL_STREAM.get()))
-                }
-
-                val output = readShellStreamOutput(shellStream)
-
-                LogManager.d(
-                    LogTags.ADB_CONNECTION,
-                    "${SessionTexts.LABEL_RECEIVED_OUTPUT.get()} (${output.length} ${CommonTexts.LABEL_CHARACTERS.get()})",
-                )
-
-                // 解析输出
-                val encoders = parseAudioEncoderList(output)
-
-                LogManager.d(
-                    LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_DETECTED_AUDIO_ENCODERS.get()} ${encoders.size} ${CommonTexts.LABEL_ITEMS.get()}",
-                )
-                if (encoders.isEmpty()) {
-                    LogManager.w(
-                        LogTags.ADB_CONNECTION,
-                        "${AdbTexts.ADB_NO_AUDIO_ENCODERS_DETECTED_OUTPUT.get()}：\n$output",
-                    )
-                }
-                Result.success(encoders)
-            } catch (e: Exception) {
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_DETECT_AUDIO_ENCODERS_FAILED.get()}: ${e.javaClass.simpleName} - ${e.message ?: "未知错误"}",
+                    "检测编码器失败: ${e.javaClass.simpleName} - ${e.message ?: "未知错误"}",
                     e,
                 )
                 Result.failure(e)
@@ -148,7 +86,7 @@ object AdbEncoderDetector {
     /**
      * 读取 Shell Stream 输出
      */
-    private suspend fun readShellStreamOutput(shellStream: dadb.AdbShellStream): String {
+    private fun readShellStreamOutput(shellStream: dadb.AdbShellStream): String {
         val output = StringBuilder()
         val errorOutput = StringBuilder()
         var lineCount = 0
@@ -164,10 +102,19 @@ object AdbEncoderDetector {
                         // EOF 说明 stream 提前关闭
                         if (!hasReceivedData) {
                             // 完全没收到数据，可能是命令执行失败
-                            LogManager.w(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_READ_OUTPUT_ERROR.get()}: scrcpy-server 立即退出，未输出任何内容")
-                            throw Exception("scrcpy-server 启动失败：进程立即退出，未输出任何内容。可能原因：\n1. scrcpy-server.jar 文件损坏\n2. 设备不支持该版本的 scrcpy\n3. Android 版本过低")
+                            LogManager.w(
+                                LogTags.ADB_CONNECTION,
+                                "${AdbTexts.ADB_READ_OUTPUT_ERROR.get()}: " +
+                                    "scrcpy-server 立即退出，未输出任何内容",
+                            )
+                            throw Exception(
+                                "scrcpy-server 启动失败：进程立即退出，未输出任何内容。可能原因：\n" +
+                                    "1. scrcpy-server.jar 文件损坏\n" +
+                                    "2. 设备不支持该版本的 scrcpy\n" +
+                                    "3. Android 版本过低",
+                            )
                         }
-                        
+
                         val errorMsg =
                             if (errorOutput.isNotEmpty()) {
                                 "scrcpy-server 启动失败\nstderr: $errorOutput"
@@ -209,18 +156,19 @@ object AdbEncoderDetector {
                             "${AdbTexts.ADB_SHELL_STREAM_EXIT.get()}, exitCode: $exitCode",
                         )
                         if (exitCode != 0) {
-                            val errorMsg = if (errorOutput.isNotEmpty()) {
-                                "scrcpy-server 执行失败 (exitCode=$exitCode)\nstderr: $errorOutput"
-                            } else {
-                                "scrcpy-server 执行失败 (exitCode=$exitCode)，无错误输出"
-                            }
+                            val errorMsg =
+                                if (errorOutput.isNotEmpty()) {
+                                    "scrcpy-server 执行失败 (exitCode=$exitCode)\nstderr: $errorOutput"
+                                } else {
+                                    "scrcpy-server 执行失败 (exitCode=$exitCode)，无错误输出"
+                                }
                             throw Exception(errorMsg)
                         }
                         break
                     }
 
                     else -> {
-                        LogManager.d(LogTags.ADB_CONNECTION, "Unknown packet: ${packet.javaClass.simpleName}")
+                        LogManager.d(LogTags.ADB_CONNECTION, "Unknown packet: ${packet.javaClass.simpleName}") // TODO
                     }
                 }
             }
@@ -247,17 +195,19 @@ object AdbEncoderDetector {
     }
 
     /**
-     * 解析 scrcpy-server 输出的编码器列表
-     * 格式示例：
-     * List of video encoders:
-     *     --video-codec=h264 --video-encoder='c2.android.avc.encoder'       (hw)
+     * 解析编码器列表
+     * @param output scrcpy-server 输出
+     * @return 编码器信息列表
+     *
+     * 示例输出格式：
+     *     --video-codec=h264 --video-encoder='OMX.qcom.video.encoder.avc'  (hw) [vendor]
      *     --video-codec=h265 --video-encoder='c2.qti.hevc.encoder'          (hw) [vendor]
      */
-    private fun parseVideoEncoderList(output: String): List<VideoEncoderInfo> {
-        val encoders = mutableListOf<VideoEncoderInfo>()
+    private fun parseVideoEncoderList(output: String): List<EncoderInfo.Video> {
+        val encoders = mutableListOf<EncoderInfo.Video>()
 
-        // 只解析视频编码器部分（在 "List of video encoders:" 和 "List of audio encoders:" 之间）
-        val videoSection =
+        // 提取视频编码器部分（在 "List of video encoders:" 和 "List of audio encoders:" 之间）
+        val section =
             if (output.contains("List of video encoders:")) {
                 val start = output.indexOf("List of video encoders:")
                 val end =
@@ -271,63 +221,25 @@ object AdbEncoderDetector {
                 output
             }
 
-        val lines = videoSection.lines()
+        // 解析每一行
+        val lines = section.lines()
         for (line in lines) {
             val trimmed = line.trim()
 
-            // 匹配 --video-encoder=xxx 或 --video-encoder='xxx' 格式
+            // 提取 codec 和 encoder
+            val codecMatch = Regex("--video-codec=([^\\s]+)").find(trimmed)
             val encoderMatch = Regex("--video-encoder='?([^'\\s]+)'?").find(trimmed)
-            val codecMatch = Regex("--video-codec=(\\w+)").find(trimmed)
 
-            if (encoderMatch != null) {
-                // 去掉引号
+            if (codecMatch != null && encoderMatch != null) {
+                val codec = codecMatch.groupValues[1]
                 val encoderName = encoderMatch.groupValues[1].trim('\'')
-                val codecName = codecMatch?.groupValues?.get(1) ?: "unknown"
 
-                // 推断 MIME 类型（使用 ApiCompatHelper 处理兼容性）
-                val mimeType =
-                    when (codecName.lowercase()) {
-                        "h264" -> {
-                            "video/avc"
-                        }
-
-                        "h265" -> {
-                            "video/hevc"
-                        }
-
-                        "h263" -> {
-                            "video/3gpp"
-                        }
-
-                        "av1" -> {
-                            // AV1 需要 API 29+，低版本设备跳过
-                            if (ApiCompatHelper.isAV1Supported()) {
-                                "video/av01"
-                            } else {
-                                null // 不支持的编解码器返回 null，后续过滤
-                            }
-                        }
-
-                        "vp8" -> {
-                            "video/x-vnd.on2.vp8"
-                        }
-
-                        "vp9" -> {
-                            "video/x-vnd.on2.vp9"
-                        }
-
-                        "mpeg4" -> {
-                            "video/mp4v-es"
-                        }
-
-                        else -> {
-                            "video/$codecName"
-                        }
-                    }
+                // 转换为 MIME type
+                val mimeType = codecToMimeType(codec, isVideo = true)
 
                 // 只添加支持的编解码器
                 if (mimeType != null) {
-                    encoders.add(VideoEncoderInfo(encoderName, mimeType))
+                    encoders.add(EncoderInfo.Video(encoderName, mimeType))
                 }
             }
         }
@@ -337,16 +249,12 @@ object AdbEncoderDetector {
 
     /**
      * 解析音频编码器列表
-     * 格式示例：
-     * List of audio encoders:
-     *     --audio-codec=opus --audio-encoder='c2.android.opus.encoder'
-     *     --audio-codec=aac --audio-encoder='c2.android.aac.encoder'
      */
-    private fun parseAudioEncoderList(output: String): List<AudioEncoderInfo> {
-        val encoders = mutableListOf<AudioEncoderInfo>()
+    private fun parseAudioEncoderList(output: String): List<EncoderInfo.Audio> {
+        val encoders = mutableListOf<EncoderInfo.Audio>()
 
-        // 只解析音频编码器部分（在 "List of audio encoders:" 之后）
-        val audioSection =
+        // 提取音频编码器部分（在 "List of audio encoders:" 之后）
+        val section =
             if (output.contains("List of audio encoders:")) {
                 val start = output.indexOf("List of audio encoders:")
                 output.substring(start)
@@ -354,34 +262,55 @@ object AdbEncoderDetector {
                 return encoders
             }
 
-        val lines = audioSection.lines()
+        // 解析每一行
+        val lines = section.lines()
         for (line in lines) {
             val trimmed = line.trim()
 
-            // 匹配 --audio-encoder=xxx 或 --audio-encoder='xxx' 格式
+            // 提取 codec 和 encoder
+            val codecMatch = Regex("--audio-codec=([^\\s]+)").find(trimmed)
             val encoderMatch = Regex("--audio-encoder='?([^'\\s]+)'?").find(trimmed)
-            val codecMatch = Regex("--audio-codec=(\\w+)").find(trimmed)
 
-            if (encoderMatch != null) {
+            if (codecMatch != null && encoderMatch != null) {
+                val codec = codecMatch.groupValues[1]
                 val encoderName = encoderMatch.groupValues[1].trim('\'')
-                val codecName = codecMatch?.groupValues?.get(1) ?: "unknown"
 
-                // 推断 MIME 类型
-                val mimeType =
-                    when (codecName.lowercase()) {
-                        "opus" -> "audio/opus"
-                        "aac" -> "audio/mp4a-latm"
-                        "flac" -> "audio/flac"
-                        "raw" -> "audio/raw"
-                        "3gpp", "amrnb" -> "audio/3gpp"
-                        "amrwb" -> "audio/amr-wb"
-                        else -> "audio/$codecName"
-                    }
+                // 转换为 MIME type
+                val mimeType = codecToMimeType(codec, isVideo = false)
 
-                encoders.add(AudioEncoderInfo(encoderName, mimeType))
+                // 只添加支持的编解码器
+                if (mimeType != null) {
+                    encoders.add(EncoderInfo.Audio(encoderName, mimeType))
+                }
             }
         }
 
         return encoders
     }
+
+    /**
+     * 将 codec 名称转换为 MIME type
+     */
+    private fun codecToMimeType(
+        codec: String,
+        isVideo: Boolean,
+    ): String? =
+        if (isVideo) {
+            when (codec.lowercase()) {
+                "h264" -> "video/avc"
+                "h265", "hevc" -> "video/hevc"
+                "av1" -> "video/av01"
+                "vp8" -> "video/x-vnd.on2.vp8"
+                "vp9" -> "video/x-vnd.on2.vp9"
+                else -> null
+            }
+        } else {
+            when (codec.lowercase()) {
+                "opus" -> "audio/opus"
+                "aac" -> "audio/mp4a-latm"
+                "flac" -> "audio/flac"
+                "raw" -> "audio/raw"
+                else -> null
+            }
+        }
 }

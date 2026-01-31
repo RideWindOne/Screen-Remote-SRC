@@ -9,9 +9,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.Lifecycle
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectionViewModel
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
 import com.mobile.scrcpy.android.feature.session.viewmodel.SessionViewModel
 import com.mobile.scrcpy.android.infrastructure.media.video.VideoDecoder
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.VideoStream
@@ -41,7 +41,7 @@ class VideoDecoderManager(
     /**
      * 启动视频解码器
      */
-    suspend fun startDecoder(
+    fun startDecoder(
         stream: VideoStream,
         surfaceHolder: SurfaceHolder?,
         scope: kotlinx.coroutines.CoroutineScope,
@@ -67,24 +67,29 @@ class VideoDecoderManager(
             LogManager.d(LogTags.VIDEO_DECODER, "${RemoteTexts.REMOTE_VIDEO_RESOLUTION.get()}: ${width}x$height")
 
             // 获取当前会话的视频编码格式
-            val videoCodec = sessionData?.videoCodec ?: "h264"
+            val videoCodec = sessionData?.preferredVideoCodec ?: "h264"
 
-            // 获取缓存的解码器名称（仅在用户选择"默认"编码器时使用）
-            val cachedDecoderName =
-                if (sessionData?.videoEncoder.isNullOrBlank()) {
-                    // 检查缓存是否有效（7天内）
-                    val cacheAge = System.currentTimeMillis() - (sessionData?.codecCacheTimestamp ?: 0L)
-                    if (cacheAge < 7 * 24 * 60 * 60 * 1000L) {
-                        sessionData?.cachedVideoDecoder
+            // 确定使用的解码器
+            val decoderName: String? =
+                if (!sessionData?.userVideoDecoder.isNullOrBlank()) {
+                    // 用户手动指定了解码器
+                    LogManager.d(LogTags.VIDEO_DECODER, "使用用户指定的解码器: ${sessionData.userVideoDecoder}")
+                    sessionData.userVideoDecoder
+                } else {
+                    // 用户选择"默认"，直接使用已选中的解码器
+                    val selected = sessionData?.selectedVideoDecoder
+                    if (!selected.isNullOrBlank()) {
+                        LogManager.d(LogTags.VIDEO_DECODER, "使用已选中的解码器: $selected")
+                        selected
                     } else {
+                        // 理论上不应该走到这里，因为连接建立时应该已经选择好了
+                        LogManager.w(LogTags.VIDEO_DECODER, "selectedVideoDecoder 为空，将使用系统默认解码器")
                         null
                     }
-                } else {
-                    null // 用户指定了编码器，不使用缓存
                 }
 
             videoDecoder =
-                VideoDecoder(surface, videoCodec, cachedDecoderName).apply {
+                VideoDecoder(surface, videoCodec, decoderName).apply {
                     onVideoSizeChanged = { w, h, rotation ->
                         if (w > 0 && h > 0) {
                             LogManager.d(
@@ -100,30 +105,6 @@ class VideoDecoderManager(
                                 LogTags.VIDEO_DECODER,
                                 "${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.get()}: ${w}x$h",
                             )
-                        }
-                    }
-
-                    // 当解码器选择完成后，保存到会话配置（仅在使用"默认"编码器时）
-                    onDecoderSelected = { decoderName ->
-                        if (sessionData?.videoEncoder.isNullOrBlank()) {
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                    sessionViewModel.updateCodecCache(
-                                        sessionId = sessionId,
-                                        videoDecoder = decoderName,
-                                        audioDecoder = null,
-                                    )
-                                    LogManager.d(
-                                        LogTags.VIDEO_DECODER,
-                                        "${RemoteTexts.REMOTE_CACHED_VIDEO_DECODER.get()}: $decoderName",
-                                    )
-                                } catch (e: Exception) {
-                                    LogManager.e(
-                                        LogTags.VIDEO_DECODER,
-                                        "${RemoteTexts.REMOTE_SAVE_DECODER_CACHE_FAILED.get()}: ${e.message}",
-                                    )
-                                }
-                            }
                         }
                     }
 
@@ -172,7 +153,7 @@ class VideoDecoderManager(
     /**
      * 切换 Surface（前台/后台）
      */
-    suspend fun setSurface(
+    fun setSurface(
         surfaceHolder: SurfaceHolder?,
         lifecycleState: Lifecycle.Event,
     ) {
@@ -193,7 +174,7 @@ class VideoDecoderManager(
                     LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_RESUME_TO_FOREGROUND.get())
                     decoder.setSurface(surface)
                     // 立即发送唤醒信号触发新帧
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                         try {
                             connectionViewModel.wakeUpScreen()
                         } catch (e: Exception) {
@@ -248,7 +229,13 @@ fun rememberVideoDecoderManager(
 
     val manager =
         remember {
-            VideoDecoderManager(connectionViewModel, sessionViewModel, sessionId, sessionData, onVideoSizeChanged)
+            VideoDecoderManager(
+                connectionViewModel,
+                sessionViewModel,
+                sessionId,
+                sessionData,
+                onVideoSizeChanged,
+            )
         }
 
     // 监听 videoStream 变化

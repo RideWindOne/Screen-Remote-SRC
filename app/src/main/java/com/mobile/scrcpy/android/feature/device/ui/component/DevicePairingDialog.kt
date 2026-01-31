@@ -452,6 +452,7 @@ private fun ClearHistoryConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         icon = {
             Icon(
                 imageVector = Icons.Default.Delete,

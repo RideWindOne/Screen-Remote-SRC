@@ -34,6 +34,11 @@ object AdbBridge {
     }
 
     /**
+     * 获取当前连接
+     */
+    fun getConnection(): AdbConnection? = currentConnection
+
+    /**
      * 清除当前连接
      */
     fun clearConnection() {

@@ -13,6 +13,8 @@ import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.infrastructure.adb.key.core.adb.AdbKeyManager
 import com.mobile.scrcpy.android.infrastructure.adb.usb.UsbAdbManager
 import com.mobile.scrcpy.android.infrastructure.adb.usb.UsbDadb
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,15 +96,14 @@ class AdbConnectionManager private constructor(
         forceReconnect: Boolean = false,
     ): Result<String> =
         withContext(Dispatchers.IO) {
+            val deviceId = "$host:$port"
+            CoroutineScope(Dispatchers.IO).launch {
+                CurrentSession.currentOrNull?.handleEvent(SessionEvent.AdbConnecting)
+            }
             try {
-                val deviceId = "$host:$port"
-
                 val keyPair =
                     keyManager.getKeyPair()
                         ?: return@withContext Result.failure(Exception(AdbTexts.ADB_KEYPAIR_NOT_INITIALIZED.get()))
-
-                LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.ADB_START_CONNECTING.get()} ==========")
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_TARGET_ADDRESS.get()}: $deviceId")
 
                 // 检查已有连接
                 connectionPool[deviceId]?.let { existingConnection ->
@@ -114,12 +115,10 @@ class AdbConnectionManager private constructor(
                     } else {
                         // 验证已有连接
                         LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.get())
-                        val isValid = AdbConnectionVerifier.verifyConnection(existingConnection)
-                        if (isValid) {
-                            LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_VERIFIED.get()}")
+                        val verifyResult = existingConnection.verify()
+                        if (verifyResult.isSuccess) {
                             return@withContext Result.success(deviceId)
                         } else {
-                            LogManager.w(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFY_FAILED.get())
                             runCatching { existingConnection.close() }
                             connectionPool.remove(deviceId)
                         }
@@ -127,31 +126,28 @@ class AdbConnectionManager private constructor(
                 }
 
                 // 创建新的 ADB 连接
-                LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CREATING_NEW_CONNECTION.get())
                 val dadb =
                     try {
-                        dadb.Dadb.create(host, port, keyPair)
+                        dadb.Dadb.create(host, port, keyPair, connectTimeout = 5000, socketTimeout = 5000)
                     } catch (e: java.net.ConnectException) {
                         LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_REFUSED.get()}: ${e.message}")
                         return@withContext Result.failure(Exception(AdbTexts.ADB_CONNECTION_REFUSED_DETAILS.get()))
                     }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DADB_CREATED.get()}")
 
-                // 验证新连接
-                val verifyResult = AdbConnectionVerifier.verifyDadb(dadb)
+                // 验证新连接并获取序列号
+                val verifyResult = AdbConnectionVerifier.verifyDadb(dadb, deviceId)
                 if (verifyResult.isFailure) {
-                    return@withContext verifyResult
+                    return@withContext verifyResult.map { deviceId }
                 }
 
-                // 创建连接对象（使用临时设备信息，后台异步获取完整信息）
-                val tempDeviceInfo =
+                val serialNumber = verifyResult.getOrDefault(deviceId)
+
+                // 创建连接对象（使用基础设备信息，后台异步获取完整信息）
+                val basicDeviceInfo =
                     DeviceInfo(
                         deviceId = deviceId,
                         name = deviceName ?: deviceId,
-                        model = "Unknown",
-                        manufacturer = "Unknown",
-                        androidVersion = "Unknown",
-                        serialNumber = "",
+                        serialNumber = serialNumber,
                         connectionType = ConnectionType.TCP,
                     )
 
@@ -161,28 +157,23 @@ class AdbConnectionManager private constructor(
                         host = host,
                         port = port,
                         dadb = dadb,
-                        deviceInfo = tempDeviceInfo,
+                        deviceInfo = basicDeviceInfo,
                     )
 
                 // 加入连接池
                 connectionPool[deviceId] = connection
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_ADDED_TO_POOL.get()}")
 
                 // 后台异步获取完整设备信息（不阻塞连接流程）
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        val fullDeviceInfo =
+                        val detailedDeviceInfo =
                             DeviceInfoProvider.getDeviceInfo(
                                 dadb,
                                 deviceId,
                                 deviceName,
                                 ConnectionType.TCP,
                             )
-                        connection.deviceInfo = fullDeviceInfo
-                        LogManager.d(
-                            LogTags.ADB_CONNECTION,
-                            "${SessionTexts.LABEL_DEVICE_INFO.get()}: ${fullDeviceInfo.name} (${fullDeviceInfo.model})",
-                        )
+                        connection.deviceInfo = detailedDeviceInfo
                     } catch (e: Exception) {
                         LogManager.w(
                             LogTags.ADB_CONNECTION,
@@ -193,15 +184,8 @@ class AdbConnectionManager private constructor(
 
                 // 更新连接设备列表
                 updateConnectedDevices()
-
-                LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.ADB_CONNECTION_SUCCESS.get()} ==========")
-                LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_DEVICE_ID.get()}: $deviceId")
                 Result.success(deviceId)
             } catch (e: Exception) {
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "========== ${AdbTexts.ADB_CONNECTION_FAILED_TITLE.get()} ==========",
-                )
                 LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
                 Result.failure(e)
             }
@@ -231,10 +215,9 @@ class AdbConnectionManager private constructor(
 
                 // 检查已有连接
                 connectionPool[deviceId]?.let { existingConnection ->
-                    LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.get())
-                    val isValid = AdbConnectionVerifier.verifyConnection(existingConnection)
-                    if (isValid) {
-                        LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_VERIFIED.get()}")
+                    val verifyResult = existingConnection.verify()
+                    if (verifyResult.isSuccess) {
+                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFIED.get())
                         return@withContext Result.success(deviceId)
                     } else {
                         LogManager.w(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFY_FAILED.get())
@@ -250,7 +233,6 @@ class AdbConnectionManager private constructor(
                 }
 
                 // 使用 USB ADB 通道直接连接
-                LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CREATING_NEW_CONNECTION.get())
                 val dadb =
                     try {
                         val usbManager =
@@ -264,13 +246,14 @@ class AdbConnectionManager private constructor(
                             Exception("${AdbTexts.USB_CONNECT_FAILED.get()}: ${e.message}"),
                         )
                     }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DADB_CREATED.get()}")
 
-                // 验证连接
-                val verifyResult = AdbConnectionVerifier.verifyDadb(dadb)
+                // 验证连接并获取序列号
+                val verifyResult = AdbConnectionVerifier.verifyDadb(dadb, deviceId)
                 if (verifyResult.isFailure) {
-                    return@withContext verifyResult
+                    return@withContext verifyResult.map { deviceId }
                 }
+
+                val detectedSerial = verifyResult.getOrDefault(serialNumber)
 
                 // 创建连接对象
                 val tempDeviceInfo =
@@ -280,7 +263,7 @@ class AdbConnectionManager private constructor(
                         model = "Unknown",
                         manufacturer = usbDevice.manufacturerName ?: "Unknown",
                         androidVersion = "Unknown",
-                        serialNumber = serialNumber,
+                        serialNumber = detectedSerial,
                         connectionType = ConnectionType.USB,
                     )
 
@@ -295,7 +278,6 @@ class AdbConnectionManager private constructor(
 
                 // 加入连接池
                 connectionPool[deviceId] = connection
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_ADDED_TO_POOL.get()}")
 
                 // 后台异步获取完整设备信息
                 CoroutineScope(Dispatchers.IO).launch {
@@ -323,11 +305,8 @@ class AdbConnectionManager private constructor(
                 // 更新连接设备列表
                 updateConnectedDevices()
 
-                LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.ADB_CONNECTION_SUCCESS.get()} ==========")
-                LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_DEVICE_ID.get()}: $deviceId")
                 Result.success(deviceId)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "========== ${AdbTexts.USB_CONNECT_FAILED.get()} ==========")
                 LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
                 Result.failure(e)
             }
@@ -353,7 +332,8 @@ class AdbConnectionManager private constructor(
      */
     suspend fun verifyConnection(deviceId: String): Boolean {
         val connection = getConnection(deviceId) ?: return false
-        return AdbConnectionVerifier.verifyConnection(connection)
+        val verifyResult = connection.verify()
+        return verifyResult.isSuccess
     }
 
     /**

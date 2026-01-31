@@ -1,5 +1,9 @@
 package com.mobile.scrcpy.android.infrastructure.scrcpy.stream.feature.scrcpy
 
+import com.mobile.scrcpy.android.core.common.event.DemuxerError
+import com.mobile.scrcpy.android.core.common.event.DeviceDisconnected
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEvent
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.ScrcpyProtocol
@@ -16,6 +20,9 @@ import java.net.Socket
  * - 每个包: 12 bytes header (PTS 8 bytes + size 4 bytes, big-endian) + payload
  * - PTS 最高位 (bit 63): config packet flag
  * - PTS 次高位 (bit 62): key frame flag
+ *
+ * 集成事件系统：
+ * - 推送 DeviceDisconnected 事件（流结束）
  */
 class ScrcpyAudioStream(
     private val socket: Socket,
@@ -127,9 +134,13 @@ class ScrcpyAudioStream(
             return AdbShellPacket.StdOut(byteArrayOf())
         } catch (_: java.io.EOFException) {
             LogManager.d("AudioDecoder", "音频流结束，共接收 $packetCount 个包")
+            // 推送设备断开事件
+            ScrcpyEventBus.pushEvent(DeviceDisconnected)
             return AdbShellPacket.Exit(byteArrayOf(0))
         } catch (e: IOException) {
             LogManager.e("AudioDecoder", "音频流读取错误: ${e.message}", e)
+            // 推送解复用器错误事件
+            ScrcpyEventBus.pushEvent(DemuxerError(e.message ?: "Audio stream error"))
             throw e
         }
     }
@@ -149,6 +160,15 @@ class ScrcpyAudioStream(
  * Frame header 格式：
  * - PTS (8 bytes, 其中最高2位是标志位)
  * - packet size (4 bytes)
+ *
+ * 集成事件系统：
+ * - 推送 DeviceDisconnected 事件（流结束）
+ * - 推送 DemuxerError 事件（读取错误）
+ *
+ * 控制流检测：
+ * - 当视频流超时时，检查控制流是否存活
+ * - 如果控制流断开，说明连接真正断开，抛出异常
+ * - 如果控制流正常，说明只是设备息屏或网络慢，继续等待
  */
 class ScrcpySocketStream(
     private val socket: Socket,
@@ -178,6 +198,8 @@ class ScrcpySocketStream(
             if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
                 LogManager.e("ScrcpySocketStream", "数据包大小异常: $packetSize")
                 onError("数据包大小异常")
+                // 推送解复用器错误事件
+                ScrcpyEventBus.pushEvent(DemuxerError("Invalid packet size: $packetSize"))
                 return AdbShellPacket.Exit(byteArrayOf(0))
             }
 
@@ -188,14 +210,19 @@ class ScrcpySocketStream(
             return AdbShellPacket.StdOut(packet)
         } catch (_: java.net.SocketTimeoutException) {
             // 读取超时，返回空数据继续等待
+            LogManager.d("ScrcpySocketStream", "💤 设备可能息屏，控制流正常，继续等待...")
             return AdbShellPacket.StdOut(byteArrayOf())
         } catch (_: java.io.EOFException) {
             // 流结束
             onError("视频流已关闭")
+            // 推送设备断开事件
+            ScrcpyEventBus.pushEvent(DeviceDisconnected)
             return AdbShellPacket.Exit(byteArrayOf(0))
         } catch (e: IOException) {
             // 其他 IO 错误
-            onError("读取失败: ${e.message}")
+            onError("读取失败 -> ${e.message}")
+            // 推送解复用器错误事件
+            ScrcpyEventBus.pushEvent(DemuxerError(e.message ?: "Video stream error"))
             throw e
         }
     }

@@ -71,12 +71,13 @@ fun ConnectionProgressDialog(
             ),
     ) {
         DialogContainer(widthRatio = 0.6f, maxHeightRatio = 0.5f) {
-            val txtConnecting = CommonTexts.STATUS_CONNECTING.get()
-            val txtFailed = CommonTexts.CONNECTION_FAILED_TITLE.get()
-
             // 标题栏
             DialogHeader(
-                title = if (hasFailed) txtFailed else txtConnecting,
+                title = if (hasFailed) {
+                    CommonTexts.CONNECTION_FAILED_TITLE.get()
+                } else {
+                    CommonTexts.STATUS_CONNECTING.get()
+                },
                 onDismiss = onDismiss,
                 showBackButton = false,
                 leftButtonText = if (hasFailed) null else " ", // 未失败时占位，不显示按钮

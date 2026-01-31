@@ -1,15 +1,24 @@
 package com.mobile.scrcpy.android.core.designsystem.component
 
+import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeActions
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
 import com.mobile.scrcpy.android.core.domain.model.GroupTreeNode
-import kotlin.collections.filter
 
 /**
  * 分组树形结构工具类
  *
  * 统一管理树形结构构建逻辑，避免重复代码。
  * 用于将扁平的分组列表转换为层级树形结构，便于 UI 展示。
+ *
+ * @deprecated 使用 tree.TreeActions 代替
  */
+@Deprecated(
+    "Use tree.TreeActions instead",
+    ReplaceWith(
+        "TreeActions",
+        "com.mobile.scrcpy.android.core.designsystem.component.tree.TreeActions",
+    ),
+)
 object GroupTreeUtils {
     /**
      * 构建分组树形结构
@@ -39,31 +48,5 @@ object GroupTreeUtils {
      * ]
      * ```
      */
-    fun buildGroupTree(groups: List<DeviceGroup>): List<GroupTreeNode> {
-        val groupMap = groups.associateBy { it.path }
-        val rootNodes = mutableListOf<GroupTreeNode>()
-
-        fun buildNode(
-            path: String,
-            level: Int,
-        ): GroupTreeNode? {
-            val group = groupMap[path] ?: return null
-            val children =
-                groups
-                    .filter { it.parentPath == path }
-                    .sortedBy { it.name }
-                    .mapNotNull { buildNode(it.path, level + 1) }
-            return GroupTreeNode(group, children, false, level)
-        }
-
-        // 构建根节点的子节点
-        groups
-            .filter { it.parentPath == "/" }
-            .sortedBy { it.name }
-            .forEach { group ->
-                buildNode(group.path, 0)?.let { rootNodes.add(it) }
-            }
-
-        return rootNodes
-    }
+    fun buildGroupTree(groups: List<DeviceGroup>): List<GroupTreeNode> = TreeActions.buildGroupTree(groups)
 }

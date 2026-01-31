@@ -28,15 +28,15 @@ class UsbAdbChannel(
     private val usbManager: UsbManager,
     private val usbDevice: UsbDevice,
 ) : AdbChannel {
-    private val connection: UsbDeviceConnection
+    // 打开 USB 设备连接
+    private val connection: UsbDeviceConnection =
+        usbManager.openDevice(usbDevice)
+            ?: throw IOException("Failed to open USB device: ${usbDevice.deviceName}")
     private val usbInterface: UsbInterface
     private val endpointIn: UsbEndpoint
     private val endpointOut: UsbEndpoint
 
     init {
-        // 打开 USB 设备连接
-        connection = usbManager.openDevice(usbDevice)
-            ?: throw IOException("Failed to open USB device: ${usbDevice.deviceName}")
 
         // 查找 ADB 接口（USB Class 255, Subclass 66, Protocol 1）
         usbInterface = findAdbInterface()

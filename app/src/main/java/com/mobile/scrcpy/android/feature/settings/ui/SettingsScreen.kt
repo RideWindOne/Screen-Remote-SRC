@@ -53,7 +53,7 @@ fun SettingsScreen(
     onNavigateToAbout: () -> Unit,
     onNavigateToAppearance: () -> Unit,
     onNavigateToLanguage: () -> Unit,
-    onNavigateToAdbKeys: () -> Unit = {},
+    onNavigateToAdbKeys: () -> Unit = {}, // TODO
     onNavigateToLogManagement: () -> Unit = {},
     onNavigateToGroupManagement: () -> Unit = {},
     onNavigateToBackupRestore: () -> Unit = {},
@@ -89,16 +89,16 @@ fun SettingsScreen(
     val txtSubmitIssue = rememberText(SettingsTexts.SETTINGS_SUBMIT_ISSUE)
     val txtUserGuide = rememberText(SettingsTexts.SETTINGS_USER_GUIDE)
 
-    // 帮助文本
-    val helpGroupManage = SettingsTexts.HELP_GROUP_MANAGE.get()
-    val helpKeepAlive = SettingsTexts.HELP_KEEP_ALIVE.get()
-    val helpFloatingHaptic = SettingsTexts.HELP_FLOATING_HAPTIC.get()
-    val helpShowOnLockScreen = SettingsTexts.HELP_SHOW_ON_LOCK_SCREEN.get()
-    val helpManageAdbKeys = SettingsTexts.HELP_MANAGE_ADB_KEYS.get()
-    val helpDevicePairing = SettingsTexts.HELP_DEVICE_PAIRING.get()
-    val helpFileTransferPath = SettingsTexts.HELP_FILE_TRANSFER_PATH.get()
-    val helpEnableLog = SettingsTexts.HELP_ENABLE_LOG.get()
-    val helpLogManagement = SettingsTexts.HELP_LOG_MANAGEMENT.get()
+    // 帮助文本（使用 rememberText 支持语言切换）
+    val helpGroupManage = rememberText(SettingsTexts.HELP_GROUP_MANAGE)
+    val helpKeepAlive = rememberText(SettingsTexts.HELP_KEEP_ALIVE)
+    val helpFloatingHaptic = rememberText(SettingsTexts.HELP_FLOATING_HAPTIC)
+    val helpShowOnLockScreen = rememberText(SettingsTexts.HELP_SHOW_ON_LOCK_SCREEN)
+    val helpManageAdbKeys = rememberText(SettingsTexts.HELP_MANAGE_ADB_KEYS)
+    val helpDevicePairing = rememberText(SettingsTexts.HELP_DEVICE_PAIRING)
+    val helpFileTransferPath = rememberText(SettingsTexts.HELP_FILE_TRANSFER_PATH)
+    val helpEnableLog = rememberText(SettingsTexts.HELP_ENABLE_LOG)
+    val helpLogManagement = rememberText(SettingsTexts.HELP_LOG_MANAGEMENT)
 
     val txt1Min = rememberText(CommonTexts.TIME_1_MINUTE)
     val txt5Min = rememberText(CommonTexts.TIME_5_MINUTES)
@@ -303,6 +303,7 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { showClearLogsDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(txtClearLogsTitle) },
             text = { Text(txtClearLogsMessage) },
             confirmButton = {

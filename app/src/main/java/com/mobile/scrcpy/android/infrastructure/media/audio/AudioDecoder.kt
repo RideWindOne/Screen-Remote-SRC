@@ -2,7 +2,12 @@ package com.mobile.scrcpy.android.infrastructure.media.audio
 
 import android.media.MediaCodec
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.event.DemuxerError
+import com.mobile.scrcpy.android.core.common.event.DeviceDisconnected
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -13,6 +18,10 @@ import kotlinx.coroutines.withContext
  * 职责：
  * - 协调格式处理器和 AudioTrack 管理器
  * - 管理解码循环和生命周期
+ *
+ * 集成事件系统：
+ * - 推送 DeviceDisconnected 事件（连接丢失）
+ * - 推送 DemuxerError 事件（解码错误）
  */
 class AudioDecoder(
     volumeScale: Float = 1.0f,
@@ -41,6 +50,9 @@ class AudioDecoder(
                 isStopped = false
                 isRunning = true
 
+                // 推送解码器启动事件
+                CurrentSession.currentOrNull?.handleEvent(SessionEvent.DecoderStarted("Audio"))
+
                 // RAW 格式直接播放，不需要解码
                 if (codec.lowercase() == "raw") {
                     playRawAudio(audioStream, sampleRate, channelCount)
@@ -55,7 +67,17 @@ class AudioDecoder(
                 ) {
                     LogManager.w(LogTags.AUDIO_DECODER, "音频连接丢失，触发回调")
                     onConnectionLost?.invoke()
+                    // 推送设备断开事件
+                    ScrcpyEventBus.pushEvent(DeviceDisconnected)
+                } else {
+                    // 推送解复用器错误事件
+                    ScrcpyEventBus.pushEvent(DemuxerError(e.message ?: "Audio decode error"))
                 }
+
+                // 推送解码器错误事件
+                CurrentSession.currentOrNull?.handleEvent(
+                    SessionEvent.DecoderError("Audio: ${e.message ?: "Unknown error"}"),
+                )
             } finally {
                 stop()
             }
@@ -78,6 +100,9 @@ class AudioDecoder(
             try {
                 decoder?.stop()
                 decoder?.release()
+
+                // 推送解码器停止事件
+                CurrentSession.currentOrNull?.handleEvent(SessionEvent.DecoderStopped("Audio"))
             } catch (e: Exception) {
                 // 忽略
             } finally {

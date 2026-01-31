@@ -2,6 +2,7 @@ package com.mobile.scrcpy.android.feature.device.viewmodel
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobile.scrcpy.android.core.common.LogTags
@@ -9,6 +10,7 @@ import com.mobile.scrcpy.android.feature.device.data.DeviceInfo
 import com.mobile.scrcpy.android.feature.device.data.PairingHistoryItem
 import com.mobile.scrcpy.android.feature.device.data.PairingResult
 import com.mobile.scrcpy.android.feature.device.data.PairingStatus
+import com.mobile.scrcpy.android.infrastructure.adb.pairing.AdbPairingManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -83,7 +85,7 @@ class DevicePairingViewModel : ViewModel() {
                 // 保存到 SharedPreferences
                 val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 val historyJson = toHistoryJson(currentHistory)
-                prefs.edit().putString(KEY_HISTORY, historyJson).apply()
+                prefs.edit { putString(KEY_HISTORY, historyJson) }
             } catch (e: Exception) {
                 Log.e(LogTags.ADB_PAIRING, "Failed to save pairing history", e)
             }
@@ -99,7 +101,7 @@ class DevicePairingViewModel : ViewModel() {
                 _pairingHistory.value = emptyList()
 
                 val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.edit().remove(KEY_HISTORY).apply()
+                prefs.edit { remove(KEY_HISTORY) }
 
                 Log.d(LogTags.ADB_PAIRING, "Pairing history cleared")
             } catch (e: Exception) {
@@ -123,9 +125,7 @@ class DevicePairingViewModel : ViewModel() {
                 Log.d(LogTags.ADB_PAIRING, "Starting pairing with code: IP=$ipAddress, Port=$port")
 
                 // 创建配对管理器
-                val pairingManager =
-                    com.mobile.scrcpy.android.infrastructure.adb.pairing
-                        .AdbPairingManager(context)
+                val pairingManager = AdbPairingManager(context)
 
                 _pairingStatus.value = PairingStatus.PAIRING
 

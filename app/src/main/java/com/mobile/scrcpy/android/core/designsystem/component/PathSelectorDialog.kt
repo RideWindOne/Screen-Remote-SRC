@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.core.designsystem.component
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -17,11 +16,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
+import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeNodeItem
+import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeRootItem
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
-import kotlin.collections.isNotEmpty
 
 /**
  * 路径选择对话框（树形展示）

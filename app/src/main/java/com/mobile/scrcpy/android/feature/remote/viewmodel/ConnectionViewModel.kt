@@ -5,11 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.NetworkConstants
-import com.mobile.scrcpy.android.core.common.ScrcpyConstants
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.domain.model.ConnectionProgress
-import com.mobile.scrcpy.android.core.domain.model.parseMaxSize
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionRepository
+import com.mobile.scrcpy.android.core.data.repository.SessionRepository
 import com.mobile.scrcpy.android.infrastructure.scrcpy.client.feature.scrcpy.ScrcpyClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,20 +24,20 @@ sealed class ConnectStatus {
 
     data class Connecting(
         val sessionId: String,
-        val message: String,
+        val message: String, // TODO
     ) : ConnectStatus()
 
     data class Connected(
-        val sessionId: String,
+        val sessionId: String, // TODO
     ) : ConnectStatus()
 
     data class Failed(
-        val sessionId: String,
-        val error: String,
+        val sessionId: String, // TODO
+        val error: String, // TODO
     ) : ConnectStatus()
 
     data class Unauthorized(
-        val sessionId: String,
+        val sessionId: String, // TODO
     ) : ConnectStatus()
 }
 
@@ -73,22 +71,6 @@ class ConnectionViewModel(
 
     // ============ 连接操作 ============
 
-    fun connectToDevice(
-        host: String,
-        port: Int = NetworkConstants.DEFAULT_ADB_PORT_INT,
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val result = scrcpyClient.connect(host, port)
-                if (result.isFailure) {
-                    LogManager.e(LogTags.CONNECTION_VM, "连接失败: ${result.exceptionOrNull()?.message}")
-                }
-            } catch (e: Exception) {
-                LogManager.e(LogTags.CONNECTION_VM, "连接异常: ${e.message}", e)
-            }
-        }
-    }
-
     fun connectSession(sessionId: String) {
         // 取消之前的连接任务
         connectJob?.cancel()
@@ -119,26 +101,14 @@ class ConnectionViewModel(
 
                 try {
                     val port = sessionData.port.toIntOrNull() ?: NetworkConstants.DEFAULT_ADB_PORT_INT
-                    val maxSize = sessionData.maxSize.parseMaxSize()
-                    val bitrate = sessionData.bitrate.toIntOrNull() ?: ScrcpyConstants.DEFAULT_BITRATE_INT
-                    val maxFps = sessionData.maxFps.toIntOrNull() ?: ScrcpyConstants.DEFAULT_MAX_FPS
-
+                    val options = sessionData.toScrcpyOptions() // 包含 sessionId
                     val result =
                         scrcpyClient.connect(
+                            sessionId = sessionId,
                             host = sessionData.host,
                             port = port,
-                            maxSize = maxSize,
-                            bitRate = bitrate,
-                            maxFps = maxFps,
-                            videoCodec = sessionData.videoCodec,
-                            videoEncoder = sessionData.videoEncoder,
-                            enableAudio = sessionData.enableAudio,
-                            audioCodec = sessionData.audioCodec,
-                            audioEncoder = sessionData.audioEncoder,
-                            keyFrameInterval = sessionData.keyFrameInterval,
-                            stayAwake = sessionData.stayAwake,
-                            turnScreenOff = sessionData.turnScreenOff,
-                            powerOffOnClose = sessionData.powerOffOnClose,
+                            options = options,
+                            isReconnecting = isReconnecting,
                         )
 
                     withContext(Dispatchers.Main) {
@@ -168,7 +138,7 @@ class ConnectionViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                scrcpyClient.disconnect()
+                scrcpyClient.cancelConnect()
                 withContext(Dispatchers.Main) {
                     _connectStatus.value = ConnectStatus.Idle
                     _connectedSessionId.value = null
@@ -203,7 +173,6 @@ class ConnectionViewModel(
                     _connectStatus.value = ConnectStatus.Idle
                     _connectedSessionId.value = null
                 }
-                LogManager.d(LogTags.CONNECTION_VM, "结束会话完成")
             } catch (e: Exception) {
                 LogManager.e(LogTags.CONNECTION_VM, "结束会话异常: ${e.message}", e)
             }

@@ -11,7 +11,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
-import com.mobile.scrcpy.android.core.common.util.toSurface
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 
 /**

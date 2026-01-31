@@ -1,0 +1,2 @@
+# This directory contains internal implementation files for ConnectionLifecycle
+# These files are not part of the public API and should be marked as internal

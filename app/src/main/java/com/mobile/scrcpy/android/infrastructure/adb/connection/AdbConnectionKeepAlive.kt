@@ -1,6 +1,8 @@
 package com.mobile.scrcpy.android.infrastructure.adb.connection
 
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.event.AdbVerifySuccess
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus.pushEvent
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
@@ -36,8 +38,20 @@ internal class AdbConnectionKeepAlive(
                     val failedConnections = mutableListOf<String>()
 
                     getConnections().forEach { connection ->
+                        val startTime = System.currentTimeMillis()
                         val result = connection.executeShell("echo 1", retryOnFailure = false)
-                        if (result.isFailure) {
+                        val durationMs = System.currentTimeMillis() - startTime
+
+                        if (result.isSuccess) {
+                            // 推送验证成功事件到 SDL
+                            pushEvent(
+                                AdbVerifySuccess(
+                                    deviceId = connection.deviceId,
+                                    deviceName = connection.deviceInfo.name,
+                                    durationMs = durationMs,
+                                ),
+                            )
+                        } else {
                             val error = result.exceptionOrNull()
                             LogManager.w(
                                 LogTags.ADB_CONNECTION,

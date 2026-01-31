@@ -2,9 +2,13 @@ package com.mobile.scrcpy.android.infrastructure.adb.connection
 
 import android.content.Context
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.event.ForwardRemoved
+import com.mobile.scrcpy.android.core.common.event.ForwardSetup
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus.pushEvent
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
-import com.mobile.scrcpy.android.core.i18n.CommonTexts
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
 import dadb.AdbShellStream
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +34,11 @@ class AdbConnection(
 ) {
     // 端口转发管理（SocketForwarder 或 dadb.tcpForward）
     private val forwarders = ConcurrentHashMap<Int, AutoCloseable>()
+
+    /**
+     * 验证连接并获取设备序列号
+     */
+    suspend fun verify(): Result<String> = AdbConnectionVerifier.verifyDadb(dadb, deviceId)
 
     /**
      * 检查连接是否有效
@@ -76,7 +85,7 @@ class AdbConnection(
                     try {
                         delay(100) // 短暂延迟，让 dadb 完成重连
                         val retryResponse = dadb.shell(command)
-                        LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_AUTO_RECONNECT_SUCCESS.get()}")
+                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_AUTO_RECONNECT_SUCCESS.get())
                         Result.success(retryResponse.output)
                     } catch (retryException: Exception) {
                         LogManager.d(
@@ -109,7 +118,7 @@ class AdbConnection(
                     try {
                         delay(100) // 短暂延迟，让 dadb 完成重连
                         val retryResponse = dadb.shell(command)
-                        LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_AUTO_RECONNECT_SUCCESS.get()}")
+                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_AUTO_RECONNECT_SUCCESS.get())
                         Result.success(retryResponse.output)
                     } catch (retryException: Exception) {
                         LogManager.d(
@@ -195,6 +204,8 @@ class AdbConnection(
         socketName: String,
     ): Result<Boolean> =
         withContext(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+
             try {
                 // 使用自定义 SocketForwarder，直接支持 localabstract socket
                 // 参考 dadb PR #90: Extend tcpForward to support more socket domains
@@ -207,21 +218,81 @@ class AdbConnection(
                     forwarder.start()
                     forwarders[localPort] = forwarder
 
-                    LogManager.d(
-                        LogTags.ADB_CONNECTION,
-                        "${AdbTexts.ADB_FORWARD_SETUP_SUCCESS.get()}（${CommonTexts.LABEL_USING.get()} SocketForwarder: $localPort -> $targetSocket）",
+                    val duration = System.currentTimeMillis() - startTime
+
+                    // 推送事件到 ScrcpyEventBus
+                    pushEvent(
+                        ForwardSetup(
+                            deviceId = deviceId,
+                            localPort = localPort,
+                            remoteSocket = targetSocket,
+                            durationMs = duration,
+                            success = true,
+                        ),
                     )
+
+                    // 推送会话事件
+                    CurrentSession.currentOrNull?.handleEvent(
+                        SessionEvent.ForwardSetup(
+                            message = "Forward setup: $localPort -> $targetSocket",
+                        ),
+                    )
+
                     Result.success(true)
                 } catch (e: Exception) {
+                    val duration = System.currentTimeMillis() - startTime
+
                     LogManager.e(
                         LogTags.ADB_CONNECTION,
                         "${AdbTexts.ADB_SOCKET_FORWARDER_FAILED.get()}: ${e.message}",
                         e,
                     )
+
+                    // 推送失败事件
+                    pushEvent(
+                        ForwardSetup(
+                            deviceId = deviceId,
+                            localPort = localPort,
+                            remoteSocket = "localabstract:$socketName",
+                            durationMs = duration,
+                            success = false,
+                            error = e.message,
+                        ),
+                    )
+
+                    // 推送会话失败事件
+                    CurrentSession.currentOrNull?.handleEvent(
+                        SessionEvent.ForwardFailed(
+                            message = "Forward failed on port $localPort: ${e.message ?: "Unknown error"}",
+                        ),
+                    )
+
                     Result.failure(e)
                 }
             } catch (e: Exception) {
+                val duration = System.currentTimeMillis() - startTime
+
                 LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FORWARD_SETUP_EXCEPTION.get()}: ${e.message}", e)
+
+                // 推送异常事件
+                pushEvent(
+                    ForwardSetup(
+                        deviceId = deviceId,
+                        localPort = localPort,
+                        remoteSocket = "localabstract:$socketName",
+                        durationMs = duration,
+                        success = false,
+                        error = e.message,
+                    ),
+                )
+
+                // 推送会话失败事件
+                CurrentSession.currentOrNull?.handleEvent(
+                    SessionEvent.ForwardFailed(
+                        message = "Forward exception on port $localPort: ${e.message ?: "Unknown error"}",
+                    ),
+                )
+
                 Result.failure(e)
             }
         }
@@ -263,7 +334,14 @@ class AdbConnection(
                 forwarders[localPort]?.close()
                 forwarders.remove(localPort)
 
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FORWARD_REMOVED.get()}: tcp:$localPort")
+                // 推送事件到 ScrcpyEventBus
+                pushEvent(
+                    ForwardRemoved(
+                        deviceId = deviceId,
+                        localPort = localPort,
+                    ),
+                )
+
                 Result.success(true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FORWARD_REMOVE_EXCEPTION.get()}: ${e.message}", e)
@@ -311,16 +389,51 @@ class AdbConnection(
     // ========== 编码器检测代理方法 ==========
 
     /**
-     * 检测可用的视频编码器
+     * 检测设备的视频和音频编码器
+     * @param context Android Context
+     * @param skipPush 是否跳过 push server 步骤
+     * @return 编码器检测结果（检测完成后自动异步保存到数据库）
      */
-    suspend fun detectVideoEncoders(context: Context): Result<List<VideoEncoderInfo>> =
-        AdbEncoderDetector.detectVideoEncoders(dadb, context, ::openShellStream)
+    suspend fun detectEncoders(
+        context: Context,
+        skipPush: Boolean = false,
+    ): Result<EncoderDetectionResult> {
+        val result = AdbEncoderDetector.detectEncoders(dadb, context, ::openShellStream, skipPush)
 
-    /**
-     * 检测音频编码器
-     */
-    suspend fun detectAudioEncoders(context: Context): Result<List<AudioEncoderInfo>> =
-        AdbEncoderDetector.detectAudioEncoders(dadb, context, ::openShellStream)
+        // 异步保存到当前会话（不阻塞返回）
+        if (result.isSuccess) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val detectionResult = result.getOrNull() ?: return@withContext
+                    val session = CurrentSession.currentOrNull ?: return@withContext
+
+                    val videoEncoders = detectionResult.videoEncoders.map { it.name }
+                    val audioEncoders = detectionResult.audioEncoders.map { it.name }
+
+                    if (videoEncoders.isNotEmpty() || audioEncoders.isNotEmpty()) {
+                        // 直接通过 SessionStorage 保存，避免调用 internal 扩展函数
+                        val currentOptions = session.options
+                        val updatedOptions =
+                            currentOptions.copy(
+                                remoteVideoEncoders = videoEncoders,
+                                remoteAudioEncoders = audioEncoders,
+                            )
+                        session.getStorage().saveOptions(updatedOptions)
+                        session.setOptions(updatedOptions)
+
+                        LogManager.d(
+                            LogTags.ADB_CONNECTION,
+                            "已保存编解码器到会话 ${session.sessionId}: 视频=${videoEncoders.size}, 音频=${audioEncoders.size}",
+                        )
+                    }
+                } catch (e: Exception) {
+                    LogManager.w(LogTags.ADB_CONNECTION, "异步保存编码器列表失败: ${e.message}")
+                }
+            }
+        }
+
+        return result
+    }
 
     /**
      * 关闭连接

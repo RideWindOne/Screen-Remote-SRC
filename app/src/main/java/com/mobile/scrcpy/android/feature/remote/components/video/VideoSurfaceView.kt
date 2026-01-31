@@ -1,5 +1,6 @@
 package com.mobile.scrcpy.android.feature.remote.components.video
 
+import android.content.Context
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.runtime.Composable
@@ -9,6 +10,18 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
+
+/**
+ * 自定义 SurfaceView，支持无障碍功能
+ */
+private class TouchableSurfaceView(
+    context: Context,
+) : SurfaceView(context) {
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+}
 
 /**
  * SurfaceView 组件（用于普通模式）
@@ -35,18 +48,15 @@ fun VideoSurfaceView(
     onTouch: ((android.view.View, android.view.MotionEvent) -> Boolean)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current // TODO
 
     AndroidView(
         factory = { ctx ->
-            SurfaceView(ctx).apply {
+            TouchableSurfaceView(ctx).apply {
                 holder.addCallback(
                     object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) {
-                            LogManager.d(
-                                LogTags.REMOTE_DISPLAY,
-                                "${RemoteTexts.REMOTE_SURFACE_READY.get()} (created)",
-                            )
+                            // LogManager.d(LogTags.REMOTE_DISPLAY, "${RemoteTexts.REMOTE_SURFACE_READY.get()} (created)",)
                             onSurfaceCreated(holder)
                         }
 
@@ -74,16 +84,14 @@ fun VideoSurfaceView(
                         }
                     },
                 )
-
-                // 设置触摸监听
-                onTouch?.let { touchHandler ->
-                    setOnTouchListener { view, event ->
-                        touchHandler(view, event)
-                    }
-                }
             }
         },
         update = { view ->
+            // 更新触摸监听器
+            view.setOnTouchListener(
+                if (onTouch != null) { v, event -> onTouch(v, event) } else null, // TODO
+            )
+
             // 每次重组时立即检查并更新 Surface
             val holder = view.holder
             val surface = holder.surface

@@ -19,7 +19,7 @@ import java.io.File
  * 职责：密钥生成/保存/导入/导出、公钥获取
  */
 class AdbKeysViewModel(
-    private val context: Context,
+    private val context: Context, // TODO
     private val adbConnectionManager: AdbConnectionManager,
 ) : ViewModel() {
     // ============ 密钥生成 ============

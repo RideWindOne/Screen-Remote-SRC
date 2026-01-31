@@ -1,49 +1,35 @@
+/**
+ * ADB 密钥管理对话框
+ * 
+ * 主对话框组件，协调密钥信息显示、编辑和操作功能
+ * 
+ * 拆分结构：
+ * - adbkey/KeyList.kt: 密钥列表和编辑组件
+ * - adbkey/KeyActions.kt: 密钥操作按钮
+ * - adbkey/KeyValidation.kt: 密钥验证对话框
+ */
 package com.mobile.scrcpy.android.feature.device.ui.component
 
 import android.annotation.SuppressLint
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,16 +40,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.mobile.scrcpy.android.app.ScreenRemoteApp
 import com.mobile.scrcpy.android.core.common.AppDimens
-import com.mobile.scrcpy.android.core.common.manager.LanguageManager.isChinese
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.common.util.FilePickerHelper
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
@@ -71,6 +52,11 @@ import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
+import com.mobile.scrcpy.android.feature.device.ui.component.adbkey.GenerateKeyPairConfirmDialog
+import com.mobile.scrcpy.android.feature.device.ui.component.adbkey.ImportKeysHintDialog
+import com.mobile.scrcpy.android.feature.device.ui.component.adbkey.KeyActionItem
+import com.mobile.scrcpy.android.feature.device.ui.component.adbkey.KeyEditItem
+import com.mobile.scrcpy.android.feature.device.ui.component.adbkey.KeyInfoItem
 import com.mobile.scrcpy.android.feature.device.viewmodel.ui.viewmodels.AdbKeysViewModel
 import kotlinx.coroutines.launch
 
@@ -122,7 +108,7 @@ fun AdbKeyManagementDialog(onDismiss: () -> Unit) {
     val txtStatus = rememberText(CommonTexts.LABEL_STATUS)
     val txtHide = rememberText(CommonTexts.BUTTON_HIDE)
     val txtShow = rememberText(CommonTexts.BUTTON_SHOW)
-    val txtClose = rememberText(CommonTexts.BUTTON_CLOSE)
+    val txtClose = rememberText(CommonTexts.BUTTON_CLOSE) // TODO
 
     // 密钥刷新函数（提前声明，供文件选择器回调使用）
     fun refreshKeys() {
@@ -180,9 +166,7 @@ fun AdbKeyManagementDialog(onDismiss: () -> Unit) {
 
     // 文件选择器 - 导入多个文件（提示用户长按多选）
     val importKeysLauncher =
-        FilePickerHelper.rememberImportMultipleFilesLauncher(
-            mimeTypes = arrayOf("*/*"),
-        ) { uris ->
+        FilePickerHelper.rememberImportMultipleFilesLauncher { uris ->
             if (uris.isNotEmpty()) {
                 scope.launch {
                     val result = viewModel.importAdbKeysFromUris(uris)
@@ -402,284 +386,4 @@ fun AdbKeyManagementDialog(onDismiss: () -> Unit) {
             onDismiss = { showImportHintDialog = false },
         )
     }
-}
-
-@Composable
-fun KeyInfoItem(
-    label: String,
-    value: String,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 11.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-fun KeyEditItem(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    isVisible: Boolean,
-    onVisibilityToggle: (() -> Unit)?,
-    focusRequester: FocusRequester?,
-    txtHide: String = CommonTexts.BUTTON_HIDE.get(),
-    txtShow: String = CommonTexts.BUTTON_SHOW.get(),
-) {
-    // 统一处理：所有密钥都可折叠
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // 标题行（始终显示，列表高度）
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(AppDimens.listItemHeight)
-                    .clickable { onVisibilityToggle?.invoke() }
-                    .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    if (isVisible) txtHide else txtShow,
-                    fontSize = 13.sp,
-                    color = Color(0xFF007AFF),
-                )
-                Icon(
-                    if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = if (isVisible) txtHide else txtShow,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color(0xFF007AFF),
-                )
-            }
-        }
-
-        // 输入框区域
-        if (!isVisible) {
-            // 折叠状态：单行，显示隐藏内容（列表高度）
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth(),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(30.dp)
-                            .clickable { onVisibilityToggle?.invoke() }
-                            .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    Text(
-                        text = "••••••••••••••••••••••••••••••••••••••••",
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                }
-            }
-        } else {
-            // 展开状态：多行输入框，显示明文
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .then(
-                            if (focusRequester != null) {
-                                Modifier.focusRequester(focusRequester)
-                            } else {
-                                Modifier
-                            },
-                        ),
-                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                minLines = 3,
-                maxLines = 8,
-            )
-        }
-    }
-
-    // 自动聚焦
-    LaunchedEffect(isVisible) {
-        if (isVisible && focusRequester != null) {
-            kotlinx.coroutines.delay(50)
-            focusRequester.requestFocus()
-        }
-    }
-}
-
-@Composable
-fun KeyActionItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = AppDimens.listItemHeight)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color(0xFF007AFF),
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-@Composable
-fun GenerateKeyPairConfirmDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val txtTitle = AdbTexts.ADB_KEY_GENERATE_CONFIRM_TITLE.get()
-    val txtDestructiveOp = AdbTexts.ADB_KEY_DESTRUCTIVE_OP.get()
-    val txtCurrentKeysDeleted = AdbTexts.ADB_KEY_CURRENT_KEYS_DELETED.get()
-    val txtDevicesLoseAuth = AdbTexts.ADB_KEY_DEVICES_LOSE_AUTH.get()
-    val txtNeedReauth = AdbTexts.ADB_KEY_NEED_REAUTH.get()
-    val txtCannotUndo = AdbTexts.ADB_KEY_CANNOT_UNDO.get()
-    val txtConfirmGenerate = AdbTexts.ADB_KEY_CONFIRM_GENERATE.get()
-    val txtConfirm = CommonTexts.BUTTON_CONFIRM.get()
-    val txtCancel = CommonTexts.BUTTON_CANCEL.get()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color.White,
-        icon = {
-            Icon(
-                Icons.Default.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(48.dp),
-            )
-        },
-        title = {
-            Text(txtTitle)
-        },
-        text = {
-            Column {
-                Text(
-                    txtDestructiveOp,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text("• $txtCurrentKeysDeleted")
-                Text("• $txtDevicesLoseAuth")
-                Spacer(Modifier.height(12.dp))
-                Text("• $txtNeedReauth")
-                Text("• $txtCannotUndo")
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    txtConfirmGenerate,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                    ),
-            ) {
-                Text(txtConfirm)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(txtCancel)
-            }
-        },
-    )
-}
-
-@Composable
-fun ImportKeysHintDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val txtTitle = AdbTexts.BUTTON_IMPORT_KEYS.get()
-    val txtHint1 = AdbTexts.ADB_KEY_IMPORT_HINT.get()
-    val txtHint2 = AdbTexts.ADB_KEY_IMPORT_HINT_MULTISELECT.get()
-    val txtHint3 = AdbTexts.ADB_KEY_IMPORT_HINT_BOTH_FILES.get()
-    val txtConfirm = CommonTexts.BUTTON_CONFIRM.get()
-    val txtCancel = CommonTexts.BUTTON_CANCEL.get()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color.White,
-        icon = {
-            Icon(
-                Icons.Default.Info,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(48.dp),
-            )
-        },
-        title = {
-            Text(txtTitle)
-        },
-        text = {
-            Column {
-                Text(
-                    txtHint1,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text("• $txtHint2")
-                Spacer(Modifier.height(8.dp))
-                Text("• $txtHint3")
-            }
-        },
-        confirmButton = {
-            Button(onClick = onConfirm) {
-                Text(txtConfirm)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(txtCancel)
-            }
-        },
-    )
 }

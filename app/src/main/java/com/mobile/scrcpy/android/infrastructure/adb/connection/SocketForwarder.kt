@@ -30,6 +30,10 @@ internal class SocketForwarder(
     private var server: ServerSocket? = null
     private var clientExecutor: ExecutorService? = null
 
+    // 用于传递线程内的异常到主线程
+    @Volatile
+    private var threadException: Exception? = null
+
     fun isRunning(): Boolean = state == State.STARTED
 
     fun start() {
@@ -38,22 +42,37 @@ internal class SocketForwarder(
         moveToState(State.STARTING)
 
         clientExecutor = Executors.newCachedThreadPool()
+
         serverThread =
             thread {
                 try {
                     handleForwarding()
-                } catch (ignored: SocketException) {
-                    // Do nothing
+                } catch (e: SocketException) {
+                    // Socket 关闭是正常的清理流程，不打印堆栈
+                    android.util.Log.w("SocketForwarder", "⚠️ Socket closed: port=$hostPort, msg=${e.message}")
+                    threadException = e
                 } catch (e: IOException) {
-                    // Log error if needed
+                    android.util.Log.e("SocketForwarder", "❌ IOException: port=$hostPort, msg=${e.message}", e)
+                    threadException = e
+                } catch (e: Exception) {
+                    android.util.Log.e("SocketForwarder", "❌ Exception: port=$hostPort, msg=${e.message}", e)
+                    threadException = e
                 } finally {
                     moveToState(State.STOPPED)
+                    android.util.Log.d("SocketForwarder", "⚫ forwarder 线程已停止: port=$hostPort")
                 }
             }
 
-        waitFor(10, 10000) {
-            // 增加超时到 10 秒
-            state == State.STARTED
+        try {
+            waitFor(10, 10000) {
+                // 增加超时到 10 秒
+                state == State.STARTED
+            }
+        } catch (e: TimeoutException) {
+            android.util.Log.e("SocketForwarder", "⏱️ forwarder 启动超时: port=$hostPort, state=$state")
+            // 如果线程内有异常，抛出线程异常而不是超时异常
+            threadException?.let { throw it }
+            throw e
         }
     }
 
@@ -164,8 +183,8 @@ internal class SocketForwarder(
     }
 
     private fun waitFor(
-        intervalMs: Int,
-        timeoutMs: Int,
+        intervalMs: Int, // TODO
+        timeoutMs: Int, // TODO
         test: () -> Boolean,
     ) {
         val start = System.currentTimeMillis()

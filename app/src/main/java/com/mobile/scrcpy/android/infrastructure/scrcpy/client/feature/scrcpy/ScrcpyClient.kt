@@ -4,26 +4,35 @@ import android.content.Context
 import android.content.Intent
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.NetworkConstants
-import com.mobile.scrcpy.android.core.common.ScrcpyConstants
+import com.mobile.scrcpy.android.core.common.event.ScrcpyError
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus
+import com.mobile.scrcpy.android.core.common.event.StatusChanged
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
+import com.mobile.scrcpy.android.core.data.storage.SessionStorage
 import com.mobile.scrcpy.android.core.domain.model.ConnectionProgress
-import com.mobile.scrcpy.android.core.domain.model.ConnectionStep
-import com.mobile.scrcpy.android.core.domain.model.StepStatus
-import com.mobile.scrcpy.android.core.i18n.AdbTexts
-import com.mobile.scrcpy.android.core.i18n.CommonTexts
+import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbBridge
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
 import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionHealthMonitor
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionLifecycle
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionMetadataReader
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionShellMonitor
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionSocketManager
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
-import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.feature.scrcpy.ScrcpyConnection
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionStateMachine
 import com.mobile.scrcpy.android.infrastructure.scrcpy.controller.feature.scrcpy.ScrcpyController
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.VideoStream
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionState
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.internal.createMonitorBus
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.internal.initMonitor
 import com.mobile.scrcpy.android.service.ScrcpyForegroundService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -37,8 +46,14 @@ class ScrcpyClient(
     private val context: Context,
     private val adbConnectionManager: AdbConnectionManager,
 ) {
-    // 当前使用的设备 ID
+    // 当前会话 ID（UUID）
+    private var currentSessionId: String? = null
+
+    // 当前设备 ID（host:port 或 usb:serial）
     private var currentDeviceId: String? = null
+
+    // 会话监控标记
+    private var sessionMonitor: Any? = null
 
     init {
         // 加载 Native 库
@@ -49,24 +64,40 @@ class ScrcpyClient(
         }
     }
 
-    // 连接管理器
-    private val connection = ScrcpyConnection(context, adbConnectionManager)
+    // 连接组件
+    private val stateMachine = ConnectionStateMachine()
+    private val socketManager = ConnectionSocketManager()
+    private val metadataReader = ConnectionMetadataReader(socketManager)
+    private val shellMonitor = ConnectionShellMonitor()
+    private val healthMonitor = ConnectionHealthMonitor()
 
     // 控制器
     private val controller =
         ScrcpyController(
             adbConnectionManager = adbConnectionManager,
             getDeviceId = { currentDeviceId },
-            getControlSocket = { connection.controlSocket },
-            clearControlSocket = { /* controlSocket 由 connection 管理，无需手动清除 */ },
+            getControlSocket = { socketManager.controlSocket },
+            clearControlSocket = { /* controlSocket 由 socketManager 管理，无需手动清除 */ },
             localPort = 27183,
+        )
+
+    private val lifecycle =
+        ConnectionLifecycle(
+            context,
+            adbConnectionManager,
+            stateMachine,
+            socketManager,
+            metadataReader,
+            shellMonitor,
+            onVideoStreamReady = { _videoStreamState.value = it },
+            onAudioStreamReady = { _audioStreamState.value = it },
         )
 
     // 状态流
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState
 
-    val connectionProgress: StateFlow<List<ConnectionProgress>> = connection.connectionProgress
+    val connectionProgress: StateFlow<List<ConnectionProgress>> = stateMachine.connectionProgress
 
     private val _videoStreamState = MutableStateFlow<VideoStream?>(null)
     val videoStreamState: StateFlow<VideoStream?> = _videoStreamState
@@ -77,247 +108,216 @@ class ScrcpyClient(
     private val _videoResolution = MutableStateFlow<Pair<Int, Int>?>(null)
     val videoResolution: StateFlow<Pair<Int, Int>?> = _videoResolution
 
-    // 连接参数缓存（用于重连）
-    private var lastMaxSize: Int? = null
-    private var lastBitRate: Int = ScrcpyConstants.DEFAULT_BITRATE_INT
-    private var lastMaxFps: Int = ScrcpyConstants.DEFAULT_MAX_FPS
-    private var lastVideoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC
-    private var lastEnableAudio: Boolean = false
-    private var lastKeyFrameInterval: Int = 2
-    private var lastStayAwake: Boolean = false
-    private var lastTurnScreenOff: Boolean = false
-    private var lastPowerOffOnClose: Boolean = false
+    // 事件处理器
+    private val eventHandler =
+        ScrcpyClientEventHandler(
+            connectionState = _connectionState,
+            getCurrentSessionId = { currentSessionId },
+            getCurrentDeviceId = { currentDeviceId },
+            updateConnectionStateOnError = ::updateConnectionStateOnError,
+        )
 
-    // 重连状态
-    private var reconnectAttempts: Int = 0
-    private var isReconnecting: Boolean = false
+    // 重连管理器
+    private val reconnectManager =
+        ScrcpyClientReconnect(
+            adbConnectionManager = adbConnectionManager,
+            connectionState = _connectionState,
+            getCurrentSessionId = { currentSessionId },
+            getCurrentDeviceId = { currentDeviceId },
+            connect = ::connect,
+        )
 
-    /**
-     * 通过设备 ID 连接 Scrcpy（异步版本，带进度反馈）
-     */
-    suspend fun connectByDeviceId(
-        deviceId: String,
-        maxSize: Int? = null,
-        bitRate: Int = ScrcpyConstants.DEFAULT_BITRATE_INT,
-        maxFps: Int = ScrcpyConstants.DEFAULT_MAX_FPS,
-        videoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC,
-        videoEncoder: String = "",
-        enableAudio: Boolean = false,
-        audioCodec: String = ScrcpyConstants.DEFAULT_AUDIO_CODEC,
-        audioEncoder: String = "",
-        keyFrameInterval: Int = 1,
-        stayAwake: Boolean = false,
-        turnScreenOff: Boolean = false,
-        powerOffOnClose: Boolean = false,
-        skipAdbConnect: Boolean = false,
-    ): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            try {
-                if (!skipAdbConnect) {
-                    connection.clearProgress()
-                    _connectionState.value = ConnectionState.Connecting
-                } else {
-                    _connectionState.value = ConnectionState.Connecting
-                }
-
-                // 保存连接参数
-                currentDeviceId = deviceId
-                lastMaxSize = maxSize
-                lastBitRate = bitRate
-                lastMaxFps = maxFps
-                lastVideoCodec = videoCodec
-                lastEnableAudio = enableAudio
-                lastKeyFrameInterval = keyFrameInterval
-                lastStayAwake = stayAwake
-                lastTurnScreenOff = turnScreenOff
-                lastPowerOffOnClose = powerOffOnClose
-
-                // 建立连接
-                val result =
-                    connection.connect(
-                        deviceId = deviceId,
-                        maxSize = maxSize,
-                        bitRate = bitRate,
-                        maxFps = maxFps,
-                        videoCodec = videoCodec,
-                        videoEncoder = videoEncoder,
-                        enableAudio = enableAudio,
-                        audioCodec = audioCodec,
-                        audioEncoder = audioEncoder,
-                        keyFrameInterval = keyFrameInterval,
-                        stayAwake = stayAwake,
-                        turnScreenOff = turnScreenOff,
-                        powerOffOnClose = powerOffOnClose,
-                        skipAdbConnect = skipAdbConnect,
-                        onVideoResolution = { width, height ->
-                            _videoResolution.value = Pair(width, height)
-                        },
-                    )
-
-                if (result.isSuccess) {
-                    val (videoStream, audioStream) = result.getOrThrow()
-                    _videoStreamState.value = videoStream
-                    _audioStreamState.value = audioStream
-
-                    // 启动 shell 监控
-                    connection.startShellMonitor { error ->
-                        updateConnectionStateOnError(error)
-                    }
-
-                    // 唤醒屏幕
-                    controller.wakeUpScreen()
-
-                    // 启动前台服务
-                    val resolution = _videoResolution.value
-                    if (resolution != null) {
-                        startForegroundService(
-                            deviceName = deviceId,
-                            width = resolution.first,
-                            height = resolution.second,
-                        )
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        _connectionState.value = ConnectionState.Connected
-                    }
-                    // LogManager.d(LogTags.SCRCPY_CLIENT, "连接状态已更新: ${_connectionState.value}")
-                    Result.success(true)
-                } else {
-                    _connectionState.value = ConnectionState.Error(result.exceptionOrNull()?.message ?: "Unknown error")
-                    AdbBridge.clearConnection()
-                    Result.failure(result.exceptionOrNull() ?: Exception("Unknown error"))
-                }
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_CONNECTION_FAILED.get()}: ${e.message}", e)
-                _connectionState.value = ConnectionState.Error(e.message ?: "Unknown error")
-                AdbBridge.clearConnection()
-                Result.failure(e)
-            }
+    init {
+        // 注册 Native 层状态事件监听
+        ScrcpyEventBus.on<StatusChanged> { event ->
+            eventHandler.handleNativeStatusChange(event.event)
         }
 
+        // 注册 Native 层错误事件监听
+        ScrcpyEventBus.on<ScrcpyError> { event ->
+            eventHandler.handleNativeError(event.event)
+        }
+    }
+
     /**
-     * 直接通过 host:port 连接（会自动创建 ADB 连接）
+     * 连接到设备（统揽全局）
      */
     suspend fun connect(
+        sessionId: String,
         host: String,
         port: Int = NetworkConstants.DEFAULT_ADB_PORT_INT,
-        maxSize: Int? = null,
-        bitRate: Int = ScrcpyConstants.DEFAULT_BITRATE_INT,
-        maxFps: Int = ScrcpyConstants.DEFAULT_MAX_FPS,
-        videoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC,
-        videoEncoder: String = "",
-        enableAudio: Boolean = false,
-        audioCodec: String = ScrcpyConstants.DEFAULT_AUDIO_CODEC,
-        audioEncoder: String = "",
-        keyFrameInterval: Int = 1,
-        stayAwake: Boolean = false,
-        turnScreenOff: Boolean = false,
-        powerOffOnClose: Boolean = false,
+        options: ScrcpyOptions,
+        isReconnecting: Boolean = false,
     ): Result<Boolean> =
         withContext(Dispatchers.IO) {
-            try {
-                connection.clearProgress()
-                _connectionState.value = ConnectionState.Connecting
+            stateMachine.clearProgress()
+            _connectionState.value = ConnectionState.Connecting
 
-                val isUsbConnection = host.startsWith("usb:")
-                val deviceId: String
+            // 1. 准备连接参数
+            val deviceId = prepareConnection(sessionId, host, port, options, isReconnecting)
 
-                if (isUsbConnection) {
-                    deviceId = host
-                    connection.updateProgress(
-                        ConnectionStep.ADB_CONNECT,
-                        StepStatus.RUNNING,
-                        "${AdbTexts.PROGRESS_VERIFYING_ADB.get()} ($deviceId)",
-                    )
-
-                    val conn = adbConnectionManager.getConnection(deviceId)
-                    if (conn == null) {
-                        val errorMsg = "${AdbTexts.USB_CONNECT_FAILED.get()}: ${AdbTexts.ADB_DEVICE_NOT_CONNECTED.get()}"
-                        connection.updateProgress(
-                            ConnectionStep.ADB_CONNECT,
-                            StepStatus.FAILED,
-                            error = errorMsg,
-                        )
-                        _connectionState.value = ConnectionState.Error(errorMsg)
-                        return@withContext Result.failure(Exception(errorMsg))
-                    }
-                } else {
-                    deviceId = "$host:$port"
-                    connection.updateProgress(
-                        ConnectionStep.ADB_CONNECT,
-                        StepStatus.RUNNING,
-                        "${AdbTexts.PROGRESS_VERIFYING_ADB.get()} ($host:$port)",
-                    )
-
-                    val connectResult = adbConnectionManager.connectDevice(host, port)
-                    if (connectResult.isFailure) {
-                        val errorMsg =
-                            connectResult.exceptionOrNull()?.message ?: CommonTexts.ERROR_CONNECTION_FAILED.get()
-                        connection.updateProgress(
-                            ConnectionStep.ADB_CONNECT,
-                            StepStatus.FAILED,
-                            error = errorMsg,
-                        )
-                        _connectionState.value = ConnectionState.Error(errorMsg)
-                        return@withContext Result.failure(connectResult.exceptionOrNull() ?: Exception(errorMsg))
-                    }
-                }
-
-                val result =
-                    connectByDeviceId(
-                        deviceId = deviceId,
-                        maxSize = maxSize,
-                        bitRate = bitRate,
-                        maxFps = maxFps,
-                        videoCodec = videoCodec,
-                        videoEncoder = videoEncoder,
-                        enableAudio = enableAudio,
-                        audioCodec = audioCodec,
-                        audioEncoder = audioEncoder,
-                        keyFrameInterval = keyFrameInterval,
-                        stayAwake = stayAwake,
-                        turnScreenOff = turnScreenOff,
-                        powerOffOnClose = powerOffOnClose,
-                        skipAdbConnect = true,
-                    )
-
-                return@withContext result
-            } catch (e: Exception) {
-                LogManager.e(
-                    LogTags.SCRCPY_CLIENT,
-                    "${RemoteTexts.SCRCPY_CONNECTION_FAILED_DETAIL.get()}: ${e.message}",
-                    e,
+            // 2. 初始化会话（必须在最前面，用于记录所有错误）
+            val storage = SessionStorage(context)
+            val sessionOptions = storage.getOptions(sessionId) ?: options
+            val session =
+                CurrentSession.currentOrNull ?: CurrentSession.start(
+                    options = sessionOptions,
+                    storage = storage,
+                    onVideoResolution = { width, height ->
+                        _videoResolution.value = Pair(width, height)
+                        LogManager.d(LogTags.SCRCPY_CLIENT, "视频分辨率已设置: ${width}x$height")
+                    },
                 )
-                _connectionState.value = ConnectionState.Error(e.message ?: CommonTexts.ERROR_CONNECTION_FAILED.get())
-                Result.failure(e)
+            session.createMonitorBus()
+
+            // 3. 创建会话监控器（仅首次连接，必须等待完成）
+            createSessionMonitorIfNeeded()
+
+            // 4. 启动控制消息发送线程（必须在会话监控器创建后）
+            if (!controller.isRunning()) {
+                controller.start(deviceId)
             }
+
+            // 5. 建立 Scrcpy 连接（包含所有细节：ADB、Server、Socket、监控、服务）
+            val connectionResult = lifecycle.connect()
+
+            if (connectionResult.isFailure) {
+                handleConnectionFailure(connectionResult.exceptionOrNull())
+                return@withContext Result.failure(
+                    connectionResult.exceptionOrNull() ?: Exception("Unknown error"),
+                )
+            }
+
+            // 6. 启动前台服务
+            val resolution = _videoResolution.value
+            if (resolution != null) {
+                startForegroundService(deviceName = deviceId)
+            }
+
+            withContext(Dispatchers.Main) {
+                _connectionState.value = ConnectionState.Connected
+            }
+            Result.success(true)
         }
 
     /**
-     * 断开连接
+     * 准备连接参数
+     */
+    private fun prepareConnection(
+        sessionId: String,
+        host: String,
+        port: Int,
+        options: ScrcpyOptions,
+        isReconnecting: Boolean,
+    ): String {
+        val deviceId = if (host.startsWith("usb:")) host else "$host:$port"
+        currentSessionId = sessionId
+        currentDeviceId = deviceId
+        return deviceId
+    }
+
+    /**
+     * 创建会话监控器（仅首次连接时创建）
+     */
+    private fun createSessionMonitorIfNeeded() {
+        if (sessionMonitor != null) return
+
+        val session = CurrentSession.current
+        session.initMonitor(
+            stateMachine = stateMachine,
+            onReconnect = { reconnectManager.triggerReconnect() },
+        )
+
+        // 监听状态变化
+        CoroutineScope(Dispatchers.Main).launch {
+            session.sessionState.collect { state ->
+                handleSessionStateChange(state)
+            }
+        }
+
+        sessionMonitor = session // 标记已初始化
+    }
+
+    /**
+     * 处理连接失败
+     */
+    private fun handleConnectionFailure(error: Throwable?) {
+        val errorMsg = error?.message ?: "Unknown error"
+        _connectionState.value = ConnectionState.Error(errorMsg)
+        CurrentSession.currentOrNull?.handleEvent(
+            SessionEvent.ServerFailed(errorMsg),
+        )
+        AdbBridge.clearConnection()
+    }
+
+    /**
+     * 断开连接（完整清理）
      */
     suspend fun disconnect(): Result<Boolean> =
         withContext(Dispatchers.IO) {
             try {
                 _connectionState.value = ConnectionState.Disconnecting
 
-                // 重置重连状态
-                reconnectAttempts = 0
-                isReconnecting = false
+                // 推送清理事件
+                currentDeviceId?.let {
+                    CurrentSession.currentOrNull?.handleEvent(SessionEvent.RequestCleanup)
+                }
 
-                // 断开连接
-                val result = connection.disconnect(currentDeviceId)
+                // 完整清理
+                ScrcpyClientCleanup.cleanupAll(
+                    videoStreamState = _videoStreamState,
+                    audioStreamState = _audioStreamState,
+                    lifecycle = lifecycle,
+                    controller = controller,
+                    shellMonitor = shellMonitor,
+                    healthMonitor = healthMonitor,
+                    videoResolution = _videoResolution,
+                    deviceId = currentDeviceId,
+                )
 
-                // 清理状态
-                _videoStreamState.value = null
-                _audioStreamState.value = null
-                _videoResolution.value = null
+                // 清理会话监控器引用
+                sessionMonitor = null
+
                 _connectionState.value = ConnectionState.Disconnected
+                reconnectManager.reset()
 
-                LogManager.d(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_DISCONNECTED_ADB_KEPT.get()}")
-                result
+                Result.success(true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "断开连接失败: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * 取消连接（部分清理）
+     */
+    suspend fun cancelConnect(): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                _connectionState.value = ConnectionState.Disconnecting
+
+                // 部分清理
+                ScrcpyClientCleanup.cleanupConnectionOnly(
+                    videoStreamState = _videoStreamState,
+                    audioStreamState = _audioStreamState,
+                    lifecycle = lifecycle,
+                    controller = controller,
+                    shellMonitor = shellMonitor,
+                    healthMonitor = healthMonitor,
+                    videoResolution = _videoResolution,
+                    deviceId = currentDeviceId,
+                )
+
+                // 清理会话监控器引用
+                sessionMonitor = null
+
+                _connectionState.value = ConnectionState.Disconnected
+                reconnectManager.reset()
+
+                LogManager.d(LogTags.SCRCPY_CLIENT, "连接已取消")
+                Result.success(true)
+            } catch (e: Exception) {
+                LogManager.e(LogTags.SCRCPY_CLIENT, "取消连接失败: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -361,165 +361,17 @@ class ScrcpyClient(
      */
     private fun updateConnectionStateOnError(message: String) {
         if (_connectionState.value is ConnectionState.Connected) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "${CommonTexts.ERROR_CONNECTION_FAILED.get()}: $message")
-            triggerReconnect()
-        }
-    }
-
-    /**
-     * 触发重连（带指数退避重试机制）
-     */
-    private fun triggerReconnect() {
-        val deviceId = currentDeviceId
-        if (deviceId == null) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "无法重连：设备 ID 为空")
-            _connectionState.value = ConnectionState.Error("设备未连接")
-            return
-        }
-
-        if (isReconnecting) {
-            LogManager.w(LogTags.SCRCPY_CLIENT, "重连正在进行中，跳过本次重连请求")
-            return
-        }
-
-        if (reconnectAttempts >= ScrcpyConstants.MAX_RECONNECT_ATTEMPTS) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "重连失败：已达最大重试次数 ${ScrcpyConstants.MAX_RECONNECT_ATTEMPTS}")
-            _connectionState.value = ConnectionState.Error("重连失败：已达最大重试次数")
-            reconnectAttempts = 0
-            isReconnecting = false
-            return
-        }
-
-        reconnectAttempts++
-        isReconnecting = true
-
-        LogManager.d(
-            LogTags.SCRCPY_CLIENT,
-            "========== 触发重连 (尝试 $reconnectAttempts/${ScrcpyConstants.MAX_RECONNECT_ATTEMPTS}) ==========",
-        )
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val delayMs = (1L shl (reconnectAttempts - 1)) * ScrcpyConstants.DEFAULT_RECONNECT_DELAY
-                LogManager.d(LogTags.SCRCPY_CLIENT, "等待 ${delayMs}ms 后重连...")
-
-                withContext(Dispatchers.Main) {
-                    _connectionState.value = ConnectionState.Reconnecting
-                }
-
-                delay(delayMs)
-
-                // 检查 ADB 连接状态
-                LogManager.d(LogTags.SCRCPY_CLIENT, "检查 ADB 连接状态...")
-                val conn = adbConnectionManager.getConnection(deviceId)
-                if (conn == null) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "✗ ADB 连接不存在")
-                    handleReconnectFailure("ADB 会话已断开，请重新连接设备")
-                    return@launch
-                }
-
-                val testResult = conn.executeShell("echo test", retryOnFailure = false)
-                if (testResult.isFailure) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "✗ ADB 连接不可用: ${testResult.exceptionOrNull()?.message}")
-                    handleReconnectFailure("ADB 会话已断开，请重新连接设备")
-                    return@launch
-                }
-                LogManager.d(LogTags.SCRCPY_CLIENT, "ADB 连接正常")
-
-                // 尝试重新连接
-                LogManager.d(LogTags.SCRCPY_CLIENT, "尝试重新连接...")
-                withContext(Dispatchers.Main) {
-                    _connectionState.value = ConnectionState.Connecting
-                }
-
-                val reconnectResult =
-                    connectByDeviceId(
-                        deviceId = deviceId,
-                        maxSize = lastMaxSize,
-                        bitRate = lastBitRate,
-                        maxFps = lastMaxFps,
-                        videoCodec = lastVideoCodec,
-                        enableAudio = lastEnableAudio,
-                        keyFrameInterval = lastKeyFrameInterval,
-                        stayAwake = lastStayAwake,
-                        turnScreenOff = lastTurnScreenOff,
-                        powerOffOnClose = lastPowerOffOnClose,
-                    )
-
-                if (reconnectResult.isSuccess) {
-                    LogManager.d(LogTags.SCRCPY_CLIENT, "========== 重连成功 (尝试 $reconnectAttempts 次) ==========")
-                    withContext(Dispatchers.Main) {
-                        _connectionState.value = ConnectionState.Connected
-                    }
-                    isReconnecting = false
-                } else {
-                    val errorMsg = reconnectResult.exceptionOrNull()?.message ?: "未知错误"
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "========== 重连失败 (尝试 $reconnectAttempts 次) ==========")
-
-                    if (isPermanentError(errorMsg)) {
-                        LogManager.e(LogTags.SCRCPY_CLIENT, "检测到永久性错误，停止重试")
-                        handleReconnectFailure("重连失败: $errorMsg")
-                    } else if (reconnectAttempts < ScrcpyConstants.MAX_RECONNECT_ATTEMPTS) {
-                        LogManager.d(LogTags.SCRCPY_CLIENT, "将在延迟后再次尝试重连...")
-                        isReconnecting = false
-                        triggerReconnect()
-                    } else {
-                        handleReconnectFailure("重连失败: $errorMsg")
-                    }
-                }
-
-                LogManager.d(LogTags.SCRCPY_CLIENT, "========== 重连流程结束 ==========")
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "========== 重连过程出错 ==========")
-                LogManager.e(LogTags.SCRCPY_CLIENT, "错误: ${e.message}", e)
-
-                if (reconnectAttempts < ScrcpyConstants.MAX_RECONNECT_ATTEMPTS) {
-                    isReconnecting = false
-                    triggerReconnect()
-                } else {
-                    handleReconnectFailure("重连失败: ${e.message}")
-                }
+            LogManager.e(LogTags.SCRCPY_CLIENT, "连接错误: $message")
+            currentDeviceId?.let {
+                CurrentSession.currentOrNull?.handleEvent(SessionEvent.RequestReconnect(message))
             }
         }
     }
 
     /**
-     * 处理重连失败
-     */
-    private suspend fun handleReconnectFailure(errorMessage: String) {
-        withContext(Dispatchers.Main) {
-            _connectionState.value = ConnectionState.Error(errorMessage)
-        }
-        reconnectAttempts = 0
-        isReconnecting = false
-    }
-
-    /**
-     * 判断是否是永久性错误（不应重试的错误）
-     */
-    private fun isPermanentError(errorMessage: String): Boolean {
-        val permanentErrorKeywords =
-            listOf(
-                "设备未连接",
-                "设备连接已断开",
-                "ADB 会话已断开",
-                "未授权",
-                "权限被拒绝",
-                "不支持",
-                "无效的参数",
-            )
-
-        return permanentErrorKeywords.any { errorMessage.contains(it, ignoreCase = true) }
-    }
-
-    /**
      * 启动前台服务（首次连接或添加设备）
      */
-    private fun startForegroundService(
-        deviceName: String,
-        width: Int,
-        height: Int,
-    ) {
+    private fun startForegroundService(deviceName: String) {
         try {
             val deviceId = currentDeviceId ?: return
 
@@ -539,7 +391,56 @@ class ScrcpyClient(
     }
 
     /**
-     * 获取当前连接的设备 ID
+     * 处理会话状态变化（来自 SessionMonitor）
+     */
+    private fun handleSessionStateChange(state: SessionState) {
+        LogManager.d(LogTags.SDL, "会话状态变化: $state")
+
+        when (state) {
+            is SessionState.Connected -> {
+                if (_connectionState.value !is ConnectionState.Connected) {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        _connectionState.value = ConnectionState.Connected
+                    }
+                }
+                reconnectManager.reset()
+            }
+
+            is SessionState.Reconnecting -> {
+                CoroutineScope(Dispatchers.Main).launch {
+                    _connectionState.value = ConnectionState.Reconnecting
+                }
+                reconnectManager.triggerReconnect()
+            }
+
+            is SessionState.Failed -> {
+                CoroutineScope(Dispatchers.Main).launch {
+                    _connectionState.value = ConnectionState.Error(state.reason)
+                }
+                reconnectManager.reset()
+            }
+
+            is SessionState.AdbConnected,
+            is SessionState.AdbDisconnected,
+            is SessionState.ServerStarting,
+            is SessionState.ServerStarted,
+            is SessionState.ServerFailed,
+            is SessionState.Idle,
+            -> {
+                // 这些状态已由 ScrcpySessionMonitor 处理
+            }
+
+            else -> {}
+        }
+    }
+
+    /**
+     * 获取当前会话 ID
+     */
+    fun getCurrentSessionId(): String? = currentSessionId
+
+    /**
+     * 获取当前设备 ID
      */
     fun getCurrentDeviceId(): String? = currentDeviceId
 }

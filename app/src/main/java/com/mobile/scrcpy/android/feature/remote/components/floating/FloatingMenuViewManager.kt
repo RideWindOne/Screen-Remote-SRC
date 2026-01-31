@@ -78,6 +78,28 @@ internal class FloatingMenuViewManager(
         state.isMenuShown = true
 
         setupMenuButtons(menu)
+
+        // 设置按键监听，拦截返回键
+        menu.isFocusable = true
+        menu.isFocusableInTouchMode = true
+        menu.requestFocus()
+        menu.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+                if (event.action == android.view.KeyEvent.ACTION_UP) {
+                    scope.launch {
+                        val result = viewModel.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
+                        if (result.isFailure) {
+                            Log.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
+                        } else {
+                            Log.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
+                        }
+                    }
+                }
+                true // 消费事件
+            } else {
+                false
+            }
+        }
     }
 
     /**
@@ -100,7 +122,7 @@ internal class FloatingMenuViewManager(
      * 更新菜单位置（跟随小球移动）
      */
     fun updateMenuPosition(
-        deltaX: Int,
+        deltaX: Int, // TODO
         deltaY: Int,
     ) {
         if (!state.isMenuShown || menuView == null || menuParams == null) return

@@ -54,7 +54,6 @@ import com.mobile.scrcpy.android.core.designsystem.component.GroupManagementDial
 import com.mobile.scrcpy.android.core.designsystem.component.PathBreadcrumb
 import com.mobile.scrcpy.android.core.domain.model.GroupType
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
-import com.mobile.scrcpy.android.feature.codec.ui.CodecTestScreen
 import com.mobile.scrcpy.android.feature.device.ui.component.AdbKeyManagementDialog
 import com.mobile.scrcpy.android.feature.remote.ui.RemoteDisplayScreen
 import com.mobile.scrcpy.android.feature.session.ui.SessionsScreen
@@ -63,10 +62,10 @@ import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 import com.mobile.scrcpy.android.feature.settings.ui.AboutScreen
 import com.mobile.scrcpy.android.feature.settings.ui.ActionsScreen
 import com.mobile.scrcpy.android.feature.settings.ui.AppearanceScreen
+import com.mobile.scrcpy.android.feature.settings.ui.BackupRestoreScreen
 import com.mobile.scrcpy.android.feature.settings.ui.LanguageScreen
 import com.mobile.scrcpy.android.feature.settings.ui.LogManagementScreen
 import com.mobile.scrcpy.android.feature.settings.ui.SettingsScreen
-import com.mobile.scrcpy.android.feature.settings.ui.BackupRestoreScreen
 import kotlin.collections.filter
 import kotlin.collections.find
 // import com.mobile.scrcpy.android.ui.components.FloatingMenuController  // 暂时隐藏
@@ -81,7 +80,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
     var showLogManagement by remember { mutableStateOf(false) }
-    var showCodecTest by remember { mutableStateOf(false) }
     var showGroupManagement by remember { mutableStateOf(false) }
     var showAdbKeyManagement by remember { mutableStateOf(false) }
     var showBackupRestore by remember { mutableStateOf(false) }
@@ -434,12 +432,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         )
     }
 
-    if (showCodecTest) {
-        CodecTestScreen(
-            onBack = { showCodecTest = false },
-        )
-    }
-
     if (showLogManagement) {
         LogManagementScreen(
             onDismiss = { showLogManagement = false },
@@ -449,7 +441,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     if (showGroupManagement) {
         GroupManagementDialog(
             groups = groups,
-            sessionCounts = viewModel.getSessionCountByGroup(),
             onDismiss = { showGroupManagement = false },
             onAddGroup = { name, parentPath, type ->
                 viewModel.addGroup(name, parentPath, type)

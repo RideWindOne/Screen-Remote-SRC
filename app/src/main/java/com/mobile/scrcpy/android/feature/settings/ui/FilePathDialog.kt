@@ -24,13 +24,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.mobile.scrcpy.android.core.common.AppColors
-import com.mobile.scrcpy.android.core.common.FilePathConstants
+import com.mobile.scrcpy.android.core.common.constants.AppColors
+import com.mobile.scrcpy.android.core.common.constants.FilePathConstants
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SettingsTexts
-import com.mobile.scrcpy.android.feature.device.ui.component.KeyActionItem
+import com.mobile.scrcpy.android.feature.device.ui.component.adbkey.KeyActionItem
 import com.mobile.scrcpy.android.feature.session.ui.component.LabeledInputRow
 
 /**

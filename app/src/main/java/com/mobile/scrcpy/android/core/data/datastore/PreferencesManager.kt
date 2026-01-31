@@ -8,7 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.mobile.scrcpy.android.core.common.FilePathConstants.DEFAULT_FILE_TRANSFER_PATH
+import com.mobile.scrcpy.android.core.common.constants.FilePathConstants.DEFAULT_FILE_TRANSFER_PATH
 import com.mobile.scrcpy.android.core.domain.model.AppLanguage
 import com.mobile.scrcpy.android.core.domain.model.AppSettings
 import com.mobile.scrcpy.android.core.domain.model.ThemeMode

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Card
@@ -36,7 +35,6 @@ import androidx.core.net.toUri
 import com.mobile.scrcpy.android.R
 import com.mobile.scrcpy.android.core.common.AppConstants
 import com.mobile.scrcpy.android.core.common.AppDimens
-import com.mobile.scrcpy.android.core.designsystem.component.DialogBottomSpacer
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.i18n.SettingsTexts
 
@@ -172,22 +170,26 @@ fun AboutScreen(onBack: () -> Unit) {
                         Modifier
                             .fillMaxWidth()
                             .height(AppDimens.listItemHeight)
-                            .clickable {
-                                val intent = Intent(Intent.ACTION_VIEW, AppConstants.TELEGRAM_CHANNEL.toUri())
-                                context.startActivity(intent)
-                            }.padding(horizontal = 16.dp),
+                            .padding(horizontal = 16.dp),
+                    // 临时禁用 Telegram 频道功能
+                    // .clickable {
+                    //     val intent = Intent(Intent.ACTION_VIEW, AppConstants.TELEGRAM_CHANNEL.toUri())
+                    //     context.startActivity(intent)
+                    // }.padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = SettingsTexts.ABOUT_TELEGRAM_BUTTON.get(),
                         style = MaterialTheme.typography.bodyLarge,
+                        // color = MaterialTheme.colorScheme.onSurfaceVariant,
                         color = MaterialTheme.colorScheme.primary,
                     )
 
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = null,
+                        // tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp),
                     )

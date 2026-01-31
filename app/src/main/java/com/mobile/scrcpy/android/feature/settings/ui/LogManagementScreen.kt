@@ -183,6 +183,7 @@ fun LogManagementScreen(onDismiss: () -> Unit) {
     if (showDeleteDialog && selectedFile != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(LogTexts.LOG_DELETE_CONFIRM_TITLE.get()) },
             text = {
                 Text(

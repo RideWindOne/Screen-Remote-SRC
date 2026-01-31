@@ -44,13 +44,11 @@ import com.mobile.scrcpy.android.feature.remote.components.floating.AutoFloating
 import com.mobile.scrcpy.android.feature.remote.components.touch.KeyboardInputHandler
 import com.mobile.scrcpy.android.feature.remote.components.video.VideoDisplayArea
 import com.mobile.scrcpy.android.feature.remote.components.video.rememberVideoDecoderManager
-import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectionViewModel
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ControlViewModel
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionRepository
+import com.mobile.scrcpy.android.core.data.repository.SessionRepository
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 import com.mobile.scrcpy.android.feature.session.viewmodel.SessionViewModel
 import com.mobile.scrcpy.android.feature.settings.viewmodel.SettingsViewModel
-import com.mobile.scrcpy.android.infrastructure.scrcpy.client.feature.scrcpy.ScrcpyClient
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
 import kotlinx.coroutines.launch
 
@@ -62,8 +60,8 @@ fun RemoteDisplayScreen(
     mainViewModel: MainViewModel,
     onClose: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current // TODO
+    val scope = rememberCoroutineScope() // TODO
 
     // 获取依赖
     val sessionRepository = remember { SessionRepository(context) }
@@ -93,7 +91,7 @@ fun RemoteDisplayScreen(
     val audioStream by connectionVM.getAudioStream().collectAsState()
     val connectionState by connectionVM.getConnectionState().collectAsState()
     val connectionProgress by connectionVM.connectionProgress.collectAsState()
-    val settings by settingsVM.settings.collectAsState()
+    val settings by settingsVM.settings.collectAsState() // TODO
     val sessionData by remember {
         sessionRepository.getSessionDataFlow(sessionId)
     }.collectAsState(initial = null)
@@ -159,6 +157,7 @@ fun RemoteDisplayScreen(
             LifecycleEventObserver { _, event ->
                 lifecycleState = event
                 if (event == Lifecycle.Event.ON_RESUME) {
+                    // 在 Socket 未连接的时候就会触发，有点太早了，再观察观察
                     scope.launch {
                         try {
                             controlVM.wakeUpScreen()
@@ -217,6 +216,7 @@ fun RemoteDisplayScreen(
         connectionViewModel = connectionVM,
         sessionViewModel = sessionVM,
         sessionId = sessionId,
+        sessionData = sessionData,
         audioStream = audioStream,
         audioVolume = audioVolume,
     )
@@ -247,16 +247,20 @@ fun RemoteDisplayScreen(
                 connectionState is ConnectionState.Connecting ||
                 connectionState is ConnectionState.Reconnecting,
     ) {
+        LogManager.d(LogTags.REMOTE_DISPLAY, "返回键被触发，当前状态: $connectionState")
         when (connectionState) {
             is ConnectionState.Connected -> {
                 // 已连接：发送返回键给远程设备
                 scope.launch {
+                    LogManager.d(LogTags.REMOTE_DISPLAY, "准备发送返回键到远程设备")
                     val result = controlVM.sendKeyEvent(4) // KEYCODE_BACK
                     if (result.isFailure) {
                         LogManager.e(
                             LogTags.REMOTE_DISPLAY,
                             "发送返回键失败: ${result.exceptionOrNull()?.message}",
                         )
+                    } else {
+                        LogManager.d(LogTags.REMOTE_DISPLAY, "返回键发送成功")
                     }
                 }
             }
@@ -265,11 +269,13 @@ fun RemoteDisplayScreen(
             is ConnectionState.Reconnecting,
             -> {
                 // 连接中/重连中：取消连接并返回主目录
+                LogManager.d(LogTags.REMOTE_DISPLAY, "连接中/重连中，取消连接")
                 connectionVM.cancelConnect()
             }
 
             else -> {
                 // 其他状态：不处理
+                LogManager.d(LogTags.REMOTE_DISPLAY, "其他状态，不处理返回键")
             }
         }
     }
@@ -294,7 +300,6 @@ fun RemoteDisplayScreen(
                 sessionData = sessionData,
                 videoAspectRatio = videoAspectRatio,
                 configuration = configuration,
-                surfaceHolder = surfaceHolder,
                 onSurfaceHolderChanged = { surfaceHolder = it },
                 videoDecoderManager = videoDecoderManager,
             )

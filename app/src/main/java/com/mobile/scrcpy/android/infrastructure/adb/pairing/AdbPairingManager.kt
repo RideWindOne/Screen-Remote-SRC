@@ -15,9 +15,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
@@ -49,12 +46,12 @@ import javax.net.ssl.X509TrustManager
  * TODO: 引入 SPAKE2+ 实现以完成配对功能
  */
 class AdbPairingManager(
-    private val context: Context,
+    private val context: Context, // TODO
 ) {
     private val keyManager = AdbKeyManager(context)
 
     companion object {
-        private const val PAIRING_TIMEOUT_MS = 30000L
+        private const val PAIRING_TIMEOUT_MS = 30000L // TODO
         private const val CONNECT_TIMEOUT_MS = 5000
 
         // ADB 配对协议常量（基于 AOSP pairing_auth 实现）
@@ -68,10 +65,10 @@ class AdbPairingManager(
 
         // 状态码
         private const val STATUS_SUCCESS = 0
-        private const val STATUS_FAIL = 1
+        private const val STATUS_FAIL = 1 // TODO
 
         // SPAKE2 协议常量（ADB 使用 SPAKE2+ 进行密钥交换）
-        private const val SPAKE2_KEY_SIZE = 32
+        private const val SPAKE2_KEY_SIZE = 32 // TODO
     }
 
     /**
@@ -149,18 +146,18 @@ class AdbPairingManager(
         // 创建信任所有证书的 TrustManager（配对过程中不验证证书）
         val trustAllCerts =
             arrayOf<TrustManager>(
-                object : X509TrustManager {
+                object : X509TrustManager { // TODO
                     override fun checkClientTrusted(
-                        chain: Array<java.security.cert.X509Certificate>,
+                        chain: Array<X509Certificate>,
                         authType: String,
                     ) {}
 
                     override fun checkServerTrusted(
-                        chain: Array<java.security.cert.X509Certificate>,
+                        chain: Array<X509Certificate>,
                         authType: String,
                     ) {}
 
-                    override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                    override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
                 },
             )
 
@@ -295,7 +292,7 @@ class AdbPairingManager(
         buffer.get() // reserved
         val payloadSize = buffer.int
 
-        if (payloadSize < 0 || payloadSize > PAIRING_PACKET_MAX_PAYLOAD_SIZE) {
+        if (payloadSize !in 0..PAIRING_PACKET_MAX_PAYLOAD_SIZE) {
             throw Exception("Invalid payload size: $payloadSize")
         }
 
@@ -320,7 +317,7 @@ class AdbPairingManager(
      * 对端信息
      */
     private data class PeerInfo(
-        val publicKey: ByteArray,
+        val publicKey: ByteArray, // TODO
     )
 
     /**

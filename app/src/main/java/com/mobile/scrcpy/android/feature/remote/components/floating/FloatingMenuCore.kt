@@ -8,6 +8,7 @@ import android.view.View
 import android.view.WindowManager
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 /**
  * 球体系统引用类型别名
@@ -102,6 +103,25 @@ fun showDualBallSystem(
             hapticEnabled = hapticEnabled, // 传递触感开关状态
         )
     ballA.setOnTouchListener(gestureHandler)
+    
+    // 设置按键监听，拦截返回键并发送到远程设备
+    ballA.setOnKeyListener { _, keyCode, event ->
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            if (event.action == android.view.KeyEvent.ACTION_UP) {
+                scope.launch {
+                    val result = viewModel.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
+                    if (result.isFailure) {
+                        Log.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
+                    } else {
+                        Log.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
+                    }
+                }
+            }
+            true // 消费事件
+        } else {
+            false // 不消费其他按键
+        }
+    }
 
     Log.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已创建（${if (isLandscape) "横屏" else "竖屏"}）")
     return Tuple4(ballA, ballB, windowManager, gestureHandler)

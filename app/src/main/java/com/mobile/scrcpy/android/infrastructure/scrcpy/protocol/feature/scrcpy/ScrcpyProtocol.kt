@@ -21,10 +21,15 @@ object ScrcpyProtocol {
     /**
      * 构建 scrcpy-server 基础命令
      * @param params 参数列表（key=value 格式）
+     * @param serverPath 自定义 server 路径（默认使用标准路径）
      */
-    fun buildScrcpyServerCommand(vararg params: String): String {
+    fun buildScrcpyServerCommand(
+        vararg params: String,
+        serverPath: String = AppConstants.SCRCPY_SERVER_PATH,
+    ): String {
         val paramsStr = if (params.isNotEmpty()) " ${params.joinToString(" ")}" else ""
-        return "CLASSPATH=${AppConstants.SCRCPY_SERVER_PATH} app_process / com.genymobile.scrcpy.Server ${AppConstants.SCRCPY_VERSION}$paramsStr"
+        return "CLASSPATH=$serverPath app_process / com.genymobile.scrcpy.Server " +
+            "${AppConstants.SCRCPY_VERSION}$paramsStr"
     }
 
     /**

@@ -20,7 +20,7 @@ import com.mobile.scrcpy.android.core.domain.model.AppSettings
 import com.mobile.scrcpy.android.core.domain.model.GroupType
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SettingsTexts
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
+import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -118,13 +118,13 @@ fun BackupRestoreScreen(
 
         AlertDialog(
             onDismissRequest = { showSuccessDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(successMessage) },
             confirmButton = {
                 TextButton(onClick = { showSuccessDialog = false }) {
                     Text(txtConfirm)
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 
@@ -135,6 +135,7 @@ fun BackupRestoreScreen(
 
         AlertDialog(
             onDismissRequest = { showErrorDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(txtError) },
             text = { Text(errorMessage) },
             confirmButton = {
@@ -142,7 +143,6 @@ fun BackupRestoreScreen(
                     Text(txtConfirm)
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 }
@@ -184,7 +184,6 @@ object BackupManager {
             val backupData =
                 BackupData(
                     version = 1,
-                    timestamp = System.currentTimeMillis(),
                     sessions = sessions,
                     groups =
                         groups.map {
@@ -251,7 +250,7 @@ object BackupManager {
 
             // ========== 第一步：记录备份分组信息 ==========
             // 备份分组：旧ID -> path
-            val backupOldIdToPath = backupData.groups.associate { it.id to it.path }
+            val backupOldIdToPath = backupData.groups.associate { it.id to it.path } // TODO
             // 备份分组：path -> 旧ID
             val backupPathToOldId = backupData.groups.associate { it.path to it.id }
 
@@ -272,16 +271,16 @@ object BackupManager {
                     GroupType.valueOf(groupData.type),
                 )
             }
-            
+
             // 等待分组添加完成
             kotlinx.coroutines.delay(100)
 
             // ========== 第三步：构建完整的 ID 映射表 ==========
             val updatedGroups = viewModel.groupViewModel.groups.first()
-            
+
             // 新分组：path -> 新ID
             val pathToNewId = updatedGroups.associate { it.path to it.id }
-            
+
             // 核心映射：备份旧ID -> 当前新ID
             val backupIdToNewId = mutableMapOf<String, String>()
             backupData.groups.forEach { backupGroup ->
@@ -346,7 +345,6 @@ object BackupManager {
 @Serializable
 data class BackupData(
     val version: Int,
-    val timestamp: Long,
     val sessions: List<SessionData>,
     val groups: List<BackupGroupData>,
     val settings: AppSettings,

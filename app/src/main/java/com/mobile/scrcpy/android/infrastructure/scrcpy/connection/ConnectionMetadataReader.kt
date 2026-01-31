@@ -44,15 +44,20 @@ class ConnectionMetadataReader(
 
                 // 创建视频流
                 videoStream =
-                    ScrcpySocketStream(videoSocket, { error ->
-                        LogManager.e(LogTags.SCRCPY_CLIENT, "Video stream error: $error")
-                    }, keyFrameInterval)
+                    ScrcpySocketStream(
+                        videoSocket,
+                        { error ->
+                            LogManager.e(LogTags.SCRCPY_CLIENT, "Video stream error -> $error")
+                        },
+//                        { socketManager.controlSocket },
+                        keyFrameInterval,
+                    )
 
                 // 读取音频元数据（如果启用）
                 if (enableAudio) {
                     val audioSocket = socketManager.audioSocket
                     if (audioSocket != null) {
-                        val audioMetadata = readAudioMetadata(audioSocket.getInputStream())
+                        val audioMetadata = readAudioMetadata(audioSocket.getInputStream()) // TODO
                         LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_AUDIO_METADATA_READ.get())
 
                         // 创建音频流
@@ -77,21 +82,14 @@ class ConnectionMetadataReader(
 
         try {
             // scrcpy 协议：
-            // 1. dummy byte (1 byte)
-            val dummyByte = dis.readByte()
-            LogManager.d(LogTags.SCRCPY_CLIENT, "Dummy byte: 0x${dummyByte.toString(16).padStart(2, '0')}")
+            // 1. dummy byte (0x00) - 已在 connectSockets 时读取
+            // 2. 设备名称 (64 bytes, null-terminated string) - 只在第一个 socket（video）发送
+            // 3. codec metadata (12 bytes) - 每个媒体 socket 都有
 
-            // 2. 设备名称 (64 bytes, null-terminated string)
+            // 读取设备名称 (64 bytes, null-terminated string)
             val deviceNameBytes = ByteArray(64)
-            var totalRead = 0
-            while (totalRead < 64) {
-                val bytesRead = dis.read(deviceNameBytes, totalRead, 64 - totalRead)
-                if (bytesRead == -1) {
-                    throw IOException("设备名称读取失败: 流提前结束 (已读 $totalRead/64 字节)")
-                }
-                totalRead += bytesRead
-            }
-            
+            dis.readFully(deviceNameBytes)
+
             val deviceName = String(deviceNameBytes, Charsets.UTF_8).trim('\u0000')
             LogManager.d(LogTags.SCRCPY_CLIENT, "设备名称: $deviceName")
             LogManager.d(
@@ -99,19 +97,12 @@ class ConnectionMetadataReader(
                 "设备名称原始字节 (前16字节): ${deviceNameBytes.take(16).joinToString(" ") { "0x%02x".format(it) }}",
             )
 
-            // 3. codec metadata (12 bytes)
+            // 2. codec metadata (12 bytes)
             // - codec_id (4 bytes, big-endian)
             // - width (4 bytes, big-endian)
             // - height (4 bytes, big-endian)
             val codecBytes = ByteArray(12)
-            totalRead = 0
-            while (totalRead < 12) {
-                val bytesRead = dis.read(codecBytes, totalRead, 12 - totalRead)
-                if (bytesRead == -1) {
-                    throw IOException("Codec 元数据读取失败: 流提前结束 (已读 $totalRead/12 字节)")
-                }
-                totalRead += bytesRead
-            }
+            dis.readFully(codecBytes) // 使用 readFully 确保读取完整
 
             LogManager.d(
                 LogTags.SCRCPY_CLIENT,
@@ -139,8 +130,14 @@ class ConnectionMetadataReader(
             LogManager.d(LogTags.SCRCPY_CLIENT, "Codec ID: 0x${codecId.toString(16).padStart(8, '0')}")
             LogManager.d(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_VIDEO_RESOLUTION.get()}: ${width}x$height")
 
+            // 验证数据合法性
             if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
-                throw IOException("${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.get()}: ${width}x$height")
+                throw IOException("${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.get()}: ${width}x$height (可能是数据未就绪)")
+            }
+
+            // 验证 codec_id 合法性（常见值：0x68323634=h264, 0x68323635=h265）
+            if (codecId == 0x5a5a5a5a || codecId == 0x00000000) {
+                throw IOException("无效的 Codec ID: 0x${codecId.toString(16)} (数据未就绪，请重试)")
             }
 
             return Pair(width, height)
@@ -156,11 +153,16 @@ class ConnectionMetadataReader(
     private fun readAudioMetadata(inputStream: java.io.InputStream): ByteArray {
         val dis = DataInputStream(inputStream)
 
-        // 读取音频配置数据（具体格式取决于 scrcpy 版本）
-        // 这里简化处理，只读取 dummy byte
-        val metadata = ByteArray(1)
-        dis.readFully(metadata)
+        // 音频 socket 不发送 dummy byte 和设备名称
+        // 直接读取 codec metadata (12 bytes)
+        val codecBytes = ByteArray(12)
+        dis.readFully(codecBytes)
 
-        return metadata
+        LogManager.d(
+            LogTags.SCRCPY_CLIENT,
+            "Audio codec 元数据: ${codecBytes.joinToString(" ") { "0x%02x".format(it) }}",
+        )
+
+        return codecBytes
     }
 }

@@ -1,0 +1,2 @@
+# This directory contains internal implementation files for session management
+# Files in this directory should be marked with 'internal' visibility

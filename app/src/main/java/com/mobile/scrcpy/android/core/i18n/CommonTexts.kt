@@ -38,6 +38,11 @@ object CommonTexts {
     val ERROR_CONNECTION_FAILED = TextPair("连接失败", "Connection failed")
     val CONNECTION_FAILED_TITLE = TextPair("连接失败", "Connection Failed")
 
+    // 筛选选项
+    val FILTER_ALL = TextPair("全部", "All")
+    val FILTER_HARDWARE = TextPair("硬件", "Hardware")
+    val FILTER_SOFTWARE = TextPair("软件", "Software")
+
     // 帮助提示
     val HELP_ICON_DESCRIPTION = TextPair("帮助", "Help")
     val HELP_DIALOG_TITLE = TextPair("说明", "Help")

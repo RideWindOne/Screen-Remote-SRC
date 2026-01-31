@@ -13,7 +13,7 @@ import com.mobile.scrcpy.android.core.common.LogTags
  * 负责处理球体贴边、拖出贴边、边缘触感反馈
  */
 internal class FloatingMenuEdgeSnap(
-    private val context: Context,
+    private val context: Context, // TODO
     private val ballA: View,
     private val ballB: View,
     private val windowManager: WindowManager,
@@ -75,7 +75,7 @@ internal class FloatingMenuEdgeSnap(
 
         var reachedEdge = false
         var currentEdge: FloatingMenuGestureState.Edge? = null
-        var distanceToNearestEdge = Float.MAX_VALUE
+        var distanceToNearestEdge = Float.MAX_VALUE // TODO
 
         // 检测到达哪个边缘
         when {
@@ -143,14 +143,13 @@ internal class FloatingMenuEdgeSnap(
         val ballTopEdge = paramsA.y.toFloat()
         val ballBottomEdge = paramsA.y + ballA.height
 
-        val distanceToLeft = ballLeftEdge
         val distanceToRight = (displayMetrics.widthPixels - ballRightEdge).toFloat()
         val distanceToBottom = (displayMetrics.heightPixels - ballBottomEdge).toFloat()
 
         // 找到最近的边
         val distances =
             listOf(
-                distanceToLeft to FloatingMenuGestureState.Edge.LEFT,
+                ballLeftEdge to FloatingMenuGestureState.Edge.LEFT,
                 distanceToRight to FloatingMenuGestureState.Edge.RIGHT,
                 ballTopEdge to FloatingMenuGestureState.Edge.TOP,
                 distanceToBottom to FloatingMenuGestureState.Edge.BOTTOM,

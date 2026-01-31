@@ -4,14 +4,16 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.widget.Toast
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.i18n.CodecTexts
 import java.util.Locale
 
 /**
  * TTS 管理器 - 单例模式
  * 用于管理全局 TTS 实例，避免重复初始化
  * 
- * 注意：TTS 仅在需要时（如 CodecTestScreen）才初始化，不在应用启动时初始化
+ * 注意：TTS 仅在需要时（如 AudioCodecTestScreen）才初始化，不在应用启动时初始化
  */
 @SuppressLint("StaticFieldLeak") // 使用 applicationContext，不会造成内存泄漏
 object TTSManager {
@@ -23,10 +25,14 @@ object TTSManager {
     /**
      * 初始化 TTS（懒加载）
      * @param context 应用上下文
+     * @param showToast 是否显示 Toast 提示
      * 
      * 注意：仅在需要时调用，不在应用启动时初始化
      */
-    fun init(context: Context) {
+    fun init(
+        context: Context,
+        showToast: Boolean = false,
+    ) {
         if (isInitialized || isInitializing) {
             return
         }
@@ -45,9 +51,25 @@ object TTSManager {
                     }
                     isInitialized = true
                     LogManager.d(LogTags.TTS_MANAGER, "TTS 初始化成功")
+                    
+                    if (showToast) {
+                        Toast.makeText(
+                            this.context,
+                            CodecTexts.CODEC_TTS_INIT_SUCCESS.get(),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 } else {
                     LogManager.w(LogTags.TTS_MANAGER, "TTS 初始化失败，可能未安装 TTS 引擎")
                     ttsInstance = null
+                    
+                    if (showToast) {
+                        Toast.makeText(
+                            this.context,
+                            CodecTexts.CODEC_TTS_INIT_FAILED.get(),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
                 isInitializing = false
             }
@@ -55,6 +77,14 @@ object TTSManager {
             LogManager.e(LogTags.TTS_MANAGER, "TTS 初始化异常: ${e.message}", e)
             isInitializing = false
             ttsInstance = null
+            
+            if (showToast) {
+                Toast.makeText(
+                    this.context,
+                    CodecTexts.CODEC_TTS_INIT_FAILED.get(),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
     

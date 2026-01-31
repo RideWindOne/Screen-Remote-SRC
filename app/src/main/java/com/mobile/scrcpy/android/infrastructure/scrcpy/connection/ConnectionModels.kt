@@ -1,5 +1,20 @@
 package com.mobile.scrcpy.android.infrastructure.scrcpy.connection
 
+import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
+
+/**
+ * 连接配置 - 包含会话的所有配置参数
+ */
+data class ConnectionConfig(
+    val sessionId: String, // 会话 UUID（唯一标识）
+    val deviceId: String, // 设备标识（host:port 或 usb:serial）
+    val options: ScrcpyOptions, // Scrcpy 选项
+    val skipAdbConnect: Boolean = false,
+    val host: String = "",
+    val port: Int = 5555,
+    val onVideoResolution: (Int, Int) -> Unit = { _, _ -> }, // 视频分辨率回调
+)
+
 /**
  * 连接状态
  */

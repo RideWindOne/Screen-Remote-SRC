@@ -1,7 +1,6 @@
 package com.mobile.scrcpy.android.infrastructure.adb.connection
 
 import com.mobile.scrcpy.android.core.domain.model.ConnectionType
-import com.mobile.scrcpy.android.feature.codec.component.EncoderInfo
 
 /**
  * 设备信息
@@ -9,25 +8,41 @@ import com.mobile.scrcpy.android.feature.codec.component.EncoderInfo
 data class DeviceInfo(
     val deviceId: String,
     val name: String,
-    val model: String,
-    val manufacturer: String,
-    val androidVersion: String,
+    val model: String = "",
+    val manufacturer: String = "",
+    val androidVersion: String = "",
     val serialNumber: String,
     val connectionType: ConnectionType = ConnectionType.TCP,
 )
 
 /**
- * 视频编码器信息
+ * 编码器信息基类
  */
-data class VideoEncoderInfo(
-    override val name: String,
-    override val mimeType: String,
-) : EncoderInfo
+sealed class EncoderInfo(
+    open val name: String,
+    open val mimeType: String,
+) {
+    /**
+     * 视频编码器信息
+     */
+    data class Video(
+        override val name: String,
+        override val mimeType: String,
+    ) : EncoderInfo(name, mimeType)
+
+    /**
+     * 音频编码器信息
+     */
+    data class Audio(
+        override val name: String,
+        override val mimeType: String,
+    ) : EncoderInfo(name, mimeType)
+}
 
 /**
- * 音频编码器信息
+ * 编码器检测结果
  */
-data class AudioEncoderInfo(
-    override val name: String,
-    override val mimeType: String,
-) : EncoderInfo
+data class EncoderDetectionResult(
+    val videoEncoders: List<EncoderInfo.Video>,
+    val audioEncoders: List<EncoderInfo.Audio>,
+)

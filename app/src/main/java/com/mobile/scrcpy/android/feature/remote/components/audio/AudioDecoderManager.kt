@@ -8,8 +8,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
+import com.mobile.scrcpy.android.core.data.datastore.LocalDecoderManager
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectionViewModel
+import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.feature.session.viewmodel.SessionViewModel
+import com.mobile.scrcpy.android.infrastructure.media.codec.CodecSelector
 import com.mobile.scrcpy.android.infrastructure.media.audio.AudioDecoder
 import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,7 @@ class AudioDecoderManager(
     private val connectionViewModel: ConnectionViewModel,
     private val sessionViewModel: SessionViewModel,
     private val sessionId: String,
+    private val sessionData: SessionData?,
     private val audioVolume: Float,
 ) {
     var audioDecoder: AudioDecoder? = null
@@ -37,7 +41,7 @@ class AudioDecoderManager(
     /**
      * 启动音频解码器
      */
-    suspend fun startDecoder(
+    fun startDecoder(
         stream: AudioStream,
         scope: kotlinx.coroutines.CoroutineScope,
     ) {
@@ -52,7 +56,7 @@ class AudioDecoderManager(
                 AudioDecoder(volumeScale = audioVolume).apply {
                     // 连接丢失回调
                     onConnectionLost = {
-                        LogManager.w(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.get()}")
+                        LogManager.w(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.get())
                         scope.launch(Dispatchers.Main) {
                             connectionViewModel.handleConnectionLost()
                         }
@@ -117,6 +121,7 @@ fun rememberAudioDecoderManager(
     connectionViewModel: ConnectionViewModel,
     sessionViewModel: SessionViewModel,
     sessionId: String,
+    sessionData: SessionData?,
     audioStream: AudioStream?,
     audioVolume: Float,
 ): AudioDecoderManager {
@@ -124,15 +129,13 @@ fun rememberAudioDecoderManager(
 
     val manager =
         remember(audioVolume) {
-            AudioDecoderManager(connectionViewModel, sessionViewModel, sessionId, audioVolume)
+            AudioDecoderManager(connectionViewModel, sessionViewModel, sessionId, sessionData, audioVolume)
         }
 
     // 音频解码器启动 - 监听 audioStream 变化
     LaunchedEffect(audioStream) {
-        val stream = audioStream
-
         // 如果 stream 为空，停止解码器
-        if (stream == null) {
+        if (audioStream == null) {
             if (manager.audioDecoder != null) {
                 LogManager.d(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_STREAM_EMPTY.get())
                 manager.stopCurrentDecoder()
@@ -141,7 +144,7 @@ fun rememberAudioDecoderManager(
         }
 
         // 如果已经在处理相同的流，跳过
-        if (stream == manager.currentAudioStream) {
+        if (audioStream == manager.currentAudioStream) {
             return@LaunchedEffect
         }
 
@@ -152,7 +155,7 @@ fun rememberAudioDecoderManager(
         }
 
         // 启动新的解码器
-        manager.startDecoder(stream, scope)
+        manager.startDecoder(audioStream, scope)
     }
 
     // 清理解码器

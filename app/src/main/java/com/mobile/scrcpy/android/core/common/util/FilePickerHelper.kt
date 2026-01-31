@@ -43,7 +43,6 @@ object FilePickerHelper {
 
     @Composable
     fun rememberImportMultipleFilesLauncher(
-        mimeTypes: Array<String> = arrayOf("*/*"),
         onResult: (List<Uri>) -> Unit,
     ): ManagedActivityResultLauncher<Array<String>, List<Uri>> =
         rememberLauncherForActivityResult(

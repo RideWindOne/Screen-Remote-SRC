@@ -19,15 +19,22 @@ import java.util.Locale
 object LogManager {
     private const val LOG_DIR = "logs"
     private const val MAX_LOG_SIZE = 10 * 1024 * 1024 // 10MB
-    
+
     private var context: Context? = null
     private var isEnabled = true
     private var logFile: File? = null
     private var fileWriter: FileWriter? = null
-    private val dateFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
+
+    @SuppressLint("ConstantLocale")
+    private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    @SuppressLint("ConstantLocale")
     private val fileNameFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    
-    fun init(context: Context, enabled: Boolean = true) {
+
+    fun init(
+        context: Context,
+        enabled: Boolean = true,
+    ) {
         // 使用 applicationContext 避免内存泄漏
         this.context = context.applicationContext
         this.isEnabled = enabled
@@ -35,7 +42,7 @@ object LogManager {
             initLogFile()
         }
     }
-    
+
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
         if (enabled) {
@@ -44,7 +51,7 @@ object LogManager {
             closeLogFile()
         }
     }
-    
+
     private fun initLogFile() {
         try {
             val ctx = context ?: return
@@ -52,26 +59,26 @@ object LogManager {
             if (!logDir.exists()) {
                 logDir.mkdirs()
             }
-            
+
             val version = AppConstants.APP_VERSION
             val date = fileNameFormat.format(Date())
-            val fileName = "Scrcpy_Remote_${version}_${date}.log"
+            val fileName = "Scrcpy_Remote_${version}_$date.log"
             logFile = File(logDir, fileName)
-            
+
             // 检查文件大小，如果超过限制则创建新文件
             if (logFile?.exists() == true && (logFile?.length() ?: 0) > MAX_LOG_SIZE) {
                 val timestamp = System.currentTimeMillis()
                 val newFileName = "Scrcpy_Remote_${version}_${date}_$timestamp.log"
                 logFile = File(logDir, newFileName)
             }
-            
+
             fileWriter = FileWriter(logFile, true)
-            i(LogTags.LOG_MANAGER, "${LogTexts.LOG_SYSTEM_INIT_SUCCESS.get()}: ${logFile?.absolutePath}")
+            i(LogTags.LOG_MANAGER, LogTexts.LOG_SYSTEM_INIT_SUCCESS.get())
         } catch (e: Exception) {
             Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_INIT_FILE_FAILED.get(), e)
         }
     }
-    
+
     private fun closeLogFile() {
         try {
             fileWriter?.close()
@@ -80,29 +87,37 @@ object LogManager {
             Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_CLOSE_FILE_FAILED.get(), e)
         }
     }
-    
-    private fun writeLog(level: String, tag: String, message: String, throwable: Throwable? = null) {
+
+    private fun writeLog(
+        level: String,
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         if (!isEnabled) return
-        
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val timestamp = dateFormat.format(Date())
-                val logMessage = buildString {
-                    append("[$timestamp] ")
-                    append("$level/$tag: ")
-                    append(message)
-                    if (throwable != null) {
+                val logMessage =
+                    buildString {
+                        append(timestamp)
+                        append(" ")
+                        append(tag)
+                        append(": ")
+                        append(message)
+                        if (throwable != null) {
+                            append("\n")
+                            append(throwable.stackTraceToString())
+                        }
                         append("\n")
-                        append(throwable.stackTraceToString())
                     }
-                    append("\n")
-                }
-                
+
                 fileWriter?.apply {
                     write(logMessage)
                     flush()
                 }
-                
+
                 // 检查文件大小
                 if ((logFile?.length() ?: 0) > MAX_LOG_SIZE) {
                     closeLogFile()
@@ -113,45 +128,65 @@ object LogManager {
             }
         }
     }
-    
-    fun v(tag: String, message: String, throwable: Throwable? = null) {
+
+    fun v(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         Log.v(tag, message, throwable)
         writeLog("V", tag, message, throwable)
     }
 
-    fun d(tag: String, message: String, throwable: Throwable? = null) {
+    fun d(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         Log.d(tag, message, throwable)
         writeLog("D", tag, message, throwable)
     }
 
-    fun i(tag: String, message: String, throwable: Throwable? = null) {
+    fun i(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         Log.i(tag, message, throwable)
         writeLog("I", tag, message, throwable)
     }
 
-    fun w(tag: String, message: String, throwable: Throwable? = null) {
+    fun w(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         Log.w(tag, message, throwable)
         writeLog("W", tag, message, throwable)
     }
 
-    fun e(tag: String, message: String, throwable: Throwable? = null) {
+    fun e(
+        tag: String,
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         Log.e(tag, message, throwable)
         writeLog("E", tag, message, throwable)
     }
-    
+
     fun getLogFiles(): List<File> {
         val ctx = context ?: return emptyList()
         val logDir = File(ctx.filesDir, LOG_DIR)
         if (!logDir.exists()) return emptyList()
-        
-        return logDir.listFiles()?.filter { it.extension == "log" }
+
+        return logDir
+            .listFiles()
+            ?.filter { it.extension == "log" }
             ?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
-    
-    fun getTotalLogSize(): Long {
-        return getLogFiles().sumOf { it.length() }
-    }
-    
+
+    fun getTotalLogSize(): Long = getLogFiles().sumOf { it.length() }
+
     fun clearAllLogs() {
         closeLogFile()
         val ctx = context ?: return
@@ -163,12 +198,12 @@ object LogManager {
             initLogFile()
         }
     }
-    
+
     fun clearOldLogs() {
         val ctx = context ?: return
         val logDir = File(ctx.filesDir, LOG_DIR)
         if (!logDir.exists()) return
-        
+
         val currentLogFile = logFile
         logDir.listFiles()?.forEach { file ->
             if (file != currentLogFile && file.extension == "log") {
@@ -181,9 +216,9 @@ object LogManager {
             }
         }
     }
-    
-    fun deleteLogFile(file: File): Boolean {
-        return try {
+
+    fun deleteLogFile(file: File): Boolean =
+        try {
             if (file == logFile) {
                 closeLogFile()
                 val result = file.delete()
@@ -198,17 +233,15 @@ object LogManager {
             Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_DELETE_FILE_FAILED.get(), e)
             false
         }
-    }
-    
-    fun readLogFile(file: File): String {
-        return try {
+
+    fun readLogFile(file: File): String =
+        try {
             file.readText()
         } catch (e: Exception) {
             Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_READ_FILE_FAILED.get(), e)
             "${LogTexts.LOG_READ_FILE_ERROR.get()}: ${e.message}"
         }
-    }
-    
+
     /**
      * 直接写入原始日志（不通过 Android Log）
      * 用于捕获 Native 代码、scrcpy-server 等外部日志
@@ -216,26 +249,33 @@ object LogManager {
      * @param tag 日志标签
      * @param message 日志消息
      */
-    fun writeRawLog(level: String, tag: String, message: String) {
+    fun writeRawLog(
+        level: String,
+        tag: String,
+        message: String,
+    ) {
         if (!isEnabled) return
-        
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val timestamp = dateFormat.format(Date())
-                val logMessage = buildString {
-                    append("[$timestamp] ")
-                    append("$level/$tag: ")
-                    append(message)
-                    if (!message.endsWith("\n")) {
-                        append("\n")
+                val logMessage =
+                    buildString {
+                        append(timestamp)
+                        append(" ")
+                        append(tag)
+                        append(": ")
+                        append(message)
+                        if (!message.endsWith("\n")) {
+                            append("\n")
+                        }
                     }
-                }
-                
+
                 fileWriter?.apply {
                     write(logMessage)
                     flush()
                 }
-                
+
                 // 检查文件大小
                 if ((logFile?.length() ?: 0) > MAX_LOG_SIZE) {
                     closeLogFile()
@@ -247,7 +287,7 @@ object LogManager {
             }
         }
     }
-    
+
     /**
      * 写入原始日志（JNI 调用）
      * @param level 日志级别
@@ -255,7 +295,11 @@ object LogManager {
      * @param message 日志消息
      */
     @JvmStatic
-    fun writeRawLogJNI(level: String, tag: String, message: String) {
+    fun writeRawLogJNI(
+        level: String,
+        tag: String,
+        message: String,
+    ) {
         writeRawLog(level, tag, message)
     }
 }

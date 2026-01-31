@@ -26,12 +26,13 @@ class AssistiveBallView
     ) : View(context, attrs) {
         // ====== 配置 ======
         private val density = resources.displayMetrics.density
-        private val BALL_RADIUS = 30f * density
-        private val SMALL_BALL_RADIUS = 18f * density
-        private val ORBIT_RADIUS = 50f * density
-        private val MENU_RADIUS = 120f * density
-        private val HALF_HIDE_OFFSET = 0.35f // 半隐藏缩放比例
-        private val LONG_PRESS_DURATION = 500L
+
+        private val BALL_RADIUS = 30f * density // TODO
+        private val SMALL_BALL_RADIUS = 18f * density // TODO
+        private val ORBIT_RADIUS = 50f * density // TODO
+        private val MENU_RADIUS = 120f * density // TODO
+        private val HALF_HIDE_OFFSET = 0.35f // 半隐藏缩放比例 // TODO
+        private val LONG_PRESS_DURATION = 500L // TODO
 
         // ====== WindowManager 相关 ======
         var windowManager: WindowManager? = null

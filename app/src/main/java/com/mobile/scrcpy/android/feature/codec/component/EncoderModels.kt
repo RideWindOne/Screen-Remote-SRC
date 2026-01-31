@@ -1,15 +1,18 @@
 package com.mobile.scrcpy.android.feature.codec.component
 
-import com.mobile.scrcpy.android.core.i18n.SessionTexts
+import com.mobile.scrcpy.android.feature.codec.component.encoder.getAudioEncoderDialogConfig
+import com.mobile.scrcpy.android.feature.codec.component.encoder.getVideoEncoderDialogConfig
+import com.mobile.scrcpy.android.feature.codec.component.encoder.matchesAudioCodecFilter
+import com.mobile.scrcpy.android.feature.codec.component.encoder.matchesVideoCodecFilter
+import com.mobile.scrcpy.android.infrastructure.adb.connection.EncoderInfo
 
 /**
- * 编码器信息接口
- * 用于统一视频和音频编码器的数据结构
+ * 编码器相关数据模型
+ * 
+ * 文件拆分说明：
+ * - encoder/VideoEncoderSection.kt - 视频编码器配置逻辑
+ * - encoder/AudioEncoderSection.kt - 音频编码器配置逻辑
  */
-interface EncoderInfo {
-    val name: String
-    val mimeType: String
-}
 
 /**
  * 编码器类型
@@ -34,41 +37,13 @@ data class EncoderDialogConfig(
 /**
  * 根据编码器类型获取对话框配置
  */
-fun getEncoderDialogConfig(encoderType: EncoderType): EncoderDialogConfig =
+fun getEncoderDialogConfig(
+    encoderType: EncoderType,
+    detectedEncoders: List<EncoderInfo>,
+): EncoderDialogConfig =
     when (encoderType) {
-        EncoderType.VIDEO -> {
-            EncoderDialogConfig(
-                title = SessionTexts.DIALOG_SELECT_VIDEO_ENCODER.get(),
-                sectionTitle = SessionTexts.SECTION_DETECTED_ENCODERS.get(),
-                detectingStatus = SessionTexts.STATUS_DETECTING_VIDEO_ENCODERS.get(),
-                noEncodersStatus = SessionTexts.STATUS_NO_ENCODERS_DETECTED.get(),
-                filterOptions =
-                    listOf(
-                        SessionTexts.ENCODER_FILTER_ALL.get(),
-                        "H.264",
-                        "H.265",
-                        "AV1",
-                    ),
-                showCodecTest = false,
-            )
-        }
-
-        EncoderType.AUDIO -> {
-            EncoderDialogConfig(
-                title = SessionTexts.DIALOG_SELECT_AUDIO_ENCODER.get(),
-                sectionTitle = SessionTexts.SECTION_DETECTED_AUDIO_ENCODERS.get(),
-                detectingStatus = SessionTexts.STATUS_DETECTING_AUDIO_ENCODERS.get(),
-                noEncodersStatus = SessionTexts.STATUS_NO_AUDIO_ENCODERS_DETECTED.get(),
-                filterOptions =
-                    listOf(
-                        SessionTexts.ENCODER_FILTER_ALL.get(),
-                        "AAC",
-                        "Opus",
-                        "FLAC",
-                    ),
-                showCodecTest = true,
-            )
-        }
+        EncoderType.VIDEO -> getVideoEncoderDialogConfig(detectedEncoders)
+        EncoderType.AUDIO -> getAudioEncoderDialogConfig(detectedEncoders)
     }
 
 /**
@@ -78,38 +53,7 @@ fun matchesCodecFilter(
     mimeType: String,
     filter: String,
     allFilterOption: String,
-): Boolean {
-    if (filter == allFilterOption) return true
+): Boolean =
+    matchesVideoCodecFilter(mimeType, filter, allFilterOption) ||
+        matchesAudioCodecFilter(mimeType, filter, allFilterOption)
 
-    return when (filter) {
-        "H.264" -> {
-            mimeType.contains("avc", ignoreCase = true)
-        }
-
-        "H.265" -> {
-            mimeType.contains("hevc", ignoreCase = true)
-        }
-
-        "AV1" -> {
-            mimeType.contains("av01", ignoreCase = true) ||
-                mimeType.contains("av1", ignoreCase = true)
-        }
-
-        "AAC" -> {
-            mimeType.contains("aac", ignoreCase = true) ||
-                mimeType.contains("mp4a-latm", ignoreCase = true)
-        }
-
-        "Opus" -> {
-            mimeType.contains("opus", ignoreCase = true)
-        }
-
-        "FLAC" -> {
-            mimeType.contains("flac", ignoreCase = true)
-        }
-
-        else -> {
-            mimeType.contains(filter, ignoreCase = true)
-        }
-    }
-}

@@ -2,11 +2,13 @@ cmake_minimum_required(VERSION 3.18.1)
 
 project("scrcpy_adb_bridge")
 
-# 设置 C++ 标准
+# 设置 C/C++ 标准
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 添加源文件
+# 添加 ADB 桥接库
 add_library(
     scrcpy_adb_bridge
     SHARED

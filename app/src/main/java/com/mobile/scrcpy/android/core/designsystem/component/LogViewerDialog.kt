@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -91,7 +90,7 @@ fun LogViewerDialog(
     val isDarkTheme = isSystemInDarkTheme()
 
     fun extractTags(content: String): List<String> {
-        val tagRegex = Regex("""[VDIWEF]/([A-Za-z0-9_]+):""")
+        val tagRegex = Regex("""\d{2}:\d{2}:\d{2}\s+([A-Za-z0-9_]+):""")
         return tagRegex
             .findAll(content)
             .map { it.groupValues[1] }
@@ -109,7 +108,7 @@ fun LogViewerDialog(
 
         if (tags.isNotEmpty()) {
             val tagPattern = tags.joinToString("|") { Regex.escape(it) }
-            val tagRegex = Regex("""[VDIWEF]/($tagPattern):""")
+            val tagRegex = Regex("""\d{2}:\d{2}:\d{2}\s+($tagPattern):""")
             lines = lines.filter { line -> tagRegex.containsMatchIn(line) }
         }
 
@@ -183,6 +182,7 @@ fun LogViewerDialog(
     if (showFileTooLargeDialog) {
         AlertDialog(
             onDismissRequest = { showFileTooLargeDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(LogTexts.LOG_FILE_TOO_LARGE_TITLE.get()) },
             text = { Text(LogTexts.LOG_FILE_TOO_LARGE_MESSAGE.get()) },
             confirmButton = {
@@ -446,6 +446,7 @@ fun LogViewerDialog(
                 CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
             SelectionContainer {
                 Text(
@@ -455,7 +456,7 @@ fun LogViewerDialog(
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                             .padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     fontFamily = FontFamily.Monospace,
                 )
             }

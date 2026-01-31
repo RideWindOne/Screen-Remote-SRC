@@ -1,4 +1,4 @@
-package com.mobile.scrcpy.android.feature.session.data.repository
+package com.mobile.scrcpy.android.core.data.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore

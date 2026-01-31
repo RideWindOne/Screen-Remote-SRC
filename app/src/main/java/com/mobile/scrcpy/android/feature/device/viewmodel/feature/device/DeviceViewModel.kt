@@ -115,7 +115,7 @@ class DeviceViewModel : ViewModel() {
         object Connecting : ConnectionState()
 
         data class Success(
-            val deviceId: String,
+            val deviceId: String, // TODO
         ) : ConnectionState()
 
         data class Error(

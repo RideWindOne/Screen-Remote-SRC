@@ -3,8 +3,8 @@ package com.mobile.scrcpy.android.feature.session.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionRepository
+import com.mobile.scrcpy.android.core.data.repository.SessionData
+import com.mobile.scrcpy.android.core.data.repository.SessionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -146,12 +146,12 @@ class SessionViewModel(
     }
 
     /**
-     * 更新会话的编解码器缓存
+     * 更新会话的选中解码器
      * @param sessionId 会话 ID
-     * @param videoDecoder 视频解码器名称（null 表示不更新）
-     * @param audioDecoder 音频解码器名称（null 表示不更新）
+     * @param videoDecoder 选中的视频解码器名称（null 表示不更新）
+     * @param audioDecoder 选中的音频解码器名称（null 表示不更新）
      */
-    suspend fun updateCodecCache(
+    suspend fun updateSelectedDecoders(
         sessionId: String,
         videoDecoder: String? = null,
         audioDecoder: String? = null,
@@ -160,9 +160,32 @@ class SessionViewModel(
 
         val updatedData =
             currentData.copy(
-                cachedVideoDecoder = videoDecoder ?: currentData.cachedVideoDecoder,
-                cachedAudioDecoder = audioDecoder ?: currentData.cachedAudioDecoder,
-                codecCacheTimestamp = System.currentTimeMillis(),
+                selectedVideoDecoder =
+                    videoDecoder ?: currentData.selectedVideoDecoder,
+                selectedAudioDecoder =
+                    audioDecoder ?: currentData.selectedAudioDecoder,
+            )
+
+        sessionRepository.updateSession(updatedData)
+    }
+
+    /**
+     * 更新会话的远程编码器列表
+     * @param sessionId 会话 ID
+     * @param videoEncoders 远程视频编码器列表
+     * @param audioEncoders 远程音频编码器列表
+     */
+    suspend fun updateRemoteEncoders(
+        sessionId: String,
+        videoEncoders: List<String>,
+        audioEncoders: List<String>,
+    ) {
+        val currentData = sessionRepository.getSessionData(sessionId) ?: return
+
+        val updatedData =
+            currentData.copy(
+                remoteVideoEncoders = videoEncoders,
+                remoteAudioEncoders = audioEncoders,
             )
 
         sessionRepository.updateSession(updatedData)

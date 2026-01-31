@@ -10,9 +10,9 @@ import com.mobile.scrcpy.android.core.domain.model.GroupType
 import com.mobile.scrcpy.android.core.domain.model.ScrcpyAction
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectionViewModel
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ControlViewModel
-import com.mobile.scrcpy.android.feature.session.data.repository.GroupRepository
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionRepository
+import com.mobile.scrcpy.android.core.data.repository.GroupRepository
+import com.mobile.scrcpy.android.core.data.repository.SessionData
+import com.mobile.scrcpy.android.core.data.repository.SessionRepository
 import com.mobile.scrcpy.android.feature.settings.viewmodel.SettingsViewModel
 import com.mobile.scrcpy.android.infrastructure.scrcpy.client.feature.scrcpy.ScrcpyClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -171,7 +171,7 @@ class MainViewModel : ViewModel() {
     }
 
     fun addAction(action: ScrcpyAction) {
-        _actions.value = _actions.value + action
+        _actions.value = _actions.value + action // TODO
         hideAddActionDialog()
     }
 

@@ -8,7 +8,6 @@
 
 package com.mobile.scrcpy.android.infrastructure.adb.usb
 
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
@@ -208,20 +207,20 @@ interface AdbChannel {
     /**
      * 写入数据到通道
      */
-    fun write(data: ByteBuffer)
+    fun write(data: ByteBuffer) // TODO
 
     /**
      * 从通道读取指定大小的数据
      */
-    fun read(size: Int): ByteBuffer
+    fun read(size: Int): ByteBuffer // TODO
 
     /**
      * 刷新通道
      */
-    fun flush()
+    fun flush() // TODO
 
     /**
      * 关闭通道
      */
-    fun close()
+    fun close() // TODO
 }

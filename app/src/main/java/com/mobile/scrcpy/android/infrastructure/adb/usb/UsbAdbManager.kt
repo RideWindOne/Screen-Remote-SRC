@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.infrastructure.adb.usb
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -38,7 +37,7 @@ class UsbAdbManager(
      * 扫描 USB 设备
      * 查找所有连接的 ADB 设备
      */
-    suspend fun scanUsbDevices(): Result<List<UsbDeviceInfo>> =
+    fun scanUsbDevices(): Result<List<UsbDeviceInfo>> =
         runCatching {
             LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_SCANNING_DEVICES.get())
 

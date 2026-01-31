@@ -1,8 +1,5 @@
 package com.mobile.scrcpy.android.feature.session.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -57,18 +54,18 @@ import com.mobile.scrcpy.android.core.domain.model.ScrcpySession
 import com.mobile.scrcpy.android.core.domain.model.SessionColor
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.feature.remote.viewmodel.ConnectStatus
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
+import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
 
 @Composable
 fun SessionsScreen(viewModel: MainViewModel) {
-    val sessionDataList by viewModel.sessionDataList.collectAsState()
+    val sessionDataList by viewModel.sessionDataList.collectAsState() // TODO
     val filteredSessions by viewModel.filteredSessions.collectAsState()
-    val groups by viewModel.groups.collectAsState()
-    val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
+    val groups by viewModel.groups.collectAsState() // TODO
+    val selectedGroupPath by viewModel.selectedGroupPath.collectAsState() // TODO
     val connectStatus by viewModel.connectStatus.collectAsState()
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
-    val context = LocalContext.current
+    val context = LocalContext.current // TODO
 
     var sessionToDelete by remember { mutableStateOf<ScrcpySession?>(null) }
 
@@ -76,12 +73,13 @@ fun SessionsScreen(viewModel: MainViewModel) {
     val txtConfirmDelete = rememberText(SessionTexts.SESSION_CONFIRM_DELETE)
     val txtDelete = rememberText(SessionTexts.SESSION_DELETE)
     val txtCancel = rememberText(SessionTexts.SESSION_CANCEL)
-    val txtUrlCopied = rememberText(SessionTexts.SESSION_URL_COPIED)
+    val txtUrlCopied = rememberText(SessionTexts.SESSION_URL_COPIED) // TODO
 
     // 删除确认对话框
     sessionToDelete?.let { session ->
         AlertDialog(
             onDismissRequest = { sessionToDelete = null },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(txtConfirmDelete) },
             text = {
                 val message =
@@ -168,8 +166,8 @@ fun buildUrlScheme(sessionData: SessionData): String {
     if (sessionData.maxSize.isNotBlank()) {
         params.add("max-size=${sessionData.maxSize}")
     }
-    if (sessionData.bitrate.isNotBlank()) {
-        params.add("video-bit-rate=${sessionData.bitrate}")
+    if (sessionData.videoBitrate.isNotBlank()) {
+        params.add("video-bit-rate=${sessionData.videoBitrate}")
     }
     if (sessionData.forceAdb) {
         params.add("force-adb-forward=true")

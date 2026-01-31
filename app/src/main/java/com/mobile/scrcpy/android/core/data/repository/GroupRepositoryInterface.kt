@@ -2,7 +2,7 @@ package com.mobile.scrcpy.android.core.data.repository
 
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
 import com.mobile.scrcpy.android.core.domain.model.GroupType
-import com.mobile.scrcpy.android.feature.session.data.repository.GroupData
+import com.mobile.scrcpy.android.core.data.repository.GroupData
 import kotlinx.coroutines.flow.Flow
 
 /**

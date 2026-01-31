@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
+import com.mobile.scrcpy.android.infrastructure.adb.shell.AdbShellManager.execute
 import com.mobile.scrcpy.android.infrastructure.scrcpy.client.feature.scrcpy.ScrcpyClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -119,7 +120,10 @@ class ControlViewModel(
                         ?: return@withContext Result.failure(Exception("Device connection lost"))
 
                 // 执行 Shell 命令
-                connection.executeShell(command)
+                execute(
+                    connection,
+                    command,
+                )
             } catch (e: Exception) {
                 LogManager.e(LogTags.CONTROL_VM, "执行 Shell 命令失败: ${e.message}", e)
                 Result.failure(e)

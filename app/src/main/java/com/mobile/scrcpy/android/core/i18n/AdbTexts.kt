@@ -67,7 +67,7 @@ object AdbTexts {
             "Connection refused. Please check:\n1. Wireless debugging is enabled\n2. IP address and port are correct\n3. Device is on the same network",
         )
     val ADB_DADB_CREATED = TextPair("DADB 连接已创建", "DADB connection created")
-    val ADB_ADDED_TO_POOL = TextPair("已添加到连接池", "Added to connection pool")
+    val ADB_ADDED_TO_POOL = TextPair("添加到连接池", "Add to connection pool")
     val ADB_GET_DEVICE_INFO_FAILED = TextPair("获取设备信息失败", "Failed to get device info")
     val ADB_CONNECTION_SUCCESS = TextPair("连接成功", "Connection successful")
     val ADB_CONNECTION_FAILED_TITLE = TextPair("连接失败", "Connection failed")
@@ -75,10 +75,13 @@ object AdbTexts {
     val ADB_DISCONNECT_FAILED = TextPair("断开连接失败", "Failed to disconnect")
     val ADB_DISCONNECT_ALL = TextPair("断开所有设备连接", "Disconnecting all devices")
     val ADB_CLOSE_CONNECTION_FAILED = TextPair("关闭连接失败", "Failed to close connection")
+    val ADB_CONNECTING = TextPair("ADB 正在连接...", "ADB Connecting...")
+    val ADB_CONNECTED = TextPair("ADB 连接成功", "ADB Connected")
+    val ADB_DISCONNECTED = TextPair("ADB 已断开", "ADB Disconnected")
     val ADB_VERIFYING = TextPair("验证 ADB 连接...", "Verifying ADB connection...")
-    val ADB_VERIFY_SUCCESS = TextPair("ADB 连接验证成功", "ADB connection verified successfully")
     val ADB_VERIFY_FAILED = TextPair("ADB 连接验证失败", "ADB connection verification failed")
-    val ADB_VERIFY_TIMEOUT = TextPair("验证超时，请检查设备是否已授权 USB 调试", "Verification timeout, please check if USB debugging is authorized")
+    val ADB_VERIFY_TIMEOUT =
+        TextPair("验证超时，请检查设备是否已授权 USB 调试", "Verification timeout, please check if USB debugging is authorized")
     val ADB_CLOSE_DADB_ERROR = TextPair("关闭 dadb 时出错", "Error closing dadb")
     val ADB_DISCONNECTED_ECONNREFUSED =
         TextPair("ADB 连接已断开 (ECONNREFUSED)", "ADB connection disconnected (ECONNREFUSED)")

@@ -7,10 +7,10 @@ import com.mobile.scrcpy.android.core.common.AppConstants
 import com.mobile.scrcpy.android.core.domain.model.DefaultGroups
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
 import com.mobile.scrcpy.android.core.domain.model.GroupType
-import com.mobile.scrcpy.android.feature.session.data.repository.GroupData
-import com.mobile.scrcpy.android.feature.session.data.repository.GroupRepository
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionRepository
+import com.mobile.scrcpy.android.core.data.repository.GroupData
+import com.mobile.scrcpy.android.core.data.repository.GroupRepository
+import com.mobile.scrcpy.android.core.data.repository.SessionData
+import com.mobile.scrcpy.android.core.data.repository.SessionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,11 +41,11 @@ class GroupViewModel(
     // ============ 分组筛选状态 ============
 
     // 当前选中的分组路径（用于首页筛选）
-    private val _selectedGroupPath = MutableStateFlow<String>(DefaultGroups.ALL_DEVICES)
+    private val _selectedGroupPath = MutableStateFlow(DefaultGroups.ALL_DEVICES)
     val selectedGroupPath: StateFlow<String> = _selectedGroupPath.asStateFlow()
 
     // 自动化页面的分组路径（独立管理）
-    private val _selectedAutomationGroupPath = MutableStateFlow<String>(DefaultGroups.ALL_DEVICES)
+    private val _selectedAutomationGroupPath = MutableStateFlow(DefaultGroups.ALL_DEVICES)
     val selectedAutomationGroupPath: StateFlow<String> = _selectedAutomationGroupPath.asStateFlow()
 
     // ============ 筛选后的会话列表 ============

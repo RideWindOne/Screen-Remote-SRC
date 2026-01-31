@@ -98,6 +98,24 @@ object RemoteTexts {
         )
     val SCRCPY_CONTROL_STREAM_DISCONNECTED =
         TextPair("控制流也断开，判定为连接断开", "Control stream also disconnected, determined as disconnected")
+
+    // Server 推送和启动
+    val REMOTE_PUSHING_SERVER = TextPair("推送 Server...", "Pushing Server...")
+    val REMOTE_SERVER_PUSHED = TextPair("Server 推送成功", "Server pushed successfully")
+    val REMOTE_PUSH_FAILED = TextPair("Server 推送失败", "Server push failed")
+    val REMOTE_STARTING_SERVER = TextPair("启动 Server...", "Starting Server...")
+    val REMOTE_SERVER_STARTED = TextPair("Server 启动成功", "Server started successfully")
+    val REMOTE_START_FAILED = TextPair("Server 启动失败", "Server start failed")
+
+    // Forward 端口转发
+    val REMOTE_SETTING_FORWARD = TextPair("设置端口转发...", "Setting up port forwarding...")
+    val REMOTE_FORWARD_SETUP = TextPair("端口转发成功", "Port forwarding successful")
+    val REMOTE_FORWARD_FAILED = TextPair("端口转发失败", "Port forwarding failed")
+
+    // Socket 连接
+    val REMOTE_CONNECTING_SOCKET = TextPair("连接 Socket...", "Connecting Socket...")
+    val REMOTE_SOCKET_CONNECTED = TextPair("Socket 连接成功", "Socket connected successfully")
+    val REMOTE_SOCKET_ERROR = TextPair("Socket 错误", "Socket error")
     val SCRCPY_CONNECTION_DISCONNECTED = TextPair("连接断开", "Connection disconnected")
     val SCRCPY_VIDEO_STREAM_CLOSED = TextPair("视频流已关闭", "Video stream closed")
     val SCRCPY_TOTAL_RECEIVED_PACKETS = TextPair("总共接收", "Total received")

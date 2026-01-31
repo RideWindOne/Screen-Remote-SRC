@@ -96,7 +96,7 @@ fun CompactGroupSelector(
         if (pathParts.isEmpty()) {
             // 根目录：只显示"全部"
             // 检查是否有一级分组
-            val hasFirstLevelGroups = groups.filter { it.parentPath == "/" }.isNotEmpty()
+            val hasFirstLevelGroups = groups.any { it.parentPath == "/" }
 
             Box(
                 modifier =

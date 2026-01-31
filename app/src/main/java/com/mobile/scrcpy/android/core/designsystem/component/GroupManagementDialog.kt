@@ -38,12 +38,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.mobile.scrcpy.android.core.common.AppColors
-import com.mobile.scrcpy.android.core.common.AppDimens.listItemHeight
-import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
+import com.mobile.scrcpy.android.core.common.constants.AppColors
+import com.mobile.scrcpy.android.core.common.constants.AppDimens.listItemHeight
 import com.mobile.scrcpy.android.core.domain.model.DefaultGroups
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
 import com.mobile.scrcpy.android.core.domain.model.GroupType
+import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeNodeItemForManagement
+import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeRootItemForManagement
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
 
@@ -53,7 +54,6 @@ import com.mobile.scrcpy.android.core.i18n.SessionTexts
 @Composable
 fun GroupManagementDialog(
     groups: List<DeviceGroup>,
-    sessionCounts: Map<String, Int>,
     onDismiss: () -> Unit,
     onAddGroup: (name: String, parentPath: String, type: GroupType) -> Unit,
     onUpdateGroup: (DeviceGroup) -> Unit,

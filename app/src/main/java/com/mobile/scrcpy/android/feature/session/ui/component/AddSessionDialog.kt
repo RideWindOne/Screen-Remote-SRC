@@ -1,30 +1,28 @@
 package com.mobile.scrcpy.android.feature.session.ui.component
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.mobile.scrcpy.android.core.common.AppColors
-import com.mobile.scrcpy.android.core.common.AppDimens
+import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.core.designsystem.component.DialogBottomSpacer
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.GroupSelectorDialog
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
+import com.mobile.scrcpy.android.core.i18n.CodecTexts
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.feature.codec.component.EncoderSelectionDialog
 import com.mobile.scrcpy.android.feature.codec.component.EncoderType
+import com.mobile.scrcpy.android.feature.codec.ui.AudioCodecSelectorScreen
+import com.mobile.scrcpy.android.feature.codec.ui.VideoCodecSelectorScreen
+import com.mobile.scrcpy.android.feature.codec.util.CodecUtils
 import com.mobile.scrcpy.android.feature.device.ui.component.UsbDeviceSelectionDialog
-import com.mobile.scrcpy.android.feature.session.data.repository.SessionData
+import com.mobile.scrcpy.android.feature.session.ui.component.sections.AudioConfigSection
+import com.mobile.scrcpy.android.feature.session.ui.component.sections.ConnectionOptionsSection
+import com.mobile.scrcpy.android.feature.session.ui.component.sections.OtherOptionsSection
+import com.mobile.scrcpy.android.feature.session.ui.component.sections.RemoteDeviceSection
+import com.mobile.scrcpy.android.feature.session.ui.component.sections.VideoConfigSection
 
 /**
  * 添加/编辑会话对话框
@@ -38,6 +36,7 @@ fun AddSessionDialog(
 ) {
     val state = remember(sessionData) { SessionDialogState(sessionData) }
     val isEditMode = sessionData != null
+    val context = LocalContext.current
 
     DialogPage(
         title =
@@ -85,31 +84,106 @@ fun AddSessionDialog(
         DialogBottomSpacer()
     }
 
-    // 编码器选择对话框
+    // 视频编码器选择
     if (state.showEncoderOptionsDialog) {
         EncoderSelectionDialog(
             encoderType = EncoderType.VIDEO,
+            sessionId = sessionData?.id, // 传入 sessionId，新建时为 null
             host = if (state.isUsbMode) state.usbSerialNumber else state.host,
             port = state.port,
-            currentEncoder = state.videoEncoder,
+            currentEncoder = state.userVideoEncoder,
+            cachedEncoders = state.remoteVideoEncoders,
             onDismiss = { state.showEncoderOptionsDialog = false },
             onEncoderSelected = { encoder ->
-                state.videoEncoder = encoder
+                if (CodecUtils.isCodecProtocolMatch(encoder, state.userVideoDecoder, CodecUtils.CodecType.VIDEO)) {
+                    state.userVideoEncoder = encoder
+                } else {
+                    Toast
+                        .makeText(
+                            context,
+                            CodecTexts.CODEC_PROTOCOL_MISMATCH.get(),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
                 state.showEncoderOptionsDialog = false
+            },
+            onEncodersDetected = { encoders ->
+                state.remoteVideoEncoders = encoders
             },
         )
     }
 
+    // 视频解码器选择
+    if (state.showVideoDecoderSelector) {
+        VideoCodecSelectorScreen(
+            currentCodecName = state.userVideoDecoder.ifBlank { null },
+            onCodecSelected = { decoder ->
+                if (CodecUtils.isCodecProtocolMatch(state.userVideoEncoder, decoder, CodecUtils.CodecType.VIDEO)) {
+                    state.userVideoDecoder = decoder
+                } else {
+                    Toast
+                        .makeText(
+                            context,
+                            CodecTexts.CODEC_PROTOCOL_MISMATCH.get(),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+                state.showVideoDecoderSelector = false
+            },
+            onBack = {
+                state.showVideoDecoderSelector = false
+            },
+        )
+    }
+
+    // 音频编码器选择
     if (state.showAudioEncoderDialog) {
         EncoderSelectionDialog(
             encoderType = EncoderType.AUDIO,
+            sessionId = sessionData?.id, // 传入 sessionId，新建时为 null
             host = if (state.isUsbMode) state.usbSerialNumber else state.host,
             port = state.port,
-            currentEncoder = state.audioEncoder,
+            currentEncoder = state.userAudioEncoder,
+            cachedEncoders = state.remoteAudioEncoders,
             onDismiss = { state.showAudioEncoderDialog = false },
             onEncoderSelected = { encoder ->
-                state.audioEncoder = encoder
+                if (CodecUtils.isCodecProtocolMatch(encoder, state.userAudioDecoder, CodecUtils.CodecType.AUDIO)) {
+                    state.userAudioEncoder = encoder
+                } else {
+                    Toast
+                        .makeText(
+                            context,
+                            CodecTexts.CODEC_PROTOCOL_MISMATCH.get(),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
                 state.showAudioEncoderDialog = false
+            },
+            onEncodersDetected = { encoders ->
+                state.remoteAudioEncoders = encoders
+            },
+        )
+    }
+
+    // 音频解码器选择
+    if (state.showAudioDecoderSelector) {
+        AudioCodecSelectorScreen(
+            currentCodecName = state.userAudioDecoder.ifBlank { null },
+            onCodecSelected = { decoder ->
+                if (CodecUtils.isCodecProtocolMatch(state.userAudioEncoder, decoder, CodecUtils.CodecType.AUDIO)) {
+                    state.userAudioDecoder = decoder
+                } else {
+                    Toast
+                        .makeText(
+                            context,
+                            CodecTexts.CODEC_PROTOCOL_MISMATCH.get(),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                }
+                state.showAudioDecoderSelector = false
+            },
+            onBack = {
+                state.showAudioDecoderSelector = false
             },
         )
     }

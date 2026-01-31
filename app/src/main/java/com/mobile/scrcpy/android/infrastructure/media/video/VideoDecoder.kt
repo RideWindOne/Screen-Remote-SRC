@@ -3,8 +3,14 @@ package com.mobile.scrcpy.android.infrastructure.media.video
 import android.media.MediaCodec
 import android.view.Surface
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.event.DemuxerError
+import com.mobile.scrcpy.android.core.common.event.DeviceDisconnected
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus
+import com.mobile.scrcpy.android.core.common.event.ScreenInitSize
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.VideoStream
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
@@ -12,6 +18,12 @@ import java.nio.ByteBuffer
 /**
  * VideoDecoder - 视频解码器（重构版）
  * 职责：解码流程控制、Surface 管理、生命周期管理
+ *
+ * 集成事件系统：
+ * - 推送 NewFrame 事件（每帧解码完成）
+ * - 推送 ScreenInitSize 事件（视频尺寸变化）
+ * - 推送 DemuxerError 事件（解码错误）
+ * - 推送 DeviceDisconnected 事件（连接丢失）
  */
 class VideoDecoder(
     private var surface: Surface?,
@@ -71,16 +83,28 @@ class VideoDecoder(
             currentRotation = 0
             onVideoSizeChanged?.invoke(width, height, 0)
 
+            // 推送屏幕初始化尺寸事件
+            ScrcpyEventBus.pushEvent(ScreenInitSize(width, height))
+
             decoder = codecManager.createDecoder(width, height) ?: run {
                 LogManager.e(LogTags.VIDEO_DECODER, "无法创建解码器")
+                CurrentSession.currentOrNull?.handleEvent(
+                    SessionEvent.DecoderError("Video: 无法创建解码器"),
+                )
                 return@withContext
             }
             LogManager.d(LogTags.VIDEO_DECODER, "解码器: ${decoder?.name}")
+
+            // 推送解码器启动事件
+            CurrentSession.currentOrNull?.handleEvent(SessionEvent.DecoderStarted("Video"))
 
             isRunning = true
             decodeLoop(videoStream)
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "解码失败: ${e.message}", e)
+            CurrentSession.currentOrNull?.handleEvent(
+                SessionEvent.DecoderError("Video: ${e.message ?: "Unknown error"}"),
+            )
         } finally {
             stop()
         }
@@ -99,6 +123,9 @@ class VideoDecoder(
             decoder?.stop()
             decoder?.release()
             decoder = null
+
+            // 推送解码器停止事件
+            CurrentSession.currentOrNull?.handleEvent(SessionEvent.DecoderStopped("Video"))
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "停止解码器失败: ${e.message}", e)
         }
@@ -218,7 +245,7 @@ class VideoDecoder(
                 when (videoCodec.lowercase()) {
                     "h264" -> configured = processH264(nalBuffer, configured, frameCount, pts)
                     "h265", "hevc" -> configured = processH265(nalBuffer, configured, frameCount, pts)
-                    "av1" -> configured = processAV1(nalBuffer, configured, frameCount, pts)
+                    "av1" -> configured = processAV1(nalBuffer, configured, pts)
                 }
 
                 if (configured) {
@@ -365,7 +392,6 @@ class VideoDecoder(
     private fun processAV1(
         nalBuffer: ByteBuffer,
         configured: Boolean,
-        frameCount: Int,
         pts: Long,
     ): Boolean {
         if (nalBuffer.position() > 0) {
@@ -407,6 +433,9 @@ class VideoDecoder(
                 currentRotation = rotation
 
                 onVideoSizeChanged?.invoke(width, height, rotation)
+
+                // 推送屏幕尺寸变化事件
+                ScrcpyEventBus.pushEvent(ScreenInitSize(width, height))
             }
         }
     }
@@ -419,11 +448,15 @@ class VideoDecoder(
             e.message?.contains("Stream closed") == true -> {
                 LogManager.w(LogTags.VIDEO_DECODER, "视频流已关闭，触发连接丢失处理")
                 onConnectionLost?.invoke()
+                // 推送设备断开事件
+                ScrcpyEventBus.pushEvent(DeviceDisconnected)
             }
 
             e.message?.contains("Socket closed") == true -> {
                 LogManager.w(LogTags.VIDEO_DECODER, "Socket 已关闭，触发连接丢失处理")
                 onConnectionLost?.invoke()
+                // 推送设备断开事件
+                ScrcpyEventBus.pushEvent(DeviceDisconnected)
             }
 
             e.message?.contains("Read timed out") == true -> {
@@ -433,6 +466,8 @@ class VideoDecoder(
             else -> {
                 LogManager.e(LogTags.VIDEO_DECODER, "解码错误: ${e.message}", e)
                 onConnectionLost?.invoke()
+                // 推送解复用器错误事件
+                ScrcpyEventBus.pushEvent(DemuxerError(e.message ?: "Unknown error"))
             }
         }
     }
