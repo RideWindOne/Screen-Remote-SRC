@@ -23,6 +23,8 @@ object SessionTexts {
     val SESSION_DELETE_SESSION = TextPair("删除会话", "Delete Session")
     val SESSION_CONNECT = TextPair("连接会话", "Connect Session")
     val SESSION_COPY = TextPair("复制会话", "Copy Session")
+    val SESSION_MANAGE = TextPair("管理功能", "Manage")
+    val SESSION_MANAGEMENT_TITLE = TextPair("会话管理", "Session Management")
     val SESSION_EMPTY_HINT =
         TextPair(
             "点击右上角 + 按钮开始新的 scrcpy 会话。\n会话会保存在此处以便快速访问。",

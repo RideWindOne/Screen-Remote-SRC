@@ -123,7 +123,16 @@ object AdbFileOperations {
                         }
 
                         // 设置执行权限
-                        dadb.shell("chmod 755 $scrcpyServerPath")
+                        val chmodCommand = "chmod 755 $scrcpyServerPath"
+                        logShellCommandStart(LogTags.ADB_CONNECTION, chmodCommand)
+                        val chmodResponse = dadb.shell(chmodCommand)
+                        logShellCommandResult(
+                            tag = LogTags.ADB_CONNECTION,
+                            command = chmodCommand,
+                            exitCode = chmodResponse.exitCode,
+                            output = chmodResponse.output,
+                            errorOutput = chmodResponse.errorOutput,
+                        )
                     }
                 } catch (e: Exception) {
                     return@withContext Result.failure(

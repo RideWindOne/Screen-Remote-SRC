@@ -16,40 +16,40 @@ object AppDimens {
     const val WINDOW_MAX_HEIGHT_RATIO = 0.8f
 
     /** 窗口圆角 */
-    val windowCornerRadius = 8.dp
+    val windowCornerRadius = IosDesignTokens.dialogCornerRadius
 
     // 组件高度
 
     /** 分组标题高度 */
-    val sectionTitleHeight = 35.dp
+    val sectionTitleHeight = IosDesignTokens.sectionTitleHeight
 
     /** 列表项高度 */
-    val listItemHeight = 38.dp
+    val listItemHeight = IosDesignTokens.formRowHeight
 
     /** 主题选项高度 */
-    val themeOptionHeight = 43.dp
+    val themeOptionHeight = IosDesignTokens.themeOptionHeight
 
     // 间距
 
     /** 卡片间距 */
-    val cardSpacing = 10.dp
+    val cardSpacing = IosDesignTokens.compactSpacing
 
     /** 标准内边距 */
-    val paddingStandard = 10.dp
+    val paddingStandard = IosDesignTokens.compactHorizontalPadding
 
     /** 标准间距 */
-    val spacingStandard = 10.dp
+    val spacingStandard = IosDesignTokens.compactHorizontalPadding
 
     /** 水平内边距 */
-    val paddingHorizontal = 10.dp
+    val paddingHorizontal = IosDesignTokens.compactHorizontalPadding
 
     /** 垂直内边距 */
-    val paddingVertical = 10.dp
+    val paddingVertical = IosDesignTokens.compactHorizontalPadding
 
     // 卡片
 
     /** 卡片圆角 */
-    val cardCornerRadius = 8.dp
+    val cardCornerRadius = IosDesignTokens.cardCornerRadius
 
     // 其他
 

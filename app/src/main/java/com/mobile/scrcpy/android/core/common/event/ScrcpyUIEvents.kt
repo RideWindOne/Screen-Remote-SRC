@@ -35,52 +35,6 @@ data class KeyUp(
 }
 
 /**
- * 鼠标移动
- */
-data class MouseMotion(
-    val x: Float,
-    val y: Float,
-) : ScrcpyEvent() {
-    override fun getLogLevel() = LogLevel.VERBOSE
-
-    override fun getCategory() = Category.UI
-
-    override fun getDescription() = "鼠标移动: ($x, $y)"
-
-    override fun needsSampling() = true
-}
-
-/**
- * 鼠标按下
- */
-data class MouseButtonDown(
-    val x: Float,
-    val y: Float,
-    val button: Int,
-) : ScrcpyEvent() {
-    override fun getLogLevel() = LogLevel.DEBUG
-
-    override fun getCategory() = Category.UI
-
-    override fun getDescription() = "鼠标按下: ($x, $y) button=$button"
-}
-
-/**
- * 鼠标抬起
- */
-data class MouseButtonUp(
-    val x: Float,
-    val y: Float,
-    val button: Int,
-) : ScrcpyEvent() {
-    override fun getLogLevel() = LogLevel.DEBUG
-
-    override fun getCategory() = Category.UI
-
-    override fun getDescription() = "鼠标抬起: ($x, $y) button=$button"
-}
-
-/**
  * 触摸按下
  */
 data class TouchDown(

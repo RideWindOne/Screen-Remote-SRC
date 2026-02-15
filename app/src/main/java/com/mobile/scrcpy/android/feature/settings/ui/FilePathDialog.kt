@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.settings.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,9 +22,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.constants.AppColors
+import com.mobile.scrcpy.android.core.common.constants.AppDimens
 import com.mobile.scrcpy.android.core.common.constants.FilePathConstants
+import com.mobile.scrcpy.android.core.common.constants.IosDesignTokens
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
@@ -60,7 +62,7 @@ fun FilePathDialog(
     val txtInfoText = rememberText(SettingsTexts.DIALOG_FILE_PATH_INFO_TEXT)
     val txtReset = rememberText(SettingsTexts.DIALOG_FILE_PATH_RESET)
     val txtSave = rememberText(CommonTexts.BUTTON_SAVE)
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     val quickPaths = FilePathConstants.QUICK_SELECT_PATHS
 
@@ -76,7 +78,7 @@ fun FilePathDialog(
         // 路径输入
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(AppDimens.cardCornerRadius),
             colors =
                 CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -98,7 +100,7 @@ fun FilePathDialog(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = IosDesignTokens.compactSpacing),
             ) {
                 quickPaths.chunked(3).forEach { rowPaths ->
                     Row(
@@ -142,7 +144,7 @@ fun FilePathDialog(
         // 重置按钮
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(AppDimens.cardCornerRadius),
             colors =
                 CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -158,7 +160,7 @@ fun FilePathDialog(
         // 说明信息
         SettingsCard(title = txtInfo) {
             Text(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(IosDesignTokens.standardHorizontalPadding),
                 text = txtInfoText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

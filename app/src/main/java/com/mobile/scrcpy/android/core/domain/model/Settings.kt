@@ -32,6 +32,11 @@ data class AppSettings(
     val keepAliveMinutes: Int = 5,
     val showOnLockScreen: Boolean = false,
     val enableActivityLog: Boolean = true,
+    val enableAudioStreamLog: Boolean = false,
+    val enableVideoStreamLog: Boolean = false,
+    val enableControlStreamLog: Boolean = false,
+    val enableShellStreamLog: Boolean = false,
+    val enableManagementLog: Boolean = false,
     val fileTransferPath: String = "",
     val enableFloatingHapticFeedback: Boolean = true,
 )

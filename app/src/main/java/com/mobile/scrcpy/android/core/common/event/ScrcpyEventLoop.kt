@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
  * 作用域：会话级事件循环，由 ScrcpyEventBus 管理
  * 生命周期：随 ScrcpyEventBus 启动/停止
  *
- * 参考：docs/ScrcpyVS/07-sdl-event-system.md
+ * 参考：docs/03-guides/event-and-shell.md
  */
 class ScrcpyEventLoop(
     private val scope: CoroutineScope,

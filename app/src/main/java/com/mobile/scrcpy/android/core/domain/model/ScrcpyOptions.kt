@@ -50,6 +50,13 @@ data class ScrcpyOptions(
     val selectedVideoDecoder: String = "", // 系统自动选择的最佳视频解码器
     val selectedAudioDecoder: String = "", // 系统自动选择的最佳音频解码器
 ) {
+    private fun normalizedUsbDeviceId(): String =
+        when {
+            !isUsbConnection() -> host
+            host.startsWith("usb:") -> host
+            else -> "usb:$host"
+        }
+
     /**
      * 判断编解码器是否匹配当前设备
      */
@@ -68,7 +75,7 @@ data class ScrcpyOptions(
     /**
      * 获取设备标识（用于日志和显示）
      */
-    fun getDeviceIdentifier(): String = if (isUsbConnection()) host else "$host:$port"
+    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else "$host:$port"
 
     /**
      * 获取最终使用的视频编码器（用户选择 > 系统自动选择）

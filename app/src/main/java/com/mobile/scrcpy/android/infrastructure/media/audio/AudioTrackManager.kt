@@ -1,6 +1,7 @@
 package com.mobile.scrcpy.android.infrastructure.media.audio
 
 import android.media.AudioFormat
+import android.media.MediaFormat
 import android.media.AudioTrack
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
@@ -14,6 +15,8 @@ class AudioTrackManager(
     private val volumeScale: Float = 1.0f,
 ) {
     @Volatile private var audioTrack: AudioTrack? = null
+    @Volatile private var trackConfig: AudioTrackConfig? = null
+    @Volatile private var nonPcm16ScalingWarningLogged = false
 
     /**
      * 创建 AudioTrack
@@ -21,21 +24,21 @@ class AudioTrackManager(
     fun createAudioTrack(
         sampleRate: Int,
         channelCount: Int,
+        encoding: Int = AudioFormat.ENCODING_PCM_16BIT,
     ): AudioTrack? =
         try {
-            val channelConfig =
-                if (channelCount == 2) {
-                    AudioFormat.CHANNEL_OUT_STEREO
-                } else {
-                    AudioFormat.CHANNEL_OUT_MONO
-                }
-
-            val bufferSize =
-                AudioTrack.getMinBufferSize(
-                    sampleRate,
-                    channelConfig,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                ) * 4
+            val config = AudioTrackConfig(sampleRate = sampleRate, channelCount = channelCount, encoding = encoding)
+            val channelConfig = config.channelMask
+            val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, encoding)
+            if (minBufferSize <= 0) {
+                LogManager.e(
+                    LogTags.AUDIO_DECODER,
+                    "AudioTrack 最小缓冲区获取失败: rate=$sampleRate, channels=$channelCount, " +
+                        "encoding=${encodingName(encoding)}, minBufferSize=$minBufferSize",
+                )
+                return null
+            }
+            val bufferSize = minBufferSize * 4
 
             val track =
                 AudioTrack
@@ -45,23 +48,53 @@ class AudioTrackManager(
                             .Builder()
                             .setSampleRate(sampleRate)
                             .setChannelMask(channelConfig)
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setEncoding(encoding)
                             .build(),
                     ).setBufferSizeInBytes(bufferSize)
                     .setTransferMode(AudioTrack.MODE_STREAM)
                     .build()
 
             audioTrack = track
+            trackConfig = config
+            nonPcm16ScalingWarningLogged = false
 
-            LogManager.d(
-                LogTags.AUDIO_DECODER,
-                "AudioTrack 创建成功: rate=$sampleRate, channels=$channelCount, bufferSize=$bufferSize",
-            )
+            AudioDebugLog.d(LogTags.AUDIO_DECODER) {
+                "AudioTrack 创建成功: rate=$sampleRate, channels=$channelCount, " +
+                    "encoding=${encodingName(encoding)}, bufferSize=$bufferSize"
+            }
             track
         } catch (e: Exception) {
             LogManager.e(LogTags.AUDIO_DECODER, "创建 AudioTrack 失败: ${e.message}", e)
             null
         }
+
+    fun reconfigureFromOutputFormat(outputFormat: MediaFormat): Boolean {
+        val sampleRate = outputFormat.getIntegerOrNull(MediaFormat.KEY_SAMPLE_RATE) ?: return false
+        val channelCount = outputFormat.getIntegerOrNull(MediaFormat.KEY_CHANNEL_COUNT) ?: return false
+        val encoding = outputFormat.getIntegerOrNull(MediaFormat.KEY_PCM_ENCODING) ?: AudioFormat.ENCODING_PCM_16BIT
+        val newConfig = AudioTrackConfig(sampleRate = sampleRate, channelCount = channelCount, encoding = encoding)
+
+        if (trackConfig == newConfig && audioTrack != null) {
+            return true
+        }
+
+        AudioDebugLog.d(LogTags.AUDIO_DECODER) {
+            "按解码输出格式重建 AudioTrack: rate=$sampleRate, channels=$channelCount, encoding=${encodingName(encoding)}"
+        }
+
+        release()
+        val recreated =
+            createAudioTrack(
+                sampleRate = sampleRate,
+                channelCount = channelCount,
+                encoding = encoding,
+            )
+        if (recreated != null) {
+            recreated.play()
+            return true
+        }
+        return false
+    }
 
     /**
      * 启动播放
@@ -81,6 +114,7 @@ class AudioTrackManager(
             // 忽略
         } finally {
             audioTrack = null
+            trackConfig = null
         }
     }
 
@@ -108,9 +142,16 @@ class AudioTrackManager(
         size: Int,
     ): Int {
         val track = audioTrack ?: return -1
+        val config = trackConfig
 
-        if (volumeScale != 1.0f) {
+        if (volumeScale != 1.0f && config?.encoding == AudioFormat.ENCODING_PCM_16BIT) {
             applyVolumeScaleToBuffer(buffer, size, volumeScale)
+        } else if (volumeScale != 1.0f && config?.encoding != null && !nonPcm16ScalingWarningLogged) {
+            nonPcm16ScalingWarningLogged = true
+            LogManager.w(
+                LogTags.AUDIO_DECODER,
+                "当前输出编码=${encodingName(config.encoding)}，跳过非 PCM16 的音量缩放",
+            )
         }
 
         return track.write(buffer, size, AudioTrack.WRITE_BLOCKING)
@@ -191,4 +232,30 @@ class AudioTrackManager(
      * 获取当前 AudioTrack 实例
      */
     fun getAudioTrack(): AudioTrack? = audioTrack
+
+    private fun encodingName(encoding: Int): String =
+        when (encoding) {
+            AudioFormat.ENCODING_PCM_16BIT -> "PCM_16BIT"
+            AudioFormat.ENCODING_PCM_8BIT -> "PCM_8BIT"
+            AudioFormat.ENCODING_PCM_FLOAT -> "PCM_FLOAT"
+            AudioFormat.ENCODING_PCM_24BIT_PACKED -> "PCM_24BIT_PACKED"
+            AudioFormat.ENCODING_PCM_32BIT -> "PCM_32BIT"
+            else -> "UNKNOWN($encoding)"
+        }
+
+    private fun MediaFormat.getIntegerOrNull(key: String): Int? = if (containsKey(key)) getInteger(key) else null
+}
+
+private data class AudioTrackConfig(
+    val sampleRate: Int,
+    val channelCount: Int,
+    val encoding: Int,
+) {
+    val channelMask: Int
+        get() =
+            if (channelCount <= 1) {
+                AudioFormat.CHANNEL_OUT_MONO
+            } else {
+                AudioFormat.CHANNEL_OUT_STEREO
+            }
 }

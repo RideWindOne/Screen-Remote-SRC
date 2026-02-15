@@ -149,4 +149,9 @@ object ScrcpyConstants {
 
     /** 控制消息队列容量限制（参考 scrcpy SC_CONTROL_MSG_QUEUE_LIMIT） */
     const val CONTROL_MSG_QUEUE_LIMIT = 60
+
+    /** 控制流空闲保活间隔（毫秒）
+     * 用于避免空闲时 control channel 被底层链路回收。
+     */
+    const val CONTROL_KEEPALIVE_INTERVAL_MS = 3000L
 }

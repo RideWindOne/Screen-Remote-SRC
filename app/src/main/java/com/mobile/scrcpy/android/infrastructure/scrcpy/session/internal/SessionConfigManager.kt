@@ -21,9 +21,31 @@ import com.mobile.scrcpy.android.infrastructure.scrcpy.session.Session
  */
 internal suspend fun Session.updateOptions(update: (ScrcpyOptions) -> ScrcpyOptions) {
     val updated = update(options)
+    persistOptions(updated)
+}
+
+/**
+ * 持久化整份配置快照
+ */
+internal suspend fun Session.persistOptions(updated: ScrcpyOptions) {
     setOptions(updated)
-    getStorage().saveOptions(updated)
+    storage().saveOptions(updated)
     LogManager.d(LogTags.SCRCPY_CLIENT, "更新配置: sessionId=$sessionId")
+}
+
+/**
+ * 保存远程检测到的编码器列表
+ */
+internal suspend fun Session.saveDiscoveredEncoders(
+    remoteVideoEncoders: List<String>,
+    remoteAudioEncoders: List<String>,
+) {
+    updateOptions {
+        it.copy(
+            remoteVideoEncoders = remoteVideoEncoders,
+            remoteAudioEncoders = remoteAudioEncoders,
+        )
+    }
 }
 
 /**

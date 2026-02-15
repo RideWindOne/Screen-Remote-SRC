@@ -52,6 +52,17 @@ object RemoteTexts {
         TextPair("Surface 已恢复，设置为就绪并恢复渲染", "Surface restored, set to ready and resume rendering")
     val REMOTE_SURFACE_UNAVAILABLE = TextPair("Surface 不可用", "Surface unavailable")
     val REMOTE_FOCUS_REQUEST_FAILED = TextPair("请求焦点失败", "Focus request failed")
+    val REMOTE_MORE_ACTIONS = TextPair("更多操作", "More actions")
+    val REMOTE_LAYOUT_RENDER = TextPair("UI 布局渲染", "UI layout render")
+    val REMOTE_LAYOUT_RENDER_DESC =
+        TextPair(
+            "抓取当前页面层级并把输入框、按钮、文本等边界叠加到远程画面上，适合在隐私/安全页辅助定位。",
+            "Capture the current hierarchy and overlay input, button and text bounds on top of the remote screen.",
+        )
+    val REMOTE_LAYOUT_RENDER_REFRESH = TextPair("刷新", "Refresh")
+    val REMOTE_LAYOUT_RENDER_NODES = TextPair("节点数", "Nodes")
+    val REMOTE_LAYOUT_RENDER_EMPTY = TextPair("当前页面没有可渲染的布局节点", "No renderable layout nodes found")
+    val REMOTE_LAYOUT_RENDER_FAILED = TextPair("布局抓取失败", "Layout capture failed")
 
     // ScrcpyClient
     val SCRCPY_NATIVE_LIB_LOAD_FAILED = TextPair("Native 库加载失败", "Native library load failed")

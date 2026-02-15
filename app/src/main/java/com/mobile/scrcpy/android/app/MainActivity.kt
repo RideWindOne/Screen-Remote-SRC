@@ -14,13 +14,19 @@ import androidx.lifecycle.ViewModelProvider
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager
 import com.mobile.scrcpy.android.core.data.datastore.PreferencesManager
-import com.mobile.scrcpy.android.feature.session.ui.feature.session.MainScreen
+import com.mobile.scrcpy.android.feature.session.ui.MainScreen
 import com.mobile.scrcpy.android.feature.settings.viewmodel.SettingsViewModel
 import com.mobile.scrcpy.android.core.designsystem.theme.ScreenRemoteTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        runCatching {
+            val startupHooksClass = Class.forName("com.mobile.scrcpy.android.debug.DebugUsbAdbCommands")
+            val method = startupHooksClass.getMethod("handleActivityLaunch", ComponentActivity::class.java)
+            method.invoke(null, this)
+        }
 
         // 设置 Edge-to-Edge（手动管理，不使用 enableEdgeToEdge()）
         ApiCompatHelper.setDecorFitsSystemWindows(window, decorFitsSystemWindows = false)

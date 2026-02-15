@@ -2,8 +2,6 @@ package com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal
 
 import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionLifecycle
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
 import java.util.Random
 
 /**
@@ -19,9 +17,6 @@ import java.util.Random
  * 连接 Socket
  */
 internal suspend fun ConnectionLifecycle.connectSockets(options: ScrcpyOptions) {
-    // 推送 Socket 连接中事件
-    CurrentSession.currentOrNull?.handleEvent(SessionEvent.SocketConnecting)
-
     socketManager.connectSockets(options.enableAudio, options.keyFrameInterval)
 }
 
@@ -37,8 +32,8 @@ internal fun generateScid(): Int {
  * 查找可用端口
  * 通过创建临时 ServerSocket 让系统自动分配可用端口
  */
-internal suspend fun findAvailablePort(): Int {
-    return try {
+internal suspend fun findAvailablePort(): Int =
+    try {
         java.net.ServerSocket(0).use { socket ->
             socket.localPort
         }
@@ -46,4 +41,3 @@ internal suspend fun findAvailablePort(): Int {
         // 如果失败，返回默认端口范围内的随机端口
         27183 + Random().nextInt(1000)
     }
-}

@@ -19,6 +19,7 @@ object LogTags {
     const val SCRCPY_CLIENT = "SCLI"
     const val SCRCPY_SERVICE = "SSVC"
     const val SCRCPY_SERVER = "SSVR"
+    const val SCRCPY_PACKET = "SKPK"
     const val SCRCPY_BRIDGE = "SBDG"
     const val SCRCPY_EVENT_BUS = "SEVT"
 
@@ -60,4 +61,5 @@ object LogTags {
     const val LOG_MANAGER = "LOG"
     const val TTS_MANAGER = "TTS"
     const val LOGCAT_CAPTURE = "LCAT"
+    const val NETWORK = "NET"
 }

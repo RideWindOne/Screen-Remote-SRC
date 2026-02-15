@@ -31,19 +31,6 @@ data class RecorderError(
 }
 
 /**
- * Controller 错误
- */
-data class ControllerError(
-    val message: String,
-) : ScrcpyEvent() {
-    override fun getLogLevel() = LogLevel.ERROR
-
-    override fun getCategory() = Category.SYSTEM
-
-    override fun getDescription() = "Controller 错误: $message"
-}
-
-/**
  * AOA 打开错误
  */
 data class AoaOpenError(

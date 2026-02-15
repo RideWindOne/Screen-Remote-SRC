@@ -4,6 +4,7 @@ import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.ScrcpyConstants
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,11 +27,11 @@ class ConnectionHealthMonitor {
         videoSocket: Socket?,
         audioSocket: Socket?,
         controlSocket: Socket?,
-        onConnectionLost: () -> Unit,
+        onConnectionLostCallback: () -> Unit,
     ) {
         stopMonitoring()
 
-        this.onConnectionLost = onConnectionLost
+        this.onConnectionLost = onConnectionLostCallback
 
         monitorJob =
             CoroutineScope(Dispatchers.IO).launch {
@@ -46,15 +47,20 @@ class ConnectionHealthMonitor {
                                 LogTags.SDL_HM,
                                 "Socket 健康检查失败: video=$videoAlive, audio=$audioAlive, control=$controlAlive",
                             )
-                            onConnectionLost()
+                            notifyConnectionLost()
                             break
                         }
 
                         // 每隔一段时间检查一次
                         delay(ScrcpyConstants.HEALTH_CHECK_INTERVAL_MS)
+                    } catch (_: CancellationException) {
+                        break
                     } catch (e: Exception) {
                         LogManager.e(LogTags.SDL_HM, "健康检查异常: ${e.message}")
-                        onConnectionLost()
+                        if (!isActive) {
+                            break
+                        }
+                        notifyConnectionLost()
                         break
                     }
                 }
@@ -65,9 +71,13 @@ class ConnectionHealthMonitor {
      * 停止监控
      */
     fun stopMonitoring() {
+        onConnectionLost = null
         monitorJob?.cancel()
         monitorJob = null
-        onConnectionLost = null
+    }
+
+    private fun notifyConnectionLost() {
+        onConnectionLost?.invoke()
     }
 
     /**

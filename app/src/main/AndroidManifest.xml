@@ -42,12 +42,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            
-            <!-- USB 设备过滤器 - 用于显示"始终允许"选项 -->
-            <!-- 放在 Activity 内才能生效 -->
-            <meta-data
-                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-                android:resource="@xml/device_filter" />
         </activity>
         
         <service
@@ -55,6 +49,10 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <receiver
+            android:name=".infrastructure.adb.security.AdbTlsIdentityChangeReceiver"
+            android:exported="false" />
         
         <!-- FileProvider for sharing log files -->
         <provider

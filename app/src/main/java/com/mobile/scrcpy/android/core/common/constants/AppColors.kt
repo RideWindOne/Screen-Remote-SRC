@@ -33,8 +33,8 @@ object AppColors {
     /** 箭头颜色 */
     val arrow = Color(0xFFE5E5EA)
 
-    /** iOS 风格选中背景色（浅灰） */
-    val iOSSelectedBackground = Color(0xFFE8E8E8)
+    /** iOS 风格浅灰轨道/选中背景（浅色模式） */
+    val iOSSelectedBackground = Color(0xFFE9E9EB)
 
     /** 白色背景 */
     val white = Color.White

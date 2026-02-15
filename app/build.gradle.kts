@@ -1,18 +1,33 @@
+
+import com.android.build.api.variant.FilterConfiguration
 import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+abstract class SyncDadbHelperAssetTask : Sync() {
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    init {
+        outputs.upToDateWhen { false }
+    }
 }
 
 // --------------------
 // 统一版本属性
 // --------------------
-val VERSION_CODE: String by project
-val VERSION_NAME: String by project
-val APP_ID = "com.mobile.scrcpy.android"
+fun requireStringProperty(key: String): String =
+    project.findProperty(key)?.toString()?.takeIf { it.isNotBlank() }
+        ?: error("Missing project property: $key")
+
+val appVersionCode = requireStringProperty("VERSION_CODE")
+val appVersionName = requireStringProperty("VERSION_NAME")
+val appVersionCodeInt = appVersionCode.toInt()
+val appId = "com.mobile.scrcpy.android"
 
 val abiCodes =
     mapOf(
@@ -23,17 +38,17 @@ val abiCodes =
     )
 
 android {
-    namespace = APP_ID
+    namespace = appId
     compileSdk = 36
 
     defaultConfig {
-        applicationId = APP_ID
+        applicationId = appId
         minSdk = 23
         targetSdk = 36
-        versionCode = VERSION_CODE.toInt()
-        versionName = VERSION_NAME
+        versionCode = appVersionCodeInt
+        versionName = appVersionName
 
-        buildConfigField("String", "APP_VERSION", "\"v$versionName\"")
+        buildConfigField("String", "APP_VERSION", "\"v$appVersionName\"")
 
         vectorDrawables.useSupportLibrary = true
 
@@ -98,7 +113,10 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                this@android.getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -111,22 +129,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-        }
-    }
-
     // --------------------
     // Compose 配置
     // --------------------
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
     }
 
     composeCompiler {
-        includeSourceInformation = true
+        // Release 不需要携带 Compose 源位置信息，避免增加编译/压缩负担。
+        includeSourceInformation = false
     }
 
     // --------------------
@@ -134,7 +148,10 @@ android {
     // --------------------
     externalNativeBuild {
         cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
+            path =
+                project.layout.projectDirectory
+                    .file("src/main/cpp/CMakeLists.txt")
+                    .asFile
             version = "3.22.1"
         }
     }
@@ -153,34 +170,36 @@ android {
     }
 }
 
-// --------------------
-// ABI versionCode
-// --------------------
-androidComponents {
-    onVariants { variant ->
-        variant.outputs.forEach { output ->
-            val abiName =
-                output.filters
-                    .find { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }
-                    ?.identifier
-
-            // 设置 ABI versionCode
-            if (abiName != null) {
-                val abiCode = abiCodes[abiName] ?: 0
-                output.versionCode.set(VERSION_CODE.toInt() * 1000 + abiCode)
-            }
-        }
-    }
+val syncDadbIconHelperAsset by tasks.registering(SyncDadbHelperAssetTask::class) {
+    val generatedDir = layout.buildDirectory.dir("generated/assets/dadbHelper")
+    dependsOn(gradle.includedBuild("dadb").task(":dadb-helper:dexJar"))
+    from(rootProject.file("../external/dadb/dadb-helper/build/libs/dadb-icon-helper.jar"))
+    outputDir.set(generatedDir)
+    into(generatedDir)
 }
 
 // --------------------
 // APK 输出文件名
 // --------------------
-android.applicationVariants.configureEach {
-    outputs.configureEach {
-        val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-        val abiName = output.getFilter("ABI") ?: "universal"
-        output.outputFileName = "Screen Remote-$abiName-${VERSION_NAME}_${VERSION_CODE}.apk"
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            syncDadbIconHelperAsset,
+            SyncDadbHelperAssetTask::outputDir,
+        )
+
+        variant.outputs.forEach { output ->
+            val abiName =
+                output.filters
+                    .find { it.filterType == FilterConfiguration.FilterType.ABI }
+                    ?.identifier
+                    ?: "universal"
+            val abiCode = abiCodes[abiName]
+
+            if (abiCode != null) {
+                output.versionCode.set(appVersionCodeInt * 1000 + abiCode)
+            }
+        }
     }
 }
 
@@ -189,12 +208,12 @@ android.applicationVariants.configureEach {
 // --------------------
 dependencies {
     // Core Android
-    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
-    implementation("androidx.activity:activity-compose:1.12.3")
+    implementation("androidx.activity:activity-compose:1.13.0")
 
     // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2026.01.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.03.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -212,11 +231,15 @@ dependencies {
 
     // Coroutines & DataStore
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("androidx.datastore:datastore-preferences:1.2.0")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 
     // DADB
     implementation("dev.mobile:dadb:1.2.10")
+    implementation("dev.mobile:dadb-android:1.2.10")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.83")
+
+    testImplementation("junit:junit:4.13.2")
 }

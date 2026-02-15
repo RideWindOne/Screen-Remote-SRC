@@ -31,6 +31,7 @@ package com.mobile.scrcpy.android.core.common
 typealias AppColors = com.mobile.scrcpy.android.core.common.constants.AppColors
 typealias AppDimens = com.mobile.scrcpy.android.core.common.constants.AppDimens
 typealias AppTextSizes = com.mobile.scrcpy.android.core.common.constants.AppTextSizes
+typealias IosDesignTokens = com.mobile.scrcpy.android.core.common.constants.IosDesignTokens
 typealias NetworkConstants = com.mobile.scrcpy.android.core.common.constants.NetworkConstants
 typealias AdbPairingConstants = com.mobile.scrcpy.android.core.common.constants.AdbPairingConstants
 typealias ScrcpyConstants = com.mobile.scrcpy.android.core.common.constants.ScrcpyConstants

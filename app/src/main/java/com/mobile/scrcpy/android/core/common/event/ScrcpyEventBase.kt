@@ -23,6 +23,7 @@ sealed class ScrcpyEvent {
         MONITOR, // 监控事件
         LIFECYCLE, // 生命周期事件
         SYSTEM, // 系统事件
+        MEDIA, // 媒体事件
     }
 
     /**

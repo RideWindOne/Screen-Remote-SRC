@@ -24,10 +24,28 @@ internal object DeviceInfoProvider {
     ): DeviceInfo =
         coroutineScope {
             try {
-                val modelDeferred = async { dadb.shell("getprop ro.product.model").output.trim() }
-                val manufacturerDeferred = async { dadb.shell("getprop ro.product.manufacturer").output.trim() }
-                val androidVersionDeferred = async { dadb.shell("getprop ro.build.version.release").output.trim() }
-                val serialNumberDeferred = async { dadb.shell("getprop ro.serialno").output.trim() }
+                suspend fun shell(command: String): String {
+                    try {
+                        logShellCommandStart(LogTags.ADB_CONNECTION, command)
+                        val response = dadb.shell(command)
+                        logShellCommandResult(
+                            tag = LogTags.ADB_CONNECTION,
+                            command = command,
+                            exitCode = response.exitCode,
+                            output = response.output,
+                            errorOutput = response.errorOutput,
+                        )
+                        return response.output.trim()
+                    } catch (error: Exception) {
+                        logShellCommandFailure(LogTags.ADB_CONNECTION, command, error)
+                        throw error
+                    }
+                }
+
+                val modelDeferred = async { shell("getprop ro.product.model") }
+                val manufacturerDeferred = async { shell("getprop ro.product.manufacturer") }
+                val androidVersionDeferred = async { shell("getprop ro.build.version.release") }
+                val serialNumberDeferred = async { shell("getprop ro.serialno") }
 
                 val model = modelDeferred.await()
                 val manufacturer = manufacturerDeferred.await()

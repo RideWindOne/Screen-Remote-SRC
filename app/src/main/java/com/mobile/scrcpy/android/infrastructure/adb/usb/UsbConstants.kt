@@ -33,7 +33,19 @@ object UsbConstants {
     /**
      * USB 传输超时（毫秒）
      */
-    const val USB_TIMEOUT = 5000
+    const val USB_WRITE_TIMEOUT = 5000
+
+    /**
+     * USB 单次读取轮询超时（毫秒）
+     *
+     * 使用有限超时，保证上层关闭连接后，阻塞读取可以尽快退出。
+     */
+    const val USB_READ_TIMEOUT = 1000
+
+    /**
+     * USB 读取在没有任何进展时的最大等待时间（毫秒）
+     */
+    const val USB_READ_IDLE_TIMEOUT = 5000
 
     /**
      * USB 批量传输最大包大小

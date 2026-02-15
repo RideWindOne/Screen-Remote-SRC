@@ -12,7 +12,7 @@ data class NewFrame(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.VERBOSE
 
-    override fun getCategory() = Category.MONITOR
+    override fun getCategory() = Category.MEDIA
 
     override fun getDescription() = "新视频帧: ${frameData.size} bytes"
 
@@ -37,7 +37,7 @@ data class ScreenInitSize(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
 
-    override fun getCategory() = Category.MONITOR
+    override fun getCategory() = Category.MEDIA
 
     override fun getDescription() = "屏幕尺寸: ${width}x$height"
 }
@@ -53,7 +53,7 @@ data class VideoFrameDecoded(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.VERBOSE
 
-    override fun getCategory() = Category.MONITOR
+    override fun getCategory() = Category.MEDIA
 
     override fun getDescription() = "[$deviceId] 视频帧解码: ${width}x$height pts=$pts"
 
@@ -70,7 +70,7 @@ data class AudioFrameDecoded(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.VERBOSE
 
-    override fun getCategory() = Category.MONITOR
+    override fun getCategory() = Category.MEDIA
 
     override fun getDescription() = "[$deviceId] 音频帧解码: ${sampleRate}Hz ${channels}ch"
 
@@ -86,7 +86,7 @@ data class VideoDecoderStalled(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.WARN
 
-    override fun getCategory() = Category.MONITOR
+    override fun getCategory() = Category.MEDIA
 
     override fun getDescription() = "[$deviceId] 视频解码器停滞: $reason"
 }
@@ -100,7 +100,7 @@ data class AudioDecoderStalled(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.WARN
 
-    override fun getCategory() = Category.MONITOR
+    override fun getCategory() = Category.MEDIA
 
     override fun getDescription() = "[$deviceId] 音频解码器停滞: $reason"
 }

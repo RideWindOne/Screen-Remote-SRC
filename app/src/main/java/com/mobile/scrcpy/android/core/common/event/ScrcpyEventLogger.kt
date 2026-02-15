@@ -162,6 +162,7 @@ object ScrcpyEventLogger {
             ScrcpyEvent.Category.MONITOR -> "📊"
             ScrcpyEvent.Category.LIFECYCLE -> "🔄"
             ScrcpyEvent.Category.SYSTEM -> "⚙️"
+            ScrcpyEvent.Category.MEDIA -> "🎬"
         }
 
     /**
@@ -202,6 +203,7 @@ object ScrcpyEventLogger {
             ScrcpyEvent.Category.MONITOR -> LogTags.SCRCPY_EVENT_BUS
             ScrcpyEvent.Category.LIFECYCLE -> LogTags.SCRCPY_CLIENT
             ScrcpyEvent.Category.SYSTEM -> LogTags.SCRCPY_EVENT_BUS
+            ScrcpyEvent.Category.MEDIA -> LogTags.VIDEO_DECODER
         }
 
     /**

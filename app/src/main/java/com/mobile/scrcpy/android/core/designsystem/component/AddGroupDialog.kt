@@ -5,7 +5,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppColors
 import com.mobile.scrcpy.android.core.common.AppDimens
@@ -55,7 +55,7 @@ fun AddGroupDialog(
     var parentPath by remember { mutableStateOf(initialParentPath) }
     var groupType by remember { mutableStateOf(initialType) }
     var showPathSelector by remember { mutableStateOf(false) }
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     // 计算完整路径预览
     val fullPath = if (parentPath == "/") "/$name" else "$parentPath/$name"

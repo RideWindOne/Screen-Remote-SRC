@@ -14,9 +14,13 @@ import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal.gener
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal.setupAdbConnection
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal.setupForwardAndPushServer
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal.startScrcpyServer
-import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.VideoStream
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
+import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.VideoStream
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ForwardRemovalTrigger
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SocketIssue
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SocketIssueKind
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SessionEvent
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SocketType
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.runtime.SessionContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -72,6 +76,7 @@ class ConnectionLifecycle(
     internal val context: Context,
     internal val adbConnectionManager: AdbConnectionManager,
     private val stateMachine: ConnectionStateMachine,
+    internal val sessionContext: SessionContext,
     internal val socketManager: ConnectionSocketManager,
     private val metadataReader: ConnectionMetadataReader,
     internal val shellMonitor: ConnectionShellMonitor,
@@ -92,7 +97,7 @@ class ConnectionLifecycle(
     suspend fun connect(): Result<Pair<VideoStream?, AudioStream?>> =
         withContext(Dispatchers.IO) {
             try {
-                val session = CurrentSession.current
+                val session = sessionContext.currentSession() ?: throw IllegalStateException("会话不存在")
                 val options = session.options
 
                 // 步骤 1: 建立/验证 ADB 连接并分配端口
@@ -106,7 +111,7 @@ class ConnectionLifecycle(
                 currentScid = scid
                 val socketName = "scrcpy_%08x".format(scid)
                 setupForwardAndPushServer(connection, socketName)
-                
+
                 // 步骤 3.5: 设置 Socket 管理器的本地端口
                 socketManager.setLocalPort(localPort)
 
@@ -121,10 +126,16 @@ class ConnectionLifecycle(
                     videoSocket = socketManager.videoSocket,
                     audioSocket = socketManager.audioSocket,
                     controlSocket = socketManager.controlSocket,
-                    onConnectionLost = {
+                    onConnectionLostCallback = {
                         LogManager.w(LogTags.SCRCPY_CLIENT, "健康监控检测到连接丢失")
-                        CurrentSession.currentOrNull?.handleEvent(
-                            SessionEvent.SocketError("Video: Socket 连接丢失"),
+                        sessionContext.emit(
+                            SessionEvent.SocketError(
+                                SocketIssue(
+                                    kind = SocketIssueKind.HealthCheckFailed,
+                                    socketType = SocketType.Video,
+                                    detail = "Socket 连接丢失",
+                                ),
+                            ),
                         )
                     },
                 )
@@ -143,7 +154,8 @@ class ConnectionLifecycle(
 
                 Result.success(Pair(videoStream, audioStream))
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "连接失败: ${e.message}", e)
+                shellMonitor.dumpDiagnostics("connect-failed")
+                LogManager.e(LogTags.SCRCPY_CLIENT, "连接失败: ${e.message}")
                 Result.failure(e)
             }
         }
@@ -155,7 +167,7 @@ class ConnectionLifecycle(
     suspend fun disconnect() =
         withContext(Dispatchers.IO) {
             try {
-                val session = CurrentSession.currentOrNull
+                val session = sessionContext.currentSession()
                 val options = session?.options
 
                 // 1. 关闭所有 Socket（停止数据传输）
@@ -172,7 +184,7 @@ class ConnectionLifecycle(
                     val connection = adbConnectionManager.getConnection(deviceId)
                     if (connection != null) {
                         try {
-                            connection.removeAdbForward(localPort)
+                            connection.removeAdbForward(localPort, ForwardRemovalTrigger.Disconnect)
                             LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.get())
                         } catch (e: Exception) {
                             LogManager.w(

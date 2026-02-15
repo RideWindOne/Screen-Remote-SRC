@@ -4,13 +4,9 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
-    resolutionStrategy {
-        eachPlugin {
-            if (requested.id.id == "com.vanniktech.maven.publish") {
-                useModule("com.vanniktech:gradle-maven-publish-plugin:0.25.3")
-            }
-        }
-    }
+}
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 @Suppress("UnstableApiUsage")
@@ -24,3 +20,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "scrcpy-mobile"
 include(":app")
+includeBuild("../external/dadb") {
+    dependencySubstitution {
+        substitute(module("dev.mobile:dadb")).using(project(":dadb"))
+        substitute(module("dev.mobile:dadb-android")).using(project(":dadb-android"))
+    }
+}

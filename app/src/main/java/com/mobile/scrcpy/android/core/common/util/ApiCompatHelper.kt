@@ -12,7 +12,6 @@
 
 package com.mobile.scrcpy.android.core.common.util
 
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -66,137 +65,11 @@ object ApiCompatHelper {
     /** Android 16 - API 36 (Preview) */
     const val API_36_BAKLAVA = 36
 
-    // ============ PendingIntent 兼容 ============
-
-    /**
-     * 获取兼容的 PendingIntent Flags
-     *
-     * Android 6.0 (API 23) 引入了 FLAG_IMMUTABLE
-     * Android 12 (API 31) 强制要求指定 FLAG_IMMUTABLE 或 FLAG_MUTABLE
-     *
-     * @param mutable 是否需要可变的 PendingIntent (默认为不可变)
-     * @return 适用于当前 API 级别的 flags
-     */
-    fun getPendingIntentFlags(mutable: Boolean = false): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (mutable) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            }
-        } else {
-            // API 23 以下不支持 FLAG_IMMUTABLE/FLAG_MUTABLE（理论上不会执行，因为 minSdk=23）
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-
-    /**
-     * 创建 USB 权限请求的 PendingIntent
-     *
-     * Android 14 (API 34) 要求使用显式 Intent 才能使用 FLAG_MUTABLE
-     * 使用 FLAG_MUTABLE 可以让系统弹窗显示"始终允许"选项
-     *
-     * @param context Context 对象
-     * @param action 权限请求的 Action
-     * @return 适用于 USB 权限请求的 PendingIntent
-     */
-    fun createUsbPermissionPendingIntent(
-        context: Context,
-        action: String,
-    ): PendingIntent {
-        val intent =
-            Intent(action).apply {
-                if (Build.VERSION.SDK_INT >= API_34_UPSIDE_DOWN_CAKE) {
-                    // Android 14+ 要求显式 Intent 才能使用 FLAG_MUTABLE
-                    setPackage(context.packageName)
-                }
-            }
-
-        return PendingIntent.getBroadcast(
-            context,
-            0,
-            intent,
-            getPendingIntentFlags(mutable = true), // 使用 FLAG_MUTABLE 以显示"始终允许"选项
-        )
-    }
-
     /**
      * 获取 USB 设备序列号（兼容不同 API 级别）
      */
     fun getUsbDeviceSerialNumber(device: android.hardware.usb.UsbDevice): String? =
         com.mobile.scrcpy.android.core.common.util.compat.getUsbDeviceSerialNumber(device)
-
-    // ============ 前台服务兼容 ============
-
-    /**
-     * 启动前台服务（兼容不同 API 级别）
-     *
-     * Android 8.0 (API 26) 引入了 startForegroundService
-     *
-     * @param context Context 对象
-     * @param intent 服务 Intent
-     */
-    fun startForegroundServiceCompat(
-        context: Context,
-        intent: Intent,
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
-        }
-    }
-
-    /**
-     * 启动前台通知（兼容不同 API 级别）
-     *
-     * Android 14 (API 34) 引入了前台服务类型参数
-     *
-     * @param service 服务实例
-     * @param notificationId 通知 ID
-     * @param notification 通知对象
-     * @param foregroundServiceType 前台服务类型（API 34+），默认为 CONNECTED_DEVICE
-     */
-    fun startForegroundCompat(
-        service: android.app.Service,
-        notificationId: Int,
-        notification: android.app.Notification,
-    ) {
-        if (Build.VERSION.SDK_INT >= API_34_UPSIDE_DOWN_CAKE) {
-            service.startForeground(
-                notificationId,
-                notification,
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-            )
-        } else {
-            service.startForeground(notificationId, notification)
-        }
-    }
-
-    /**
-     * 停止前台服务（兼容不同 API 级别）
-     *
-     * Android 7.0 (API 24) 引入了 STOP_FOREGROUND_REMOVE 常量
-     *
-     * @param service 服务实例
-     * @param removeNotification 是否移除通知
-     */
-    fun stopForegroundCompat(
-        service: android.app.Service,
-        removeNotification: Boolean = true,
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val flags =
-                if (removeNotification) {
-                    android.app.Service.STOP_FOREGROUND_REMOVE
-                } else {
-                    android.app.Service.STOP_FOREGROUND_DETACH
-                }
-            service.stopForeground(flags)
-        } else {
-            @Suppress("DEPRECATION")
-            service.stopForeground(removeNotification)
-        }
-    }
 
     // ============ 窗口/系统栏兼容 ============
 
@@ -269,74 +142,6 @@ object ApiCompatHelper {
 
     fun getHapticFeedbackConstant(feedbackType: String): Int =
         com.mobile.scrcpy.android.core.common.util.compat.getHapticFeedbackConstant(feedbackType)
-
-    // ============ 通知兼容 ============
-
-    /**
-     * 创建通知渠道（兼容不同 API 级别）
-     *
-     * Android 8.0 (API 26) 引入了 NotificationChannel
-     *
-     * @param context Context 对象
-     * @param channelId 通知渠道 ID
-     * @param channelName 通知渠道名称
-     * @param importance 重要性级别（NotificationManager.IMPORTANCE_*）
-     * @param description 渠道描述（可选）
-     * @param showBadge 是否显示角标（默认 false）
-     */
-    fun createNotificationChannelCompat(
-        context: Context,
-        channelId: String,
-        channelName: String,
-        importance: Int,
-        description: String? = null,
-        showBadge: Boolean = false,
-    ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel =
-                android.app
-                    .NotificationChannel(
-                        channelId,
-                        channelName,
-                        importance,
-                    ).apply {
-                        description?.let { this.description = it }
-                        setShowBadge(showBadge)
-                    }
-
-            val notificationManager =
-                context.getSystemService(
-                    Context.NOTIFICATION_SERVICE,
-                ) as? android.app.NotificationManager
-            notificationManager?.createNotificationChannel(channel)
-        }
-        // API 26 以下不需要创建通知渠道
-    }
-
-    /**
-     * 创建兼容的 NotificationCompat.Builder
-     *
-     * Android 8.0 (API 26) 引入了 NotificationChannel，必须指定 channelId
-     * Android 6.0-7.1 (API 23-25) 不需要 channelId
-     *
-     * @param context Context 对象
-     * @param channelId 通知渠道 ID（API 26+ 必需）
-     * @return NotificationCompat.Builder 实例
-     */
-    fun createNotificationBuilder(
-        context: Context,
-        channelId: String,
-    ): androidx.core.app.NotificationCompat.Builder =
-        if (isApiLevel(API_26_OREO)) {
-            // Android 8.0+ 必须指定 channelId
-            androidx.core.app.NotificationCompat
-                .Builder(context, channelId)
-        } else {
-            // Android 6.0-7.1 不需要 channelId
-            @Suppress("DEPRECATION")
-            androidx.core.app.NotificationCompat
-                .Builder(context)
-        }
 
     // ============ 日志输出 ============
 

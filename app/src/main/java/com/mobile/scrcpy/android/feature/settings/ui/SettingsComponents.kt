@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppDimens
+import com.mobile.scrcpy.android.core.common.IosDesignTokens
 import com.mobile.scrcpy.android.core.designsystem.component.HelpIcon
 import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.mobile.scrcpy.android.core.designsystem.component.IOSSwitch
@@ -46,7 +47,7 @@ fun SettingsCard(
         SectionTitle(title)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(AppDimens.cardCornerRadius),
             colors =
                 CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -68,9 +69,9 @@ fun SettingsCard(
 @Composable
 fun SettingsDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp),
+        modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = IosDesignTokens.dividerAlpha),
     )
 }
 
@@ -102,13 +103,13 @@ fun SettingsItem(
                 .fillMaxWidth()
                 .height(AppDimens.listItemHeight)
                 .clickable(enabled = enabled && onClick != null) { onClick?.invoke() }
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactInlineSpacing),
         ) {
             Text(
                 text = title,
@@ -147,7 +148,7 @@ fun SettingsItem(
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(IosDesignTokens.externalIconSize),
                 )
             }
         }
@@ -179,13 +180,13 @@ fun SettingsItemWithMenu(
                 .fillMaxWidth()
                 .height(AppDimens.listItemHeight)
                 .clickable { onExpandedChange(true) }
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactInlineSpacing),
         ) {
             Text(
                 text = title,
@@ -235,13 +236,13 @@ fun SettingsSwitch(
             Modifier
                 .fillMaxWidth()
                 .height(AppDimens.listItemHeight)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactInlineSpacing),
             modifier = Modifier.weight(1f, fill = false),
         ) {
             Text(

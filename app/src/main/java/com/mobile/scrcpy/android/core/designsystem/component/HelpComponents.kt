@@ -5,10 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppColors
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
+import com.mobile.scrcpy.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 /**
  * 帮助图标组件
@@ -102,6 +101,5 @@ private fun HelpDialog(
                 )
             }
         },
-        shape = RoundedCornerShape(16.dp),
     )
 }

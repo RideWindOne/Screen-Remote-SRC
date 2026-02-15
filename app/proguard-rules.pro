@@ -1,95 +1,36 @@
-# Add project specific ProGuard rules here.
-# -keep class com.mobile.scrcpy.android.** { *; }
-
 # ============ Kotlin 相关 ============
 -dontwarn kotlin.**
+-dontwarn com.android.org.conscrypt.SSLParametersImpl
+-dontwarn org.apache.harmony.xnet.provider.jsse.SSLParametersImpl
 -keepclassmembers class **$WhenMappings {
     <fields>;
 }
 
-# ============ Jetpack Compose ============
-# Compose 运行时需要保留的类
--keep class androidx.compose.runtime.** { *; }
--keep class androidx.compose.ui.** { *; }
-
-# ============ 数据模型 ============
-# 保留所有数据类（用于序列化/反序列化）
--keep @kotlinx.serialization.Serializable class * { *; }
--keepclassmembers class * {
-    @kotlinx.serialization.SerialName <fields>;
+# ============ JNI / 反射入口 ============
+# Native 层通过 FindClass/GetStaticMethodID 定位这些符号，不能混淆或删除。
+-keep class com.mobile.scrcpy.android.infrastructure.adb.connection.AdbBridge {
+    public static int executeAdbCommand(java.lang.String[]);
+    public static int waitProcess(int);
+    public static java.lang.String readProcessOutput(int);
+    public static boolean terminateProcess(int);
+    public static void cleanupProcess(int);
 }
 
-# 保留 Models.kt 中的数据类
--keep class com.mobile.scrcpy.android.core.data.model.** { *; }
-
-# ============ JNI 相关 ============
-# 保留所有 native 方法
--keepclasseswithmembernames class * {
-    native <methods>;
+-keep class com.mobile.scrcpy.android.core.common.manager.LogManager {
+    public static void writeRawLogJNI(java.lang.String, java.lang.String, java.lang.String);
 }
 
-# 保留 JNI 桥接类
--keep class com.mobile.scrcpy.android.feature.scrcpy.bridge.** { *; }
-
-# ============ ViewModel ============
-# 保留 ViewModel 的构造函数（用于反射创建）
--keep class * extends androidx.lifecycle.ViewModel {
-    <init>(...);
-}
-
-# ============ 反射相关 ============
-# 保留被反射调用的类和方法
--keepclassmembers class * {
-    @androidx.annotation.Keep *;
-}
-
-# ============ 枚举 ============
-# 保留枚举类
--keepclassmembers enum * {
-    public static **[] values();
-    public static ** valueOf(java.lang.String);
-}
-
-# ============ Parcelable ============
--keep class * implements android.os.Parcelable {
-    public static final android.os.Parcelable$Creator *;
-}
-
-# ============ 序列化 ============
-# Kotlinx Serialization
--keepattributes *Annotation*, InnerClasses
+# ============ Kotlinx Serialization ============
+-keepattributes *Annotation*,InnerClasses,Signature,SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 -dontnote kotlinx.serialization.AnnotationsKt
 
--keepclassmembers class kotlinx.serialization.json.** {
-    *** Companion;
-}
--keepclasseswithmembers class kotlinx.serialization.json.** {
+-keep @kotlinx.serialization.Serializable class * { *; }
+-keep class **$$serializer { *; }
+-keepclassmembers class * {
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# ============ DataStore ============
-# 保留 DataStore Preferences 相关
--keep class androidx.datastore.*.** { *; }
-
 # ============ Coroutines ============
--keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
--keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
--keepclassmembers class kotlinx.coroutines.** {
-    volatile <fields>;
-}
-
-# ============ 调试信息 ============
--keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile
-
-# ============ 日志管理 ============
-# 保留 LogManager 的所有方法（项目使用自定义日志系统写入文件）
--keep class LogManager {
-    public <methods>;
-}
-
-# 注意：不移除 android.util.Log 调用，因为：
-# 1. LogManager 依赖 Log 输出到 Logcat
-# 2. LogManager 同时将日志写入文件
-# 3. 项目内部已有日志开关（LogManager.setEnabled()）控制日志收集
-# 4. 移除 Log 调用会导致文件日志功能失效
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler

@@ -5,6 +5,7 @@ package com.mobile.scrcpy.android.core.domain.model
  */
 enum class ConnectionType {
     TCP, // TCP/IP 网络连接
+    TLS, // Wireless Debugging / ADB over TLS
     USB, // USB 有线连接
 }
 

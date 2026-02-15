@@ -20,6 +20,11 @@ object SettingsTexts {
     val SETTINGS_DEVICE_PAIRING = TextPair("使用配对码进行 ADB 配对", "ADB Pairing with Pairing Code")
     val SETTINGS_FILE_TRANSFER_PATH = TextPair("文件发送默认路径", "Default File Transfer Path")
     val SETTINGS_ENABLE_LOG = TextPair("启用日志记录", "Enable Logging")
+    val SETTINGS_AUDIO_STREAM_LOG = TextPair("音频流日志", "Audio Stream Logs")
+    val SETTINGS_VIDEO_STREAM_LOG = TextPair("视频流日志", "Video Stream Logs")
+    val SETTINGS_CONTROL_STREAM_LOG = TextPair("控制流日志", "Control Stream Logs")
+    val SETTINGS_SHELL_STREAM_LOG = TextPair("Shell 日志", "Shell Stream Logs")
+    val SETTINGS_MANAGEMENT_LOG = TextPair("管理日志", "Management Logs")
     val SETTINGS_LOG_MANAGEMENT = TextPair("日志管理", "Log Management")
     val SETTINGS_CLEAR_LOGS = TextPair("清除全部日志", "Clear All Logs")
     val SETTINGS_SUBMIT_ISSUE = TextPair("提交问题", "Submit Issue")
@@ -120,6 +125,31 @@ object SettingsTexts {
         TextPair(
             "启用应用活动日志记录。日志会记录应用的关键操作和错误信息，用于问题排查和调试。日志文件存储在应用私有目录中，不会占用大量空间。",
             "Enable application activity logging. Logs record key operations and error messages for troubleshooting and debugging. Log files are stored in the app's private directory and won't take up much space.",
+        )
+    val HELP_AUDIO_STREAM_LOG =
+        TextPair(
+            "记录音频流调试细节，例如配置包、音频帧、输出缓冲和部分头信息。仅在排查音频解码或音频链路问题时建议开启。",
+            "Record detailed audio stream diagnostics such as config packets, audio frames, output buffers, and header details. Recommended only when debugging audio decoding or transport issues.",
+        )
+    val HELP_VIDEO_STREAM_LOG =
+        TextPair(
+            "记录视频流调试细节，例如视频元数据、关键帧、包头和解码器切面日志。仅在排查视频链路问题时建议开启。",
+            "Record detailed video stream diagnostics such as video metadata, keyframes, packet headers, and decoder surface logs. Recommended only when debugging video transport issues.",
+        )
+    val HELP_CONTROL_STREAM_LOG =
+        TextPair(
+            "记录控制流调试细节，例如控制消息发送线程、文本注入、控制保活与控制 Socket 就绪状态。仅在排查控制失效时建议开启。",
+            "Record detailed control stream diagnostics such as sender thread activity, text injection, control keepalive, and control socket readiness. Recommended only when debugging input/control issues.",
+        )
+    val HELP_SHELL_STREAM_LOG =
+        TextPair(
+            "记录 scrcpy-server shell 输出、stderr、退出码和启动/监控阶段的包级诊断信息。建议在排查 server 启动失败、server 进程退出或 dummy byte/Socket 异常时开启。",
+            "Record scrcpy-server shell stdout, stderr, exit codes, and packet-level diagnostics during startup/runtime monitoring. Recommended when debugging server startup failures, process exits, or dummy-byte/socket anomalies.",
+        )
+    val HELP_MANAGEMENT_LOG =
+        TextPair(
+            "记录管理功能的调试细节，例如 ADB Bridge 命令、应用图标辅助请求和文件/应用管理相关的高频诊断日志。仅在排查管理功能时建议开启。",
+            "Record detailed management diagnostics such as ADB Bridge commands, app-icon helper requests, and high-frequency file/app management diagnostics. Recommended only when debugging management features.",
         )
     val HELP_LOG_MANAGEMENT =
         TextPair(

@@ -28,6 +28,7 @@ import com.mobile.scrcpy.android.feature.codec.component.encoder.matchesAudioCod
 import com.mobile.scrcpy.android.feature.codec.component.encoder.matchesVideoCodecFilter
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
 import com.mobile.scrcpy.android.infrastructure.adb.connection.EncoderInfo
+import com.mobile.scrcpy.android.service.ScrcpyForegroundService
 import kotlinx.coroutines.launch
 
 /**
@@ -114,6 +115,7 @@ fun EncoderSelectionDialog(
                 }
 
                 val deviceId = "$host:${port.ifBlank { "5555" }}"
+                val hadExistingConnection = adbConnectionManager.isDeviceConnected(deviceId)
                 val connectResult = adbConnectionManager.connectDevice(host, port.toIntOrNull() ?: 5555)
 
                 if (connectResult.isFailure) {
@@ -127,6 +129,15 @@ fun EncoderSelectionDialog(
                     detectError = SessionTexts.ERROR_CANNOT_GET_CONNECTION.get()
                     isDetecting = false
                     return@launch
+                }
+
+                if (!hadExistingConnection) {
+                    ScrcpyForegroundService.protectDevice(
+                        context = context,
+                        deviceId = deviceId,
+                        deviceName = connection.deviceInfo.name,
+                        delayedAck = connection.supportsDelayedAck(),
+                    )
                 }
 
                 // 检测编码器

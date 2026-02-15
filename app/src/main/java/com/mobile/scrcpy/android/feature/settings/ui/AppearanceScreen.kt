@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppColors
 import com.mobile.scrcpy.android.core.common.AppDimens
+import com.mobile.scrcpy.android.core.common.IosDesignTokens
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
@@ -76,9 +77,9 @@ fun AppearanceScreen(
                 )
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = 0.3f),
+                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 ThemeOption(
@@ -94,9 +95,9 @@ fun AppearanceScreen(
                 )
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = 0.3f),
+                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 ThemeOption(
@@ -127,7 +128,7 @@ private fun ThemeOption(
                 .fillMaxWidth()
                 .height(AppDimens.themeOptionHeight)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

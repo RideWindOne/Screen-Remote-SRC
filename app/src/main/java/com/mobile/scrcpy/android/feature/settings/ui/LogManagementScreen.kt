@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +33,7 @@ import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
+import com.mobile.scrcpy.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.mobile.scrcpy.android.core.designsystem.component.LogFileItem
 import com.mobile.scrcpy.android.core.designsystem.component.LogViewerDialog
 import com.mobile.scrcpy.android.core.designsystem.component.formatFileSize

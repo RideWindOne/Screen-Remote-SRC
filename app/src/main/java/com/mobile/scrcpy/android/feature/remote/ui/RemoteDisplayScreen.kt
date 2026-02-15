@@ -1,13 +1,20 @@
 package com.mobile.scrcpy.android.feature.remote.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.net.Uri
 import android.view.SurfaceHolder
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -19,11 +26,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -31,75 +40,334 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobile.scrcpy.android.app.ScreenRemoteApp
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
-import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import com.mobile.scrcpy.android.core.data.datastore.PreferencesManager
+import com.mobile.scrcpy.android.core.data.repository.SessionData
+import com.mobile.scrcpy.android.core.data.repository.SessionRepository
 import com.mobile.scrcpy.android.core.designsystem.component.MessageItem
+import com.mobile.scrcpy.android.core.designsystem.component.MessageListState
 import com.mobile.scrcpy.android.core.designsystem.component.rememberMessageListState
+import com.mobile.scrcpy.android.core.domain.model.AppSettings
+import com.mobile.scrcpy.android.core.domain.model.ConnectionProgress
 import com.mobile.scrcpy.android.core.domain.model.getDisplayText
 import com.mobile.scrcpy.android.core.domain.model.getIcon
+import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
+import com.mobile.scrcpy.android.core.common.util.FilePickerHelper
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
-import com.mobile.scrcpy.android.feature.remote.components.audio.rememberAudioDecoderManager
-import com.mobile.scrcpy.android.feature.remote.components.connection.ConnectionStateOverlay
-import com.mobile.scrcpy.android.feature.remote.components.floating.AutoFloatingMenu
-import com.mobile.scrcpy.android.feature.remote.components.touch.KeyboardInputHandler
-import com.mobile.scrcpy.android.feature.remote.components.video.VideoDisplayArea
-import com.mobile.scrcpy.android.feature.remote.components.video.rememberVideoDecoderManager
-import com.mobile.scrcpy.android.feature.remote.viewmodel.ControlViewModel
-import com.mobile.scrcpy.android.core.data.repository.SessionRepository
+import com.mobile.scrcpy.android.feature.remote.model.RemoteUiLayoutNode
+import com.mobile.scrcpy.android.feature.remote.model.RemoteUiLayoutSnapshot
+import com.mobile.scrcpy.android.feature.remote.presentation.ConnectionViewModel
+import com.mobile.scrcpy.android.feature.remote.presentation.ControlViewModel
+import com.mobile.scrcpy.android.feature.remote.presentation.VideoDecoderManager
+import com.mobile.scrcpy.android.feature.remote.presentation.rememberAudioDecoderManager
+import com.mobile.scrcpy.android.feature.remote.presentation.rememberVideoDecoderManager
+import com.mobile.scrcpy.android.feature.remote.ui.internal.RemoteLayoutInspectorOverlay
+import com.mobile.scrcpy.android.feature.remote.widget.connection.ConnectionStateOverlay
+import com.mobile.scrcpy.android.feature.remote.widget.floating.AutoFloatingMenu
+import com.mobile.scrcpy.android.feature.remote.widget.floating.FloatingMenuActions
+import com.mobile.scrcpy.android.feature.remote.widget.touch.KeyboardInputHandler
+import com.mobile.scrcpy.android.feature.remote.widget.video.VideoDisplayArea
 import com.mobile.scrcpy.android.feature.session.viewmodel.MainViewModel
-import com.mobile.scrcpy.android.feature.session.viewmodel.SessionViewModel
 import com.mobile.scrcpy.android.feature.settings.viewmodel.SettingsViewModel
+import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionState
+import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.VideoStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private data class RemoteLayoutInspectorUiState(
+    val isLoading: Boolean,
+    val isOverlayVisible: Boolean,
+    val isTargetKeyboardVisible: Boolean,
+    val snapshot: RemoteUiLayoutSnapshot?,
+    val nodes: List<RemoteUiLayoutNode>,
+)
+
+private data class RemoteDisplayScreenRouteState(
+    val videoStream: VideoStream?,
+    val audioStream: AudioStream?,
+    val connectionState: ConnectionState,
+    val connectionProgress: List<ConnectionProgress>,
+    val settings: AppSettings,
+    val sessionData: SessionData?,
+    val messageListState: MessageListState,
+    val videoDecoderManager: VideoDecoderManager,
+    val floatingMenuActions: FloatingMenuActions,
+    val uploadPickerRequestToken: Int,
+    val keyboardRequestToken: Int,
+    val layoutInspectorState: RemoteLayoutInspectorUiState,
+    val uploadSelectedFile: (Uri) -> Unit,
+    val refreshLayoutInspectorOverlay: () -> Unit,
+    val hideLayoutInspectorOverlay: () -> Unit,
+    val showKeyboardInput: Boolean,
+    val onKeyboardInputVisibleChange: (Boolean) -> Unit,
+    val surfaceHolder: SurfaceHolder?,
+    val onSurfaceHolderChanged: (SurfaceHolder?) -> Unit,
+    val lifecycleState: Lifecycle.Event,
+    val onLifecycleStateChanged: (Lifecycle.Event) -> Unit,
+    val videoAspectRatio: Float,
+    val videoWidth: Int,
+    val videoHeight: Int,
+    val onVideoMetricsChanged: (Int, Int, Float) -> Unit,
+)
+
 @SuppressLint("ClickableViewAccessibility", "ConfigurationScreenWidthHeight")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RemoteDisplayScreen(
     sessionId: String,
     mainViewModel: MainViewModel,
     onClose: () -> Unit,
 ) {
-    val context = LocalContext.current // TODO
-    val scope = rememberCoroutineScope() // TODO
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    // 获取依赖
     val sessionRepository = remember { SessionRepository(context) }
     val adbConnectionManager = remember { ScreenRemoteApp.instance.adbConnectionManager }
     val preferencesManager = remember { PreferencesManager(context) }
 
-    // 使用 MainViewModel 中的实例
     val scrcpyClient = mainViewModel.scrcpyClient
-    val connectionVM = mainViewModel.connectionViewModel
-
-    // 创建其他 ViewModels
-    val controlVM: ControlViewModel =
+    val connectionViewModel = mainViewModel.connectionViewModel
+    val controlViewModel: ControlViewModel =
         viewModel(
             factory = ControlViewModel.provideFactory(scrcpyClient, adbConnectionManager),
         )
-    val sessionVM: SessionViewModel =
-        viewModel(
-            factory = SessionViewModel.provideFactory(sessionRepository),
-        )
-    val settingsVM: SettingsViewModel =
+    val settingsViewModel: SettingsViewModel =
         viewModel(
             factory = SettingsViewModel.provideFactory(preferencesManager),
         )
 
-    // 收集状态
-    val videoStream by connectionVM.getVideoStream().collectAsState()
-    val audioStream by connectionVM.getAudioStream().collectAsState()
-    val connectionState by connectionVM.getConnectionState().collectAsState()
-    val connectionProgress by connectionVM.connectionProgress.collectAsState()
-    val settings by settingsVM.settings.collectAsState() // TODO
-    val sessionData by remember {
+    val routeState =
+        rememberRemoteDisplayScreenRouteState(
+            context = context,
+            sessionId = sessionId,
+            sessionRepository = sessionRepository,
+            controlViewModel = controlViewModel,
+            connectionViewModel = connectionViewModel,
+            settingsViewModel = settingsViewModel,
+        )
+
+    RemoteDisplayScreenEffects(
+        sessionId = sessionId,
+        routeState = routeState,
+        controlViewModel = controlViewModel,
+        connectionViewModel = connectionViewModel,
+        onClose = onClose,
+        scope = scope,
+    )
+
+    RemoteDisplayScreenContent(
+        sessionId = sessionId,
+        routeState = routeState,
+        controlViewModel = controlViewModel,
+        connectionViewModel = connectionViewModel,
+        onClose = onClose,
+    )
+}
+
+@Composable
+private fun rememberRemoteDisplayScreenRouteState(
+    context: Context,
+    sessionId: String,
+    sessionRepository: SessionRepository,
+    controlViewModel: ControlViewModel,
+    connectionViewModel: ConnectionViewModel,
+    settingsViewModel: SettingsViewModel,
+): RemoteDisplayScreenRouteState {
+    val videoStream by connectionViewModel.getVideoStream().collectAsState()
+    val audioStream by connectionViewModel.getAudioStream().collectAsState()
+    val connectionState by connectionViewModel.getConnectionState().collectAsState()
+    val connectionProgress by connectionViewModel.connectionProgress.collectAsState()
+    val settings by settingsViewModel.settings.collectAsState()
+    val sessionData by remember(sessionId, sessionRepository) {
         sessionRepository.getSessionDataFlow(sessionId)
     }.collectAsState(initial = null)
+    val scope = rememberCoroutineScope()
 
-    val keyboardController = LocalSoftwareKeyboardController.current
+    val messageListState = rememberMessageListState()
+
+    var showKeyboardInput by remember { mutableStateOf(false) }
+    var keyboardRequestToken by remember { mutableIntStateOf(0) }
+    var isLayoutInspectorLoading by remember { mutableStateOf(false) }
+    var isUploadingFile by remember { mutableStateOf(false) }
+    var uploadPickerRequestToken by remember { mutableIntStateOf(0) }
+    var isLayoutInspectorVisible by remember { mutableStateOf(false) }
+    var isLayoutInspectorAutoRefreshEnabled by remember { mutableStateOf(false) }
+    var isTargetKeyboardVisible by remember { mutableStateOf(false) }
+    var layoutInspectorSnapshot by remember { mutableStateOf<RemoteUiLayoutSnapshot?>(null) }
+    var layoutInspectorNodes by remember { mutableStateOf<List<RemoteUiLayoutNode>>(emptyList()) }
+    var surfaceHolder by remember { mutableStateOf<SurfaceHolder?>(null) }
+    var lifecycleState by remember { mutableStateOf(Lifecycle.Event.ON_ANY) }
+    var videoAspectRatio by remember { mutableFloatStateOf(9f / 16f) }
+    var videoWidth by remember { mutableIntStateOf(0) }
+    var videoHeight by remember { mutableIntStateOf(0) }
+
+    rememberAudioDecoderManager(
+        connectionViewModel = connectionViewModel,
+        audioStream = audioStream,
+        audioVolume = 1.0f,
+    )
+
+    val videoDecoderManager =
+        rememberVideoDecoderManager(
+            connectionViewModel = connectionViewModel,
+            videoStream = videoStream,
+            surfaceHolder = surfaceHolder,
+            lifecycleState = lifecycleState,
+            onVideoSizeChanged = { width, height, aspectRatio ->
+                videoWidth = width
+                videoHeight = height
+                videoAspectRatio = aspectRatio
+            },
+        )
+
+    fun requestLayoutInspectorRender(showOverlayOnSuccess: Boolean) {
+        if (isLayoutInspectorLoading) {
+            return
+        }
+
+        scope.launch {
+            isLayoutInspectorLoading = true
+
+            val result = controlViewModel.captureCurrentUiLayout()
+            result
+                .onSuccess { snapshot ->
+                    if (snapshot.nodes.isEmpty()) {
+                        layoutInspectorSnapshot = snapshot
+                        layoutInspectorNodes = emptyList()
+                        isLayoutInspectorVisible = false
+                        isLayoutInspectorAutoRefreshEnabled = false
+                        Toast.makeText(context, RemoteTexts.REMOTE_LAYOUT_RENDER_EMPTY.get(), Toast.LENGTH_SHORT).show()
+                    } else {
+                        layoutInspectorSnapshot = snapshot
+                        layoutInspectorNodes = snapshot.nodes
+                        if (showOverlayOnSuccess || isLayoutInspectorAutoRefreshEnabled) {
+                            isLayoutInspectorVisible = true
+                        }
+                    }
+                }.onFailure { error ->
+                    val message =
+                        error.message?.takeIf { it.isNotBlank() }
+                            ?: RemoteTexts.REMOTE_LAYOUT_RENDER_FAILED.get()
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                }
+
+            controlViewModel.isTargetDeviceKeyboardVisible()
+                .onSuccess { visible ->
+                    isTargetKeyboardVisible = visible
+                }
+
+            isLayoutInspectorLoading = false
+        }
+    }
+
+    val floatingMenuActions =
+        remember(controlViewModel, settings.enableFloatingHapticFeedback, connectionViewModel) {
+            FloatingMenuActions(
+                controlViewModel = controlViewModel,
+                captureTargetDeviceScreenshot = {
+                    controlViewModel.captureTargetDeviceScreenshot()
+                },
+                disconnect = {
+                    connectionViewModel.clearConnectStatus()
+                    connectionViewModel.disconnectFromDevice()
+                },
+                showKeyboardInput = {
+                    showKeyboardInput = true
+                    keyboardRequestToken += 1
+                },
+                requestUploadFilePicker = {
+                    if (!isUploadingFile) {
+                        uploadPickerRequestToken += 1
+                    }
+                },
+                requestLayoutInspectorRender = {
+                    isLayoutInspectorAutoRefreshEnabled = true
+                    requestLayoutInspectorRender(showOverlayOnSuccess = true)
+                },
+                hapticEnabled = settings.enableFloatingHapticFeedback,
+            )
+        }
+
+    fun uploadSelectedFile(uri: Uri) {
+        if (isUploadingFile) {
+            return
+        }
+
+        scope.launch {
+            isUploadingFile = true
+
+            val result = controlViewModel.uploadFileToDevice(context, uri)
+            result
+                .onSuccess { remotePath ->
+                    Toast.makeText(context, "已上传到 $remotePath", Toast.LENGTH_SHORT).show()
+                }.onFailure { error ->
+                    val message = error.message?.ifBlank { null } ?: "上传失败"
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                }
+
+            isUploadingFile = false
+        }
+    }
+
+    return RemoteDisplayScreenRouteState(
+        videoStream = videoStream,
+        audioStream = audioStream,
+        connectionState = connectionState,
+        connectionProgress = connectionProgress,
+        settings = settings,
+        sessionData = sessionData,
+        messageListState = messageListState,
+        videoDecoderManager = videoDecoderManager,
+        floatingMenuActions = floatingMenuActions,
+        uploadPickerRequestToken = uploadPickerRequestToken,
+        keyboardRequestToken = keyboardRequestToken,
+        layoutInspectorState =
+            RemoteLayoutInspectorUiState(
+                isLoading = isLayoutInspectorLoading,
+                isOverlayVisible = isLayoutInspectorVisible && isLayoutInspectorAutoRefreshEnabled,
+                isTargetKeyboardVisible = isTargetKeyboardVisible,
+                snapshot = layoutInspectorSnapshot,
+                nodes = layoutInspectorNodes,
+            ),
+        uploadSelectedFile = ::uploadSelectedFile,
+        refreshLayoutInspectorOverlay = {
+            requestLayoutInspectorRender(showOverlayOnSuccess = false)
+        },
+        hideLayoutInspectorOverlay = {
+            isLayoutInspectorVisible = false
+            isLayoutInspectorAutoRefreshEnabled = false
+            isTargetKeyboardVisible = false
+        },
+        showKeyboardInput = showKeyboardInput,
+        onKeyboardInputVisibleChange = { showKeyboardInput = it },
+        surfaceHolder = surfaceHolder,
+        onSurfaceHolderChanged = { surfaceHolder = it },
+        lifecycleState = lifecycleState,
+        onLifecycleStateChanged = { lifecycleState = it },
+        videoAspectRatio = videoAspectRatio,
+        videoWidth = videoWidth,
+        videoHeight = videoHeight,
+        onVideoMetricsChanged = { width, height, aspectRatio ->
+            videoWidth = width
+            videoHeight = height
+            videoAspectRatio = aspectRatio
+        },
+    )
+}
+
+@Composable
+private fun RemoteDisplayScreenEffects(
+    sessionId: String,
+    routeState: RemoteDisplayScreenRouteState,
+    controlViewModel: ControlViewModel,
+    connectionViewModel: ConnectionViewModel,
+    onClose: () -> Unit,
+    scope: CoroutineScope,
+) {
+    val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 全屏模式：进入时启用，退出时恢复
     DisposableEffect(Unit) {
         val activity = context as? ComponentActivity
         activity?.window?.let { window ->
@@ -112,18 +380,12 @@ fun RemoteDisplayScreen(
         }
     }
 
-    // 消息列表状态
-    val messageListState = rememberMessageListState()
-
-    // 监听 connectionProgress 变化，同步到消息列表
-    LaunchedEffect(connectionProgress) {
-        if (connectionProgress.isEmpty()) {
-            messageListState.clear()
+    LaunchedEffect(routeState.connectionProgress) {
+        if (routeState.connectionProgress.isEmpty()) {
+            routeState.messageListState.clear()
         } else {
-            connectionProgress.forEach { progress ->
+            routeState.connectionProgress.forEach { progress ->
                 val messageId = progress.step.name
-                val existingMessage = messageListState.messages.find { it.id == messageId }
-
                 val newMessage =
                     MessageItem(
                         id = messageId,
@@ -132,37 +394,23 @@ fun RemoteDisplayScreen(
                         subtitle = progress.message,
                         error = progress.error,
                     )
-
+                val existingMessage = routeState.messageListState.messages.find { it.id == messageId }
                 if (existingMessage == null) {
-                    messageListState.addMessage(newMessage)
+                    routeState.messageListState.addMessage(newMessage)
                 } else {
-                    messageListState.updateMessage(messageId) { newMessage }
+                    routeState.messageListState.updateMessage(messageId) { newMessage }
                 }
             }
         }
     }
 
-    // 键盘输入状态
-    var showKeyboardInput by remember { mutableStateOf(false) }
-
-    // Surface 状态
-    var surfaceHolder by remember { mutableStateOf<SurfaceHolder?>(null) }
-
-    // 生命周期监听
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var lifecycleState by remember { mutableStateOf(Lifecycle.Event.ON_ANY) }
-
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
-                lifecycleState = event
+                routeState.onLifecycleStateChanged(event)
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    // 在 Socket 未连接的时候就会触发，有点太早了，再观察观察
                     scope.launch {
-                        try {
-                            controlVM.wakeUpScreen()
-                        } catch (e: Exception) {
-                        }
+                        runCatching { controlViewModel.wakeUpScreen() }
                     }
                 }
             }
@@ -172,37 +420,29 @@ fun RemoteDisplayScreen(
         }
     }
 
-    // 视频尺寸和宽高比
-    var videoAspectRatio by remember { mutableFloatStateOf(9f / 16f) }
-    var videoWidth by remember { mutableIntStateOf(0) }
-    var videoHeight by remember { mutableIntStateOf(0) }
-
-    // 监听 A 的旋转，重新计算宽高比
     val isALandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    LaunchedEffect(isALandscape) {
-        if (videoWidth > 0 && videoHeight > 0) {
-            videoAspectRatio = videoWidth.toFloat() / videoHeight.toFloat()
+    LaunchedEffect(isALandscape, routeState.videoWidth, routeState.videoHeight) {
+        if (routeState.videoWidth > 0 && routeState.videoHeight > 0) {
+            val aspectRatio = routeState.videoWidth.toFloat() / routeState.videoHeight.toFloat()
+            routeState.onVideoMetricsChanged(routeState.videoWidth, routeState.videoHeight, aspectRatio)
 
-            val isBLandscape = videoWidth > videoHeight
+            val isBLandscape = routeState.videoWidth > routeState.videoHeight
             val containerAspectRatio =
                 configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
-            val matchHeightFirst = videoAspectRatio < containerAspectRatio
+            val matchHeightFirst = aspectRatio < containerAspectRatio
 
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
                 "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.get()}: A${if (isALandscape) {
-                    RemoteTexts.REMOTE_LANDSCAPE
-                        .get()
+                    RemoteTexts.REMOTE_LANDSCAPE.get()
                 } else {
                     RemoteTexts.REMOTE_PORTRAIT.get()
                 }}, B${if (isBLandscape) {
-                    RemoteTexts.REMOTE_LANDSCAPE
-                        .get()
+                    RemoteTexts.REMOTE_LANDSCAPE.get()
                 } else {
                     RemoteTexts.REMOTE_PORTRAIT.get()
-                }}, ${RemoteTexts.REMOTE_ASPECT_RATIO.get()}=$videoAspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.get()}: ${if (matchHeightFirst) {
-                    RemoteTexts.REMOTE_FILL_HEIGHT
-                        .get()
+                }}, ${RemoteTexts.REMOTE_ASPECT_RATIO.get()}=$aspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.get()}: ${if (matchHeightFirst) {
+                    RemoteTexts.REMOTE_FILL_HEIGHT.get()
                 } else {
                     RemoteTexts.REMOTE_FILL_WIDTH.get()
                 }}",
@@ -210,50 +450,17 @@ fun RemoteDisplayScreen(
         }
     }
 
-    // 音频解码器管理
-    val audioVolume = 1.0f // sessionData?.audioVolume?.toFloatOrNull() ?: 1.0f
-    rememberAudioDecoderManager(
-        connectionViewModel = connectionVM,
-        sessionViewModel = sessionVM,
-        sessionId = sessionId,
-        sessionData = sessionData,
-        audioStream = audioStream,
-        audioVolume = audioVolume,
-    )
-
-    // 视频解码器管理
-    val videoDecoderManager =
-        rememberVideoDecoderManager(
-            connectionViewModel = connectionVM,
-            sessionViewModel = sessionVM,
-            sessionId = sessionId,
-            sessionData = sessionData,
-            videoStream = videoStream,
-            surfaceHolder = surfaceHolder,
-            lifecycleState = lifecycleState,
-            onVideoSizeChanged = { w, h, aspectRatio ->
-                videoWidth = w
-                videoHeight = h
-                videoAspectRatio = aspectRatio
-            },
-        )
-
-    // 拦截返回键
-    // - 连接中/重连中：取消连接并返回主目录
-    // - 已连接：传递给远程设备
     BackHandler(
         enabled =
-            connectionState is ConnectionState.Connected ||
-                connectionState is ConnectionState.Connecting ||
-                connectionState is ConnectionState.Reconnecting,
+            routeState.connectionState is ConnectionState.Connected ||
+                routeState.connectionState is ConnectionState.Connecting ||
+                routeState.connectionState is ConnectionState.Reconnecting,
     ) {
-        LogManager.d(LogTags.REMOTE_DISPLAY, "返回键被触发，当前状态: $connectionState")
-        when (connectionState) {
+        LogManager.d(LogTags.REMOTE_DISPLAY, "返回键被触发，当前状态: ${routeState.connectionState}")
+        when (routeState.connectionState) {
             is ConnectionState.Connected -> {
-                // 已连接：发送返回键给远程设备
                 scope.launch {
-                    LogManager.d(LogTags.REMOTE_DISPLAY, "准备发送返回键到远程设备")
-                    val result = controlVM.sendKeyEvent(4) // KEYCODE_BACK
+                    val result = controlViewModel.sendKeyEvent(4)
                     if (result.isFailure) {
                         LogManager.e(
                             LogTags.REMOTE_DISPLAY,
@@ -268,19 +475,45 @@ fun RemoteDisplayScreen(
             is ConnectionState.Connecting,
             is ConnectionState.Reconnecting,
             -> {
-                // 连接中/重连中：取消连接并返回主目录
                 LogManager.d(LogTags.REMOTE_DISPLAY, "连接中/重连中，取消连接")
-                connectionVM.cancelConnect()
+                connectionViewModel.cancelConnect()
             }
 
-            else -> {
-                // 其他状态：不处理
-                LogManager.d(LogTags.REMOTE_DISPLAY, "其他状态，不处理返回键")
+            else -> Unit
+        }
+    }
+}
+
+@Composable
+private fun RemoteDisplayScreenContent(
+    sessionId: String,
+    routeState: RemoteDisplayScreenRouteState,
+    controlViewModel: ControlViewModel,
+    connectionViewModel: ConnectionViewModel,
+    onClose: () -> Unit,
+) {
+    val configuration = LocalConfiguration.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val uploadLauncher =
+        FilePickerHelper.rememberImportFileLauncher { uri ->
+            uri?.let(routeState.uploadSelectedFile)
+        }
+
+    LaunchedEffect(routeState.uploadPickerRequestToken) {
+        if (routeState.uploadPickerRequestToken > 0) {
+            uploadLauncher.launch(arrayOf("*/*"))
+        }
+    }
+
+    LaunchedEffect(routeState.layoutInspectorState.isOverlayVisible) {
+        if (routeState.layoutInspectorState.isOverlayVisible) {
+            while (true) {
+                delay(1000)
+                routeState.refreshLayoutInspectorOverlay()
             }
         }
     }
 
-    // 主界面布局
     Box(
         modifier =
             Modifier
@@ -288,36 +521,65 @@ fun RemoteDisplayScreen(
                 .background(Color.Black),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 悬浮球（仅在视频流存在时显示）
-            if (videoStream != null) {
-                AutoFloatingMenu(viewModel = mainViewModel)
+            if (routeState.videoStream != null) {
+                AutoFloatingMenu(actions = routeState.floatingMenuActions)
             }
 
-            // 视频显示区域
             VideoDisplayArea(
-                controlViewModel = controlVM,
-                connectionViewModel = connectionVM,
-                sessionData = sessionData,
-                videoAspectRatio = videoAspectRatio,
+                controlViewModel = controlViewModel,
+                connectionViewModel = connectionViewModel,
+                sessionData = routeState.sessionData,
+                videoAspectRatio = routeState.videoAspectRatio,
                 configuration = configuration,
-                onSurfaceHolderChanged = { surfaceHolder = it },
-                videoDecoderManager = videoDecoderManager,
-            )
+                onSurfaceHolderChanged = routeState.onSurfaceHolderChanged,
+                videoDecoderManager = routeState.videoDecoderManager,
+            ) {
+                if (routeState.layoutInspectorState.isOverlayVisible) {
+                    RemoteLayoutInspectorOverlay(
+                        snapshot = routeState.layoutInspectorState.snapshot,
+                        nodes = routeState.layoutInspectorState.nodes,
+                        isLoading = routeState.layoutInspectorState.isLoading,
+                        onRefresh = routeState.refreshLayoutInspectorOverlay,
+                        onClose = routeState.hideLayoutInspectorOverlay,
+                    )
+                }
 
-            // 连接状态覆盖层
+                if (
+                    routeState.layoutInspectorState.isOverlayVisible &&
+                    routeState.layoutInspectorState.isTargetKeyboardVisible
+                ) {
+                    Surface(
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 40.dp),
+                        color = Color(0xCC1F2937),
+                        shape = RoundedCornerShape(12.dp),
+                        tonalElevation = 0.dp,
+                    ) {
+                        Text(
+                            text = "目标设备键盘已打开，可能影响底部按钮点击",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+
             ConnectionStateOverlay(
-                connectionState = connectionState,
-                messageListState = messageListState,
-                onReconnect = { connectionVM.connectSession(sessionId) },
+                connectionState = routeState.connectionState,
+                messageListState = routeState.messageListState,
+                onReconnect = { connectionViewModel.connectSession(sessionId) },
                 onClose = onClose,
             )
 
-            // 键盘输入处理
-            if (showKeyboardInput) {
+            if (routeState.showKeyboardInput) {
                 KeyboardInputHandler(
-                    controlViewModel = controlVM,
+                    controlViewModel = controlViewModel,
                     keyboardController = keyboardController,
-                    onDismiss = { showKeyboardInput = false },
+                    requestToken = routeState.keyboardRequestToken,
+                    onDismiss = { routeState.onKeyboardInputVisibleChange(false) },
                 )
             }
         }

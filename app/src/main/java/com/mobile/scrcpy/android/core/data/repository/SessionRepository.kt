@@ -55,6 +55,13 @@ data class SessionData(
     // 分组信息
     val groupIds: List<String> = emptyList(), // 所属分组 ID 列表，支持多分组
 ) {
+    private fun normalizedUsbDeviceId(): String =
+        when {
+            !isUsbConnection() -> host
+            host.startsWith("usb:") -> host
+            else -> "usb:$host"
+        }
+
     /**
      * 判断是否为 USB 连接
      */
@@ -63,7 +70,12 @@ data class SessionData(
     /**
      * 获取 USB 序列号（仅 USB 模式有效）
      */
-    fun getUsbSerialNumber(): String? = if (isUsbConnection()) host else null
+    fun getUsbSerialNumber(): String? =
+        if (isUsbConnection()) {
+            host.removePrefix("usb:")
+        } else {
+            null
+        }
 
     /**
      * 判断编解码器是否匹配当前设备
@@ -90,7 +102,7 @@ data class SessionData(
      * 获取设备唯一标识
      * USB 模式使用序列号，TCP 模式使用 host:port
      */
-    fun getDeviceIdentifier(): String = if (isUsbConnection()) host else "$host:$port"
+    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else "$host:$port"
 
     /**
      * 转换为 ScrcpyOptions
@@ -98,7 +110,7 @@ data class SessionData(
     fun toScrcpyOptions(): ScrcpyOptions =
         ScrcpyOptions(
             sessionId = id,
-            host = host,
+            host = if (isUsbConnection()) normalizedUsbDeviceId() else host,
             port = port.toIntOrNull() ?: 0,
             maxSize = maxSize.toIntOrNull() ?: 1920,
             videoBitRate = videoBitrate.toIntOrNull() ?: 8000000,

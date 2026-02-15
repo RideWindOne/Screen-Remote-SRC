@@ -39,7 +39,7 @@ class VideoCodecManager(
             // 1. 优先使用缓存的解码器
             selectedDecoderName?.let { cachedName ->
                 try {
-                    LogManager.d(LogTags.VIDEO_DECODER, "使用缓存解码器: $cachedName")
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "使用缓存解码器: $cachedName" }
                     return MediaCodec.createByCodecName(cachedName)
                 } catch (_: Exception) {
                     LogManager.w(LogTags.VIDEO_DECODER, "缓存解码器失效: $cachedName, 重新检测")
@@ -56,7 +56,7 @@ class VideoCodecManager(
                 if (info != null && isLikelyHardware(info)) {
                     selectedDecoderName = name
                     onDecoderSelected?.invoke(name)
-                    LogManager.d(LogTags.VIDEO_DECODER, "系统推荐: $name")
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "系统推荐: $name" }
                     return MediaCodec.createByCodecName(name)
                 }
             }
@@ -69,7 +69,7 @@ class VideoCodecManager(
                 try {
                     selectedDecoderName = info.name
                     onDecoderSelected?.invoke(info.name)
-                    LogManager.d(LogTags.VIDEO_DECODER, "硬件解码: ${info.name}")
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "硬件解码: ${info.name}" }
                     return MediaCodec.createByCodecName(info.name)
                 } catch (_: Exception) {
                 }

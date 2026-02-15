@@ -1,70 +1,53 @@
 package com.mobile.scrcpy.android.infrastructure.adb.connection
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.event.ConnectionLost
+import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus
+import com.mobile.scrcpy.android.core.common.event.UsbDeviceDisconnected
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
-import com.mobile.scrcpy.android.core.domain.model.ConnectionType
-import com.mobile.scrcpy.android.core.i18n.AdbTexts
-import com.mobile.scrcpy.android.core.i18n.CommonTexts
-import com.mobile.scrcpy.android.core.i18n.SessionTexts
+import com.mobile.scrcpy.android.infrastructure.adb.AdbRuntimeDiagnostics
+import com.mobile.scrcpy.android.infrastructure.adb.AdbRuntimeProvider
 import com.mobile.scrcpy.android.infrastructure.adb.key.core.adb.AdbKeyManager
 import com.mobile.scrcpy.android.infrastructure.adb.usb.UsbAdbManager
-import com.mobile.scrcpy.android.infrastructure.adb.usb.UsbDadb
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
-import kotlinx.coroutines.CoroutineScope
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SessionEvent
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.runtime.SessionContext
+import dadb.android.runtime.ExperimentalDadbAndroidApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 全局 ADB 连接管理器
- * 负责管理所有设备的 ADB 连接（TCP 和 USB），保持会话不主动关闭
- *
- * 职责：
- * - 连接池管理
- * - TCP/USB 设备连接
- * - USB 设备扫描
- * - 连接保活（委托给 AdbConnectionKeepAlive）
- *
- * 已拆分模块：
- * - AdbKeyManager: 密钥对管理
- * - AdbConnectionVerifier: 连接验证
- * - DeviceInfoProvider: 设备信息获取
- * - AdbConnectionKeepAlive: 连接保活
+ * 负责暴露统一 API，并装配连接池、建链流程和保活协作者。
  */
+@OptIn(ExperimentalDadbAndroidApi::class)
 class AdbConnectionManager private constructor(
     private val context: Context,
 ) {
-    // 设备连接池：deviceId -> AdbConnection
-    private val connectionPool = ConcurrentHashMap<String, AdbConnection>()
-
-    // 连接状态流
-    private val _connectedDevices = MutableStateFlow<List<DeviceInfo>>(emptyList())
-    val connectedDevices: StateFlow<List<DeviceInfo>> = _connectedDevices.asStateFlow()
-
-    // 密钥管理器
     private val keyManager = AdbKeyManager(context)
-
-    // USB 管理器
     private val usbAdbManager: UsbAdbManager by lazy { UsbAdbManager(context) }
-
-    // 心跳保活管理器
-    private val keepAliveManager =
-        AdbConnectionKeepAlive(
-            keepAliveInterval = 30_000L,
-            onConnectionFailed = { deviceId ->
-                connectionPool.remove(deviceId)?.close()
-                updateConnectedDevices()
-            },
+    private val connectionRegistry = AdbConnectionRegistry()
+    private val connector =
+        AdbConnectionConnector(
+            context = context,
+            usbAdbManager = usbAdbManager,
+            connectionRegistry = connectionRegistry,
         )
+    private var usbDetachReceiver: BroadcastReceiver? = null
+    private val connectionOperationLocks = ConcurrentHashMap<String, Mutex>()
+
+    val connectedDevices: StateFlow<List<DeviceInfo>> = connectionRegistry.connectedDevices
 
     companion object {
         @SuppressLint("StaticFieldLeak")
@@ -78,348 +61,198 @@ class AdbConnectionManager private constructor(
     }
 
     init {
-        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_MANAGER_INIT.get())
-        keepAliveManager.start { connectionPool.values.toList() }
+        LogManager.d(LogTags.ADB_CONNECTION, "ADB 连接管理器初始化")
+        registerUsbDetachReceiver()
     }
 
-    /**
-     * 连接设备
-     * @param host 设备 IP 地址
-     * @param port ADB 端口，默认 5555
-     * @param deviceName 设备名称（可选，用于显示）
-     * @return 设备 ID（host:port）
-     */
     suspend fun connectDevice(
         host: String,
         port: Int = 5555,
         deviceName: String? = null,
         forceReconnect: Boolean = false,
+        sessionContext: SessionContext? = null,
+        withDelayedAck: Boolean = true,
     ): Result<String> =
         withContext(Dispatchers.IO) {
-            val deviceId = "$host:$port"
-            CoroutineScope(Dispatchers.IO).launch {
-                CurrentSession.currentOrNull?.handleEvent(SessionEvent.AdbConnecting)
-            }
-            try {
-                val keyPair =
-                    keyManager.getKeyPair()
-                        ?: return@withContext Result.failure(Exception(AdbTexts.ADB_KEYPAIR_NOT_INITIALIZED.get()))
-
-                // 检查已有连接
-                connectionPool[deviceId]?.let { existingConnection ->
-                    if (forceReconnect) {
-                        // 强制重连：清理旧连接
-                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_FORCE_RECONNECT_CLEANUP.get())
-                        runCatching { existingConnection.close() }
-                        connectionPool.remove(deviceId)
-                    } else {
-                        // 验证已有连接
-                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.get())
-                        val verifyResult = existingConnection.verify()
-                        if (verifyResult.isSuccess) {
-                            return@withContext Result.success(deviceId)
-                        } else {
-                            runCatching { existingConnection.close() }
-                            connectionPool.remove(deviceId)
-                        }
-                    }
-                }
-
-                // 创建新的 ADB 连接
-                val dadb =
-                    try {
-                        dadb.Dadb.create(host, port, keyPair, connectTimeout = 5000, socketTimeout = 5000)
-                    } catch (e: java.net.ConnectException) {
-                        LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_REFUSED.get()}: ${e.message}")
-                        return@withContext Result.failure(Exception(AdbTexts.ADB_CONNECTION_REFUSED_DETAILS.get()))
-                    }
-
-                // 验证新连接并获取序列号
-                val verifyResult = AdbConnectionVerifier.verifyDadb(dadb, deviceId)
-                if (verifyResult.isFailure) {
-                    return@withContext verifyResult.map { deviceId }
-                }
-
-                val serialNumber = verifyResult.getOrDefault(deviceId)
-
-                // 创建连接对象（使用基础设备信息，后台异步获取完整信息）
-                val basicDeviceInfo =
-                    DeviceInfo(
-                        deviceId = deviceId,
-                        name = deviceName ?: deviceId,
-                        serialNumber = serialNumber,
-                        connectionType = ConnectionType.TCP,
-                    )
-
-                val connection =
-                    AdbConnection(
-                        deviceId = deviceId,
-                        host = host,
-                        port = port,
-                        dadb = dadb,
-                        deviceInfo = basicDeviceInfo,
-                    )
-
-                // 加入连接池
-                connectionPool[deviceId] = connection
-
-                // 后台异步获取完整设备信息（不阻塞连接流程）
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val detailedDeviceInfo =
-                            DeviceInfoProvider.getDeviceInfo(
-                                dadb,
-                                deviceId,
-                                deviceName,
-                                ConnectionType.TCP,
-                            )
-                        connection.deviceInfo = detailedDeviceInfo
-                    } catch (e: Exception) {
-                        LogManager.w(
-                            LogTags.ADB_CONNECTION,
-                            "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED.get()}: ${e.message}",
-                        )
-                    }
-                }
-
-                // 更新连接设备列表
-                updateConnectedDevices()
-                Result.success(deviceId)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
-                Result.failure(e)
+            withDeviceOperationLock("$host:$port") {
+                emit(sessionContext, SessionEvent.AdbConnecting)
+                connector.connectTcp(
+                    host = host,
+                    port = port,
+                    deviceName = deviceName,
+                    forceReconnect = forceReconnect,
+                    sessionContext = sessionContext,
+                    withDelayedAck = withDelayedAck,
+                )
             }
         }
 
-    /**
-     * 连接 USB 设备
-     * @param usbDevice USB 设备对象
-     * @param deviceName 设备名称（可选）
-     * @return 设备 ID（usb:serialNumber）
-     */
     suspend fun connectUsbDevice(
         usbDevice: UsbDevice,
         deviceName: String? = null,
+        sessionContext: SessionContext? = null,
+        withDelayedAck: Boolean = true,
     ): Result<String> =
-        withContext(Dispatchers.IO) {
-            try {
-                val serialNumber = ApiCompatHelper.getUsbDeviceSerialNumber(usbDevice) ?: usbDevice.deviceName
-                val deviceId = "usb:$serialNumber"
-
-                val keyPair =
-                    keyManager.getKeyPair()
-                        ?: return@withContext Result.failure(Exception(AdbTexts.ADB_KEYPAIR_NOT_INITIALIZED.get()))
-
-                LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.USB_CONNECTING_DEVICE.get()} ==========")
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.USB_SERIAL_NUMBER.get()}: $serialNumber")
-
-                // 检查已有连接
-                connectionPool[deviceId]?.let { existingConnection ->
-                    val verifyResult = existingConnection.verify()
-                    if (verifyResult.isSuccess) {
-                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFIED.get())
-                        return@withContext Result.success(deviceId)
-                    } else {
-                        LogManager.w(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFY_FAILED.get())
-                        runCatching { existingConnection.close() }
-                        connectionPool.remove(deviceId)
-                    }
-                }
-
-                // 请求 USB 权限
-                val permissionResult = usbAdbManager.requestUsbPermission(usbDevice)
-                if (permissionResult.isFailure) {
-                    return@withContext permissionResult.map { deviceId }
-                }
-
-                // 使用 USB ADB 通道直接连接
-                val dadb =
-                    try {
-                        val usbManager =
-                            context.getSystemService(
-                                Context.USB_SERVICE,
-                            ) as android.hardware.usb.UsbManager
-                        UsbDadb(usbManager, usbDevice, keyPair, deviceId)
-                    } catch (e: Exception) {
-                        LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.USB_CONNECT_FAILED.get()}: ${e.message}")
-                        return@withContext Result.failure(
-                            Exception("${AdbTexts.USB_CONNECT_FAILED.get()}: ${e.message}"),
-                        )
-                    }
-
-                // 验证连接并获取序列号
-                val verifyResult = AdbConnectionVerifier.verifyDadb(dadb, deviceId)
-                if (verifyResult.isFailure) {
-                    return@withContext verifyResult.map { deviceId }
-                }
-
-                val detectedSerial = verifyResult.getOrDefault(serialNumber)
-
-                // 创建连接对象
-                val tempDeviceInfo =
-                    DeviceInfo(
-                        deviceId = deviceId,
-                        name = deviceName ?: (usbDevice.productName ?: serialNumber),
-                        model = "Unknown",
-                        manufacturer = usbDevice.manufacturerName ?: "Unknown",
-                        androidVersion = "Unknown",
-                        serialNumber = detectedSerial,
-                        connectionType = ConnectionType.USB,
-                    )
-
-                val connection =
-                    AdbConnection(
-                        deviceId = deviceId,
-                        host = "usb",
-                        port = 0,
-                        dadb = dadb,
-                        deviceInfo = tempDeviceInfo,
-                    )
-
-                // 加入连接池
-                connectionPool[deviceId] = connection
-
-                // 后台异步获取完整设备信息
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        val fullDeviceInfo =
-                            DeviceInfoProvider.getDeviceInfo(
-                                dadb,
-                                deviceId,
-                                deviceName,
-                                ConnectionType.USB,
-                            )
-                        connection.deviceInfo = fullDeviceInfo
-                        LogManager.d(
-                            LogTags.ADB_CONNECTION,
-                            "${SessionTexts.LABEL_DEVICE_INFO.get()}: ${fullDeviceInfo.name} (${fullDeviceInfo.model})",
-                        )
-                    } catch (e: Exception) {
-                        LogManager.w(
-                            LogTags.ADB_CONNECTION,
-                            "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED.get()}: ${e.message}",
-                        )
-                    }
-                }
-
-                // 更新连接设备列表
-                updateConnectedDevices()
-
-                Result.success(deviceId)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
-                Result.failure(e)
-            }
+        withDeviceOperationLock(resolveUsbOperationKey(usbDevice)) {
+            connector.connectUsb(
+                usbDevice = usbDevice,
+                deviceName = deviceName,
+                sessionContext = sessionContext,
+                withDelayedAck = withDelayedAck,
+            )
         }
 
-    /**
-     * 扫描 USB 设备
-     */
+    suspend fun connectUsbDeviceById(
+        deviceId: String,
+        deviceName: String? = null,
+        sessionContext: SessionContext? = null,
+        withDelayedAck: Boolean = true,
+    ): Result<String> =
+        withDeviceOperationLock(normalizeUsbDeviceId(deviceId)) {
+            connector.connectUsbByDeviceId(
+                deviceId = deviceId,
+                deviceName = deviceName,
+                sessionContext = sessionContext,
+                withDelayedAck = withDelayedAck,
+            )
+        }
+
     suspend fun scanUsbDevices() = usbAdbManager.scanUsbDevices()
 
-    /**
-     * 请求 USB 权限
-     */
     suspend fun requestUsbPermission(device: UsbDevice) = usbAdbManager.requestUsbPermission(device)
 
-    /**
-     * 获取 USB 设备列表
-     */
     fun getUsbDevices() = usbAdbManager.usbDevices
 
-    /**
-     * 验证 ADB 连接是否可用
-     */
     suspend fun verifyConnection(deviceId: String): Boolean {
         val connection = getConnection(deviceId) ?: return false
-        val verifyResult = connection.verify()
-        return verifyResult.isSuccess
+        return connection.verify().isSuccess
     }
 
-    /**
-     * 断开设备连接
-     */
     suspend fun disconnectDevice(deviceId: String): Result<Boolean> =
         withContext(Dispatchers.IO) {
-            try {
-                val connection = connectionPool.remove(deviceId)
-                if (connection != null) {
-                    connection.close()
-                    updateConnectedDevices()
-                    LogManager.d(
-                        LogTags.ADB_CONNECTION,
-                        "${CommonTexts.LABEL_DEVICE.get()} $deviceId ${AdbTexts.ADB_DEVICE_DISCONNECTED.get()}",
-                    )
-                    Result.success(true)
-                } else {
-                    Result.failure(Exception(AdbTexts.ADB_DEVICE_NOT_CONNECTED.get()))
-                }
-            } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECT_FAILED.get()}: ${e.message}", e)
-                Result.failure(e)
+            withDeviceOperationLock(deviceId) {
+                connectionRegistry.disconnectDevice(deviceId)
             }
         }
 
-    /**
-     * 获取设备连接
-     */
-    fun getConnection(deviceId: String): AdbConnection? = connectionPool[deviceId]
+    fun getConnection(deviceId: String): AdbConnection? = connectionRegistry.getConnection(deviceId)
 
-    /**
-     * 获取所有已连接设备
-     */
-    fun getAllConnections(): List<AdbConnection> = connectionPool.values.toList()
+    fun getAllConnections(): List<AdbConnection> = connectionRegistry.getAllConnections()
 
-    /**
-     * 检查设备是否已连接
-     */
-    fun isDeviceConnected(deviceId: String): Boolean = connectionPool[deviceId]?.isConnected() ?: false
+    fun isDeviceConnected(deviceId: String): Boolean = connectionRegistry.isDeviceConnected(deviceId)
 
-    /**
-     * 更新已连接设备列表
-     */
-    private fun updateConnectedDevices() {
-        val devices = connectionPool.values.map { it.deviceInfo }
-        _connectedDevices.value = devices
-    }
-
-    /**
-     * 断开所有设备（应用退出时调用）
-     */
     suspend fun disconnectAll() =
         withContext(Dispatchers.IO) {
-            LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_DISCONNECT_ALL.get())
-
-            // 停止心跳任务
-            keepAliveManager.stop()
-
-            connectionPool.values.forEach { connection ->
-                try {
-                    connection.close()
-                } catch (e: Exception) {
-                    LogManager.e(
-                        LogTags.ADB_CONNECTION,
-                        "${AdbTexts.ADB_CLOSE_CONNECTION_FAILED.get()}: ${e.message}",
-                        e,
-                    )
-                }
-            }
-            connectionPool.clear()
-            updateConnectedDevices()
+            LogManager.d(LogTags.ADB_CONNECTION, "断开所有 ADB 连接")
+            connectionRegistry.disconnectAll()
         }
 
-    /**
-     * 获取 ADB 密钥对（用于设备扫描等操作）
-     */
     fun getKeyPair() = keyManager.getKeyPair()
 
-    /**
-     * 获取公钥（用于手动授权）
-     */
     fun getPublicKey() = keyManager.getPublicKey()
 
-    /**
-     * 重新加载密钥对（在生成新密钥或导入密钥后调用）
-     */
     fun reloadKeyPair() = keyManager.reloadKeyPair()
+
+    suspend fun refreshRuntimeIdentity() =
+        withContext(Dispatchers.IO) {
+            LogManager.d(LogTags.ADB_CONNECTION, "Refreshing ADB runtime identity, disconnecting stale connections")
+            connectionRegistry.disconnectAll()
+            AdbBridge.clearConnection()
+            keyManager.reloadKeyPair()
+            LogManager.d(LogTags.ADB_CONNECTION, "Runtime identity refreshed: ${AdbRuntimeDiagnostics.identitySummary(AdbRuntimeProvider.get())}")
+        }
+
+    private fun emit(
+        sessionContext: SessionContext?,
+        event: SessionEvent,
+    ) {
+        sessionContext?.emit(event)
+    }
+
+    private suspend fun <T> withDeviceOperationLock(
+        deviceId: String,
+        action: suspend () -> T,
+    ): T = connectionOperationLocks.computeIfAbsent(deviceId) { Mutex() }.withLock { action() }
+
+    private fun resolveUsbOperationKey(usbDevice: UsbDevice): String {
+        val serial =
+            runCatching { ApiCompatHelper.getUsbDeviceSerialNumber(usbDevice) }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: usbDevice.deviceName
+        return normalizeUsbDeviceId(serial)
+    }
+
+    private fun normalizeUsbDeviceId(deviceId: String): String =
+        if (deviceId.startsWith("usb:")) {
+            deviceId
+        } else {
+            "usb:$deviceId"
+        }
+
+    private fun registerUsbDetachReceiver() {
+        if (usbDetachReceiver != null) {
+            return
+        }
+
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(
+                    context: Context,
+                    intent: Intent,
+                ) {
+                    if (intent.action != UsbManager.ACTION_USB_DEVICE_DETACHED) {
+                        return
+                    }
+
+                    val detachedDevice =
+                        ApiCompatHelper.getParcelableExtraCompat(
+                            intent,
+                            UsbManager.EXTRA_DEVICE,
+                            UsbDevice::class.java,
+                        ) ?: return
+
+                    val detachedSerial =
+                        runCatching { ApiCompatHelper.getUsbDeviceSerialNumber(detachedDevice) }
+                            .getOrNull()
+                            ?.takeIf { it.isNotBlank() }
+
+                    val activeUsbConnections =
+                        connectionRegistry.getAllConnections()
+                            .filter { it.deviceId.startsWith("usb:") }
+
+                    val matchedConnection =
+                        detachedSerial?.let { serial ->
+                            activeUsbConnections.firstOrNull { it.deviceId == "usb:$serial" }
+                        } ?: activeUsbConnections.singleOrNull()
+
+                    LogManager.w(
+                        LogTags.USB_CONNECTION,
+                        "USB detached: device=${detachedDevice.deviceName}, serial=${detachedSerial ?: "<unknown>"}, matched=${matchedConnection?.deviceId ?: "<none>"}, " +
+                            "activeUsbConnections=${activeUsbConnections.joinToString { it.deviceId }}",
+                    )
+
+                    matchedConnection?.let { connection ->
+                        connection.handleTransportDisconnected("USB device detached")
+                        connectionRegistry.removeAndClose(connection.deviceId)
+                        ScrcpyEventBus.pushEvent(UsbDeviceDisconnected)
+                        ScrcpyEventBus.pushEvent(
+                            ConnectionLost(
+                                deviceId = connection.deviceId,
+                                reason = "USB device detached",
+                            ),
+                        )
+                    }
+                }
+            }
+
+        ApiCompatHelper.registerReceiverCompat(
+            context = context,
+            receiver = receiver,
+            filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED),
+            exported = false,
+        )
+        usbDetachReceiver = receiver
+        LogManager.d(LogTags.USB_CONNECTION, "USB detach receiver registered")
+    }
 }

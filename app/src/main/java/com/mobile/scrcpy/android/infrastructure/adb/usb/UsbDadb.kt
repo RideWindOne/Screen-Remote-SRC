@@ -48,6 +48,8 @@ class UsbDadb(
     @Volatile
     private var closed = false
 
+    override fun isTlsConnection(): Boolean = false
+
     init {
         // 初始化 ADB 连接
         initializeConnection()
@@ -70,11 +72,18 @@ class UsbDadb(
         LogManager.d(LogTags.ADB_CONNECTION, "Starting ADB handshake...")
 
         // 1. 发送 CNXN 消息
+        LogManager.d(
+            LogTags.ADB_CONNECTION,
+            "USB handshake: send CNXN version=${AdbProtocol.CONNECT_VERSION} maxData=${AdbProtocol.CONNECT_MAXDATA}",
+        )
         channel.write(AdbProtocol.generateConnect())
 
         // 2. 接收响应
         var message = AdbProtocol.AdbMessage.parse(channel)
-        LogManager.d(LogTags.ADB_CONNECTION, "Received: ${message.getCommandName()}")
+        LogManager.d(
+            LogTags.ADB_CONNECTION,
+            "USB handshake: received ${message.getCommandName()} arg0=${message.arg0} arg1=${message.arg1} payloadLength=${message.payloadLength}",
+        )
 
         // 3. 处理认证
         if (message.command == AdbProtocol.CMD_AUTH) {
@@ -84,20 +93,38 @@ class UsbDadb(
             // 提取 token 数据
             val tokenArray = ByteArray(token.remaining())
             token.duplicate().get(tokenArray)
+            LogManager.d(
+                LogTags.ADB_CONNECTION,
+                "USB handshake: AUTH token received bytes=${tokenArray.size} type=${message.arg0}",
+            )
 
             // 使用 RSA 签名 token
             val signature = UsbAdbAuth.signToken(tokenArray, keyPair)
+            LogManager.d(
+                LogTags.ADB_CONNECTION,
+                "USB handshake: send AUTH signature bytes=${signature.size}",
+            )
             channel.write(AdbProtocol.generateAuth(AdbProtocol.AUTH_TYPE_SIGNATURE, signature))
 
             message = AdbProtocol.AdbMessage.parse(channel)
-            LogManager.d(LogTags.ADB_CONNECTION, "Received: ${message.getCommandName()}")
+            LogManager.d(
+                LogTags.ADB_CONNECTION,
+                "USB handshake: received ${message.getCommandName()} arg0=${message.arg0} arg1=${message.arg1} payloadLength=${message.payloadLength}",
+            )
 
             // 如果还需要认证，发送公钥
             if (message.command == AdbProtocol.CMD_AUTH) {
                 val publicKey = UsbAdbAuth.getPublicKeyBytes(keyPair)
+                LogManager.d(
+                    LogTags.ADB_CONNECTION,
+                    "USB handshake: send AUTH public key bytes=${publicKey.size}",
+                )
                 channel.write(AdbProtocol.generateAuth(AdbProtocol.AUTH_TYPE_RSA_PUBLIC, publicKey))
                 message = AdbProtocol.AdbMessage.parse(channel)
-                LogManager.d(LogTags.ADB_CONNECTION, "Received: ${message.getCommandName()}")
+                LogManager.d(
+                    LogTags.ADB_CONNECTION,
+                    "USB handshake: received ${message.getCommandName()} arg0=${message.arg0} arg1=${message.arg1} payloadLength=${message.payloadLength}",
+                )
             }
         }
 
@@ -108,7 +135,7 @@ class UsbDadb(
 
         // 5. 保存最大数据大小
         maxData = message.arg1
-        LogManager.d(LogTags.ADB_CONNECTION, "ADB handshake completed, maxData=$maxData")
+        LogManager.d(LogTags.ADB_CONNECTION, "USB handshake completed, maxData=$maxData")
     }
 
     /**

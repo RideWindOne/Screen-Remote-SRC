@@ -3,139 +3,70 @@ package com.mobile.scrcpy.android.core.common.manager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
-import com.mobile.scrcpy.android.core.common.AppConstants
 import com.mobile.scrcpy.android.core.common.LogTags
-import com.mobile.scrcpy.android.core.i18n.LogTexts
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.mobile.scrcpy.android.core.domain.model.AppSettings
 import java.io.File
-import java.io.FileWriter
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
-@SuppressLint("StaticFieldLeak") // 使用 applicationContext，不会造成内存泄漏
+@SuppressLint("StaticFieldLeak")
 object LogManager {
-    private const val LOG_DIR = "logs"
-    private const val MAX_LOG_SIZE = 10 * 1024 * 1024 // 10MB
-
-    private var context: Context? = null
-    private var isEnabled = true
-    private var logFile: File? = null
-    private var fileWriter: FileWriter? = null
-
-    @SuppressLint("ConstantLocale")
-    private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-
-    @SuppressLint("ConstantLocale")
-    private val fileNameFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val state = LogManagerState()
+    private val fileController =
+        LogFileController(
+            state = state,
+            onInitSuccess = {
+                i(LogTags.LOG_MANAGER, it)
+            },
+        )
+    private val messageWriter =
+        LogMessageWriter(
+            state = state,
+            reopenLogFile = fileController::reopenLogFile,
+        )
 
     fun init(
         context: Context,
         enabled: Boolean = true,
     ) {
-        // 使用 applicationContext 避免内存泄漏
-        this.context = context.applicationContext
-        this.isEnabled = enabled
-        if (enabled) {
-            initLogFile()
-        }
+        fileController.init(context, enabled)
     }
 
     fun setEnabled(enabled: Boolean) {
-        isEnabled = enabled
-        if (enabled) {
-            initLogFile()
-        } else {
-            closeLogFile()
-        }
+        fileController.setEnabled(enabled)
     }
 
-    private fun initLogFile() {
-        try {
-            val ctx = context ?: return
-            val logDir = File(ctx.filesDir, LOG_DIR)
-            if (!logDir.exists()) {
-                logDir.mkdirs()
+    fun applySettings(settings: AppSettings) {
+        if (state.isEnabled != settings.enableActivityLog) {
+            fileController.setEnabled(settings.enableActivityLog)
+        }
+        state.enableAudioStreamLog = settings.enableAudioStreamLog
+        state.enableVideoStreamLog = settings.enableVideoStreamLog
+        state.enableControlStreamLog = settings.enableControlStreamLog
+        state.enableShellStreamLog = settings.enableShellStreamLog
+        state.enableManagementLog = settings.enableManagementLog
+    }
+
+    fun isDetailLoggingEnabled(category: LogDetailCategory): Boolean =
+        state.isEnabled &&
+            when (category) {
+                LogDetailCategory.AUDIO_STREAM -> state.enableAudioStreamLog
+                LogDetailCategory.VIDEO_STREAM -> state.enableVideoStreamLog
+                LogDetailCategory.CONTROL_STREAM -> state.enableControlStreamLog
+                LogDetailCategory.SHELL_STREAM -> state.enableShellStreamLog
+                LogDetailCategory.MANAGEMENT -> state.enableManagementLog
             }
-
-            val version = AppConstants.APP_VERSION
-            val date = fileNameFormat.format(Date())
-            val fileName = "Scrcpy_Remote_${version}_$date.log"
-            logFile = File(logDir, fileName)
-
-            // 检查文件大小，如果超过限制则创建新文件
-            if (logFile?.exists() == true && (logFile?.length() ?: 0) > MAX_LOG_SIZE) {
-                val timestamp = System.currentTimeMillis()
-                val newFileName = "Scrcpy_Remote_${version}_${date}_$timestamp.log"
-                logFile = File(logDir, newFileName)
-            }
-
-            fileWriter = FileWriter(logFile, true)
-            i(LogTags.LOG_MANAGER, LogTexts.LOG_SYSTEM_INIT_SUCCESS.get())
-        } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_INIT_FILE_FAILED.get(), e)
-        }
-    }
-
-    private fun closeLogFile() {
-        try {
-            fileWriter?.close()
-            fileWriter = null
-        } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_CLOSE_FILE_FAILED.get(), e)
-        }
-    }
-
-    private fun writeLog(
-        level: String,
-        tag: String,
-        message: String,
-        throwable: Throwable? = null,
-    ) {
-        if (!isEnabled) return
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val timestamp = dateFormat.format(Date())
-                val logMessage =
-                    buildString {
-                        append(timestamp)
-                        append(" ")
-                        append(tag)
-                        append(": ")
-                        append(message)
-                        if (throwable != null) {
-                            append("\n")
-                            append(throwable.stackTraceToString())
-                        }
-                        append("\n")
-                    }
-
-                fileWriter?.apply {
-                    write(logMessage)
-                    flush()
-                }
-
-                // 检查文件大小
-                if ((logFile?.length() ?: 0) > MAX_LOG_SIZE) {
-                    closeLogFile()
-                    initLogFile()
-                }
-            } catch (e: Exception) {
-                Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_WRITE_FAILED.get(), e)
-            }
-        }
-    }
 
     fun v(
         tag: String,
         message: String,
         throwable: Throwable? = null,
     ) {
-        Log.v(tag, message, throwable)
-        writeLog("V", tag, message, throwable)
+        if (throwable != null) {
+            Log.v(tag, message, throwable)
+            messageWriter.writeLog("V", tag, "$message: ${throwable.message}")
+        } else {
+            Log.v(tag, message)
+            messageWriter.writeLog("V", tag, message)
+        }
     }
 
     fun d(
@@ -143,8 +74,13 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
-        Log.d(tag, message, throwable)
-        writeLog("D", tag, message, throwable)
+        if (throwable != null) {
+            Log.d(tag, message, throwable)
+            messageWriter.writeLog("D", tag, "$message: ${throwable.message}")
+        } else {
+            Log.d(tag, message)
+            messageWriter.writeLog("D", tag, message)
+        }
     }
 
     fun i(
@@ -152,8 +88,13 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
-        Log.i(tag, message, throwable)
-        writeLog("I", tag, message, throwable)
+        if (throwable != null) {
+            Log.i(tag, message, throwable)
+            messageWriter.writeLog("I", tag, "$message: ${throwable.message}")
+        } else {
+            Log.i(tag, message)
+            messageWriter.writeLog("I", tag, message)
+        }
     }
 
     fun w(
@@ -161,8 +102,13 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
-        Log.w(tag, message, throwable)
-        writeLog("W", tag, message, throwable)
+        if (throwable != null) {
+            Log.w(tag, message, throwable)
+            messageWriter.writeLog("W", tag, "$message: ${throwable.message}")
+        } else {
+            Log.w(tag, message)
+            messageWriter.writeLog("W", tag, message)
+        }
     }
 
     fun e(
@@ -170,130 +116,39 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
-        Log.e(tag, message, throwable)
-        writeLog("E", tag, message, throwable)
+        if (throwable != null) {
+            Log.e(tag, message, throwable)
+            messageWriter.writeLog("E", tag, "$message: ${throwable.message}")
+        } else {
+            Log.e(tag, message)
+            messageWriter.writeLog("E", tag, message)
+        }
     }
 
-    fun getLogFiles(): List<File> {
-        val ctx = context ?: return emptyList()
-        val logDir = File(ctx.filesDir, LOG_DIR)
-        if (!logDir.exists()) return emptyList()
+    fun getLogFiles(): List<File> = fileController.getLogFiles()
 
-        return logDir
-            .listFiles()
-            ?.filter { it.extension == "log" }
-            ?.sortedByDescending { it.lastModified() } ?: emptyList()
-    }
-
-    fun getTotalLogSize(): Long = getLogFiles().sumOf { it.length() }
+    fun getTotalLogSize(): Long = fileController.getTotalLogSize()
 
     fun clearAllLogs() {
-        closeLogFile()
-        val ctx = context ?: return
-        val logDir = File(ctx.filesDir, LOG_DIR)
-        if (logDir.exists()) {
-            logDir.listFiles()?.forEach { it.delete() }
-        }
-        if (isEnabled) {
-            initLogFile()
-        }
+        fileController.clearAllLogs()
     }
 
     fun clearOldLogs() {
-        val ctx = context ?: return
-        val logDir = File(ctx.filesDir, LOG_DIR)
-        if (!logDir.exists()) return
-
-        val currentLogFile = logFile
-        logDir.listFiles()?.forEach { file ->
-            if (file != currentLogFile && file.extension == "log") {
-                try {
-                    file.delete()
-                    i(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_SUCCESS.get()}: ${file.name}")
-                } catch (e: Exception) {
-                    e(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_FAILED.get()}: ${file.name}", e)
-                }
-            }
-        }
+        fileController.clearOldLogs()
     }
 
-    fun deleteLogFile(file: File): Boolean =
-        try {
-            if (file == logFile) {
-                closeLogFile()
-                val result = file.delete()
-                if (isEnabled) {
-                    initLogFile()
-                }
-                result
-            } else {
-                file.delete()
-            }
-        } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_DELETE_FILE_FAILED.get(), e)
-            false
-        }
+    fun deleteLogFile(file: File): Boolean = fileController.deleteLogFile(file)
 
-    fun readLogFile(file: File): String =
-        try {
-            file.readText()
-        } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_READ_FILE_FAILED.get(), e)
-            "${LogTexts.LOG_READ_FILE_ERROR.get()}: ${e.message}"
-        }
+    fun readLogFile(file: File): String = fileController.readLogFile(file)
 
-    /**
-     * 直接写入原始日志（不通过 Android Log）
-     * 用于捕获 Native 代码、scrcpy-server 等外部日志
-     * @param level 日志级别 (V/D/I/W/E)
-     * @param tag 日志标签
-     * @param message 日志消息
-     */
     fun writeRawLog(
         level: String,
         tag: String,
         message: String,
     ) {
-        if (!isEnabled) return
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val timestamp = dateFormat.format(Date())
-                val logMessage =
-                    buildString {
-                        append(timestamp)
-                        append(" ")
-                        append(tag)
-                        append(": ")
-                        append(message)
-                        if (!message.endsWith("\n")) {
-                            append("\n")
-                        }
-                    }
-
-                fileWriter?.apply {
-                    write(logMessage)
-                    flush()
-                }
-
-                // 检查文件大小
-                if ((logFile?.length() ?: 0) > MAX_LOG_SIZE) {
-                    closeLogFile()
-                    initLogFile()
-                }
-            } catch (e: Exception) {
-                // 如果写入失败，至少输出到 Android Log
-                Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_WRITE_RAW_FAILED.get(), e)
-            }
-        }
+        messageWriter.writeRawLog(level, tag, message)
     }
 
-    /**
-     * 写入原始日志（JNI 调用）
-     * @param level 日志级别
-     * @param tag 日志标签
-     * @param message 日志消息
-     */
     @JvmStatic
     fun writeRawLogJNI(
         level: String,

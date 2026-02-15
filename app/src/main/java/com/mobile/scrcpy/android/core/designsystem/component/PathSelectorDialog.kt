@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeActions
 import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeNodeItem
 import com.mobile.scrcpy.android.core.designsystem.component.tree.TreeRootItem
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
@@ -48,7 +49,7 @@ fun PathSelectorDialog(
     // 构建树形结构
     val treeNodes =
         remember(groups) {
-            GroupTreeUtils.buildGroupTree(groups)
+            TreeActions.buildGroupTree(groups)
         }
 
     DialogPage(

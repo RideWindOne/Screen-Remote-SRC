@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppColors
 import com.mobile.scrcpy.android.core.common.AppDimens
+import com.mobile.scrcpy.android.core.common.IosDesignTokens
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
@@ -74,9 +75,9 @@ fun LanguageScreen(
                 )
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = 0.3f),
+                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 LanguageOption(
@@ -90,9 +91,9 @@ fun LanguageScreen(
                 )
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = 0.3f),
+                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 LanguageOption(
@@ -119,9 +120,9 @@ private fun LanguageOption(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(43.dp)
+                .height(AppDimens.themeOptionHeight)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -17,7 +17,7 @@ package com.mobile.scrcpy.android.core.common.event
  * - WARN: 警告事件（超时、重试、降级）
  * - ERROR: 错误事件（异常、失败）
  *
- * 参考：docs/EVENT_SYSTEM_GUIDE.md
+ * 参考：docs/03-guides/event-and-shell.md
  */
 
 // 重新导出所有事件类型，保持向后兼容
@@ -33,9 +33,6 @@ typealias ScrcpyEventError = Error
 
 typealias ScrcpyEventKeyDown = KeyDown
 typealias ScrcpyEventKeyUp = KeyUp
-typealias ScrcpyEventMouseMotion = MouseMotion
-typealias ScrcpyEventMouseButtonDown = MouseButtonDown
-typealias ScrcpyEventMouseButtonUp = MouseButtonUp
 typealias ScrcpyEventTouchDown = TouchDown
 typealias ScrcpyEventTouchMove = TouchMove
 typealias ScrcpyEventTouchUp = TouchUp
@@ -70,7 +67,6 @@ typealias ScrcpyEventMonitorException = MonitorException
 
 typealias ScrcpyEventDemuxerError = DemuxerError
 typealias ScrcpyEventRecorderError = RecorderError
-typealias ScrcpyEventControllerError = ControllerError
 typealias ScrcpyEventAoaOpenError = AoaOpenError
 typealias ScrcpyEventTimeLimitReached = TimeLimitReached
 typealias ScrcpyEventRunOnMainThread = RunOnMainThread

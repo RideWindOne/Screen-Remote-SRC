@@ -6,9 +6,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.os.Handler
+import android.os.Looper
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
+import com.mobile.scrcpy.android.core.common.util.compat.PendingIntentApiCompat
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,13 +27,15 @@ class UsbAdbManager(
     private val context: Context,
 ) {
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
+    private val permissionAction = "${context.packageName}.USB_PERMISSION"
 
     // USB 设备列表
     private val _usbDevices = MutableStateFlow<List<UsbDeviceInfo>>(emptyList())
     val usbDevices: StateFlow<List<UsbDeviceInfo>> = _usbDevices.asStateFlow()
 
     companion object {
-        private const val ACTION_USB_PERMISSION = "USB_PERMISSION"
+        private const val PERMISSION_POLL_INTERVAL_MS = 250L
+        private const val PERMISSION_TIMEOUT_MS = 15_000L
     }
 
     /**
@@ -124,7 +129,6 @@ class UsbAdbManager(
     private fun isAdbDevice(device: UsbDevice): Boolean {
         for (i in 0 until device.interfaceCount) {
             val usbInterface = device.getInterface(i)
-            // 检查接口类型是否匹配 ADB
             if (usbInterface.interfaceClass == UsbConstants.ADB_CLASS &&
                 usbInterface.interfaceSubclass == UsbConstants.ADB_SUBCLASS &&
                 usbInterface.interfaceProtocol == UsbConstants.ADB_PROTOCOL
@@ -148,6 +152,22 @@ class UsbAdbManager(
             }
 
             LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_REQUESTING_PERMISSION.get())
+            LogManager.d(
+                LogTags.USB_CONNECTION,
+                "USB permission request start: device=${device.deviceName}, action=$permissionAction",
+            )
+
+            val handler = Handler(Looper.getMainLooper())
+            var finished = false
+
+            fun finish(result: Result<Boolean>) {
+                if (finished) {
+                    return
+                }
+                finished = true
+                handler.removeCallbacksAndMessages(null)
+                continuation.resume(result)
+            }
 
             // 创建权限请求接收器
             val receiver =
@@ -156,7 +176,11 @@ class UsbAdbManager(
                         context: Context,
                         intent: Intent,
                     ) {
-                        if (ACTION_USB_PERMISSION == intent.action) {
+                        LogManager.d(
+                            LogTags.USB_CONNECTION,
+                            "USB permission receiver onReceive: action=${intent.action}, device=${device.deviceName}",
+                        )
+                        if (permissionAction == intent.action) {
                             synchronized(this) {
                                 val usbDevice =
                                     ApiCompatHelper.getParcelableExtraCompat(
@@ -166,14 +190,16 @@ class UsbAdbManager(
                                     )
 
                                 if (usbDevice != null && usbDevice.deviceName == device.deviceName) {
-                                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                                    val granted =
+                                        intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) ||
+                                            usbManager.hasPermission(device)
 
                                     if (granted) {
                                         LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_GRANTED.get())
-                                        continuation.resume(Result.success(true))
+                                        finish(Result.success(true))
                                     } else {
                                         LogManager.w(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_DENIED.get())
-                                        continuation.resume(Result.success(false))
+                                        finish(Result.success(false))
                                     }
 
                                     // 注销接收器
@@ -189,29 +215,70 @@ class UsbAdbManager(
                 }
 
             // 注册接收器
-            val filter = IntentFilter(ACTION_USB_PERMISSION)
-            ApiCompatHelper.registerReceiverCompat(context, receiver, filter)
+            val filter = IntentFilter(permissionAction)
+            ApiCompatHelper.registerReceiverCompat(context, receiver, filter, exported = true)
+
+            val pollPermissionState =
+                object : Runnable {
+                    private val startAt = System.currentTimeMillis()
+
+                    override fun run() {
+                        if (finished) {
+                            return
+                        }
+                        if (usbManager.hasPermission(device)) {
+                            LogManager.d(
+                                LogTags.USB_CONNECTION,
+                                "USB permission detected by polling: ${device.deviceName}",
+                            )
+                            try {
+                                context.unregisterReceiver(receiver)
+                            } catch (_: Exception) {
+                            }
+                            finish(Result.success(true))
+                            return
+                        }
+
+                        val elapsed = System.currentTimeMillis() - startAt
+                        if (elapsed >= PERMISSION_TIMEOUT_MS) {
+                            LogManager.w(
+                                LogTags.USB_CONNECTION,
+                                "USB permission request timed out: ${device.deviceName}",
+                            )
+                            try {
+                                context.unregisterReceiver(receiver)
+                            } catch (_: Exception) {
+                            }
+                            finish(Result.failure(IllegalStateException("USB permission request timed out")))
+                            return
+                        }
+
+                        handler.postDelayed(this, PERMISSION_POLL_INTERVAL_MS)
+                    }
+                }
 
             // 请求权限
             val permissionIntent =
-                ApiCompatHelper.createUsbPermissionPendingIntent(
+                PendingIntentApiCompat.createUsbPermissionPendingIntent(
                     context,
-                    ACTION_USB_PERMISSION,
+                    permissionAction,
                 )
 
             try {
                 usbManager.requestPermission(device, permissionIntent)
+                handler.postDelayed(pollPermissionState, PERMISSION_POLL_INTERVAL_MS)
             } catch (e: Exception) {
                 LogManager.e(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_REQUEST_FAILED.get(), e)
                 try {
                     context.unregisterReceiver(receiver)
                 } catch (ignored: Exception) {
                 }
-                continuation.resume(Result.failure(e))
+                finish(Result.failure(e))
             }
 
             // 取消时注销接收器
             continuation.invokeOnCancellation {
+                handler.removeCallbacksAndMessages(null)
                 try {
                     context.unregisterReceiver(receiver)
                 } catch (ignored: Exception) {

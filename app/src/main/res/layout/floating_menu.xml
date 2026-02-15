@@ -1,82 +1,117 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
-    android:layout_height="48dp"
-    android:orientation="horizontal"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
     android:background="@drawable/floating_menu_bg"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp"
-    android:gravity="center_vertical">
+    android:paddingStart="7dp"
+    android:paddingTop="0.5dp"
+    android:paddingEnd="7dp"
+    android:paddingBottom="0.5dp"
+    android:gravity="center_horizontal">
 
-    <!-- 返回键 -->
-    <ImageButton
-        android:id="@+id/btn_back"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_back"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Back" />
+    <LinearLayout
+        android:id="@+id/layout_more_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="1dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
 
-    <!-- 主页键 -->
-    <ImageButton
-        android:id="@+id/btn_home"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="4dp"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_home"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Home" />
+        <ImageButton
+            android:id="@+id/btn_upload"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Upload"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_action_send_files_or_photos" />
 
-    <!-- 最近任务（多任务） -->
-    <ImageButton
-        android:id="@+id/btn_recent"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="4dp"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_recent"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Recents" />
+        <ImageButton
+            android:id="@+id/btn_layout_inspector"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Layout Inspector"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_action_dump_ui_layouts" />
+    </LinearLayout>
 
-    <!-- 键盘 -->
-    <ImageButton
-        android:id="@+id/btn_keyboard"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="4dp"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_keyboard"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Keyboard" />
+    <LinearLayout
+        android:id="@+id/layout_main_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <!-- 更多菜单 -->
-    <ImageButton
-        android:id="@+id/btn_menu"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="4dp"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_menu"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Options" />
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_toolbar_back"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Back" />
 
-    <!-- 断开连接 -->
-    <ImageButton
-        android:id="@+id/btn_close"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="4dp"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_close"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Disconnect" />
+        <ImageButton
+            android:id="@+id/btn_home"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_toolbar_home"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Home" />
+
+        <ImageButton
+            android:id="@+id/btn_recent"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_toolbar_switch"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Recents" />
+
+        <ImageButton
+            android:id="@+id/btn_keyboard"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_toolbar_keyboard"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Keyboard" />
+
+        <ImageButton
+            android:id="@+id/btn_menu"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_toolbar_more"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Options" />
+
+        <ImageButton
+            android:id="@+id/btn_close"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_toolbar_close"
+            android:scaleType="centerInside"
+            android:padding="7dp"
+            android:contentDescription="Disconnect" />
+    </LinearLayout>
 
 </LinearLayout>

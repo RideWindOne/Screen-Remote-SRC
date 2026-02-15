@@ -1,16 +1,21 @@
 package com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal
 
-import android.content.Context
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnection
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionLifecycle
-import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.feature.scrcpy.ScrcpyProtocol
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.CurrentSession
-import com.mobile.scrcpy.android.infrastructure.scrcpy.session.SessionEvent
+import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.AdbIssue
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.AdbIssueKind
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ServerIssue
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ServerPushContext
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ServerIssueKind
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ServerStartContext
+import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SessionEvent
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import com.mobile.scrcpy.android.core.common.AppConstants
 
 /**
  * Server 设置逻辑 - 负责 Forward 设置、Server 推送和启动
@@ -23,34 +28,41 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     connection: AdbConnection,
     socketName: String,
 ) = coroutineScope {
+    val pushTargetPath = AppConstants.SCRCPY_SERVER_PATH
+
     // 推送 Forward 设置中事件
-    CurrentSession.currentOrNull?.handleEvent(SessionEvent.ForwardSetting)
+    sessionContext.emit(SessionEvent.ForwardSetting)
 
     val forwardJob =
         async {
             connection.setupAdbForward(localPort, socketName).getOrElse { error ->
-                // 推送 Forward 失败事件
-                CurrentSession.currentOrNull?.handleEvent(
-                    SessionEvent.ForwardFailed("$localPort -> $socketName: ${error.message ?: "Unknown error"}"),
-                )
                 // 推送 ADB 断开事件（forward 失败通常意味着 ADB 连接有问题）
-                CurrentSession.currentOrNull?.handleEvent(
-                    SessionEvent.AdbDisconnected("Forward failed: ${error.message}"),
+                sessionContext.emit(
+                    SessionEvent.AdbDisconnected(
+                        AdbIssue(
+                            kind = AdbIssueKind.ForwardSetupFailed,
+                            detail = "Forward failed: ${error.message}",
+                        ),
+                    ),
                 )
                 throw Exception("Forward failed: ${error.message}", error)
             }
-            // 推送 Forward 设置成功事件
-            CurrentSession.currentOrNull?.handleEvent(SessionEvent.ForwardSetup("$localPort -> $socketName"))
         }
 
     // 推送 Server 推送中事件
-    CurrentSession.currentOrNull?.handleEvent(SessionEvent.ServerPushing)
+    sessionContext.emit(
+        SessionEvent.ServerPushing(
+            ServerPushContext(targetPath = pushTargetPath),
+        ),
+    )
 
     val pushJob =
         async {
+            val pushStartTime = System.currentTimeMillis()
             connection.pushScrcpyServer(context).getOrElse { error ->
                 throw Exception("Push failed: ${error.message}", error)
             }
+            System.currentTimeMillis() - pushStartTime
         }
 
     try {
@@ -60,19 +72,31 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     }
 
     try {
-        pushJob.await()
+        val duration = pushJob.await()
         // 推送 Server 推送成功事件
-        CurrentSession.currentOrNull?.handleEvent(SessionEvent.ServerPushed)
+        sessionContext.emit(
+            SessionEvent.ServerPushed(
+                ServerPushContext(
+                    targetPath = pushTargetPath,
+                    durationMs = duration,
+                ),
+            ),
+        )
     } catch (e: Exception) {
         // 推送 Server 推送失败事件
-        CurrentSession.currentOrNull?.handleEvent(
-            SessionEvent.ServerPushFailed(e.message ?: "Unknown error"),
+        sessionContext.emit(
+            SessionEvent.ServerPushFailed(
+                ServerIssue(
+                    kind = ServerIssueKind.PushFailed,
+                    detail = e.message ?: "Unknown error",
+                ),
+            ),
         )
         throw e
     }
 
     // Push 成功后，检测远程编码器（如果需要）
-    val session = CurrentSession.currentOrNull
+    val session = sessionContext.currentSession()
     val needDetect =
         session?.options?.let { options ->
             // 需要检测的情况：用户选择的编解码器为空（需要自动选择）
@@ -101,7 +125,7 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
     scid: Int,
 ) {
     // 推送 Server 启动事件
-    CurrentSession.currentOrNull?.handleEvent(SessionEvent.ServerStarting)
+    sessionContext.emit(SessionEvent.ServerStarting)
 
     val command = buildScrcpyCommand(scid)
 
@@ -109,7 +133,14 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
     val stream =
         connection.openShellStream(command) ?: run {
             // 推送 Server 启动失败事件
-            CurrentSession.currentOrNull?.handleEvent(SessionEvent.ServerFailed("Failed to start server"))
+            sessionContext.emit(
+                SessionEvent.ServerFailed(
+                    ServerIssue(
+                        kind = ServerIssueKind.StartFailed,
+                        detail = "Failed to start server",
+                    ),
+                ),
+            )
             throw Exception("Failed to start server")
         }
 
@@ -119,7 +150,14 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
     val serverReady = shellMonitor.waitForServerReady(timeoutMs = 10000)
     if (!serverReady) {
         // 推送 Server 启动失败事件
-        CurrentSession.currentOrNull?.handleEvent(SessionEvent.ServerFailed("scrcpy-server 启动超时或失败"))
+        sessionContext.emit(
+            SessionEvent.ServerFailed(
+                ServerIssue(
+                    kind = ServerIssueKind.StartupTimeout,
+                    detail = "scrcpy-server 启动超时或失败",
+                ),
+            ),
+        )
         throw Exception("scrcpy-server 启动超时或失败")
     }
 
@@ -127,14 +165,19 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
     shellMonitor.startMonitor()
 
     // 推送 Server 启动成功事件
-    CurrentSession.currentOrNull?.handleEvent(SessionEvent.ServerStarted)
+    sessionContext.emit(
+        SessionEvent.ServerStarted(
+            ServerStartContext(scid = scid),
+        ),
+    )
 }
 
 /**
  * 构建 Scrcpy 命令（从会话配置读取参数）
  */
 internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
-    val options = CurrentSession.current.options
+    val options = sessionContext.currentOptions() ?: throw IllegalStateException("会话不存在")
+    val videoCodec = options.preferredVideoCodec.ifBlank { "h264" }
 
     val scidHex = String.format("%08x", scid)
     val params =
@@ -151,10 +194,14 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         listOf(
             "video_bit_rate=${options.videoBitRate}",
             "max_fps=${options.maxFps}",
-            "video_codec=${options.preferredVideoCodec}",
+            "video_codec=$videoCodec",
             "stay_awake=${options.stayAwake}",
             "power_off_on_close=${options.powerOffOnClose}",
             "tunnel_forward=true",
+            "send_device_meta=true",
+            "send_codec_meta=true",
+            "send_frame_meta=true",
+            "send_dummy_byte=true",
         ),
     )
 
