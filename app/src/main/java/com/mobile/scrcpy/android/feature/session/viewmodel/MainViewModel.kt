@@ -222,6 +222,9 @@ class MainViewModel : ViewModel() {
                 deviceId = deviceId,
                 deviceName = connection.deviceInfo.name,
                 delayedAck = true,
+                host = sessionData.host,
+                port = sessionData.port.toIntOrNull() ?: 0,
+                isUsbConnection = sessionData.isUsbConnection(),
             )
             _managementDeviceId.value = deviceId
             _managementConnectStatus.value = ManagementConnectStatus.Connected(sessionId, deviceId)

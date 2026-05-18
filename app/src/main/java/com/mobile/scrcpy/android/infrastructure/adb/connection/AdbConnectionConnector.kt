@@ -5,6 +5,8 @@ import android.hardware.usb.UsbDevice
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
+import com.mobile.scrcpy.android.core.common.util.normalizeEndpointHost
 import com.mobile.scrcpy.android.core.domain.model.ConnectionType
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import com.mobile.scrcpy.android.core.i18n.CommonTexts
@@ -39,7 +41,8 @@ internal class AdbConnectionConnector(
         withDelayedAck: Boolean = true,
     ): Result<String> =
         withContext(Dispatchers.IO) {
-            val deviceId = "$host:$port"
+            val normalizedHost = normalizeEndpointHost(host)
+            val deviceId = formatHostPort(normalizedHost, port)
             try {
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
                     existingConnection.bindSessionContext(sessionContext)
@@ -78,10 +81,10 @@ internal class AdbConnectionConnector(
                         )
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
-                            "Endpoint state before connect: ${AdbRuntimeDiagnostics.endpointSummary(context, host, port)}",
+                            "Endpoint state before connect: ${AdbRuntimeDiagnostics.endpointSummary(context, normalizedHost, port)}",
                         )
                         adbRuntime.connectNetworkDadb(
-                            host = host,
+                            host = normalizedHost,
                             port = port,
                             connectTimeout = 5000,
                             socketTimeout = 5000,
@@ -108,7 +111,7 @@ internal class AdbConnectionConnector(
                 val isTlsConnection = dadb.isTlsConnection()
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "Endpoint state after connect: ${AdbRuntimeDiagnostics.endpointSummary(context, host, port)} tls=$isTlsConnection",
+                    "Endpoint state after connect: ${AdbRuntimeDiagnostics.endpointSummary(context, normalizedHost, port)} tls=$isTlsConnection",
                 )
 
                 val connectionType =
@@ -122,7 +125,7 @@ internal class AdbConnectionConnector(
                 val connection =
                     AdbConnection(
                         deviceId = deviceId,
-                        host = host,
+                        host = normalizedHost,
                         port = port,
                         dadb = dadb,
                         delayedAckEnabled = delayedAckEnabled,

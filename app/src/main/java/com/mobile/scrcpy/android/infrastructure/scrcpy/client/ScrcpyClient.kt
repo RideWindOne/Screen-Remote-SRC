@@ -217,7 +217,10 @@ class ScrcpyClient(
     /**
      * 启动前台服务（首次连接或添加设备）
      */
-    private fun startForegroundService(deviceName: String) {
+    private fun startForegroundService(
+        deviceName: String,
+        options: ScrcpyOptions,
+    ) {
         try {
             val deviceId = currentDeviceId ?: return
             ScrcpyForegroundService.protectDevice(
@@ -225,6 +228,9 @@ class ScrcpyClient(
                 deviceId = deviceId,
                 deviceName = deviceName,
                 delayedAck = false,
+                host = options.host,
+                port = options.port,
+                isUsbConnection = options.isUsbConnection(),
             )
 
             LogManager.d(LogTags.SCRCPY_CLIENT, "已添加设备到保活列表: $deviceName")

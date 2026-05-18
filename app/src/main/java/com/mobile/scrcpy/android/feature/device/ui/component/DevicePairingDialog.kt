@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mobile.scrcpy.android.core.common.AdbPairingConstants
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
+import com.mobile.scrcpy.android.core.common.util.parseHostPort
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
@@ -120,13 +122,13 @@ private fun mergeSelectedHostWithCurrentPort(
     selectedHostPort: String,
     currentHostPort: String,
 ): String {
-    if (selectedHostPort.contains(":")) {
+    if (parseHostPort(selectedHostPort, allowUnbracketedIpv6 = true) != null) {
         return selectedHostPort
     }
 
-    val currentPort = currentHostPort.substringAfter(':', "")
+    val currentPort = parseHostPort(currentHostPort, allowUnbracketedIpv6 = true)?.port?.toString().orEmpty()
     return if (currentPort.isNotBlank()) {
-        "$selectedHostPort:$currentPort"
+        formatHostPort(selectedHostPort, currentPort)
     } else {
         selectedHostPort
     }
@@ -143,7 +145,7 @@ private fun performPairing(
             onError(AdbTexts.ERROR_EMPTY_FIELD.get())
         }
 
-        !hostPort.contains(":") -> {
+        parseHostPort(hostPort, allowUnbracketedIpv6 = true) == null -> {
             onError(AdbTexts.ERROR_INVALID_IP.get())
         }
 
@@ -152,19 +154,18 @@ private fun performPairing(
         }
 
         else -> {
-            val parts = hostPort.split(":")
-            if (parts.size != 2) {
+            val endpoint = parseHostPort(hostPort, allowUnbracketedIpv6 = true)
+            if (endpoint == null) {
                 onError(AdbTexts.ERROR_INVALID_IP.get())
                 return
             }
 
-            val port = parts[1].toIntOrNull()
-            if (port == null || port < AdbPairingConstants.MIN_PORT || port > AdbPairingConstants.MAX_PORT) {
+            if (endpoint.port < AdbPairingConstants.MIN_PORT || endpoint.port > AdbPairingConstants.MAX_PORT) {
                 onError(AdbTexts.ERROR_INVALID_PORT.get())
                 return
             }
 
-            onPair(parts[0], parts[1], pairingCode)
+            onPair(endpoint.host, endpoint.port.toString(), pairingCode)
         }
     }
 }

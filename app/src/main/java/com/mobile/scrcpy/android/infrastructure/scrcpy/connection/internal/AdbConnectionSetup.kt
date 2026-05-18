@@ -10,6 +10,7 @@ package com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal
 
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbBridge
@@ -30,13 +31,12 @@ import kotlinx.coroutines.delay
  * - 设置全局 ADB Bridge
  */
 internal suspend fun ConnectionLifecycle.setupAdbConnection(
-    host: String,
-    port: Int,
+    options: ScrcpyOptions,
 ): AdbConnection =
     coroutineScope {
         val portJob = async { findAvailablePort() }
 
-        val connection = getOrCreateAdbConnection(host, port)
+        val connection = getOrCreateAdbConnection(options)
         AdbBridge.setConnection(connection)
 
         localPort = portJob.await()
@@ -50,13 +50,14 @@ internal suspend fun ConnectionLifecycle.setupAdbConnection(
  * - 创建新连接
  */
 private suspend fun ConnectionLifecycle.getOrCreateAdbConnection(
-    host: String,
-    port: Int,
+    options: ScrcpyOptions,
 ): AdbConnection {
     sessionContext.emit(SessionEvent.AdbVerifying)
 
-    val deviceId = if (port == 0) normalizeUsbDeviceId(host) else "$host:$port"
-    val isUsbConnection = (port == 0)
+    val host = options.host
+    val port = options.port
+    val deviceId = options.getDeviceIdentifier()
+    val isUsbConnection = options.isUsbConnection()
 
     // 检查已有连接
     val existingConnection = adbConnectionManager.getConnection(deviceId)
@@ -168,10 +169,3 @@ internal suspend fun ConnectionLifecycle.cleanupOldResources(connection: AdbConn
         )
     }
 }
-
-private fun normalizeUsbDeviceId(host: String): String =
-    if (host.startsWith("usb:")) {
-        host
-    } else {
-        "usb:$host"
-    }

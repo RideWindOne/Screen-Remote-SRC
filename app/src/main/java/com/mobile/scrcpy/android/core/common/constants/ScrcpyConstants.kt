@@ -41,8 +41,8 @@ object ScrcpyConstants {
     /** 默认显示 ID */
     const val DEFAULT_DISPLAY_ID = 0
 
-    /** 默认编码器配置 */
-    const val DEFAULT_CODEC_OPTIONS = "profile=1,level=52,intra-refresh-period=0"
+    /** 默认编码器配置。保持为空，避免在部分设备上因 profile/level 不兼容导致 server 启动失败。 */
+    const val DEFAULT_CODEC_OPTIONS = ""
 
     // 音频编码
 

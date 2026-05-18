@@ -47,12 +47,18 @@ class ScrcpyForegroundService : Service() {
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_DEVICE_NAME = "device_name"
         const val EXTRA_DELAYED_ACK = "delayed_ack"
+        const val EXTRA_HOST = "host"
+        const val EXTRA_PORT = "port"
+        const val EXTRA_USB_CONNECTION = "usb_connection"
 
         fun protectDevice(
             context: android.content.Context,
             deviceId: String,
             deviceName: String,
             delayedAck: Boolean,
+            host: String? = null,
+            port: Int = 0,
+            isUsbConnection: Boolean = false,
         ) {
             val intent =
                 Intent(context, ScrcpyForegroundService::class.java).apply {
@@ -60,6 +66,9 @@ class ScrcpyForegroundService : Service() {
                     putExtra(EXTRA_DEVICE_ID, deviceId)
                     putExtra(EXTRA_DEVICE_NAME, deviceName)
                     putExtra(EXTRA_DELAYED_ACK, delayedAck)
+                    putExtra(EXTRA_HOST, host)
+                    putExtra(EXTRA_PORT, port)
+                    putExtra(EXTRA_USB_CONNECTION, isUsbConnection)
                 }
             ServiceApiCompat.startForegroundServiceCompat(context, intent)
         }
@@ -97,8 +106,18 @@ class ScrcpyForegroundService : Service() {
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
                 val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "未知设备"
                 val delayedAck = intent.getBooleanExtra(EXTRA_DELAYED_ACK, false)
+                val host = intent.getStringExtra(EXTRA_HOST)
+                val port = intent.getIntExtra(EXTRA_PORT, 0)
+                val isUsbConnection = intent.getBooleanExtra(EXTRA_USB_CONNECTION, false)
                 if (deviceId != null) {
-                    addDevice(deviceId, deviceName, delayedAck)
+                    addDevice(
+                        deviceId = deviceId,
+                        deviceName = deviceName,
+                        delayedAck = delayedAck,
+                        host = host,
+                        port = port,
+                        isUsbConnection = isUsbConnection,
+                    )
                 }
             }
 
@@ -132,13 +151,22 @@ class ScrcpyForegroundService : Service() {
         deviceId: String,
         deviceName: String,
         delayedAck: Boolean,
+        host: String?,
+        port: Int,
+        isUsbConnection: Boolean,
     ) {
         protectedDevices[deviceId] =
             ProtectedAdbDevice(
                 deviceName = deviceName,
                 delayedAck = delayedAck,
+                host = host,
+                port = port,
+                isUsbConnection = isUsbConnection,
             )
-        LogManager.d(LogTags.SCRCPY_SERVICE, "添加保护设备: $deviceName ($deviceId) delayedAck=$delayedAck")
+        LogManager.d(
+            LogTags.SCRCPY_SERVICE,
+            "添加保护设备: $deviceName ($deviceId) delayedAck=$delayedAck host=${host ?: "-"} port=$port usb=$isUsbConnection",
+        )
 
         if (!isRunning) {
             try {
@@ -224,4 +252,7 @@ class ScrcpyForegroundService : Service() {
 internal data class ProtectedAdbDevice(
     val deviceName: String,
     val delayedAck: Boolean,
+    val host: String?,
+    val port: Int,
+    val isUsbConnection: Boolean,
 )

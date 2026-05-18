@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
+import com.mobile.scrcpy.android.core.common.util.normalizeEndpointHost
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
@@ -51,7 +53,7 @@ class PairingEndpointMetadataManager(
         port: String,
         deviceName: String = "Android Device",
     ) {
-        val normalizedEndpoint = endpoint.trim().lowercase()
+        val normalizedEndpoint = normalizeEndpointHost(endpoint).lowercase()
         val normalizedPort = port.trim()
         if (normalizedEndpoint.isBlank() || normalizedPort.isBlank()) {
             return
@@ -80,7 +82,7 @@ class PairingEndpointMetadataManager(
                 PairingHistoryItem(
                     hostPort =
                         if (metadata.lastPairingPort.isNotBlank()) {
-                            "${metadata.endpoint}:${metadata.lastPairingPort}"
+                            formatHostPort(metadata.endpoint, metadata.lastPairingPort)
                         } else {
                             metadata.endpoint
                         },
@@ -91,7 +93,7 @@ class PairingEndpointMetadataManager(
             }
 
     suspend fun removeEndpoint(endpoint: String) {
-        val normalizedEndpoint = endpoint.trim().lowercase()
+        val normalizedEndpoint = normalizeEndpointHost(endpoint).lowercase()
         if (normalizedEndpoint.isBlank()) {
             return
         }

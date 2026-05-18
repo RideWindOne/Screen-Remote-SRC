@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
+import com.mobile.scrcpy.android.core.common.util.formatHostForAuthority
 import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.core.domain.model.ScrcpySession
 import com.mobile.scrcpy.android.core.domain.model.SessionColor
@@ -112,7 +113,7 @@ fun buildUrlScheme(sessionData: SessionData): String {
     val port = if (sessionData.port.isNotBlank()) ":${sessionData.port}" else ""
     val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
 
-    return "scrcpy2://${sessionData.host}$port$query"
+    return "scrcpy2://${formatHostForAuthority(sessionData.host)}$port$query"
 }
 
 @Composable

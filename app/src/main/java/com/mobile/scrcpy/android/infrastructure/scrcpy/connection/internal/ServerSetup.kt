@@ -195,6 +195,7 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
             "video_bit_rate=${options.videoBitRate}",
             "max_fps=${options.maxFps}",
             "video_codec=$videoCodec",
+            "display_id=${options.displayId.coerceAtLeast(0)}",
             "stay_awake=${options.stayAwake}",
             "power_off_on_close=${options.powerOffOnClose}",
             "tunnel_forward=true",
@@ -205,23 +206,45 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         ),
     )
 
-    if (options.selectedVideoEncoder.isNotBlank()) {
-        params.add("video_encoder=${options.getFinalVideoEncoder()}")
+    if (options.showTouches) {
+        params.add("show_touches=true")
+    }
+
+    options.getFinalVideoEncoder().takeIf { it.isNotBlank() }?.let { encoder ->
+        params.add("video_encoder=$encoder")
     }
 
     if (options.enableAudio) {
         params.add("audio_codec=${options.preferredAudioCodec}")
         params.add("audio_bit_rate=${options.audioBitRate}")
-        if (options.selectedAudioEncoder.isNotBlank()) {
-            params.add("audio_encoder=${options.getFinalAudioEncoder()}")
+        options.getFinalAudioEncoder().takeIf { it.isNotBlank() }?.let { encoder ->
+            params.add("audio_encoder=$encoder")
         }
     } else {
         params.add("audio=false")
     }
 
-    params.add(
-        "video_codec_options=profile=1,level=52,key-frame-interval=${options.keyFrameInterval}",
-    )
+    buildVideoCodecOptions(options.codecOptions, options.keyFrameInterval)?.let { codecOptions ->
+        params.add("video_codec_options=$codecOptions")
+    }
 
     return ScrcpyProtocol.buildScrcpyServerCommand(*params.toTypedArray())
+}
+
+private fun buildVideoCodecOptions(
+    userCodecOptions: String,
+    keyFrameInterval: Int,
+): String? {
+    val options =
+        userCodecOptions
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toMutableList()
+
+    if (options.none { it.substringBefore('=').trim() == "key-frame-interval" }) {
+        options.add("key-frame-interval=${keyFrameInterval.coerceAtLeast(0)}")
+    }
+
+    return options.takeIf { it.isNotEmpty() }?.joinToString(",")
 }

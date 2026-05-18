@@ -13,6 +13,8 @@ import com.mobile.scrcpy.android.core.common.event.ScrcpyEventBus
 import com.mobile.scrcpy.android.core.common.event.UsbDeviceDisconnected
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
+import com.mobile.scrcpy.android.core.common.util.normalizeEndpointHost
 import com.mobile.scrcpy.android.infrastructure.adb.AdbRuntimeDiagnostics
 import com.mobile.scrcpy.android.infrastructure.adb.AdbRuntimeProvider
 import com.mobile.scrcpy.android.infrastructure.adb.key.core.adb.AdbKeyManager
@@ -74,10 +76,11 @@ class AdbConnectionManager private constructor(
         withDelayedAck: Boolean = true,
     ): Result<String> =
         withContext(Dispatchers.IO) {
-            withDeviceOperationLock("$host:$port") {
+            val normalizedHost = normalizeEndpointHost(host)
+            withDeviceOperationLock(formatHostPort(normalizedHost, port)) {
                 emit(sessionContext, SessionEvent.AdbConnecting)
                 connector.connectTcp(
-                    host = host,
+                    host = normalizedHost,
                     port = port,
                     deviceName = deviceName,
                     forceReconnect = forceReconnect,

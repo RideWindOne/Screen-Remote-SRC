@@ -101,7 +101,7 @@ class ConnectionLifecycle(
                 val options = session.options
 
                 // 步骤 1: 建立/验证 ADB 连接并分配端口
-                val connection = setupAdbConnection(options.host, options.port)
+                val connection = setupAdbConnection(options)
 
                 // 步骤 2: 清理旧资源
                 cleanupOldResources(connection)
@@ -180,7 +180,7 @@ class ConnectionLifecycle(
 
                 // 3. 移除 ADB Forward
                 if (options != null) {
-                    val deviceId = if (options.isUsbConnection()) options.host else "${options.host}:${options.port}"
+                    val deviceId = options.getDeviceIdentifier()
                     val connection = adbConnectionManager.getConnection(deviceId)
                     if (connection != null) {
                         try {
@@ -197,7 +197,7 @@ class ConnectionLifecycle(
 
                 // 4. 终止服务器进程
                 if (options != null && currentScid != null) {
-                    val deviceId = if (options.isUsbConnection()) options.host else "${options.host}:${options.port}"
+                    val deviceId = options.getDeviceIdentifier()
                     val connection = adbConnectionManager.getConnection(deviceId)
                     if (connection != null) {
                         try {

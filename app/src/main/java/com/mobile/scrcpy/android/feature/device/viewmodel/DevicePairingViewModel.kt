@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
+import com.mobile.scrcpy.android.core.common.util.parseHostPort
 import com.mobile.scrcpy.android.feature.device.data.DeviceInfo
 import com.mobile.scrcpy.android.feature.device.data.PairingEndpointMetadataManager
 import com.mobile.scrcpy.android.feature.device.data.PairingHistoryItem
@@ -55,7 +56,7 @@ class DevicePairingViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
-                val endpoint = hostPort.substringBefore(':')
+                val endpoint = parseHostPort(hostPort, allowUnbracketedIpv6 = true)?.host ?: hostPort
                 withContext(Dispatchers.IO) {
                     PairingEndpointMetadataManager(context).removeEndpoint(endpoint)
                 }

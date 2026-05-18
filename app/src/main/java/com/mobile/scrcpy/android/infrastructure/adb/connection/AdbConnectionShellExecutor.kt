@@ -90,6 +90,31 @@ internal class AdbConnectionShellExecutor(
             }
         }
 
+    suspend fun openPtyStream(command: String = ""): AdbShellStream? =
+        withContext(Dispatchers.IO) {
+            try {
+                logShellStreamOpen(LogTags.ADB_CONNECTION, command.ifBlank { "<interactive pty>" })
+                dadb.openPtyShell(command).also {
+                    logShellStreamReady(LogTags.ADB_CONNECTION, command.ifBlank { "<interactive pty>" })
+                }
+            } catch (e: Exception) {
+                logShellCommandFailure(LogTags.ADB_CONNECTION, command.ifBlank { "<interactive pty>" }, e)
+                LogManager.w(LogTags.ADB_CONNECTION, "PTY shell 打开失败，回退到 raw shell: ${e.message}")
+                runCatching {
+                    dadb.openShell(command).also {
+                        logShellStreamReady(LogTags.ADB_CONNECTION, command.ifBlank { "<interactive raw>" })
+                    }
+                }.getOrElse { fallbackError ->
+                    LogManager.e(
+                        LogTags.ADB_CONNECTION,
+                        "${AdbTexts.ADB_OPEN_SHELL_STREAM_FAILED.get()}: ${fallbackError.message}",
+                        fallbackError,
+                    )
+                    null
+                }
+            }
+        }
+
     private suspend fun retryShellCommand(
         command: String,
         retryOnFailure: Boolean,

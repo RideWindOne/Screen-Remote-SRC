@@ -1,5 +1,7 @@
 package com.mobile.scrcpy.android.feature.device.data
 
+import com.mobile.scrcpy.android.core.common.util.parseHostPort
+
 /**
  * 配对方式
  */
@@ -110,12 +112,7 @@ data class QRCodeData(
         try {
             // 服务名称格式通常为：adb-<serial>-<random>._adb-tls-pairing._tcp
             // 或者直接包含 IP:Port
-            val parts = serviceName.split(":")
-            if (parts.size == 2) {
-                parts[0]
-            } else {
-                null
-            }
+            parseHostPort(serviceName, allowUnbracketedIpv6 = true)?.host
         } catch (e: Exception) {
             null
         }
@@ -125,12 +122,7 @@ data class QRCodeData(
      */
     fun extractPort(): String? =
         try {
-            val parts = serviceName.split(":")
-            if (parts.size == 2) {
-                parts[1]
-            } else {
-                null
-            }
+            parseHostPort(serviceName, allowUnbracketedIpv6 = true)?.port?.toString()
         } catch (e: Exception) {
             null
         }

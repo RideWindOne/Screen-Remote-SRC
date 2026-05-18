@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppDimens
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
 import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenuItem
@@ -69,7 +70,7 @@ fun DetectingCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "$host:${port.ifBlank { "5555" }}",
+                text = formatHostPort(host, port.ifBlank { "5555" }),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )

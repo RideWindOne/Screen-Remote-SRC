@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.mobile.scrcpy.android.core.common.ScrcpyConstants
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
+import com.mobile.scrcpy.android.core.common.util.normalizeEndpointHost
 import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
 import com.mobile.scrcpy.android.core.domain.model.ScrcpySession
 import com.mobile.scrcpy.android.core.domain.model.SessionColor
@@ -29,6 +31,9 @@ data class SessionData(
     val maxSize: String = "",
     val videoBitrate: String = "",
     val maxFps: String = "", // 最大帧率
+    val displayId: Int = 0,
+    val showTouches: Boolean = false,
+    val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
     val preferredVideoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC,
     val userVideoEncoder: String = "",
     val userVideoDecoder: String = "",
@@ -102,7 +107,7 @@ data class SessionData(
      * 获取设备唯一标识
      * USB 模式使用序列号，TCP 模式使用 host:port
      */
-    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else "$host:$port"
+    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else formatHostPort(host, port)
 
     /**
      * 转换为 ScrcpyOptions
@@ -110,11 +115,14 @@ data class SessionData(
     fun toScrcpyOptions(): ScrcpyOptions =
         ScrcpyOptions(
             sessionId = id,
-            host = if (isUsbConnection()) normalizedUsbDeviceId() else host,
+            host = if (isUsbConnection()) normalizedUsbDeviceId() else normalizeEndpointHost(host),
             port = port.toIntOrNull() ?: 0,
             maxSize = maxSize.toIntOrNull() ?: 1920,
-            videoBitRate = videoBitrate.toIntOrNull() ?: 8000000,
+            videoBitRate = parseBitRate(videoBitrate) ?: 8000000,
             maxFps = maxFps.toIntOrNull() ?: 60,
+            displayId = displayId,
+            showTouches = showTouches,
+            codecOptions = codecOptions,
             preferredVideoCodec = preferredVideoCodec,
             userVideoEncoder = userVideoEncoder,
             userVideoDecoder = userVideoDecoder,
@@ -122,7 +130,7 @@ data class SessionData(
             preferredAudioCodec = preferredAudioCodec,
             userAudioEncoder = userAudioEncoder,
             userAudioDecoder = userAudioDecoder,
-            audioBitRate = audioBitrate.toIntOrNull() ?: 128000,
+            audioBitRate = parseBitRate(audioBitrate) ?: 128000,
             audioBufferMs = audioBufferMs.toIntOrNull(),
             keyFrameInterval = keyFrameInterval,
             stayAwake = stayAwake,
@@ -145,6 +153,9 @@ data class SessionData(
             maxSize = options.maxSize.toString(),
             videoBitrate = options.videoBitRate.toString(),
             maxFps = options.maxFps.toString(),
+            displayId = options.displayId,
+            showTouches = options.showTouches,
+            codecOptions = options.codecOptions,
             preferredVideoCodec = options.preferredVideoCodec,
             userVideoEncoder = options.userVideoEncoder,
             userVideoDecoder = options.userVideoDecoder,
@@ -166,6 +177,28 @@ data class SessionData(
             remoteVideoEncoders = options.remoteVideoEncoders,
             remoteAudioEncoders = options.remoteAudioEncoders,
         )
+}
+
+internal fun parseBitRate(rawValue: String): Int? {
+    val value = rawValue.trim()
+    if (value.isEmpty()) return null
+
+    val multiplier =
+        when (value.last().lowercaseChar()) {
+            'm' -> 1_000_000L
+            'k' -> 1_000L
+            else -> 1L
+        }
+    val numericPart =
+        if (multiplier == 1L) {
+            value
+        } else {
+            value.dropLast(1)
+        }
+
+    val parsed = numericPart.toDoubleOrNull() ?: return null
+    val bitsPerSecond = (parsed * multiplier).toLong()
+    return bitsPerSecond.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
 }
 
 class SessionRepository(

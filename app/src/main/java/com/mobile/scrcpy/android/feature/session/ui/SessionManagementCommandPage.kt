@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.session.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -35,13 +35,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +54,15 @@ import androidx.compose.ui.unit.sp
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbBridge
 import com.mobile.scrcpy.android.infrastructure.adb.shell.AdbShellManager
+import dadb.AdbShellPacket
+import dadb.AdbShellStream
+import dadb.ID_CLOSE_STDIN
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -59,6 +70,11 @@ import java.util.Locale
 internal const val SESSION_MANAGEMENT_COMMAND_HISTORY_MAX_SIZE = 12
 
 private const val SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT = 16_000
+private const val SESSION_MANAGEMENT_SHELL_KEEPALIVE_INTERVAL_MS = 20_000L
+private const val SESSION_MANAGEMENT_SHELL_RECONNECT_DELAY_MS = 1_200L
+private const val SESSION_MANAGEMENT_SHELL_MAX_RECONNECT_ATTEMPTS = 3
+private val SESSION_MANAGEMENT_ANSI_PATTERN =
+    Regex("""\u001B(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\)|[PX^_].*?\u001B\\|[@-Z\\-_])""")
 
 data class ManagementCommandRecord(
     val command: String,
@@ -79,6 +95,7 @@ private data class ManagementCommandPreset(
 @Composable
 internal fun SessionManagementCommandPage(
     modifier: Modifier = Modifier,
+    terminalSession: ManagementTerminalSession,
     commandInput: String,
     history: List<ManagementCommandRecord>,
     isExecuting: Boolean,
@@ -88,40 +105,34 @@ internal fun SessionManagementCommandPage(
     showPresetDialog: Boolean,
     onShowPresetDialogChange: (Boolean) -> Unit,
 ) {
-    val context = LocalContext.current
-
-    LaunchedEffect(isExecuting) {
-        if (isExecuting) {
-            Toast.makeText(context, "正在执行，请稍候…", Toast.LENGTH_SHORT).show()
-        }
+    LaunchedEffect(terminalSession) {
+        terminalSession.start()
     }
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // 终端显示区域 - 无左右 padding
-        SessionManagementTerminalDisplay(
-            history = history,
-            isExecuting = isExecuting,
-            onClearHistory = onClearHistory,
-        )
-
-        // 命令输入框
-        SessionManagementCommandInputCard(
-            commandInput = commandInput,
-            isExecuting = isExecuting,
-            onCommandInputChange = onCommandInputChange,
-            onExecuteCommand = onExecuteCommand,
-        )
-    }
+    SessionManagementTerminalDisplay(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .imePadding(),
+        output = terminalSession.output,
+        isConnected = terminalSession.isConnected,
+        commandInput = commandInput,
+        inputEnabled = terminalSession.canWrite,
+        onCommandInputChange = onCommandInputChange,
+        onExecuteCommand = { command ->
+            terminalSession.sendLine(command)
+            onCommandInputChange("")
+        },
+        onClear = terminalSession::clear,
+    )
 
     // 快捷命令弹窗
     if (showPresetDialog) {
         SessionManagementCommandPresetDialog(
             isExecuting = isExecuting,
             onExecuteCommand = { command ->
-                onExecuteCommand(command)
+                terminalSession.sendLine(command)
+                onCommandInputChange("")
                 onShowPresetDialogChange(false)
             },
             onDismiss = { onShowPresetDialogChange(false) },
@@ -131,100 +142,93 @@ internal fun SessionManagementCommandPage(
 
 @Composable
 private fun SessionManagementTerminalDisplay(
-    history: List<ManagementCommandRecord>,
-    isExecuting: Boolean,
-    onClearHistory: () -> Unit,
+    modifier: Modifier = Modifier,
+    output: String,
+    isConnected: Boolean,
+    commandInput: String,
+    inputEnabled: Boolean,
+    onCommandInputChange: (String) -> Unit,
+    onExecuteCommand: (String) -> Unit,
+    onClear: () -> Unit,
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFF1E1E1E), // 深色终端背景
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
     ) {
-        // 终端内容区域
-        SessionManagementTerminalContent(
-            history = history,
-            isExecuting = isExecuting,
-            onClearHistory = onClearHistory,
-        )
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(),
+        ) {
+            SessionManagementTerminalContent(
+                modifier = Modifier.weight(1f),
+                output = output,
+                isConnected = isConnected,
+                onClear = onClear,
+            )
+
+            AppDivider()
+
+            SessionManagementTerminalInputLine(
+                commandInput = commandInput,
+                inputEnabled = inputEnabled,
+                onCommandInputChange = onCommandInputChange,
+                onExecuteCommand = onExecuteCommand,
+            )
+        }
     }
 }
 
 @Composable
 private fun SessionManagementTerminalContent(
-    history: List<ManagementCommandRecord>,
-    isExecuting: Boolean,
-    onClearHistory: () -> Unit,
+    modifier: Modifier = Modifier,
+    output: String,
+    isConnected: Boolean,
+    onClear: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
 
-    // 自动滚动到底部
-    LaunchedEffect(history.size, isExecuting) {
+    LaunchedEffect(output.length, isConnected) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
     Box(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 150.dp, max = 400.dp)
+                    .fillMaxHeight()
+                    .heightIn(min = 150.dp)
                     .verticalScroll(scrollState)
                     .padding(14.dp),
         ) {
-            if (history.isEmpty()) {
-                // 空状态提示
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = "$ # 欢迎使用 Shell 终端",
-                        style =
-                            MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                            ),
-                        color = Color(0xFF6A9955), // 绿色注释
-                    )
-                    Text(
-                        text = "$ # 输入命令后按回车执行，或使用下方快捷命令",
-                        style =
-                            MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                            ),
-                        color = Color(0xFF6A9955),
-                    )
-                }
-            } else {
-                SelectionContainer {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        history.asReversed().forEach { record ->
-                            SessionManagementTerminalEntry(record = record)
-                        }
-
-                        if (isExecuting) {
-                            Text(
-                                text = "$ 执行中...",
-                                style =
-                                    MaterialTheme.typography.bodyMedium.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                    ),
-                                color = Color(0xFF4EC9B0), // 青色
-                            )
-                        }
-                    }
-                }
+            SelectionContainer {
+                Text(
+                    text =
+                        output.ifBlank {
+                            if (isConnected) {
+                                "# 已连接交互式 shell。"
+                            } else {
+                                "# 正在打开交互式 shell..."
+                            }
+                        },
+                    style =
+                        MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 19.sp,
+                        ),
+                    color = Color(0xFFCCCCCC),
+                )
             }
         }
 
-        // 清空按钮 - 右上角小 X
-        if (history.isNotEmpty()) {
+        if (output.isNotEmpty()) {
             IconButton(
-                onClick = onClearHistory,
-                enabled = !isExecuting,
+                onClick = onClear,
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
@@ -304,125 +308,101 @@ private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
 }
 
 @Composable
-private fun SessionManagementCommandInputCard(
+private fun SessionManagementTerminalInputLine(
     commandInput: String,
-    isExecuting: Boolean,
+    inputEnabled: Boolean,
     onCommandInputChange: (String) -> Unit,
     onExecuteCommand: (String) -> Unit,
 ) {
     val normalizedCommand = commandInput.trim()
     val inputScrollState = rememberScrollState()
 
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Column(
+        Text(
+            text = "$",
+            style =
+                MaterialTheme.typography.bodyLarge.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                ),
+            color = Color(0xFF4EC9B0),
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 112.dp, max = 220.dp),
-            ) {
+                    .padding(top = 9.dp, end = 8.dp),
+        )
+
+        BasicTextField(
+            value = commandInput,
+            onValueChange = onCommandInputChange,
+            enabled = inputEnabled,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = 44.dp, max = 132.dp)
+                    .verticalScroll(inputScrollState)
+                    .padding(top = 8.dp, bottom = 8.dp),
+            textStyle =
+                TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    color = Color(0xFFD4D4D4),
+                ),
+            cursorBrush = SolidColor(Color(0xFF4EC9B0)),
+            keyboardOptions =
+                KeyboardOptions(
+                    imeAction = ImeAction.Send,
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onSend = {
+                        if (normalizedCommand.isNotBlank() && inputEnabled) {
+                            onExecuteCommand(normalizedCommand)
+                        }
+                    },
+                ),
+            decorationBox = { innerTextField ->
                 Box(
                     modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.TopStart,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
-                    ) {
+                    if (commandInput.isEmpty()) {
                         Text(
-                            text = "$",
+                            text = if (inputEnabled) "输入 Shell 命令" else "正在连接 shell...",
                             style =
-                                MaterialTheme.typography.bodyLarge.copy(
+                                MaterialTheme.typography.bodyMedium.copy(
                                     fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                ),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier =
-                                Modifier
-                                    .padding(start = 12.dp, top = 14.dp),
-                        )
-
-                        BasicTextField(
-                            value = commandInput,
-                            onValueChange = onCommandInputChange,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .verticalScroll(inputScrollState)
-                                    .padding(start = 8.dp, end = 56.dp, top = 12.dp, bottom = 44.dp),
-                            textStyle =
-                                TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 15.sp,
                                     lineHeight = 22.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
                                 ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            keyboardOptions =
-                                KeyboardOptions(
-                                    imeAction = ImeAction.Send,
-                                ),
-                            keyboardActions =
-                                KeyboardActions(
-                                    onSend = {
-                                        if (normalizedCommand.isNotBlank() && !isExecuting) {
-                                            onExecuteCommand(normalizedCommand)
-                                        }
-                                    },
-                                ),
-                            decorationBox = { innerTextField ->
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.TopStart,
-                                ) {
-                                    if (commandInput.isEmpty()) {
-                                        Text(
-                                            text = "输入 Shell 命令\n支持长命令换行",
-                                            style =
-                                                MaterialTheme.typography.bodyMedium.copy(
-                                                    fontFamily = FontFamily.Monospace,
-                                                    lineHeight = 22.sp,
-                                                ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                        )
-                                    }
-                                    innerTextField()
-                                }
-                            },
+                            color = Color(0xFFCCCCCC).copy(alpha = 0.46f),
                         )
                     }
-
-                    IconButton(
-                        onClick = { onExecuteCommand(normalizedCommand) },
-                        enabled = normalizedCommand.isNotBlank() && !isExecuting,
-                        modifier =
-                            Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(end = 8.dp, bottom = 8.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "执行命令",
-                            tint =
-                                if (normalizedCommand.isNotBlank() && !isExecuting) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                                },
-                        )
-                    }
+                    innerTextField()
                 }
-            }
+            },
+        )
+
+        IconButton(
+            onClick = { onExecuteCommand(normalizedCommand) },
+            enabled = normalizedCommand.isNotBlank() && inputEnabled,
+            modifier = Modifier.size(44.dp),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Send,
+                contentDescription = "执行命令",
+                tint =
+                    if (normalizedCommand.isNotBlank() && inputEnabled) {
+                        Color(0xFF4EC9B0)
+                    } else {
+                        Color(0xFFCCCCCC).copy(alpha = 0.32f)
+                    },
+            )
         }
     }
 }
@@ -546,6 +526,213 @@ private fun SessionManagementCommandPresetCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+internal class ManagementTerminalSession(
+    private val scope: CoroutineScope,
+) {
+    var output by mutableStateOf("")
+        private set
+    var isConnected by mutableStateOf(false)
+        private set
+
+    private var shellStream: AdbShellStream? = null
+    private var readJob: Job? = null
+    private var keepAliveJob: Job? = null
+    private var closeRequested = false
+    private var userRequestedExit = false
+    private var hasEverConnected = false
+    private var reconnectAttempts = 0
+
+    val canWrite: Boolean
+        get() = isConnected && shellStream != null
+
+    fun start() {
+        if (readJob?.isActive == true) {
+            return
+        }
+
+        closeRequested = false
+        if (!hasEverConnected) {
+            append("# 正在连接交互式 shell...\n")
+        }
+        readJob =
+            scope.launch {
+                val connection = AdbBridge.getConnection()
+                if (connection == null) {
+                    appendConnectionFailed()
+                    return@launch
+                }
+
+                val stream = connection.openShellStream("")
+                if (stream == null) {
+                    appendConnectionFailed()
+                    return@launch
+                }
+
+                shellStream = stream
+                isConnected = true
+                if (!hasEverConnected) {
+                    append("# 已连接。\n")
+                }
+                hasEverConnected = true
+                reconnectAttempts = 0
+                startKeepAlive(stream)
+
+                withContext(Dispatchers.IO) {
+                    try {
+                        while (true) {
+                            when (val packet = stream.read()) {
+                                is AdbShellPacket.StdOut -> {
+                                    appendTerminalTextOnMain(String(packet.payload))
+                                }
+
+                                is AdbShellPacket.StdError -> {
+                                    appendTerminalTextOnMain(String(packet.payload))
+                                }
+
+                                is AdbShellPacket.Exit -> {
+                                    appendOnMain("\n# shell 已退出，exit=${packet.payload.firstOrNull()?.toInt() ?: 0}\n")
+                                    break
+                                }
+                            }
+                        }
+                    } catch (error: Exception) {
+                        // Idle shell streams may be closed by the transport. Reconnect silently below.
+                    } finally {
+                        keepAliveJob?.cancel()
+                        keepAliveJob = null
+                        withContext(Dispatchers.Main) {
+                            isConnected = false
+                            shellStream = null
+                        }
+                        runCatching { stream.close() }
+                    }
+                }
+
+                readJob = null
+                if (!closeRequested && !userRequestedExit) {
+                    reconnectAttempts += 1
+                    if (reconnectAttempts <= SESSION_MANAGEMENT_SHELL_MAX_RECONNECT_ATTEMPTS) {
+                        delay(SESSION_MANAGEMENT_SHELL_RECONNECT_DELAY_MS)
+                        start()
+                    } else {
+                        appendConnectionFailed()
+                    }
+                }
+            }
+    }
+
+    fun sendLine(command: String) {
+        val line = command.trimEnd()
+        if (line.isBlank()) {
+            return
+        }
+
+        if (line.trim() == "clear") {
+            clear()
+            return
+        }
+
+        val stream =
+            shellStream ?: run {
+                append("# shell 尚未连接。\n")
+                return
+            }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) {
+                    append("$ $line\n")
+                }
+                if (line.trim() == "exit") {
+                    userRequestedExit = true
+                }
+                stream.write("$line\n")
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main) {
+                    append("\n# 写入失败: ${error.message.orEmpty()}\n")
+                    close()
+                }
+            }
+        }
+    }
+
+    fun clear() {
+        output = ""
+    }
+
+    fun close() {
+        closeRequested = true
+        keepAliveJob?.cancel()
+        keepAliveJob = null
+        readJob?.cancel()
+        readJob = null
+        isConnected = false
+        shellStream?.let { stream ->
+            runCatching { stream.write(ID_CLOSE_STDIN) }
+            runCatching { stream.close() }
+        }
+        shellStream = null
+    }
+
+    private fun startKeepAlive(stream: AdbShellStream) {
+        keepAliveJob?.cancel()
+        keepAliveJob =
+            scope.launch(Dispatchers.IO) {
+                while (!closeRequested && !userRequestedExit) {
+                    delay(SESSION_MANAGEMENT_SHELL_KEEPALIVE_INTERVAL_MS)
+                    runCatching {
+                        stream.write(":\n")
+                    }.onFailure {
+                        return@launch
+                    }
+                }
+            }
+    }
+
+    private fun append(text: String) {
+        output = (output + text).takeLast(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT)
+    }
+
+    private fun appendConnectionFailed() {
+        output = output.trimEnd()
+        append("\n# 已断开。\n")
+    }
+
+    private fun appendTerminalText(text: String) {
+        SESSION_MANAGEMENT_ANSI_PATTERN
+            .replace(text, "")
+            .forEach { char ->
+                output =
+                    when (char) {
+                        '\r' -> {
+                            val lineStart = output.lastIndexOf('\n') + 1
+                            output.take(lineStart)
+                        }
+
+                        '\b' -> {
+                            output.dropLast(1)
+                        }
+
+                        else -> {
+                            output + char
+                        }
+                    }.takeLast(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT)
+            }
+    }
+
+    private suspend fun appendOnMain(text: String) {
+        withContext(Dispatchers.Main) {
+            append(text)
+        }
+    }
+
+    private suspend fun appendTerminalTextOnMain(text: String) {
+        withContext(Dispatchers.Main) {
+            appendTerminalText(text)
         }
     }
 }

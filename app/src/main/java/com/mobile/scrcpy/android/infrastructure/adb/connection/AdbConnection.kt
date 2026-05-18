@@ -124,6 +124,8 @@ class AdbConnection(
 
     suspend fun openShellStream(command: String): AdbShellStream? = shellExecutor.openStream(command)
 
+    suspend fun openPtyShellStream(command: String = ""): AdbShellStream? = shellExecutor.openPtyStream(command)
+
     suspend fun executeService(destination: String): Result<String> =
         withContext(Dispatchers.IO) {
             runCatching {

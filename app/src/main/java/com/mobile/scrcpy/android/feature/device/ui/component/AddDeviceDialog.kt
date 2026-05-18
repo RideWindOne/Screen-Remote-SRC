@@ -26,6 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.mobile.scrcpy.android.core.common.util.normalizeEndpointHost
+import com.mobile.scrcpy.android.core.common.util.parseHostPort
 import com.mobile.scrcpy.android.feature.device.viewmodel.DeviceViewModel
 
 @Composable
@@ -109,8 +111,10 @@ fun AddDeviceDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val portInt = port.toIntOrNull() ?: 5555
-                    onConnect(host, portInt, null)
+                    val parsedEndpoint = parseHostPort(host)
+                    val targetHost = normalizeEndpointHost(parsedEndpoint?.host ?: host)
+                    val portInt = parsedEndpoint?.port ?: port.toIntOrNull() ?: 5555
+                    onConnect(targetHost, portInt, null)
                 },
                 enabled = host.isNotBlank() && connectionState !is DeviceViewModel.ConnectionState.Connecting,
             ) {

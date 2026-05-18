@@ -39,7 +39,7 @@ internal class ScrcpyClientConnectionCoordinator(
     private val getCurrentDeviceId: () -> String?,
     private val setCurrentIds: (String, String) -> Unit,
     private val onSessionStateChanged: (SessionState) -> Unit,
-    private val startForegroundService: (String) -> Unit,
+    private val startForegroundService: (String, ScrcpyOptions) -> Unit,
 ) {
     private val observerScope = CoroutineScope(Dispatchers.Main)
 
@@ -84,7 +84,7 @@ internal class ScrcpyClientConnectionCoordinator(
 
             val resolution = videoResolution.value
             if (resolution != null) {
-                startForegroundService(deviceId)
+                startForegroundService(deviceId, options)
             }
 
             withContext(Dispatchers.Main) {

@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.session.ui
 
-import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -56,6 +55,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -83,6 +84,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -112,6 +114,7 @@ import androidx.core.content.FileProvider
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import com.mobile.scrcpy.android.core.common.util.compat.putIfAbsentCompat
 import com.mobile.scrcpy.android.core.common.util.compat.readAtMostBytesCompat
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
 import com.mobile.scrcpy.android.core.data.repository.SessionData
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
@@ -167,6 +170,13 @@ fun SessionManagementScreen(
     var commandHistory by remember(sessionData.id) { mutableStateOf<List<ManagementCommandRecord>>(emptyList()) }
     var commandExecuting by remember(sessionData.id) { mutableStateOf(false) }
     var commandPresetDialogOpen by remember(sessionData.id) { mutableStateOf(false) }
+    val commandTerminalSession = remember(sessionData.id) { ManagementTerminalSession(scope) }
+
+    DisposableEffect(commandTerminalSession) {
+        onDispose {
+            commandTerminalSession.close()
+        }
+    }
 
     val snapshot by produceState(
         initialValue = DeviceDashboardSnapshot.loading(sessionData),
@@ -304,6 +314,7 @@ fun SessionManagementScreen(
                     commandHistory = commandHistory,
                     commandExecuting = commandExecuting,
                     commandPresetDialogOpen = commandPresetDialogOpen,
+                    commandTerminalSession = commandTerminalSession,
                     onFileSelectionModeChanged = { fileSelectionMode = it },
                     onCommandInputChange = { commandInput = it },
                     onCommandExecute = ::runManagementCommand,
@@ -690,8 +701,10 @@ private val SessionManagementDrawerSectionSpacing = 12.dp
 private val SessionManagementDrawerItemSpacing = 6.dp
 private val SessionManagementSurfaceElevation = 1.dp
 private val SessionManagementContentHorizontalPadding = 20.dp
+private val SessionManagementProcessContentHorizontalPadding = 8.dp
 private val SessionManagementContentBottomPadding = 20.dp
 private val SessionManagementContentTopPadding = 110.dp
+private const val SessionManagementProcessListLimit = 40
 private val SessionManagementProgressSpacing = 14.dp
 private val SessionManagementProgressIndicatorSize = 22.dp
 private val SessionManagementAppRowSpacing = 12.dp
@@ -919,7 +932,7 @@ private fun SessionManagementDrawer(
                                 if (sessionData.isUsbConnection()) {
                                     sessionData.getUsbSerialNumber().orEmpty().ifBlank { sessionData.host }
                                 } else {
-                                    "${sessionData.host}:${sessionData.port}"
+                                    formatHostPort(sessionData.host, sessionData.port)
                                 },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -972,6 +985,7 @@ private fun SessionManagementDetailPane(
     commandHistory: List<ManagementCommandRecord>,
     commandExecuting: Boolean,
     commandPresetDialogOpen: Boolean,
+    commandTerminalSession: ManagementTerminalSession,
     onFileSelectionModeChanged: (Boolean) -> Unit,
     onCommandInputChange: (String) -> Unit,
     onCommandExecute: (String) -> Unit,
@@ -979,12 +993,19 @@ private fun SessionManagementDetailPane(
     onCommandPresetDialogChange: (Boolean) -> Unit,
     onUtilityAction: (UtilityAction) -> Unit,
 ) {
+    val horizontalPadding =
+        if (selectedSection == SessionManagementSection.Process) {
+            SessionManagementProcessContentHorizontalPadding
+        } else {
+            SessionManagementContentHorizontalPadding
+        }
+
     LazyColumn(
         modifier = modifier.fillMaxHeight(),
         contentPadding =
             PaddingValues(
-                start = SessionManagementContentHorizontalPadding,
-                end = SessionManagementContentHorizontalPadding,
+                start = horizontalPadding,
+                end = horizontalPadding,
                 top = SessionManagementContentTopPadding,
                 bottom = SessionManagementContentBottomPadding,
             ),
@@ -1042,6 +1063,7 @@ private fun SessionManagementDetailPane(
                 item {
                     SessionManagementCommandPage(
                         modifier = Modifier.fillParentMaxHeight(),
+                        terminalSession = commandTerminalSession,
                         commandInput = commandInput,
                         history = commandHistory,
                         isExecuting = commandExecuting,
@@ -1869,6 +1891,16 @@ private fun SessionManagementProcessPage(
     snapshot: DeviceDashboardSnapshot,
     refreshToken: Int,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val expandedPackages = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    var actionProgress by remember { mutableStateOf<String?>(null) }
+    var actionResult by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        SessionManagementAppCache.prepareForProcess(context)
+    }
+
     val processSnapshot by produceState(
         initialValue = ProcessListSnapshot.loading(),
         key1 = refreshToken,
@@ -1890,19 +1922,38 @@ private fun SessionManagementProcessPage(
         } else {
             0f
         }
+    val processEntries = processSnapshot.entries
+    val topMemoryEntry = processEntries.maxByOrNull { it.totalMemoryBytes }
+    val appProcessCount = processEntries.sumOf { 1 + it.children.size }
+
+    fun stopProcess(entry: ProcessEntry) {
+        actionProgress = "正在结束 ${entry.appTitle}"
+        scope.launch {
+            val result =
+                runCatching {
+                    val connection = AdbBridge.getConnection() ?: error("当前没有可用的 ADB 连接。")
+                    connection
+                        .executeShell("am force-stop ${entry.packageName}", retryOnFailure = false)
+                        .getOrThrow()
+                    "已尝试结束 ${entry.packageName} 的运行进程。"
+                }
+            actionProgress = null
+            actionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: "结束进程失败。")
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 1.dp,
         ) {
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1930,14 +1981,29 @@ private fun SessionManagementProcessPage(
                             .clip(RoundedCornerShape(999.dp)),
                 )
 
-                SessionManagementInfoRow(
-                    label = "已用内存",
-                    value = usedMemoryBytes?.let(::formatBytes) ?: "--",
-                )
-                SessionManagementInfoRow(
-                    label = "可用内存",
-                    value = snapshot.memoryAvailable.ifBlank { "--" },
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    SessionManagementProcessStatTile(
+                        label = "已用",
+                        value = usedMemoryBytes?.let(::formatBytes) ?: "--",
+                        accent = Color(0xFFFFA94D),
+                        modifier = Modifier.weight(1f),
+                    )
+                    SessionManagementProcessStatTile(
+                        label = "可用",
+                        value = snapshot.memoryAvailable.ifBlank { "--" },
+                        accent = Color(0xFF4CB782),
+                        modifier = Modifier.weight(1f),
+                    )
+                    SessionManagementProcessStatTile(
+                        label = "应用进程",
+                        value = if (processEntries.isEmpty()) "--" else appProcessCount.toString(),
+                        accent = Color(0xFF64B5F6),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 
@@ -1945,7 +2011,7 @@ private fun SessionManagementProcessPage(
             processSnapshot.isLoading -> {
                 SessionManagementNoteCard(
                     title = "正在读取进程列表",
-                    text = "当前通过 ADB 加载常驻和前台进程占用情况。",
+                    text = "当前通过 ADB 加载正在运行的应用进程和内存占用。",
                 )
             }
 
@@ -1958,8 +2024,8 @@ private fun SessionManagementProcessPage(
 
             else -> {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
                     tonalElevation = 1.dp,
                 ) {
                     Column(
@@ -1967,13 +2033,241 @@ private fun SessionManagementProcessPage(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        processSnapshot.entries.forEachIndexed { index, entry ->
-                            SessionManagementProcessRow(entry = entry)
-                            if (index != processSnapshot.entries.lastIndex) {
-                                AppDivider(modifier = Modifier.padding(start = 58.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "运行中的应用",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text =
+                                        topMemoryEntry?.let {
+                                            "最高占用 ${it.appTitle} · ${it.memory}"
+                                        } ?: "按内存占用排序",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            SessionManagementUtilityBadge(
+                                text = "${processEntries.size} 项",
+                                accent = Color(0xFF64B5F6),
+                                available = true,
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            processEntries.forEachIndexed { index, entry ->
+                                val expanded = expandedPackages[entry.packageName] == true
+                                SessionManagementProcessRow(
+                                    entry = entry,
+                                    rank = index + 1,
+                                    expanded = expanded,
+                                    onToggleExpanded = {
+                                        expandedPackages[entry.packageName] = !expanded
+                                    },
+                                    onStop = { stopProcess(entry) },
+                                )
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    actionProgress?.let { message ->
+        SessionManagementProgressDialog(
+            title = "进程管理",
+            message = message,
+        )
+    }
+
+    actionResult?.let { message ->
+        AlertDialog(
+            onDismissRequest = { actionResult = null },
+            title = { Text("进程管理") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { actionResult = null }) {
+                    Text("确定")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
+    }
+}
+
+@Composable
+private fun SessionManagementProcessStatTile(
+    label: String,
+    value: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = accent.copy(alpha = 0.12f),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = accent,
+                maxLines = 1,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionManagementProcessRow(
+    entry: ProcessEntry,
+    rank: Int,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val context = LocalContext.current
+    val hasChildren = entry.children.isNotEmpty()
+    val isSystemApp = entry.packageName.startsWith("com.android") || entry.packageName.startsWith("android")
+    val presentation by produceState(
+        initialValue =
+            RemoteAppPresentation(
+                title = entry.appTitle,
+                icon = SessionManagementAppCache.cachedIcon(entry.packageName),
+            ),
+        entry.packageName,
+        entry.appTitle,
+        entry.totalMemoryBytes,
+    ) {
+        value =
+            loadCachedAppPresentation(
+                context = context,
+                entry =
+                    AppInventoryEntry(
+                        packageName = entry.packageName,
+                        appTitle = entry.appTitle,
+                        isSystemApp = isSystemApp,
+                        apkPath = "",
+                        isEnabled = true,
+                    ),
+                packageNameOnlyMode = false,
+            )
+    }
+    val displayTitle = presentation.title
+    val iconBitmap = presentation.icon
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(0.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.5.dp,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SessionManagementAppAvatar(
+                    packageName = entry.packageName,
+                    appTitle = displayTitle.ifBlank { rank.toString() },
+                    isSystemApp = isSystemApp,
+                    iconBitmap = iconBitmap,
+                )
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = displayTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = entry.packageName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                Text(
+                    text = entry.memory,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+
+                if (hasChildren) {
+                    IconButton(
+                        onClick = onToggleExpanded,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (expanded) "收起子进程" else "展开子进程",
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.size(36.dp))
+                }
+
+                IconButton(
+                    onClick = onStop,
+                    modifier = Modifier.size(36.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "结束进程",
+                        tint = Color(0xFF4EA3F1),
+                    )
+                }
+            }
+
+            if (expanded && hasChildren) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                ) {
+                    entry.children.forEach { child ->
+                        SessionManagementProcessChildRow(
+                            entry = entry,
+                            appTitle = displayTitle,
+                            child = child,
+                            iconBitmap = iconBitmap,
+                        )
                     }
                 }
             }
@@ -1982,48 +2276,57 @@ private fun SessionManagementProcessPage(
 }
 
 @Composable
-private fun SessionManagementProcessRow(entry: ProcessEntry) {
+private fun SessionManagementProcessChildRow(
+    entry: ProcessEntry,
+    appTitle: String,
+    child: ProcessChildEntry,
+    iconBitmap: Bitmap?,
+) {
+    val isSystemApp = entry.packageName.startsWith("com.android") || entry.packageName.startsWith("android")
+
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Surface(
-            shape = RoundedCornerShape(999.dp),
-            color = Color(0xFF64B5F6).copy(alpha = 0.18f),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Usb,
-                contentDescription = null,
-                tint = Color(0xFF64B5F6),
-                modifier =
-                    Modifier
-                        .padding(10.dp)
-                        .size(22.dp),
-            )
-        }
+        SessionManagementAppAvatar(
+            packageName = entry.packageName,
+            appTitle = appTitle,
+            isSystemApp = isSystemApp,
+            iconBitmap = iconBitmap,
+        )
 
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             Text(
-                text = entry.name,
+                text = appTitle,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "PID ${entry.pid}  CPU ${entry.cpuPercent}",
+                text = child.name,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
 
         Text(
-            text = entry.memory,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = child.memory,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
+
+        Box(modifier = Modifier.size(72.dp))
     }
 }
 
@@ -4469,15 +4772,15 @@ private enum class SessionManagementSection(
     Process(
         title = "进程管理",
         icon = Icons.Default.Usb,
-        summary = "围绕前台应用、后台进程和运行状态提供更偏运维的设备管理能力。",
+        summary = "按应用聚合展示设备上正在运行的 app 进程，例如电话服务、通话设置、联系人等。",
         capabilities =
             listOf(
-                "支持查看当前前台应用和最近任务状态。",
-                "支持结束指定后台进程或批量清理后台。",
-                "支持查询包名、PID 和运行状态，便于排障。",
-                "适合作为截图里的“进程管理”页承载位。",
+                "展示设备内存、已用内存和可用内存。",
+                "按应用汇总主进程和 :service 子进程内存。",
+                "支持展开查看同一应用下的多个运行进程。",
+                "支持结束指定应用的运行进程。",
             ),
-        entryPoints = listOf("前台应用", "后台清理", "PID 查询", "任务状态"),
+        entryPoints = listOf("运行进程", "内存占用", "子进程", "结束应用"),
         supportsRefresh = true,
     ),
     Command(
@@ -4965,10 +5268,25 @@ internal object SessionManagementAppCache {
 }
 
 private data class ProcessEntry(
+    val packageName: String,
+    val appTitle: String,
+    val pid: String,
+    val totalMemoryBytes: Long,
+    val memory: String,
+    val children: List<ProcessChildEntry>,
+)
+
+private data class ProcessChildEntry(
     val name: String,
     val pid: String,
+    val memoryBytes: Long,
     val memory: String,
-    val cpuPercent: String,
+)
+
+private data class RawProcessEntry(
+    val name: String,
+    val pid: String,
+    val memoryBytes: Long,
 )
 
 private data class ProcessListSnapshot(
@@ -6178,7 +6496,7 @@ private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
         val output =
             connection
                 .executeShell(
-                    "top -b -n 1 -o RES,%CPU,PID,ARGS | tail -n +2 | head -n 12",
+                    "ps -A -o PID,RSS,NAME 2>/dev/null || ps -A",
                     retryOnFailure = false,
                 ).getOrThrow()
 
@@ -6186,12 +6504,40 @@ private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
             output
                 .lineSequence()
                 .mapNotNull(::parseProcessLine)
-                .toList()
+                .filter { it.name.isAppProcessName() }
+                .groupBy { it.name.substringBefore(':') }
+                .map { (packageName, processes) ->
+                    val sortedProcesses = processes.sortedByDescending { it.memoryBytes }
+                    val children =
+                        sortedProcesses.map { process ->
+                            ProcessChildEntry(
+                                name = process.name,
+                                pid = process.pid,
+                                memoryBytes = process.memoryBytes,
+                                memory = formatProcessMemory(process.memoryBytes),
+                            )
+                        }
+                    val totalMemoryBytes = processes.sumOf { it.memoryBytes }
+
+                    ProcessEntry(
+                        packageName = packageName,
+                        appTitle = SessionManagementAppCache.appTitle(packageName, guessAppTitle(packageName)),
+                        pid =
+                            sortedProcesses
+                                .firstOrNull { it.name == packageName }
+                                ?.pid
+                                ?: sortedProcesses.firstOrNull()?.pid.orEmpty(),
+                        totalMemoryBytes = totalMemoryBytes,
+                        memory = formatProcessMemory(totalMemoryBytes),
+                        children = if (children.size > 1) children else emptyList(),
+                    )
+                }.sortedByDescending { it.totalMemoryBytes }
+                .take(SessionManagementProcessListLimit)
 
         ProcessListSnapshot(
             isLoading = false,
             entries = entries,
-            errorMessage = if (entries.isEmpty()) "未读取到可展示的进程数据。" else null,
+            errorMessage = if (entries.isEmpty()) "未读取到正在运行的应用进程。" else null,
         )
     }.getOrElse { error ->
         ProcessListSnapshot.loading().copy(
@@ -6777,21 +7123,78 @@ private fun parseDisplayBytes(text: String): Long? {
     }
 }
 
-private fun parseProcessLine(line: String): ProcessEntry? {
+private fun parseProcessLine(line: String): RawProcessEntry? {
     val tokens = line.trim().split(Regex("\\s+"))
-    if (tokens.size < 4) return null
+    if (tokens.size < 3 || tokens.first().equals("PID", ignoreCase = true)) return null
 
-    val memory = tokens.getOrNull(0) ?: return null
-    val cpu = tokens.getOrNull(1) ?: return null
-    val pid = tokens.getOrNull(2) ?: return null
-    val name = tokens.drop(3).joinToString(" ").ifBlank { return null }
+    val compactPid = tokens.getOrNull(0)?.takeIf { it.all(Char::isDigit) }
+    val compactRssKb = tokens.getOrNull(1)?.toLongOrNull()
+    val compactName = tokens.drop(2).joinToString(" ").trim()
+    if (compactPid != null && compactRssKb != null && compactName.isNotBlank()) {
+        return RawProcessEntry(
+            name = compactName,
+            pid = compactPid,
+            memoryBytes = compactRssKb * 1024,
+        )
+    }
 
-    return ProcessEntry(
-        name = name,
-        pid = pid,
-        memory = memory,
-        cpuPercent = cpu,
+    val defaultPid = tokens.getOrNull(1)?.takeIf { it.all(Char::isDigit) } ?: return null
+    val defaultRssKb = tokens.getOrNull(4)?.toLongOrNull() ?: return null
+    val defaultName = tokens.lastOrNull()?.trim().orEmpty()
+    if (defaultName.isBlank()) return null
+
+    return RawProcessEntry(
+        name = defaultName,
+        pid = defaultPid,
+        memoryBytes = defaultRssKb * 1024,
     )
+}
+
+private fun String.isAppProcessName(): Boolean {
+    val basePackage = substringBefore(':')
+    return basePackage.contains('.') &&
+        !basePackage.contains('/') &&
+        !basePackage.startsWith("[") &&
+        basePackage.any { it.isLetter() }
+}
+
+private fun formatProcessMemory(bytes: Long): String {
+    val mb = bytes / 1024.0 / 1024.0
+    if (mb < 1024) {
+        return String.format(Locale.US, "%.1f MB", mb)
+    }
+    return String.format(Locale.US, "%.2f GB", mb / 1024.0)
+}
+
+private fun parseCpuPercentValue(raw: String): Float =
+    raw
+        .trim()
+        .removeSuffix("%")
+        .toFloatOrNull()
+        ?: 0f
+
+private fun formatCpuPercent(value: Float): String =
+    when {
+        value <= 0f -> "0%"
+        value < 10f -> String.format(Locale.US, "%.1f%%", value)
+        else -> String.format(Locale.US, "%.0f%%", value)
+    }
+
+private fun String.shortProcessName(): String {
+    val normalized = trim()
+    if (normalized.isBlank()) return "--"
+
+    val packageLike =
+        normalized
+            .substringAfterLast('/')
+            .substringBefore(' ')
+            .ifBlank { normalized }
+
+    return packageLike
+        .substringAfterLast(':')
+        .takeIf { it.length >= 3 && packageLike.contains(':') }
+        ?.let { "${packageLike.substringBefore(':').substringAfterLast('.')}:$it" }
+        ?: packageLike.substringAfterLast('.').ifBlank { packageLike }
 }
 
 private fun mapBatteryStatus(raw: String?): String =

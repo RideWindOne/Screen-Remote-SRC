@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
@@ -114,9 +115,10 @@ fun EncoderSelectionDialog(
                     return@launch
                 }
 
-                val deviceId = "$host:${port.ifBlank { "5555" }}"
+                val adbPort = port.toIntOrNull() ?: 5555
+                val deviceId = formatHostPort(host, adbPort)
                 val hadExistingConnection = adbConnectionManager.isDeviceConnected(deviceId)
-                val connectResult = adbConnectionManager.connectDevice(host, port.toIntOrNull() ?: 5555)
+                val connectResult = adbConnectionManager.connectDevice(host, adbPort)
 
                 if (connectResult.isFailure) {
                     detectError = "${connectResult.exceptionOrNull()?.message}"
@@ -137,6 +139,9 @@ fun EncoderSelectionDialog(
                         deviceId = deviceId,
                         deviceName = connection.deviceInfo.name,
                         delayedAck = connection.supportsDelayedAck(),
+                        host = host,
+                        port = adbPort,
+                        isUsbConnection = false,
                     )
                 }
 

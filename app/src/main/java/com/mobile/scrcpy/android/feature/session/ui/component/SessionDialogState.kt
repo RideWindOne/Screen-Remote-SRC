@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mobile.scrcpy.android.core.common.ScrcpyConstants
+import com.mobile.scrcpy.android.core.common.util.normalizeEndpointHost
+import com.mobile.scrcpy.android.core.common.util.parseHostPort
 import com.mobile.scrcpy.android.core.data.repository.SessionData
 import java.util.UUID
 
@@ -92,8 +94,9 @@ class SessionDialogState(
      * 转换为 SessionData
      */
     fun toSessionData(existingId: String? = null): SessionData {
-        val finalHost = if (isUsbMode) usbSerialNumber else host
-        val finalPort = if (isUsbMode) "0" else port
+        val parsedEndpoint = if (!isUsbMode) parseHostPort(host) else null
+        val finalHost = if (isUsbMode) usbSerialNumber else normalizeEndpointHost(parsedEndpoint?.host ?: host)
+        val finalPort = if (isUsbMode) "0" else parsedEndpoint?.port?.toString() ?: port.trim()
 
         return SessionData(
             id = existingId ?: UUID.randomUUID().toString(),

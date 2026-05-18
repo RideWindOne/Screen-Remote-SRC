@@ -51,7 +51,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
                                         LogTags.SCRCPY_SERVICE,
                                         "ADB 连接不存在: $deviceId，尝试重建 delayedAck=${protectedDevice.delayedAck} protected=${protectedDevices.keys.joinToString()}",
                                     )
-                                    tryReconnect(deviceId, protectedDevice.delayedAck, adbManager)
+                                    tryReconnect(deviceId, protectedDevice, adbManager)
                                 } else {
                                     val result = connection.executeShell("echo 1", retryOnFailure = false)
                                     if (result.isSuccess) {
@@ -63,7 +63,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
                                             "ADB 心跳失败: $deviceId delayedAck=${protectedDevice.delayedAck} connectionDelayedAck=${connection.supportsDelayedAck()}，尝试重连",
                                         )
                                         SessionIssueTracker.record("adb.heartbeat", "Heartbeat failed for $deviceId")
-                                        tryReconnect(deviceId, protectedDevice.delayedAck, adbManager)
+                                        tryReconnect(deviceId, protectedDevice, adbManager)
                                     }
                                 }
                             } catch (e: Exception) {
@@ -72,7 +72,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
                                     "ADB 心跳异常 $deviceId delayedAck=${protectedDevice.delayedAck}: ${e.message}，尝试重连",
                                 )
                                 SessionIssueTracker.record("adb.heartbeat", "Heartbeat exception for $deviceId: ${e.message}")
-                                tryReconnect(deviceId, protectedDevice.delayedAck, adbManager)
+                                tryReconnect(deviceId, protectedDevice, adbManager)
                             }
 
                         if (!reconnectSucceeded) {
@@ -104,13 +104,14 @@ internal class ScrcpyServiceHeartbeatMonitor(
 
     private suspend fun tryReconnect(
         deviceId: String,
-        delayedAck: Boolean,
+        protectedDevice: ProtectedAdbDevice,
         adbManager: AdbConnectionManager,
     ): Boolean =
         try {
+            val delayedAck = protectedDevice.delayedAck
             LogManager.d(LogTags.SCRCPY_SERVICE, "开始重连 ADB: $deviceId delayedAck=$delayedAck")
 
-            if (deviceId.startsWith("usb:")) {
+            if (protectedDevice.isUsbConnection) {
                 val result = adbManager.connectUsbDeviceById(deviceId, withDelayedAck = delayedAck)
                 if (result.isSuccess) {
                     LogManager.d(LogTags.SCRCPY_SERVICE, "USB ADB 重连成功: $deviceId")
@@ -124,14 +125,13 @@ internal class ScrcpyServiceHeartbeatMonitor(
                 return false
             }
 
-            val parts = deviceId.split(":")
-            if (parts.size != 2) {
-                LogManager.e(LogTags.SCRCPY_SERVICE, "设备 ID 格式错误: $deviceId")
+            val host = protectedDevice.host
+            val port = protectedDevice.port
+            if (host.isNullOrBlank() || port <= 0) {
+                LogManager.e(LogTags.SCRCPY_SERVICE, "设备缺少会话连接配置，无法重连: $deviceId host=${host ?: "-"} port=$port")
                 return false
             }
 
-            val host = parts[0]
-            val port = parts[1].toIntOrNull() ?: 5555
             val result = adbManager.connectDevice(host, port, forceReconnect = true, withDelayedAck = delayedAck)
 
             if (result.isSuccess) {

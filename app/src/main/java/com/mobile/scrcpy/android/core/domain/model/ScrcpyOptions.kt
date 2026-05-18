@@ -1,5 +1,7 @@
 package com.mobile.scrcpy.android.core.domain.model
 
+import com.mobile.scrcpy.android.core.common.util.formatHostPort
+
 /**
  * Scrcpy 配置选项 - 唯一配置载体
  *
@@ -26,7 +28,7 @@ data class ScrcpyOptions(
     val displayId: Int = 0,
     val showTouches: Boolean = false,
     val stayAwake: Boolean = true,
-    val codecOptions: String = "profile=1,level=2",
+    val codecOptions: String = "",
     val powerOffOnClose: Boolean = false,
     val enableAudio: Boolean = false,
     val audioBitRate: Int = 128000,
@@ -75,7 +77,7 @@ data class ScrcpyOptions(
     /**
      * 获取设备标识（用于日志和显示）
      */
-    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else "$host:$port"
+    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else formatHostPort(host, port)
 
     /**
      * 获取最终使用的视频编码器（用户选择 > 系统自动选择）
