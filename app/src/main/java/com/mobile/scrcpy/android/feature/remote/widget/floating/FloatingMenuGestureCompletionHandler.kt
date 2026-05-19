@@ -1,10 +1,10 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.WindowManager
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -30,7 +30,7 @@ internal class FloatingMenuGestureCompletionHandler(
                 else -> "null"
             }
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER,
             "⬆️ 松开 - 时长: ${duration}ms, 移动: ${state.hasMoved}, 长按: ${state.isLongPress}, 可长按: ${state.canEnterLongPress}, 方向: $directionInfo",
         )
@@ -65,7 +65,7 @@ internal class FloatingMenuGestureCompletionHandler(
         }
 
         if (state.isMenuShown) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 点击！隐藏菜单")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 点击！隐藏菜单")
             menuManager.hideMenu()
             return
         }
@@ -73,23 +73,23 @@ internal class FloatingMenuGestureCompletionHandler(
         if (hapticEnabled) {
             performHapticFeedbackCompat(HapticFeedbackConstants.CONTEXT_CLICK)
         }
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 点击！显示菜单")
+        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 点击！显示菜单")
         menuManager.showMenu()
     }
 
     private fun handleReservedFunction() {
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER_MSG,
             "长按超过${LONG_PRESS_TIME_MS}ms但未移动 → 保持无动作",
         )
     }
 
     private fun handleSecondStageLongPress() {
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "二段长按松手 → 目标设备截图")
+        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "二段长按松手 → 目标设备截图")
         scope.launch {
             val result = actions.captureTargetDeviceScreenshot()
             if (result.isFailure) {
-                Log.e(
+                LogManager.e(
                     LogTags.FLOATING_CONTROLLER_MSG,
                     "目标设备截图失败: ${result.exceptionOrNull()?.message}",
                 )
@@ -100,12 +100,12 @@ internal class FloatingMenuGestureCompletionHandler(
 
     private fun handleLongPressDrag(direction: FloatingMenuGestureState.Direction?) {
         if (direction == null) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "长按拖动但未识别方向 → 预留功能")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "长按拖动但未识别方向 → 预留功能")
             edgeSnap.resetAPosition()
             return
         }
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER_MSG,
             "手势完成: ${direction.actionName} ($direction)",
         )
@@ -117,7 +117,7 @@ internal class FloatingMenuGestureCompletionHandler(
                 FloatingMenuGestureState.Direction.UP -> dispatchKeyEvent(3, "手势主页键失败")
                 FloatingMenuGestureState.Direction.DOWN -> {
                     actions.controlViewModel.executeShellCommand("cmd statusbar expand-notifications")
-                    Log.d(
+                    FloatingDebugLog.d(
                         LogTags.FLOATING_CONTROLLER_MSG,
                         "📱 下拉通知栏: 执行命令 'cmd statusbar expand-notifications'",
                     )
@@ -134,7 +134,7 @@ internal class FloatingMenuGestureCompletionHandler(
     ) {
         val result = actions.controlViewModel.sendKeyEvent(keyCode)
         if (result.isFailure) {
-            Log.e(
+            LogManager.e(
                 LogTags.FLOATING_CONTROLLER_MSG,
                 "$failureLog: ${result.exceptionOrNull()?.message}",
             )

@@ -1,10 +1,10 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.content.Context
-import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 
 internal class FloatingMenuMenuPositionController(
     context: Context,
@@ -48,7 +48,7 @@ internal class FloatingMenuMenuPositionController(
         overlayState.menuParams?.let { params ->
             params.x = (displayMetrics.widthPixels - currentMenuWidth()) / 2
             updateLayout(windowManager, params)
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "📍 菜单居中对齐")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "📍 菜单居中对齐")
         }
     }
 
@@ -131,7 +131,7 @@ internal class FloatingMenuMenuPositionController(
         try {
             windowManager.updateViewLayout(menuView, params)
         } catch (e: Exception) {
-            Log.e(LogTags.FLOATING_CONTROLLER, "更新菜单位置失败: ${e.message}")
+            LogManager.e(LogTags.FLOATING_CONTROLLER, "更新菜单位置失败: ${e.message}")
         }
     }
 }

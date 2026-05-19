@@ -52,7 +52,11 @@ internal fun SettingsScreenContent(
             onUpdateSettings = onUpdateSettings,
         )
 
-        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+        Spacer(
+            modifier =
+                androidx.compose.ui.Modifier
+                    .height(10.dp),
+        )
 
         AdbManagementSection(
             settings = settings,
@@ -61,7 +65,11 @@ internal fun SettingsScreenContent(
             onNavigateToAdbKeys = onNavigateToAdbKeys,
         )
 
-        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+        Spacer(
+            modifier =
+                androidx.compose.ui.Modifier
+                    .height(10.dp),
+        )
 
         LogSettingsSection(
             settings = settings,
@@ -71,7 +79,11 @@ internal fun SettingsScreenContent(
             onUpdateSettings = onUpdateSettings,
         )
 
-        Spacer(modifier = androidx.compose.ui.Modifier.height(10.dp))
+        Spacer(
+            modifier =
+                androidx.compose.ui.Modifier
+                    .height(10.dp),
+        )
 
         FeedbackSupportSection(
             texts = texts,
@@ -213,6 +225,18 @@ private fun LogSettingsSection(
             helpText = texts.helpEnableLog,
             onCheckedChange = {
                 val updated = settings.copy(enableActivityLog = it)
+                onUpdateSettings(updated)
+                LogManager.applySettings(updated)
+            },
+        )
+        SettingsDivider()
+        SettingsSwitch(
+            title = texts.eventStreamLog,
+            checked = settings.enableEventStreamLog,
+            enabled = settings.enableActivityLog,
+            helpText = texts.helpEventStreamLog,
+            onCheckedChange = {
+                val updated = settings.copy(enableEventStreamLog = it)
                 onUpdateSettings(updated)
                 LogManager.applySettings(updated)
             },

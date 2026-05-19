@@ -86,9 +86,11 @@ internal class VideoDecoderSurfaceController(
                     LogManager.e(LogTags.VIDEO_DECODER, "无法切换 Surface：dummy Surface 不可用")
                 }
             } catch (e: IllegalStateException) {
-                if (e.message?.contains("during start()") == true) {
+                if (e.message?.contains("during start()") == true ||
+                    e.message?.contains("not configured for an output surface") == true
+                ) {
                     pendingSurface = newSurface ?: dummySurface
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器正在启动，稍后会自动使用新 Surface" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器尚未完成 Surface 配置，稍后会自动使用新 Surface" }
                 } else {
                     LogManager.w(LogTags.VIDEO_DECODER, "切换 Surface 失败（状态异常）: ${e.message}")
                 }

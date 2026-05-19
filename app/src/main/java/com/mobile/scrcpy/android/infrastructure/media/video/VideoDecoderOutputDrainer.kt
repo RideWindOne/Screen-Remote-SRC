@@ -10,6 +10,8 @@ internal class VideoDecoderOutputDrainer(
     private val getDecoder: () -> MediaCodec?,
     private val isStopped: () -> Boolean,
 ) {
+    private var renderedFrameCount = 0
+
     fun drainOutputBuffers(bufferInfo: MediaCodec.BufferInfo) {
         if (isStopped()) {
             return
@@ -24,6 +26,12 @@ internal class VideoDecoderOutputDrainer(
                 while (outputIndex >= 0) {
                     val shouldRender = surfaceController.shouldRender()
                     codec.releaseOutputBuffer(outputIndex, shouldRender)
+                    renderedFrameCount++
+                    if (renderedFrameCount <= 8 || renderedFrameCount % 60 == 0) {
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) {
+                            "解码器输出帧 #$renderedFrameCount: size=${bufferInfo.size} render=$shouldRender ptsUs=${bufferInfo.presentationTimeUs}"
+                        }
+                    }
                     outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
                 }
 

@@ -32,9 +32,10 @@ private data class RemoteTouchPoint(
 @Composable
 fun VideoDisplayArea(
     controlViewModel: ControlViewModel,
-    connectionViewModel: ConnectionViewModel,
     sessionData: SessionData?,
     videoAspectRatio: Float,
+    videoWidth: Int,
+    videoHeight: Int,
     configuration: android.content.res.Configuration,
     onSurfaceHolderChanged: (SurfaceHolder?) -> Unit,
     videoDecoderManager: VideoDecoderManager,
@@ -43,11 +44,11 @@ fun VideoDisplayArea(
     val activeRemotePoints = remember { linkedMapOf<Int, RemoteTouchPoint>() }
 
     val handleTouch: (View, android.view.MotionEvent) -> Boolean = { view, event ->
-        val resolution = connectionViewModel.getVideoResolution().value
-        if (resolution == null || view.width <= 0 || view.height <= 0) {
+        if (videoWidth <= 0 || videoHeight <= 0 || view.width <= 0 || view.height <= 0) {
             false
         } else {
-            val (deviceWidth, deviceHeight) = resolution
+            val deviceWidth = videoWidth
+            val deviceHeight = videoHeight
 
             fun dispatchTouchEvent(
                 action: Int,

@@ -3,7 +3,9 @@ package com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.SessionTexts
+import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnection
+import com.mobile.scrcpy.android.infrastructure.media.codec.CodecSelector
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.AdbIssue
@@ -177,7 +179,8 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
  */
 internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
     val options = sessionContext.currentOptions() ?: throw IllegalStateException("会话不存在")
-    val videoCodec = options.preferredVideoCodec.ifBlank { "h264" }
+    val videoEncoder = options.getFinalVideoEncoder()
+    val videoCodec = resolveVideoCodec(options, videoEncoder)
 
     val scidHex = String.format("%08x", scid)
     val params =
@@ -200,7 +203,7 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
             "power_off_on_close=${options.powerOffOnClose}",
             "tunnel_forward=true",
             "send_device_meta=true",
-            "send_codec_meta=true",
+            "send_stream_meta=true",
             "send_frame_meta=true",
             "send_dummy_byte=true",
         ),
@@ -210,7 +213,7 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         params.add("show_touches=true")
     }
 
-    options.getFinalVideoEncoder().takeIf { it.isNotBlank() }?.let { encoder ->
+    videoEncoder.takeIf { it.isNotBlank() }?.let { encoder ->
         params.add("video_encoder=$encoder")
     }
 
@@ -229,6 +232,26 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
     }
 
     return ScrcpyProtocol.buildScrcpyServerCommand(*params.toTypedArray())
+}
+
+private fun resolveVideoCodec(
+    options: ScrcpyOptions,
+    videoEncoder: String,
+): String {
+    val preferredCodec = options.preferredVideoCodec.ifBlank { "h264" }
+    if (videoEncoder.isBlank()) {
+        return preferredCodec
+    }
+
+    val encoderCodec = CodecSelector.inferVideoCodecFromName(videoEncoder)
+    val normalizedPreferred = CodecSelector.inferVideoCodecFromName(preferredCodec)
+    if (encoderCodec != normalizedPreferred) {
+        LogManager.w(
+            LogTags.SCRCPY_CLIENT,
+            "视频编码格式与编码器不匹配，使用编码器推导格式: preferred=$preferredCodec encoder=$videoEncoder codec=$encoderCodec",
+        )
+    }
+    return encoderCodec
 }
 
 private fun buildVideoCodecOptions(

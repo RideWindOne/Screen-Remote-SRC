@@ -1,7 +1,6 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.content.Context
-import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import com.mobile.scrcpy.android.core.common.LogTags
@@ -46,7 +45,7 @@ internal class FloatingMenuEdgeSnap(
         analyzer.checkDragOut(deltaX, deltaY) {
             state.isSnappedToEdge = false
             state.snappedEdge = null
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🔓 拖出贴边")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🔓 拖出贴边")
             menuManager.centerMenuHorizontally()
         }
     }
@@ -68,7 +67,7 @@ internal class FloatingMenuEdgeSnap(
         state.isSnappedToEdge = true
         state.snappedEdge = target.edge
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER_MSG,
             "🧲 贴边${target.edge.name}: 从(${animator.paramsA.x}, ${animator.paramsA.y}) → (${target.targetX}, ${target.targetY}), " +
                 "目标露出=${EDGE_VISIBLE_WIDTH_DP}dp(${(EDGE_VISIBLE_WIDTH_DP * density).toInt()}px), " +

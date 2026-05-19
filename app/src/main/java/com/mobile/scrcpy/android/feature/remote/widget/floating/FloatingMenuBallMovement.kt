@@ -1,7 +1,6 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.content.Context
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -100,7 +99,7 @@ internal class FloatingMenuBallMovement(
         state.lastRawX = event.rawX
         state.lastRawY = event.rawY
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER,
             "拖动 A+B: Δ($finalDeltaX, $finalDeltaY), A中心=(${paramsA.x + ballARadius}, ${paramsA.y + ballARadius}), B中心=(${state.ballBCenterX}, ${state.ballBCenterY})",
         )
@@ -168,7 +167,7 @@ internal class FloatingMenuBallMovement(
         state.lastRawX = event.rawX
         state.lastRawY = event.rawY
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER,
             "🔁 长按拖动: 手指=(${fingerX.toInt()}, ${fingerY.toInt()}), " +
                 "偏移=(${state.downOffsetX.toInt()}, ${state.downOffsetY.toInt()}), " +
@@ -222,7 +221,7 @@ internal class FloatingMenuBallMovement(
         state.ballBCenterX = paramsB.x + ballB.width / 2f
         state.ballBCenterY = paramsB.y + ballB.height / 2f
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER_MSG,
             "对齐完成: A中心=(${paramsA.x + ballARadius}, ${paramsA.y + ballARadius}), " +
                 "B中心=(${state.ballBCenterX}, $ballACenterY)",

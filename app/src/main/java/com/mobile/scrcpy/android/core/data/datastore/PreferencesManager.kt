@@ -29,6 +29,7 @@ class PreferencesManager(
         val ENABLE_AUDIO_STREAM_LOG = booleanPreferencesKey("enable_audio_stream_log")
         val ENABLE_VIDEO_STREAM_LOG = booleanPreferencesKey("enable_video_stream_log")
         val ENABLE_CONTROL_STREAM_LOG = booleanPreferencesKey("enable_control_stream_log")
+        val ENABLE_EVENT_STREAM_LOG = booleanPreferencesKey("enable_event_stream_log")
         val ENABLE_SHELL_STREAM_LOG = booleanPreferencesKey("enable_shell_stream_log")
         val ENABLE_MANAGEMENT_LOG = booleanPreferencesKey("enable_management_log")
         val FILE_TRANSFER_PATH = stringPreferencesKey("file_transfer_path")
@@ -60,6 +61,7 @@ class PreferencesManager(
                 enableAudioStreamLog = preferences[Keys.ENABLE_AUDIO_STREAM_LOG] ?: false,
                 enableVideoStreamLog = preferences[Keys.ENABLE_VIDEO_STREAM_LOG] ?: false,
                 enableControlStreamLog = preferences[Keys.ENABLE_CONTROL_STREAM_LOG] ?: false,
+                enableEventStreamLog = preferences[Keys.ENABLE_EVENT_STREAM_LOG] ?: false,
                 enableShellStreamLog = preferences[Keys.ENABLE_SHELL_STREAM_LOG] ?: false,
                 enableManagementLog = preferences[Keys.ENABLE_MANAGEMENT_LOG] ?: false,
                 fileTransferPath = preferences[Keys.FILE_TRANSFER_PATH] ?: DEFAULT_FILE_TRANSFER_PATH,
@@ -77,6 +79,7 @@ class PreferencesManager(
             preferences[Keys.ENABLE_AUDIO_STREAM_LOG] = settings.enableAudioStreamLog
             preferences[Keys.ENABLE_VIDEO_STREAM_LOG] = settings.enableVideoStreamLog
             preferences[Keys.ENABLE_CONTROL_STREAM_LOG] = settings.enableControlStreamLog
+            preferences[Keys.ENABLE_EVENT_STREAM_LOG] = settings.enableEventStreamLog
             preferences[Keys.ENABLE_SHELL_STREAM_LOG] = settings.enableShellStreamLog
             preferences[Keys.ENABLE_MANAGEMENT_LOG] = settings.enableManagementLog
             preferences[Keys.FILE_TRANSFER_PATH] = settings.fileTransferPath

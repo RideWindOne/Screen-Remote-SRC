@@ -2,11 +2,11 @@ package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import kotlinx.coroutines.launch
 
 /**
@@ -42,9 +42,9 @@ fun showDualBallSystem(
     // 仅在开关开启时初始化触感反馈
     if (hapticEnabled) {
         HapticHelper.init(context)
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "触感反馈已启用")
+        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "触感反馈已启用")
     } else {
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🔕 触感反馈已禁用")
+        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🔕 触感反馈已禁用")
     }
 
     val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -110,9 +110,9 @@ fun showDualBallSystem(
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
                     if (result.isFailure) {
-                        Log.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
                     } else {
-                        Log.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
+                        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
                     }
                 }
             }
@@ -122,7 +122,7 @@ fun showDualBallSystem(
         }
     }
 
-    Log.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已创建（${if (isLandscape) "横屏" else "竖屏"}）")
+    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已创建（${if (isLandscape) "横屏" else "竖屏"}）")
     return Tuple4(ballA, ballB, windowManager, gestureHandler)
 }
 
@@ -142,9 +142,9 @@ fun hideDualBallSystem(reference: BallSystemReference?) {
             if (ballB.isAttachedToWindow) {
                 windowManager.removeView(ballB)
             }
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已移除")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已移除")
         } catch (e: Exception) {
-            Log.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
+            LogManager.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
         }
     }
 }

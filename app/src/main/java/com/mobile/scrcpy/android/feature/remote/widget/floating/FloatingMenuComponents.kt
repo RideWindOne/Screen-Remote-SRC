@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
-import android.util.Log
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -47,7 +46,7 @@ fun AutoFloatingMenu(actions: FloatingMenuActions) {
     // 监听屏幕旋转，重新定位小球
     LaunchedEffect(configuration.orientation) {
         if (isInitialized && ballSystemReference != null) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
             ballSystemReference?.let { reference ->
                 repositionBallsOnRotation(context, reference)
             }
@@ -57,7 +56,7 @@ fun AutoFloatingMenu(actions: FloatingMenuActions) {
     // 清理资源
     DisposableEffect(Unit) {
         onDispose {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 隐藏悬浮球")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 隐藏悬浮球")
             hideDualBallSystem(ballSystemReference)
             ballSystemReference = null
         }
@@ -80,7 +79,7 @@ fun AutoFloatingMenuDirect(actions: FloatingMenuActions) {
 
     // 自动显示悬浮球
     LaunchedEffect(Unit) {
-        Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 自动显示双球体系统（直接模式）")
+        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 自动显示双球体系统（直接模式）")
         ballSystemReference = showDualBallSystem(context, actions, scope)
         // 延迟启用旋转监听，避免初始化时的配置抖动
         kotlinx.coroutines.delay(300)
@@ -90,7 +89,7 @@ fun AutoFloatingMenuDirect(actions: FloatingMenuActions) {
     // 监听屏幕旋转，重新定位小球
     LaunchedEffect(configuration.orientation) {
         if (isInitialized && ballSystemReference != null) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 (方向=${configuration.orientation})")
             // 平滑移动到默认位置，而不是重建
             ballSystemReference?.let { reference ->
                 repositionBallsOnRotation(context, reference)
@@ -101,7 +100,7 @@ fun AutoFloatingMenuDirect(actions: FloatingMenuActions) {
     // 清理资源
     DisposableEffect(Unit) {
         onDispose {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 隐藏双球体系统")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 隐藏双球体系统")
             hideDualBallSystem(ballSystemReference)
             ballSystemReference = null
         }
@@ -124,7 +123,7 @@ fun FloatingMenuController(actions: FloatingMenuActions) {
     // 监听屏幕旋转，重新定位小球
     LaunchedEffect(configuration.orientation) {
         if (isFloatingShown && ballSystemReference != null && lastOrientation != configuration.orientation) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 ($lastOrientation → ${configuration.orientation})")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "屏幕旋转，检查小球位置 ($lastOrientation → ${configuration.orientation})")
             configuration.orientation
             // 平滑移动到默认位置，而不是重建
             ballSystemReference?.let { reference ->
@@ -138,11 +137,11 @@ fun FloatingMenuController(actions: FloatingMenuActions) {
 
     IconButton(onClick = {
         if (!isFloatingShown) {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 显示双球体系统")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🎯 显示双球体系统")
             ballSystemReference = showDualBallSystem(context, actions, scope)
             isFloatingShown = true
         } else {
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 隐藏双球体系统")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 隐藏双球体系统")
             hideDualBallSystem(ballSystemReference)
             ballSystemReference = null
             isFloatingShown = false

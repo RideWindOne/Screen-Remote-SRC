@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.settings.ui
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +27,7 @@ import com.mobile.scrcpy.android.core.common.AppColors
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.IosDesignTokens
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
@@ -68,7 +68,7 @@ fun AppearanceScreen(
                     title = txtSystem,
                     isSelected = settings.themeMode == ThemeMode.SYSTEM,
                     onClick = {
-                        Log.d(
+                        LogManager.d(
                             LogTags.APP,
                             "点击跟随系统，当前主题: ${settings.themeMode}",
                         )
@@ -86,7 +86,7 @@ fun AppearanceScreen(
                     title = txtLight,
                     isSelected = settings.themeMode == ThemeMode.LIGHT,
                     onClick = {
-                        Log.d(
+                        LogManager.d(
                             LogTags.APP,
                             "点击浅色模式，当前主题: ${settings.themeMode}",
                         )
@@ -104,7 +104,7 @@ fun AppearanceScreen(
                     title = txtDark,
                     isSelected = settings.themeMode == ThemeMode.DARK,
                     onClick = {
-                        Log.d(
+                        LogManager.d(
                             LogTags.APP,
                             "点击深色模式，当前主题: ${settings.themeMode}",
                         )

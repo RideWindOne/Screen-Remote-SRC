@@ -241,11 +241,12 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         val pendingSession = sessionDataList.find { it.id == pendingManagementSessionId }
         val loadingMessage =
             when (managementConnectStatus) {
-                is ManagementConnectStatus.Connecting -> "正在连接 ${pendingSession?.name ?: "目标设备"}"
-                else -> "正在准备管理功能"
+                is ManagementConnectStatus.Connecting ->
+                    managementText("正在连接 ${pendingSession?.name ?: "目标设备"}", "Connecting to ${pendingSession?.name ?: "target device"}")
+                else -> managementText("正在准备管理功能", "Preparing management")
             }
         ManagementLoadingDialog(
-            title = "管理功能",
+            title = managementText("管理功能", "Management"),
             message = loadingMessage,
         )
     }
@@ -341,7 +342,7 @@ private fun MainScreenContent(
                     IconButton(onClick = routeState::openSettings) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "设置",
+                            contentDescription = managementText("设置", "Settings"),
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }

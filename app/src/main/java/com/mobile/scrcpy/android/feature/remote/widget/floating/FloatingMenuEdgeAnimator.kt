@@ -3,10 +3,10 @@ package com.mobile.scrcpy.android.feature.remote.widget.floating
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
-import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 
 internal class FloatingMenuEdgeAnimator(
     internal val ballA: View,
@@ -53,7 +53,7 @@ internal class FloatingMenuEdgeAnimator(
                             fraction = fraction,
                         )
                     } catch (e: Exception) {
-                        Log.e(LogTags.FLOATING_CONTROLLER, "贴边动画更新失败: ${e.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "贴边动画更新失败: ${e.message}")
                         cancel()
                     }
                 }
@@ -70,7 +70,7 @@ internal class FloatingMenuEdgeAnimator(
         val targetACenterX = targetX + ballA.width / 2f
         val targetACenterY = targetY + ballA.height / 2f
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER_MSG,
             "🎯 开始归位: A从(${paramsA.x}, ${paramsA.y}) → ($targetX, $targetY), " +
                 "B中心=(${state.ballBCenterX}, ${state.ballBCenterY}), 归位后A中心=($targetACenterX, $targetACenterY)",
@@ -90,7 +90,7 @@ internal class FloatingMenuEdgeAnimator(
                     try {
                         windowManager.updateViewLayout(ballA, paramsA)
                     } catch (e: Exception) {
-                        Log.e(LogTags.FLOATING_CONTROLLER, "归位动画更新失败: ${e.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "归位动画更新失败: ${e.message}")
                         cancel()
                     }
                 }
@@ -99,7 +99,7 @@ internal class FloatingMenuEdgeAnimator(
                         override fun onAnimationEnd(animation: Animator) {
                             val finalACenterX = paramsA.x + ballA.width / 2f
                             val finalACenterY = paramsA.y + ballA.height / 2f
-                            Log.d(
+                            FloatingDebugLog.d(
                                 LogTags.FLOATING_CONTROLLER_MSG,
                                 "归位完成: A左上角=(${paramsA.x}, ${paramsA.y}), " +
                                     "A中心=($finalACenterX, $finalACenterY), B中心=(${state.ballBCenterX}, ${state.ballBCenterY})",

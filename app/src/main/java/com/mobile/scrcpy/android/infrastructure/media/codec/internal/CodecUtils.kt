@@ -163,7 +163,7 @@ internal fun findBestRemoteEncoder(
  */
 internal fun findOpusDecoder(localDecoders: List<String>): String? {
     val opusDecoders = localDecoders.filter { it.contains("opus", ignoreCase = true) }
-    return opusDecoders.find { isHardwareCodec(it) } ?: opusDecoders.firstOrNull()
+    return findBestDecoderByPriority(opusDecoders)
 }
 
 /**
@@ -180,8 +180,15 @@ internal fun findDecoderByMimeType(
             val supportedTypes = getDecoderSupportedTypes(decoderName)
             mimeType in supportedTypes
         }
-    return typeDecoders.find { isHardwareCodec(it) } ?: typeDecoders.firstOrNull()
+    return findBestDecoderByPriority(typeDecoders)
 }
+
+internal fun findBestDecoderByPriority(decoders: List<String>): String? =
+    decoders.find { isHardwareCodec(it) }
+        ?: decoders.find { isGoogleSoftwareCodec(it) }
+        ?: decoders.find { !isHardwareCodec(it) && !isGoldfishCodec(it) && !isAndroidSoftwareCodec(it) }
+        ?: decoders.find { isAndroidSoftwareCodec(it) }
+        ?: decoders.find { isGoldfishCodec(it) }
 
 /**
  * 通过 MIME 类型为用户解码器查找编码器
@@ -221,7 +228,14 @@ internal fun getDecoderSupportedTypes(decoderName: String): List<String> =
  */
 internal fun isHardwareCodec(codecName: String): Boolean =
     !codecName.startsWith("OMX.google", ignoreCase = true) &&
-        !codecName.startsWith("c2.android", ignoreCase = true)
+        !codecName.startsWith("c2.android", ignoreCase = true) &&
+        !isGoldfishCodec(codecName)
+
+internal fun isGoldfishCodec(codecName: String): Boolean = codecName.contains("goldfish", ignoreCase = true)
+
+internal fun isAndroidSoftwareCodec(codecName: String): Boolean = codecName.startsWith("c2.android", ignoreCase = true)
+
+internal fun isGoogleSoftwareCodec(codecName: String): Boolean = codecName.startsWith("OMX.google", ignoreCase = true)
 
 /**
  * 视频编码格式转 MIME 类型

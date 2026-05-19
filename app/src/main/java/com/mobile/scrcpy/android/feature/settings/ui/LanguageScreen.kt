@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.settings.ui
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,6 +28,7 @@ import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.IosDesignTokens
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.common.manager.LanguageManager
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.manager.rememberText
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
@@ -68,7 +68,7 @@ fun LanguageScreen(
                     title = txtAuto,
                     isSelected = settings.language == AppLanguage.AUTO,
                     onClick = {
-                        Log.d(LogTags.APP, "切换语言: AUTO")
+                        LogManager.d(LogTags.APP, "切换语言: AUTO")
                         viewModel.updateSettings(settings.copy(language = AppLanguage.AUTO))
                         LanguageManager.setLanguage(AppLanguage.AUTO)
                     },
@@ -84,7 +84,7 @@ fun LanguageScreen(
                     title = txtChinese,
                     isSelected = settings.language == AppLanguage.CHINESE,
                     onClick = {
-                        Log.d(LogTags.APP, "切换语言: CHINESE")
+                        LogManager.d(LogTags.APP, "切换语言: CHINESE")
                         viewModel.updateSettings(settings.copy(language = AppLanguage.CHINESE))
                         LanguageManager.setLanguage(AppLanguage.CHINESE)
                     },
@@ -100,7 +100,7 @@ fun LanguageScreen(
                     title = txtEnglish,
                     isSelected = settings.language == AppLanguage.ENGLISH,
                     onClick = {
-                        Log.d(LogTags.APP, "切换语言: ENGLISH")
+                        LogManager.d(LogTags.APP, "切换语言: ENGLISH")
                         viewModel.updateSettings(settings.copy(language = AppLanguage.ENGLISH))
                         LanguageManager.setLanguage(AppLanguage.ENGLISH)
                     },

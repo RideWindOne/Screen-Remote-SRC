@@ -1,6 +1,7 @@
 package com.mobile.scrcpy.android.core.common.event
 
-import android.util.Log
+import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,7 +30,7 @@ class ScrcpyEventLoop(
     val eventHandlers = mutableMapOf<Class<out ScrcpyEvent>, (ScrcpyEvent) -> Unit>()
 
     companion object {
-        private const val TAG = "ScrcpyEventLoop"
+        private const val TAG = LogTags.SCRCPY_EVENT_BUS
     }
 
     /**
@@ -56,14 +57,14 @@ class ScrcpyEventLoop(
      */
     fun start() {
         if (isRunning) {
-            Log.w(TAG, "Event loop already running")
+            LogManager.w(TAG, "Event loop already running")
             return
         }
 
         isRunning = true
         loopJob =
             scope.launch {
-                Log.d(TAG, "Event loop started")
+                LogManager.d(TAG, "Event loop started")
 
                 try {
                     for (event in eventChannel) {
@@ -71,15 +72,15 @@ class ScrcpyEventLoop(
 
                         // 退出事件
                         if (event is Quit) {
-                            Log.d(TAG, "Quit event received, stopping loop")
+                            LogManager.d(TAG, "Quit event received, stopping loop")
                             break
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Event loop error", e)
+                    LogManager.e(TAG, "Event loop error", e)
                 } finally {
                     isRunning = false
-                    Log.d(TAG, "Event loop stopped")
+                    LogManager.d(TAG, "Event loop stopped")
                 }
             }
     }
@@ -109,7 +110,7 @@ class ScrcpyEventLoop(
                 try {
                     event.task()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error running task on main thread", e)
+                    LogManager.e(TAG, "Error running task on main thread", e)
                 }
             }
             return
@@ -121,11 +122,11 @@ class ScrcpyEventLoop(
             try {
                 handler(event)
             } catch (e: Exception) {
-                Log.e(TAG, "Error handling event: ${event::class.simpleName}", e)
+                LogManager.e(TAG, "Error handling event: ${event::class.simpleName}", e)
             }
         } else {
             // 没有处理器的事件也记录（但不是错误）
-            Log.v(TAG, "No handler for event: ${event::class.simpleName}")
+            LogManager.v(TAG, "No handler for event: ${event::class.simpleName}")
         }
     }
 

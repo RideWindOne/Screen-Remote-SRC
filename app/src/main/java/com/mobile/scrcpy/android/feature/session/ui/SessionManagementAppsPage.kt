@@ -35,8 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.mobile.scrcpy.android.core.common.util.FilePickerHelper
 import com.mobile.scrcpy.android.core.designsystem.component.AppDivider
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbBridge
@@ -247,16 +248,16 @@ internal fun SessionManagementAppsPage(
         ) { uri ->
             uri ?: return@rememberImportFileLauncher
             scope.launch {
-                appActionProgress = "正在准备安装包"
+                appActionProgress = managementText("正在准备安装包", "Preparing APK")
                 val result =
                     runCatching {
                         val tempFile = copyUriToTempApk(context, uri)
-                        val connection = AdbBridge.getConnection() ?: error("当前没有可用的 ADB 连接。")
+                        val connection = AdbBridge.getConnection() ?: error(managementText("当前没有可用的 ADB 连接。", "No ADB connection is available."))
                         connection.installApk(tempFile.absolutePath).getOrThrow()
-                        "安装请求已发送。"
+                        managementText("安装请求已发送。", "Install request sent.")
                     }
                 appActionProgress = null
-                appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: "安装失败")
+                appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: managementText("安装失败", "Install failed"))
                 refreshInventory(manual = true)
             }
         }
@@ -269,7 +270,7 @@ internal fun SessionManagementAppsPage(
         scope.launch {
             val result = block()
             appActionProgress = null
-            appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: "操作失败")
+            appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: managementText("操作失败", "Action failed"))
             refreshInventory(manual = true)
         }
     }
@@ -287,24 +288,24 @@ internal fun SessionManagementAppsPage(
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             item {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = managementPanelColor(),
                         tonalElevation = 1.dp,
                     ) {
                         Column(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                text = "共 ${visibleApps.size} 项",
+                                text = managementCountLabel(visibleApps.size),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -315,7 +316,7 @@ internal fun SessionManagementAppsPage(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .height(50.dp),
+                                        .height(48.dp),
                                 singleLine = true,
                                 shape = RoundedCornerShape(18.dp),
                                 leadingIcon = {
@@ -329,12 +330,19 @@ internal fun SessionManagementAppsPage(
                                         IconButton(onClick = { searchQuery = "" }) {
                                             Icon(
                                                 imageVector = Icons.Default.Close,
-                                                contentDescription = "清空",
+                                                contentDescription = managementText("清空", "Clear"),
                                             )
                                         }
                                     }
                                 },
-                                label = { Text("搜索应用或包名") },
+                                placeholder = {
+                                    Text(
+                                        text = managementText("搜索应用或包名", "Search apps or packages"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
                             )
                         }
                     }
@@ -371,12 +379,18 @@ internal fun SessionManagementAppsPage(
                 }
             }
 
+            if (!appInventory.isLoading && appInventory.errorMessage == null && visibleApps.isNotEmpty()) {
+                item {
+                    Box(modifier = Modifier.height(12.dp))
+                }
+            }
+
             when {
                 appInventory.isLoading && visibleApps.isEmpty() -> {
                     item {
                         SessionManagementNoteCard(
-                            title = "正在读取应用列表",
-                            text = "应用列表按页加载；每页到手后会并行预取该页图标并写入本地缓存。",
+                            title = managementText("正在读取应用列表", "Loading apps"),
+                            text = managementText("正在同步设备上的应用。", "Syncing apps from the device."),
                         )
                     }
                 }
@@ -384,7 +398,7 @@ internal fun SessionManagementAppsPage(
                 appInventory.errorMessage != null -> {
                     item {
                         SessionManagementNoteCard(
-                            title = "应用列表读取失败",
+                            title = managementText("应用列表读取失败", "Couldn't load apps"),
                             text = appInventory.errorMessage,
                         )
                     }
@@ -393,39 +407,35 @@ internal fun SessionManagementAppsPage(
                 visibleApps.isEmpty() -> {
                     item {
                         SessionManagementNoteCard(
-                            title = "没有匹配结果",
-                            text = "调整搜索条件或在右上角下拉菜单里修改筛选。",
+                            title = managementText("没有匹配结果", "No results"),
+                            text = managementText("试试别的关键词或筛选。", "Try a different keyword or filter."),
                         )
                     }
                 }
 
                 else -> {
-                    itemsIndexed(visibleApps) { index, entry ->
+                    item {
                         Surface(
-                            shape =
-                                RoundedCornerShape(
-                                    topStart = if (index == 0) 20.dp else 0.dp,
-                                    topEnd = if (index == 0) 20.dp else 0.dp,
-                                    bottomStart = if (index == visibleApps.lastIndex) 20.dp else 0.dp,
-                                    bottomEnd = if (index == visibleApps.lastIndex) 20.dp else 0.dp,
-                                ),
-                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(20.dp),
+                            color = managementPanelColor(),
                             tonalElevation = 1.dp,
                         ) {
                             Column(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
                             ) {
-                                SessionManagementAppRow(
-                                    entry = entry,
-                                    packageNameOnlyMode = packageNameOnlyMode,
-                                    presentationVersion = appPresentationVersions[entry.packageName] ?: 0,
-                                    onClick = { selectedAppForActions = entry },
-                                )
-                                if (index != visibleApps.lastIndex) {
-                                    AppDivider(modifier = Modifier.padding(start = 58.dp))
+                                visibleApps.forEachIndexed { index, entry ->
+                                    SessionManagementAppRow(
+                                        entry = entry,
+                                        packageNameOnlyMode = packageNameOnlyMode,
+                                        presentationVersion = appPresentationVersions[entry.packageName] ?: 0,
+                                        onClick = { selectedAppForActions = entry },
+                                    )
+                                    if (index != visibleApps.lastIndex) {
+                                        AppDivider(modifier = Modifier.padding(start = 50.dp))
+                                    }
                                 }
                             }
                         }
@@ -446,7 +456,7 @@ internal fun SessionManagementAppsPage(
             },
             onPickInstalledApp = {
                 appAddDialogOpen = false
-                appActionResult = "选择已安装应用稍后补接 install-existing 选择器。"
+                appActionResult = managementText("选择已安装应用功能稍后补上。", "Pick installed app will be added later.")
             },
         )
     }
@@ -461,17 +471,22 @@ internal fun SessionManagementAppsPage(
             },
             onLaunch = {
                 selectedAppForActions = null
-                launchAppAction(progress = "正在启动 ${entry.appTitle}") {
+                launchAppAction(progress = managementText("正在启动 ${entry.appTitle}", "Launching ${entry.appTitle}")) {
                     runShellAction(
                         command = "monkey -p ${entry.packageName} -c android.intent.category.LAUNCHER 1",
-                        successMessage = "已尝试在设备上启动 ${entry.packageName}。",
+                        successMessage = managementText("已尝试在设备上启动 ${entry.packageName}。", "Tried to launch ${entry.packageName} on the device."),
                     )
                 }
             },
             onToggleEnabled = {
                 selectedAppForActions = null
                 launchAppAction(
-                    progress = if (entry.isEnabled) "正在停用 ${entry.appTitle}" else "正在启用 ${entry.appTitle}",
+                    progress =
+                        if (entry.isEnabled) {
+                            managementText("正在停用 ${entry.appTitle}", "Disabling ${entry.appTitle}")
+                        } else {
+                            managementText("正在启用 ${entry.appTitle}", "Enabling ${entry.appTitle}")
+                        },
                 ) {
                     runShellAction(
                         command =
@@ -482,9 +497,9 @@ internal fun SessionManagementAppsPage(
                             },
                         successMessage =
                             if (entry.isEnabled) {
-                                "已尝试停用 ${entry.packageName}。"
+                                managementText("已尝试停用 ${entry.packageName}。", "Tried to disable ${entry.packageName}.")
                             } else {
-                                "已尝试启用 ${entry.packageName}。"
+                                managementText("已尝试启用 ${entry.packageName}。", "Tried to enable ${entry.packageName}.")
                             },
                     )
                 }
@@ -495,16 +510,16 @@ internal fun SessionManagementAppsPage(
             },
             onClearData = {
                 selectedAppForActions = null
-                launchAppAction(progress = "正在清除 ${entry.appTitle} 数据") {
+                launchAppAction(progress = managementText("正在清除 ${entry.appTitle} 数据", "Clearing ${entry.appTitle} data")) {
                     runShellAction(
                         command = "pm clear ${entry.packageName}",
-                        successMessage = "已清除 ${entry.packageName} 数据。",
+                        successMessage = managementText("已清除 ${entry.packageName} 数据。", "Cleared data for ${entry.packageName}."),
                     )
                 }
             },
             onDownloadApk = {
                 selectedAppForActions = null
-                launchAppAction(progress = "正在导出 ${entry.appTitle} 安装包") {
+                launchAppAction(progress = managementText("正在导出 ${entry.appTitle} 安装包", "Exporting APK for ${entry.appTitle}")) {
                     exportPackageApk(context, entry.packageName)
                 }
             },
@@ -524,10 +539,10 @@ internal fun SessionManagementAppsPage(
             onDismiss = { uninstallAppState = null },
             onConfirm = { keepData ->
                 uninstallAppState = null
-                launchAppAction(progress = "正在卸载 ${entry.appTitle}") {
+                launchAppAction(progress = managementText("正在卸载 ${entry.appTitle}", "Uninstalling ${entry.appTitle}")) {
                     runShellAction(
                         command = "pm uninstall ${if (keepData) "-k " else ""}${entry.packageName}",
-                        successMessage = "已尝试卸载 ${entry.packageName}。",
+                        successMessage = managementText("已尝试卸载 ${entry.packageName}。", "Tried to uninstall ${entry.packageName}."),
                     )
                 }
             },
@@ -536,7 +551,7 @@ internal fun SessionManagementAppsPage(
 
     appActionProgress?.let { message ->
         SessionManagementProgressDialog(
-            title = "应用管理",
+            title = managementText("应用管理", "Apps"),
             message = message,
         )
     }
@@ -544,14 +559,14 @@ internal fun SessionManagementAppsPage(
     appActionResult?.let { message ->
         AlertDialog(
             onDismissRequest = { appActionResult = null },
-            title = { Text("应用管理") },
+            title = { Text(managementText("应用管理", "Apps")) },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { appActionResult = null }) {
-                    Text("确定")
+                    Text(managementText("确定", "OK"))
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 }

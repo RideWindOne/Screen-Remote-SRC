@@ -2,7 +2,6 @@ package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -94,7 +93,7 @@ class FloatingMenuGestureHandler(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (!isTouchInsideCircle(v, event)) {
-                    Log.d(LogTags.FLOATING_CONTROLLER, "❌ 触摸点在圆外")
+                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "❌ 触摸点在圆外")
                     return false
                 }
                 handleDown(event)
@@ -143,7 +142,7 @@ class FloatingMenuGestureHandler(
 
         longPressScheduler.schedule()
 
-        Log.d(
+        FloatingDebugLog.d(
             LogTags.FLOATING_CONTROLLER,
             "⬇️ 按下 at (${event.rawX}, ${event.rawY}), " +
                 "B中心=(${state.ballBCenterX}, ${state.ballBCenterY}), " +
@@ -173,7 +172,7 @@ class FloatingMenuGestureHandler(
     }
 
     private fun handleCancel() {
-        Log.d(LogTags.FLOATING_CONTROLLER, "❌ 手势取消")
+        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "❌ 手势取消")
         state.cancelLongPressCallbacks()
         state.reset()
     }

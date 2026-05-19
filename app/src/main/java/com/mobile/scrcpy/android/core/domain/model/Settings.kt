@@ -35,6 +35,7 @@ data class AppSettings(
     val enableAudioStreamLog: Boolean = false,
     val enableVideoStreamLog: Boolean = false,
     val enableControlStreamLog: Boolean = false,
+    val enableEventStreamLog: Boolean = false,
     val enableShellStreamLog: Boolean = false,
     val enableManagementLog: Boolean = false,
     val fileTransferPath: String = "",

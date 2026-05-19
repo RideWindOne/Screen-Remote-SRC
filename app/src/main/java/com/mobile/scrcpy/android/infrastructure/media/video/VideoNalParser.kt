@@ -19,8 +19,12 @@ class VideoNalParser {
         const val H265_NAL_VPS = 32
         const val H265_NAL_SPS = 33
         const val H265_NAL_PPS = 34
+        const val H265_NAL_BLA_W_LP = 16
+        const val H265_NAL_BLA_W_RADL = 17
+        const val H265_NAL_BLA_N_LP = 18
         const val H265_NAL_IDR_W_RADL = 19
         const val H265_NAL_IDR_N_LP = 20
+        const val H265_NAL_CRA_NUT = 21
 
         const val FRAME_META_MIN_SIZE = 6
         const val FRAME_META_MAX_SIZE = 10
@@ -129,5 +133,7 @@ class VideoNalParser {
     /**
      * 检查是否为 H.265 关键帧
      */
-    fun isH265KeyFrame(nalType: Int): Boolean = nalType == H265_NAL_IDR_W_RADL || nalType == H265_NAL_IDR_N_LP
+    fun isH265KeyFrame(nalType: Int): Boolean =
+        nalType in H265_NAL_BLA_W_LP..H265_NAL_CRA_NUT
+
 }

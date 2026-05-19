@@ -11,7 +11,7 @@ object AppConstants {
     const val APP_VERSION = BuildConfig.APP_VERSION
 
     /** Scrcpy 版本 */
-    const val SCRCPY_VERSION = "3.3.4"
+    const val SCRCPY_VERSION = "4.0"
 
     /** Scrcpy Server 路径 */
     const val SCRCPY_SERVER_PATH = "/data/local/tmp/scrcpy-server.jar"

@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import com.mobile.scrcpy.android.core.common.LogTags
 
@@ -16,7 +15,7 @@ internal class FloatingMenuLongPressScheduler(
                     if (hapticEnabled) {
                         performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
                     }
-                    Log.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住300ms未移动，可以进入长按模式")
+                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住300ms未移动，可以进入长按模式")
                 }
             }
         val reservedFunctionRunnable =
@@ -26,7 +25,7 @@ internal class FloatingMenuLongPressScheduler(
                     if (hapticEnabled) {
                         performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
                     }
-                    Log.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住800ms未移动，预留功能触发")
+                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住800ms未移动，预留功能触发")
                 }
             }
 

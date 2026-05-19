@@ -15,7 +15,10 @@ import com.mobile.scrcpy.android.infrastructure.media.codec.CodecSelectionResult
 // 2. 硬件 + low_latency + OMX - 低延迟但旧架构
 // 3. 硬件 + C2 - 新架构但无低延迟优化
 // 4. 硬件 + OMX - 旧架构
-// 5. 软件解码器 - 兼容性保底
+// 5. OMX.google 软件解码器 - 通常比 c2.android 更稳
+// 6. 其他非 c2.android 软件解码器 - 兼容性保底
+// 7. c2.android 软件解码器 - 最后软件兜底
+// 8. goldfish - 模拟器/虚拟设备兜底，最后才选
 internal val VIDEO_DECODER_PRIORITY =
     listOf<(String) -> Boolean>(
         { name ->
@@ -32,7 +35,10 @@ internal val VIDEO_DECODER_PRIORITY =
                 name.contains("c2", ignoreCase = true)
         },
         { name -> isHardwareCodec(name) },
-        { _ -> true }, // 软件解码器（兼容性保底）
+        { name -> isGoogleSoftwareCodec(name) },
+        { name -> !isHardwareCodec(name) && !isGoldfishCodec(name) && !isAndroidSoftwareCodec(name) },
+        { name -> isAndroidSoftwareCodec(name) },
+        { name -> isGoldfishCodec(name) },
     )
 
 /**
@@ -47,7 +53,16 @@ internal fun selectVideoCodecInternal(
 ): CodecSelectionResult? {
     // 如果用户指定了编码器和解码器，直接返回
     if (!userEncoder.isNullOrBlank() && !userDecoder.isNullOrBlank()) {
-        return createResultFromUserChoice(userEncoder, userDecoder, ::inferVideoCodecFromName, LogTags.VIDEO_DECODER)
+        val encoderCodec = inferVideoCodecFromName(userEncoder)
+        val decoderCodec = inferVideoCodecFromName(userDecoder)
+        if (encoderCodec != decoderCodec) {
+            LogManager.w(
+                LogTags.VIDEO_DECODER,
+                "用户选择的视频编解码器格式不匹配: encoder=$userEncoder($encoderCodec), decoder=$userDecoder($decoderCodec)",
+            )
+            return null
+        }
+        return CodecSelectionResult(userEncoder, userDecoder, encoderCodec)
     }
 
     // 如果用户只指定了编码器，找匹配的解码器
@@ -168,6 +183,7 @@ internal fun getVideoDecoderType(decoder: String): String =
         decoder.contains("low_latency", ignoreCase = true) -> "硬件+低延迟"
         decoder.contains("c2", ignoreCase = true) && isHardwareCodec(decoder) -> "硬件+C2"
         isHardwareCodec(decoder) -> "硬件"
+        isGoldfishCodec(decoder) -> "goldfish"
         else -> "软件"
     }
 

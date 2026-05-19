@@ -38,12 +38,18 @@ class VideoCodecManager(
 
             // 1. 优先使用缓存的解码器
             selectedDecoderName?.let { cachedName ->
-                try {
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "使用缓存解码器: $cachedName" }
-                    return MediaCodec.createByCodecName(cachedName)
-                } catch (_: Exception) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "缓存解码器失效: $cachedName, 重新检测")
+                if (isGoldfishCodec(cachedName) || isAndroidSoftwareCodec(cachedName)) {
+                    val reason = if (isGoldfishCodec(cachedName)) "goldfish" else "c2.android 软件解码器"
+                    LogManager.w(LogTags.VIDEO_DECODER, "缓存解码器为 $reason，降级到重新选择: $cachedName")
                     selectedDecoderName = null
+                } else {
+                    try {
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "使用缓存解码器: $cachedName" }
+                        return MediaCodec.createByCodecName(cachedName)
+                    } catch (_: Exception) {
+                        LogManager.w(LogTags.VIDEO_DECODER, "缓存解码器失效: $cachedName, 重新检测")
+                        selectedDecoderName = null
+                    }
                 }
             }
 
@@ -53,7 +59,7 @@ class VideoCodecManager(
             // 系统推荐
             codecList.findDecoderForFormat(format)?.let { name ->
                 val info = codecList.codecInfos.firstOrNull { it.name == name }
-                if (info != null && isLikelyHardware(info)) {
+                if (info != null && isLikelyHardware(info) && !isGoldfishCodec(name)) {
                     selectedDecoderName = name
                     onDecoderSelected?.invoke(name)
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "系统推荐: $name" }
@@ -64,12 +70,66 @@ class VideoCodecManager(
             // 手动选择硬件解码器
             for (info in codecList.codecInfos) {
                 if (info.isEncoder || !info.supportedTypes.contains(mimeType)) continue
-                if (!isLikelyHardware(info) || info.name.contains("goldfish", true)) continue
+                if (!isLikelyHardware(info) || isGoldfishCodec(info.name)) continue
 
                 try {
                     selectedDecoderName = info.name
                     onDecoderSelected?.invoke(info.name)
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "硬件解码: ${info.name}" }
+                    return MediaCodec.createByCodecName(info.name)
+                } catch (_: Exception) {
+                }
+            }
+
+            // 软件解码器兜底：优先 OMX.google，其次其他非 c2.android 软件实现，最后才是 c2.android。
+            for (info in codecList.codecInfos) {
+                if (info.isEncoder || !info.supportedTypes.contains(mimeType)) continue
+                if (isLikelyHardware(info) || isGoldfishCodec(info.name) || !isGoogleSoftwareCodec(info.name)) continue
+
+                try {
+                    selectedDecoderName = info.name
+                    onDecoderSelected?.invoke(info.name)
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "软件解码: ${info.name}" }
+                    return MediaCodec.createByCodecName(info.name)
+                } catch (_: Exception) {
+                }
+            }
+
+            for (info in codecList.codecInfos) {
+                if (info.isEncoder || !info.supportedTypes.contains(mimeType)) continue
+                if (isLikelyHardware(info) || isGoldfishCodec(info.name) || isAndroidSoftwareCodec(info.name)) continue
+
+                try {
+                    selectedDecoderName = info.name
+                    onDecoderSelected?.invoke(info.name)
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "软件解码: ${info.name}" }
+                    return MediaCodec.createByCodecName(info.name)
+                } catch (_: Exception) {
+                }
+            }
+
+            for (info in codecList.codecInfos) {
+                if (info.isEncoder || !info.supportedTypes.contains(mimeType)) continue
+                if (isLikelyHardware(info) || isGoldfishCodec(info.name) || !isAndroidSoftwareCodec(info.name)) continue
+
+                try {
+                    selectedDecoderName = info.name
+                    onDecoderSelected?.invoke(info.name)
+                    LogManager.w(LogTags.VIDEO_DECODER, "最后软件兜底使用 c2.android 解码器: ${info.name}")
+                    return MediaCodec.createByCodecName(info.name)
+                } catch (_: Exception) {
+                }
+            }
+
+            // goldfish 只作为最后兜底。
+            for (info in codecList.codecInfos) {
+                if (info.isEncoder || !info.supportedTypes.contains(mimeType)) continue
+                if (!isGoldfishCodec(info.name)) continue
+
+                try {
+                    selectedDecoderName = info.name
+                    onDecoderSelected?.invoke(info.name)
+                    LogManager.w(LogTags.VIDEO_DECODER, "最后兜底使用 goldfish 解码器: ${info.name}")
                     return MediaCodec.createByCodecName(info.name)
                 } catch (_: Exception) {
                 }
@@ -85,4 +145,10 @@ class VideoCodecManager(
     }
 
     private fun isLikelyHardware(info: MediaCodecInfo): Boolean = ApiCompatHelper.isHardwareAccelerated(info)
+
+    private fun isGoldfishCodec(name: String): Boolean = name.contains("goldfish", ignoreCase = true)
+
+    private fun isAndroidSoftwareCodec(name: String): Boolean = name.startsWith("c2.android", ignoreCase = true)
+
+    private fun isGoogleSoftwareCodec(name: String): Boolean = name.startsWith("OMX.google", ignoreCase = true)
 }

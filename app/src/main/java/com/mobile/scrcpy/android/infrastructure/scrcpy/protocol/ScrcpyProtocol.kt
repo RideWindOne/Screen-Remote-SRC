@@ -9,8 +9,9 @@ import java.io.IOException
  */
 object ScrcpyProtocol {
     // PTS 标志位常量（与 scrcpy 服务端一致）
-    const val PACKET_FLAG_CONFIG = 1L shl 63
-    const val PACKET_FLAG_KEY_FRAME = 1L shl 62
+    const val PACKET_FLAG_SESSION = 1L shl 63
+    const val PACKET_FLAG_CONFIG = 1L shl 62
+    const val PACKET_FLAG_KEY_FRAME = 1L shl 61
     const val PACKET_PTS_MASK = PACKET_FLAG_KEY_FRAME - 1
 
     // 控制消息类型
@@ -33,10 +34,18 @@ object ScrcpyProtocol {
     }
 }
 
+data class VideoFrameInfo(
+    val pts: Long,
+    val isConfig: Boolean,
+    val isKeyFrame: Boolean,
+)
+
 /**
  * 视频流接口，用于统一 AdbShellStream 和 ScrcpySocketStream
  */
 interface VideoStream : AutoCloseable {
     @Throws(IOException::class)
     fun read(): AdbShellPacket
+
+    fun currentFrameInfo(): VideoFrameInfo? = null
 }

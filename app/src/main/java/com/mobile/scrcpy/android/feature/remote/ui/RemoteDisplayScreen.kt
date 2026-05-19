@@ -527,9 +527,10 @@ private fun RemoteDisplayScreenContent(
 
             VideoDisplayArea(
                 controlViewModel = controlViewModel,
-                connectionViewModel = connectionViewModel,
                 sessionData = routeState.sessionData,
                 videoAspectRatio = routeState.videoAspectRatio,
+                videoWidth = routeState.videoWidth,
+                videoHeight = routeState.videoHeight,
                 configuration = configuration,
                 onSurfaceHolderChanged = routeState.onSurfaceHolderChanged,
                 videoDecoderManager = routeState.videoDecoderManager,

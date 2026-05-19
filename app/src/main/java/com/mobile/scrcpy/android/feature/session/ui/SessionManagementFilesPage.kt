@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mobile.scrcpy.android.core.common.AppColors
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -121,7 +123,7 @@ internal fun SessionManagementFileBrowser(
         scope.launch {
             val result = block()
             fileActionProgress = null
-            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: "文件操作失败")
+            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: managementText("文件操作失败", "File action failed"))
             selectedPaths = emptySet()
             refreshCurrentDirectory()
         }
@@ -134,8 +136,8 @@ internal fun SessionManagementFileBrowser(
         ) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
-                tonalElevation = 1.dp,
+                color = managementPanelColor(),
+                tonalElevation = 0.5.dp,
             ) {
                 Row(
                     modifier =
@@ -159,7 +161,7 @@ internal fun SessionManagementFileBrowser(
                         tonalElevation = 1.dp,
                     ) {
                         Text(
-                            text = if (currentPath == "/") "返回 sdcard" else "返回上一级",
+                            text = if (currentPath == "/") managementText("返回 sdcard", "Back to sdcard") else managementText("返回上一级", "Go up"),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier =
@@ -177,7 +179,7 @@ internal fun SessionManagementFileBrowser(
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface,
+                color = managementPanelColor(),
                 tonalElevation = 1.dp,
             ) {
                 when {
@@ -187,15 +189,15 @@ internal fun SessionManagementFileBrowser(
 
                     fileSnapshot.errorMessage != null -> {
                         SessionManagementNoteCard(
-                            title = "目录读取失败",
-                            text = fileSnapshot.errorMessage ?: "目录读取失败。",
+                            title = managementText("目录读取失败", "Couldn't load folder"),
+                            text = fileSnapshot.errorMessage ?: managementText("目录读取失败。", "Couldn't load this folder."),
                         )
                     }
 
                     fileSnapshot.entries.isEmpty() -> {
                         SessionManagementNoteCard(
-                            title = "目录为空",
-                            text = "当前目录没有可展示的文件或文件夹。",
+                            title = managementText("目录为空", "Folder is empty"),
+                            text = managementText("当前目录没有可展示的文件或文件夹。", "No files or folders here."),
                         )
                     }
 
@@ -253,8 +255,8 @@ internal fun SessionManagementFileBrowser(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 2.dp,
+                color = managementPanelColor(),
+                tonalElevation = 0.5.dp,
             ) {
                 Row(
                     modifier =
@@ -266,49 +268,49 @@ internal fun SessionManagementFileBrowser(
                 ) {
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.Download,
-                        label = "下载",
+                        label = managementText("下载", "Download"),
                         showLabel = false,
-                        onClick = { fileActionMessage = "下载功能后续补真实 pull，当前先保留多选入口。" },
+                        onClick = { fileActionMessage = managementText("暂不支持批量下载。", "Bulk download isn't available yet.") },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.ContentCopy,
-                        label = "复制",
+                        label = managementText("复制", "Copy"),
                         showLabel = false,
-                        onClick = { fileActionMessage = "复制功能后续补设备端剪贴板。当前先保留入口。" },
+                        onClick = { fileActionMessage = managementText("暂不支持复制。", "Copy isn't available yet.") },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.ContentCut,
-                        label = "剪切",
+                        label = managementText("剪切", "Cut"),
                         showLabel = false,
-                        onClick = { fileActionMessage = "剪切功能后续补真实移动逻辑。当前先保留入口。" },
+                        onClick = { fileActionMessage = managementText("暂不支持剪切。", "Cut isn't available yet.") },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.Edit,
-                        label = "重命名",
+                        label = managementText("重命名", "Rename"),
                         showLabel = false,
                         onClick = {
                             renameTarget = selectedEntries.singleOrNull()
                                 ?: run {
-                                    fileActionMessage = "重命名仅支持单个文件或文件夹。"
+                                    fileActionMessage = managementText("重命名仅支持单个文件或文件夹。", "Rename only supports a single file or folder.")
                                     null
                                 }
                         },
                     )
                     SessionManagementBottomIconAction(
-                        icon = Icons.Default.Info,
-                        label = "详情",
+                        icon = androidx.compose.material.icons.Icons.Outlined.Info,
+                        label = managementText("详情", "Details"),
                         showLabel = false,
                         onClick = {
                             fileDetailEntry = selectedEntries.singleOrNull()
                                 ?: run {
-                                    fileActionMessage = "详情仅支持单个文件或文件夹。"
+                                    fileActionMessage = managementText("详情仅支持单个文件或文件夹。", "Details only supports a single file or folder.")
                                     null
                                 }
                         },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.DeleteOutline,
-                        label = "删除",
+                        label = managementText("删除", "Delete"),
                         showLabel = false,
                         onClick = {
                             if (selectedEntries.isNotEmpty()) {
@@ -334,24 +336,24 @@ internal fun SessionManagementFileBrowser(
             },
             onUpload = {
                 addMenuOpen = false
-                fileActionMessage = "从本地上传稍后补接系统文件选择器。"
+                fileActionMessage = managementText("本地上传暂不可用。", "Upload from device isn't available yet.")
             },
         )
     }
 
     if (createFolderDialogOpen) {
         SessionManagementTextInputDialog(
-            title = "新建文件夹",
-            label = "文件夹名称",
+            title = managementText("新建文件夹", "New folder"),
+            label = managementText("文件夹名称", "Folder name"),
             initialValue = "",
-            confirmText = "创建",
+            confirmText = managementText("创建", "Create"),
             onDismiss = { createFolderDialogOpen = false },
             onConfirm = { folderName ->
                 createFolderDialogOpen = false
-                launchFileAction(progress = "正在创建文件夹") {
+                launchFileAction(progress = managementText("正在创建文件夹", "Creating folder")) {
                     runShellAction(
                         command = "mkdir -p ${quoteShellArg(joinRemotePath(currentPath, folderName))}",
-                        successMessage = "文件夹已创建。",
+                        successMessage = managementText("文件夹已创建。", "Folder created."),
                     )
                 }
             },
@@ -360,17 +362,17 @@ internal fun SessionManagementFileBrowser(
 
     if (createFileDialogOpen) {
         SessionManagementTextInputDialog(
-            title = "新建文件",
-            label = "文件名称",
+            title = managementText("新建文件", "New file"),
+            label = managementText("文件名称", "File name"),
             initialValue = "",
-            confirmText = "创建",
+            confirmText = managementText("创建", "Create"),
             onDismiss = { createFileDialogOpen = false },
             onConfirm = { fileName ->
                 createFileDialogOpen = false
-                launchFileAction(progress = "正在创建文件") {
+                launchFileAction(progress = managementText("正在创建文件", "Creating file")) {
                     runShellAction(
                         command = "touch ${quoteShellArg(joinRemotePath(currentPath, fileName))}",
-                        successMessage = "文件已创建。",
+                        successMessage = managementText("文件已创建。", "File created."),
                     )
                 }
             },
@@ -379,19 +381,19 @@ internal fun SessionManagementFileBrowser(
 
     renameTarget?.let { entry ->
         SessionManagementTextInputDialog(
-            title = "重命名",
-            label = "新的名称",
+            title = managementText("重命名", "Rename"),
+            label = managementText("新的名称", "New name"),
             initialValue = entry.name,
-            confirmText = "应用",
+            confirmText = managementText("应用", "Apply"),
             onDismiss = { renameTarget = null },
             onConfirm = { newName ->
                 renameTarget = null
-                launchFileAction(progress = "正在重命名 ${entry.name}") {
+                launchFileAction(progress = managementText("正在重命名 ${entry.name}", "Renaming ${entry.name}")) {
                     runShellAction(
                         command =
                             "mv ${quoteShellArg(entry.fullPath)} " +
                                 quoteShellArg(joinRemotePath(parentRemotePath(entry.fullPath), newName)),
-                        successMessage = "重命名已完成。",
+                        successMessage = managementText("重命名已完成。", "Rename complete."),
                     )
                 }
             },
@@ -405,10 +407,10 @@ internal fun SessionManagementFileBrowser(
             onConfirm = {
                 val targetPaths = deleteTargets.map { it.fullPath }
                 deleteTargets = emptyList()
-                launchFileAction(progress = "正在删除 ${targetPaths.size} 项") {
+                launchFileAction(progress = managementText("正在删除 ${targetPaths.size} 项", "Deleting ${targetPaths.size} item(s)")) {
                     runShellAction(
                         command = "rm -rf ${targetPaths.joinToString(" ") { quoteShellArg(it) }}",
-                        successMessage = "删除已完成。",
+                        successMessage = managementText("删除已完成。", "Delete complete."),
                     )
                 }
             },
@@ -426,7 +428,7 @@ internal fun SessionManagementFileBrowser(
             onDismiss = { selectedFile = null },
             onPreview = {
                 selectedFile = null
-                fileActionProgress = "正在准备预览文件"
+                fileActionProgress = managementText("正在准备预览文件", "Preparing preview")
                 scope.launch {
                     val result = prepareRemoteFileForLocalOpen(context, entry)
                     fileActionProgress = null
@@ -460,14 +462,14 @@ internal fun SessionManagementFileBrowser(
                             }
                         },
                         onFailure = { error ->
-                            fileActionMessage = error.message ?: "准备预览失败"
+                            fileActionMessage = error.message ?: managementText("准备预览失败", "Couldn't prepare preview")
                         },
                     )
                 }
             },
             onOpenExternal = {
                 selectedFile = null
-                fileActionProgress = "正在准备本机临时文件"
+                fileActionProgress = managementText("正在准备本机临时文件", "Preparing local temp file")
                 scope.launch {
                     val result =
                         prepareRemoteFileForLocalOpen(context, entry).mapCatching { file ->
@@ -475,7 +477,7 @@ internal fun SessionManagementFileBrowser(
                         }
                     fileActionProgress = null
                     result.exceptionOrNull()?.let { error ->
-                        fileActionMessage = error.message ?: "打开文件失败"
+                        fileActionMessage = error.message ?: managementText("打开文件失败", "Couldn't open file")
                     }
                 }
             },
@@ -485,13 +487,13 @@ internal fun SessionManagementFileBrowser(
             },
             onEdit = {
                 selectedFile = null
-                fileActionProgress = "正在加载文本文件"
+                fileActionProgress = managementText("正在加载文本文件", "Loading text file")
                 scope.launch {
                     val result = loadRemoteTextEditorState(context, entry)
                     fileActionProgress = null
                     result.fold(
                         onSuccess = { editorState -> textEditorState = editorState },
-                        onFailure = { error -> fileActionMessage = error.message ?: "加载文本文件失败" },
+                        onFailure = { error -> fileActionMessage = error.message ?: managementText("加载文本文件失败", "Couldn't load text file") },
                     )
                 }
             },
@@ -515,13 +517,13 @@ internal fun SessionManagementFileBrowser(
             onDismiss = { textEditorState = null },
             onSave = { content ->
                 textEditorState = null
-                launchFileAction(progress = "正在保存并回写设备") {
+                launchFileAction(progress = managementText("正在保存并回写设备", "Saving and pushing back")) {
                     saveRemoteTextFile(editorState, content)
                 }
             },
             onOpenExternal = {
                 textEditorState = null
-                fileActionProgress = "正在准备本机临时文件"
+                fileActionProgress = managementText("正在准备本机临时文件", "Preparing local temp file")
                 scope.launch {
                     val result =
                         prepareRemoteFileForLocalOpen(context, editorState.entry).mapCatching { file ->
@@ -529,7 +531,7 @@ internal fun SessionManagementFileBrowser(
                         }
                     fileActionProgress = null
                     result.exceptionOrNull()?.let { error ->
-                        fileActionMessage = error.message ?: "打开文件失败"
+                        fileActionMessage = error.message ?: managementText("打开文件失败", "Couldn't open file")
                     }
                 }
             },
@@ -545,7 +547,7 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: "打开图片失败" }
+                        ?.let { error -> fileActionMessage = error.message ?: managementText("打开图片失败", "Couldn't open image") }
                 }
             },
             onPushBack = {
@@ -564,7 +566,7 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: "打开视频失败" }
+                        ?.let { error -> fileActionMessage = error.message ?: managementText("打开视频失败", "Couldn't open video") }
                 }
             },
             onPushBack = {
@@ -583,7 +585,7 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: "打开音频失败" }
+                        ?.let { error -> fileActionMessage = error.message ?: managementText("打开音频失败", "Couldn't open audio") }
                 }
             },
             onPushBack = {
@@ -602,7 +604,7 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: "打开文件失败" }
+                        ?.let { error -> fileActionMessage = error.message ?: managementText("打开文件失败", "Couldn't open file") }
                 }
             },
             onPushBack = {
@@ -620,7 +622,7 @@ internal fun SessionManagementFileBrowser(
                 overwriteConfirmState = null
                 when (confirmState) {
                     is RemoteOverwriteConfirmState.PushBack -> {
-                        launchFileAction(progress = "正在回写设备") {
+                        launchFileAction(progress = managementText("正在回写设备", "Pushing back to device")) {
                             pushPreparedLocalFileToDevice(context, confirmState.entry)
                         }
                     }
@@ -631,7 +633,7 @@ internal fun SessionManagementFileBrowser(
 
     fileActionProgress?.let { message ->
         SessionManagementProgressDialog(
-            title = "文件管理",
+            title = managementText("文件管理", "Files"),
             message = message,
         )
     }
@@ -639,14 +641,14 @@ internal fun SessionManagementFileBrowser(
     fileActionMessage?.let { message ->
         AlertDialog(
             onDismissRequest = { fileActionMessage = null },
-            title = { Text("文件管理") },
+            title = { Text(managementText("文件管理", "Files")) },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = { fileActionMessage = null }) {
-                    Text("确定")
+                    Text(managementText("确定", "OK"))
                 }
             },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 }

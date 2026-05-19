@@ -11,6 +11,7 @@ import com.mobile.scrcpy.android.infrastructure.media.audio.AudioDebugLog
 import com.mobile.scrcpy.android.infrastructure.media.audio.AudioStream
 import com.mobile.scrcpy.android.infrastructure.media.video.VideoDebugLog
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
+import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.VideoFrameInfo
 import com.mobile.scrcpy.android.infrastructure.scrcpy.protocol.VideoStream
 import dadb.AdbShellPacket
 import java.io.IOException
@@ -167,7 +168,7 @@ class ScrcpyAudioStream(
 
 /**
  * Scrcpy Socket Stream 包装类
- * 按照 scrcpy 3.3.4 协议：12字节 frame header + 数据包内容
+ * 按照 scrcpy 4.0 协议：12字节 frame header + 数据包内容
  * Frame header 格式：
  * - PTS (8 bytes, 其中最高2位是标志位)
  * - packet size (4 bytes)
@@ -186,9 +187,11 @@ class ScrcpySocketStream(
     inputStream: InputStream = socket.inputStream,
     private val onError: (String) -> Unit,
     keyFrameInterval: Int = 2,
+    private val onVideoResolution: (Int, Int) -> Unit = { _, _ -> },
 ) : VideoStream {
     private val dataInputStream = java.io.DataInputStream(inputStream)
     private var packetCount = 0
+    private var frameInfo: VideoFrameInfo? = null
 
     init {
         socket.soTimeout = keyFrameInterval * 1000 // 关键帧间隔转毫秒
@@ -197,43 +200,60 @@ class ScrcpySocketStream(
     @Throws(IOException::class)
     override fun read(): AdbShellPacket {
         try {
-            // 检查数据是否可用
-            if (dataInputStream.available() <= 0) {
-                // 没有数据，返回空包（避免阻塞）
-                return AdbShellPacket.StdOut(byteArrayOf())
-            }
+            while (true) {
+                // 读取 frame/session header（12字节）
+                val ptsAndFlags = dataInputStream.readLong() // 8字节 PTS 或 session flags + width
+                val packetSize = dataInputStream.readInt() // 4字节包大小或 session height
 
-            // 读取 frame header（12字节）
-            val ptsAndFlags = dataInputStream.readLong() // 8字节 PTS（包含标志位）
-            val packetSize = dataInputStream.readInt() // 4字节包大小
+                if ((ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_SESSION) != 0L) {
+                    val width = (ptsAndFlags and 0xFFFF_FFFFL).toInt()
+                    val height = packetSize
 
-            // 检查包大小是否合理（最大4MB）
-            if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
-                LogManager.e("ScrcpySocketStream", "数据包大小异常: $packetSize")
-                onError("数据包大小异常")
-                // 推送解复用器错误事件
-                ScrcpyEventBus.pushEvent(DemuxerError("Invalid packet size: $packetSize"))
-                return AdbShellPacket.Exit(byteArrayOf(0))
-            }
+                    if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
+                        LogManager.e("ScrcpySocketStream", "Session meta 视频尺寸异常: ${width}x$height")
+                        onError("Session meta 视频尺寸异常")
+                        ScrcpyEventBus.pushEvent(DemuxerError("Invalid session size: ${width}x$height"))
+                        return AdbShellPacket.Exit(byteArrayOf(0))
+                    }
 
-            // 读取完整数据包
-            val packet = ByteArray(packetSize)
-            dataInputStream.readFully(packet, 0, packetSize)
-            packetCount++
+                    onVideoResolution(width, height)
+                    frameInfo = null
+                    VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
+                        "video session meta: size=${width}x$height flags=0x${(ptsAndFlags ushr 32).toString(16)}"
+                    }
+                    continue
+                }
 
-            if (packetCount <= 5) {
+                // 检查包大小是否合理（最大4MB）
+                if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
+                    LogManager.e("ScrcpySocketStream", "数据包大小异常: $packetSize")
+                    onError("数据包大小异常")
+                    // 推送解复用器错误事件
+                    ScrcpyEventBus.pushEvent(DemuxerError("Invalid packet size: $packetSize"))
+                    return AdbShellPacket.Exit(byteArrayOf(0))
+                }
+
+                // 读取完整数据包
+                val packet = ByteArray(packetSize)
+                dataInputStream.readFully(packet, 0, packetSize)
+                packetCount++
                 val isConfig = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_CONFIG) != 0L
                 val isKeyFrame = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_KEY_FRAME) != 0L
                 val pts = ptsAndFlags and ScrcpyProtocol.PACKET_PTS_MASK
-                val preview = packet.take(minOf(16, packet.size)).joinToString(" ") { "%02X".format(it) }
-                VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
-                    "video packet#$packetCount size=$packetSize pts=$pts config=$isConfig key=$isKeyFrame data=$preview"
-                }
-            }
+                frameInfo = VideoFrameInfo(pts = pts, isConfig = isConfig, isKeyFrame = isKeyFrame)
 
-            return AdbShellPacket.StdOut(packet)
+                if (packetCount <= 8 || packetCount % 60 == 0) {
+                    val preview = packet.take(minOf(16, packet.size)).joinToString(" ") { "%02X".format(it) }
+                    VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
+                        "video packet#$packetCount size=$packetSize pts=$pts config=$isConfig key=$isKeyFrame data=$preview"
+                    }
+                }
+
+                return AdbShellPacket.StdOut(packet)
+            }
         } catch (_: java.net.SocketTimeoutException) {
             // 读取超时，返回空数据继续等待
+            frameInfo = null
             VideoDebugLog.d("ScrcpySocketStream") { "💤 设备可能息屏，控制流正常，继续等待..." }
             return AdbShellPacket.StdOut(byteArrayOf())
         } catch (_: java.io.EOFException) {
@@ -256,6 +276,8 @@ class ScrcpySocketStream(
             throw e
         }
     }
+
+    override fun currentFrameInfo(): VideoFrameInfo? = frameInfo
 
     override fun close() {
         try {

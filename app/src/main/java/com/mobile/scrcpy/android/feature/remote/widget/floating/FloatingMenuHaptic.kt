@@ -2,9 +2,9 @@ package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.content.Context
 import android.os.Vibrator
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 
 /**
@@ -21,9 +21,9 @@ internal object HapticHelper {
         vibrator = ApiCompatHelper.getVibratorCompat(context)
 
         if (vibrator?.hasVibrator() == true) {
-            Log.d(LogTags.FLOATING_CONTROLLER, "Vibrator 初始化成功")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "Vibrator 初始化成功")
         } else {
-            Log.w(LogTags.FLOATING_CONTROLLER, "设备不支持触感")
+            LogManager.w(LogTags.FLOATING_CONTROLLER, "设备不支持触感")
         }
     }
 

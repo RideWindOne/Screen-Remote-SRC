@@ -13,6 +13,7 @@ internal class LogManagerState {
     var enableAudioStreamLog = false
     var enableVideoStreamLog = false
     var enableControlStreamLog = false
+    var enableEventStreamLog = false
     var enableShellStreamLog = false
     var enableManagementLog = false
     var logFile: File? = null

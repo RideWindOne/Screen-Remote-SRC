@@ -1,7 +1,6 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
 import android.content.Context
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.WindowManager
@@ -69,7 +68,7 @@ internal class FloatingMenuEdgeAnalyzer(
         ) {
             performHapticFeedbackCompat(HapticFeedbackConstants.VIRTUAL_KEY)
             state.hasTriggeredEdgeHaptic = true
-            Log.d(
+            FloatingDebugLog.d(
                 LogTags.FLOATING_CONTROLLER_MSG,
                 "🧲 进入边缘区域: ${currentEdge.name}, 距离=${distanceToNearestEdge.toInt()}px",
             )
@@ -78,7 +77,7 @@ internal class FloatingMenuEdgeAnalyzer(
         val hapticResetThreshold = EDGE_HAPTIC_RESET_DISTANCE_DP * density
         if (state.hasTriggeredEdgeHaptic && distanceToNearestEdge > hapticResetThreshold) {
             state.hasTriggeredEdgeHaptic = false
-            Log.d(
+            FloatingDebugLog.d(
                 LogTags.FLOATING_CONTROLLER_MSG,
                 "↩️ 离开边缘${distanceToNearestEdge.toInt()}px（阈值${hapticResetThreshold.toInt()}px），重置触感状态",
             )
@@ -110,7 +109,7 @@ internal class FloatingMenuEdgeAnalyzer(
         val edge = nearest.second
         val snapThreshold = EDGE_SNAP_THRESHOLD_DP * density
         if (minDistance > snapThreshold) {
-            Log.d(
+            FloatingDebugLog.d(
                 LogTags.FLOATING_CONTROLLER_MSG,
                 "🚫 距离边缘${minDistance.toInt()}px，不贴边（阈值${snapThreshold.toInt()}px）",
             )

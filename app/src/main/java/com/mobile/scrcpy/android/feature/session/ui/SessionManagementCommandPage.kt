@@ -152,31 +152,42 @@ private fun SessionManagementTerminalDisplay(
     onClear: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF1E1E1E), // 深色终端背景
+        shape = RoundedCornerShape(18.dp),
+        color = managementPanelColor(),
         modifier = modifier,
+        tonalElevation = 0.5.dp,
     ) {
-        Column(
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1E1E1E),
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .padding(8.dp),
         ) {
-            SessionManagementTerminalContent(
-                modifier = Modifier.weight(1f),
-                output = output,
-                isConnected = isConnected,
-                onClear = onClear,
-            )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(),
+            ) {
+                SessionManagementTerminalContent(
+                    modifier = Modifier.weight(1f),
+                    output = output,
+                    isConnected = isConnected,
+                    onClear = onClear,
+                )
 
-            AppDivider()
+                AppDivider()
 
-            SessionManagementTerminalInputLine(
-                commandInput = commandInput,
-                inputEnabled = inputEnabled,
-                onCommandInputChange = onCommandInputChange,
-                onExecuteCommand = onExecuteCommand,
-            )
+                SessionManagementTerminalInputLine(
+                    commandInput = commandInput,
+                    inputEnabled = inputEnabled,
+                    onCommandInputChange = onCommandInputChange,
+                    onExecuteCommand = onExecuteCommand,
+                )
+            }
         }
     }
 }
@@ -211,9 +222,9 @@ private fun SessionManagementTerminalContent(
                     text =
                         output.ifBlank {
                             if (isConnected) {
-                                "# 已连接交互式 shell。"
+                                managementText("# 已连接交互式 shell。", "# Interactive shell connected.")
                             } else {
-                                "# 正在打开交互式 shell..."
+                                managementText("# 正在打开交互式 shell...", "# Opening interactive shell...")
                             }
                         },
                     style =
@@ -237,7 +248,7 @@ private fun SessionManagementTerminalContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "清空",
+                    contentDescription = managementText("清空", "Clear"),
                     tint = Color(0xFFFF5252),
                     modifier = Modifier.size(16.dp),
                 )
@@ -374,9 +385,14 @@ private fun SessionManagementTerminalInputLine(
                 ) {
                     if (commandInput.isEmpty()) {
                         Text(
-                            text = if (inputEnabled) "输入 Shell 命令" else "正在连接 shell...",
+                            text =
+                                if (inputEnabled) {
+                                    managementText("输入 Shell 命令", "Enter a shell command")
+                                } else {
+                                    managementText("正在连接 shell...", "Connecting to shell...")
+                                },
                             style =
-                                MaterialTheme.typography.bodyMedium.copy(
+                                MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     lineHeight = 22.sp,
                                 ),
@@ -395,7 +411,7 @@ private fun SessionManagementTerminalInputLine(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = "执行命令",
+                contentDescription = managementText("执行命令", "Run command"),
                 tint =
                     if (normalizedCommand.isNotBlank() && inputEnabled) {
                         Color(0xFF4EC9B0)
@@ -421,7 +437,7 @@ private fun SessionManagementCommandPresetDialog(
             color = MaterialTheme.colorScheme.surface,
             modifier =
                 Modifier
-                    .fillMaxWidth(0.95f)
+                    .fillMaxWidth(0.98f)
                     .fillMaxHeight(0.65f),
         ) {
             Column(
@@ -435,7 +451,7 @@ private fun SessionManagementCommandPresetDialog(
                             .padding(horizontal = 20.dp, vertical = 16.dp),
                 ) {
                     Text(
-                        text = "快捷命令",
+                        text = managementText("快捷命令", "Quick commands"),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -475,7 +491,8 @@ private fun SessionManagementCommandPresetCard(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = managementPanelColor(),
+        tonalElevation = 0.5.dp,
         modifier = modifier,
     ) {
         Column(
@@ -822,8 +839,8 @@ private fun ManagementCommandRecord.executedAtLabel(): String =
 private fun managementCommandPresets(): List<ManagementCommandPreset> =
     listOf(
         ManagementCommandPreset(
-            title = "设备概览",
-            description = "快速确认品牌、型号和系统版本。",
+            title = managementText("设备概览", "Device overview"),
+            description = managementText("快速确认品牌、型号和系统版本。", "Quick check of brand, model, and Android version."),
             command =
                 "echo Manufacturer: \$(getprop ro.product.manufacturer) && " +
                     "echo Model: \$(getprop ro.product.model) && " +
@@ -832,85 +849,93 @@ private fun managementCommandPresets(): List<ManagementCommandPreset> =
             accent = Color(0xFF53A7FF),
         ),
         ManagementCommandPreset(
-            title = "屏幕参数",
-            description = "读取当前分辨率和 DPI 状态。",
+            title = managementText("屏幕参数", "Display metrics"),
+            description = managementText("读取当前分辨率和 DPI 状态。", "Read the current resolution and DPI."),
             command = "wm size && wm density",
             icon = Icons.Default.CropFree,
             accent = Color(0xFFFFA94D),
         ),
         ManagementCommandPreset(
-            title = "前台页面",
-            description = "定位当前焦点窗口和前台 Activity。",
+            title = managementText("前台页面", "Foreground window"),
+            description = managementText("定位当前焦点窗口和前台 Activity。", "Locate the focused window and foreground activity."),
             command = "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'",
             icon = Icons.Default.Search,
             accent = Color(0xFF7B61FF),
         ),
         ManagementCommandPreset(
-            title = "第三方应用",
-            description = "列出用户安装应用，便于排障或核对包名。",
+            title = managementText("第三方应用", "User apps"),
+            description =
+                managementText(
+                    "列出用户安装应用，便于排障或核对包名。",
+                    "List installed user apps for debugging and package checks.",
+                ),
             command = "pm list packages -3 | head -n 80",
             icon = Icons.Default.Apps,
             accent = Color(0xFF4CB782),
         ),
         ManagementCommandPreset(
-            title = "网络状态",
-            description = "查看 WLAN 地址和当前无线调试端口。",
+            title = managementText("网络状态", "Network status"),
+            description = managementText("查看 WLAN 地址和当前无线调试端口。", "Show WLAN address and wireless debugging port."),
             command = "ip addr show wlan0 | grep -m 1 'inet ' && getprop service.adb.tcp.port",
             icon = Icons.Default.Wifi,
             accent = Color(0xFF12B7A2),
         ),
         ManagementCommandPreset(
-            title = "Logcat 快照",
-            description = "抓取最近 120 行日志，适合先做一次快照排查。",
+            title = managementText("Logcat 快照", "Logcat snapshot"),
+            description =
+                managementText(
+                    "抓取最近 120 行日志，适合先做一次快照排查。",
+                    "Capture the latest 120 log lines for a quick check.",
+                ),
             command = "logcat -d -t 120",
             icon = Icons.Default.Code,
             accent = Color(0xFF5F6B7A),
         ),
         ManagementCommandPreset(
-            title = "内存使用",
-            description = "查看系统内存使用情况和可用内存。",
+            title = managementText("内存使用", "Memory usage"),
+            description = managementText("查看系统内存使用情况和可用内存。", "Show total used and available memory."),
             command = "dumpsys meminfo | grep -E 'Total RAM|Free RAM|Used RAM'",
             icon = Icons.Default.Android,
             accent = Color(0xFFFF6B9D),
         ),
         ManagementCommandPreset(
-            title = "电池信息",
-            description = "查看电池电量、温度和充电状态。",
+            title = managementText("电池信息", "Battery info"),
+            description = managementText("查看电池电量、温度和充电状态。", "Show battery level, temperature, and charging state."),
             command = "dumpsys battery | grep -E 'level|temperature|status'",
             icon = Icons.Default.Android,
             accent = Color(0xFF4CAF50),
         ),
         ManagementCommandPreset(
-            title = "CPU 信息",
-            description = "查看 CPU 架构和核心数量。",
+            title = managementText("CPU 信息", "CPU info"),
+            description = managementText("查看 CPU 架构和核心数量。", "Show CPU architecture and core count."),
             command = "cat /proc/cpuinfo | grep -E 'processor|Hardware|model name' | head -n 10",
             icon = Icons.Default.Android,
             accent = Color(0xFFFF9800),
         ),
         ManagementCommandPreset(
-            title = "存储空间",
-            description = "查看内部存储和 SD 卡的使用情况。",
+            title = managementText("存储空间", "Storage"),
+            description = managementText("查看内部存储和 SD 卡的使用情况。", "Show internal storage and SD card usage."),
             command = "df -h | grep -E '/data|/storage'",
             icon = Icons.Default.Android,
             accent = Color(0xFF9C27B0),
         ),
         ManagementCommandPreset(
-            title = "正在运行的进程",
-            description = "列出当前正在运行的应用进程。",
+            title = managementText("正在运行的进程", "Running processes"),
+            description = managementText("列出当前正在运行的应用进程。", "List running app processes."),
             command = "ps -A | grep -v '\\[' | head -n 30",
             icon = Icons.Default.Apps,
             accent = Color(0xFF00BCD4),
         ),
         ManagementCommandPreset(
-            title = "清理后台应用",
-            description = "强制停止所有后台应用释放内存。",
+            title = managementText("清理后台应用", "Kill background apps"),
+            description = managementText("强制停止所有后台应用释放内存。", "Force-stop background apps to free memory."),
             command = "am kill-all",
             icon = Icons.Default.DeleteOutline,
             accent = Color(0xFFFF5252),
         ),
         ManagementCommandPreset(
-            title = "系统属性",
-            description = "查看关键系统属性信息。",
+            title = managementText("系统属性", "System properties"),
+            description = managementText("查看关键系统属性信息。", "Inspect key system properties."),
             command = "getprop | grep -E 'ro.build|ro.product|ro.hardware'",
             icon = Icons.Default.Info,
             accent = Color(0xFF607D8B),

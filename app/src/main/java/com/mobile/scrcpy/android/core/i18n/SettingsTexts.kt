@@ -20,6 +20,8 @@ object SettingsTexts {
     val SETTINGS_DEVICE_PAIRING = TextPair("使用配对码进行 ADB 配对", "ADB Pairing with Pairing Code")
     val SETTINGS_FILE_TRANSFER_PATH = TextPair("文件发送默认路径", "Default File Transfer Path")
     val SETTINGS_ENABLE_LOG = TextPair("启用日志记录", "Enable Logging")
+
+    val SETTINGS_EVENT_STREAM_LOG = TextPair("事件流日志", "Event Stream Logs")
     val SETTINGS_AUDIO_STREAM_LOG = TextPair("音频流日志", "Audio Stream Logs")
     val SETTINGS_VIDEO_STREAM_LOG = TextPair("视频流日志", "Video Stream Logs")
     val SETTINGS_CONTROL_STREAM_LOG = TextPair("控制流日志", "Control Stream Logs")
@@ -140,6 +142,11 @@ object SettingsTexts {
         TextPair(
             "记录控制流调试细节，例如控制消息发送线程、文本注入、控制保活与控制 Socket 就绪状态。仅在排查控制失效时建议开启。",
             "Record detailed control stream diagnostics such as sender thread activity, text injection, control keepalive, and control socket readiness. Recommended only when debugging input/control issues.",
+        )
+    val HELP_EVENT_STREAM_LOG =
+        TextPair(
+            "记录会话事件流和状态机调试细节，例如 SCLI 会话事件、SDL 状态变化、事件总线与组件快照。仅在排查连接流程、状态流转或清理流程时建议开启。",
+            "Record session event-flow and state-machine diagnostics such as SCLI session events, SDL state changes, event bus activity, and component snapshots. Recommended only when debugging connection flow, state transitions, or cleanup.",
         )
     val HELP_SHELL_STREAM_LOG =
         TextPair(

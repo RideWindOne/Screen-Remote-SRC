@@ -65,13 +65,17 @@ internal class VideoDecoderPlayback(
 
                 when (val packet = videoStream.read()) {
                     is dadb.AdbShellPacket.StdOut -> {
+                        val frameInfo = videoStream.currentFrameInfo()
+                        val packetPts = frameInfo?.pts ?: pts
                         configured =
                             packetProcessor.processStdOutPacket(
                                 payload = packet.payload,
                                 nalBuffer = nalBuffer,
                                 configured = configured,
                                 frameCount = frameCount,
-                                pts = pts,
+                                pts = packetPts,
+                                packetIsConfig = frameInfo?.isConfig ?: false,
+                                packetIsKeyFrame = frameInfo?.isKeyFrame ?: false,
                             )
                     }
 

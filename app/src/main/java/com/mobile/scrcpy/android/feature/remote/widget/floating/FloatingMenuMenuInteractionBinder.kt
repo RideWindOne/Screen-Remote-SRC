@@ -1,6 +1,5 @@
 package com.mobile.scrcpy.android.feature.remote.widget.floating
 
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
@@ -8,6 +7,7 @@ import android.view.WindowManager
 import android.widget.ImageButton
 import com.mobile.scrcpy.android.R
 import com.mobile.scrcpy.android.core.common.LogTags
+import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.common.util.ApiCompatHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -38,9 +38,9 @@ internal class FloatingMenuMenuInteractionBinder(
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(4)
                     if (result.isFailure) {
-                        Log.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
                     } else {
-                        Log.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
+                        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
                     }
                 }
                 true
@@ -60,21 +60,21 @@ internal class FloatingMenuMenuInteractionBinder(
 
         menu.findViewById<ImageButton>(R.id.btn_keyboard)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                Log.d(LogTags.FLOATING_CONTROLLER_MSG, "⌨️ 键盘按钮")
+                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "⌨️ 键盘按钮")
                 actions.showKeyboardInput()
             }
         }
 
         menu.findViewById<ImageButton>(R.id.btn_upload)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                Log.d(LogTags.FLOATING_CONTROLLER_MSG, "📤 上传按钮")
+                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "📤 上传按钮")
                 actions.requestUploadFilePicker()
             }
         }
 
         menu.findViewById<ImageButton>(R.id.btn_layout_inspector)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                Log.d(LogTags.FLOATING_CONTROLLER_MSG, "🧩 布局分析按钮")
+                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🧩 布局分析按钮")
                 actions.requestLayoutInspectorRender()
             }
         }
@@ -84,7 +84,7 @@ internal class FloatingMenuMenuInteractionBinder(
                 if (hapticEnabled) {
                     performHapticFeedbackCompat(HapticFeedbackConstants.KEYBOARD_TAP)
                 }
-                Log.d(LogTags.FLOATING_CONTROLLER_MSG, "📱 更多菜单按钮")
+                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "📱 更多菜单按钮")
                 onToggleMoreActionsRow()
             }
         }
@@ -93,7 +93,7 @@ internal class FloatingMenuMenuInteractionBinder(
             if (hapticEnabled) {
                 performHapticFeedbackCompat(ApiCompatHelper.getHapticFeedbackConstant("reject"))
             }
-            Log.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 断开连接")
+            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 断开连接")
 
             scope.launch {
                 onHideMenu()
@@ -113,11 +113,11 @@ internal class FloatingMenuMenuInteractionBinder(
     ) {
         menu.findViewById<ImageButton>(buttonId)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                Log.d(LogTags.FLOATING_CONTROLLER_MSG, logMessage)
+                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, logMessage)
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(keyCode)
                     if (result.isFailure) {
-                        Log.e(LogTags.FLOATING_CONTROLLER_MSG, "$failureLog: ${result.exceptionOrNull()?.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER_MSG, "$failureLog: ${result.exceptionOrNull()?.message}")
                     }
                 }
             }
@@ -147,7 +147,7 @@ internal class FloatingMenuMenuInteractionBinder(
                 windowManager.removeView(ballB)
             }
         } catch (e: Exception) {
-            Log.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
+            LogManager.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
         }
     }
 }

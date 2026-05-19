@@ -65,7 +65,13 @@ internal suspend fun ConnectionLifecycle.processCodecSelection(
 
 internal fun ConnectionLifecycle.shouldDetectVideoCodec(options: ScrcpyOptions): Boolean =
     when {
-        options.userVideoEncoder.isNotBlank() && options.userVideoDecoder.isNotBlank() -> false
+        options.userVideoEncoder.isNotBlank() && options.userVideoDecoder.isNotBlank() ->
+            hasVideoCodecDrift(
+                preferredVideoCodec = options.preferredVideoCodec,
+                selectedEncoder = options.userVideoEncoder,
+                selectedDecoder = options.userVideoDecoder,
+            )
+
         options.userVideoEncoder.isNotBlank() && options.userVideoDecoder.isBlank() -> {
             shouldDetectDecoder(
                 options.selectedVideoDecoder,
@@ -143,7 +149,7 @@ internal fun ConnectionLifecycle.hasVideoCodecDrift(
 ): Boolean {
     val normalizedPreferred =
         preferredVideoCodec
-            .ifBlank { return false }
+            .ifBlank { return true }
             .let(CodecSelector::inferVideoCodecFromName)
     val encoderCodec = CodecSelector.inferVideoCodecFromName(selectedEncoder)
     val decoderCodec = CodecSelector.inferVideoCodecFromName(selectedDecoder)

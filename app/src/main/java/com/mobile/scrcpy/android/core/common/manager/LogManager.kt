@@ -41,6 +41,7 @@ object LogManager {
         state.enableAudioStreamLog = settings.enableAudioStreamLog
         state.enableVideoStreamLog = settings.enableVideoStreamLog
         state.enableControlStreamLog = settings.enableControlStreamLog
+        state.enableEventStreamLog = settings.enableEventStreamLog
         state.enableShellStreamLog = settings.enableShellStreamLog
         state.enableManagementLog = settings.enableManagementLog
     }
@@ -51,6 +52,7 @@ object LogManager {
                 LogDetailCategory.AUDIO_STREAM -> state.enableAudioStreamLog
                 LogDetailCategory.VIDEO_STREAM -> state.enableVideoStreamLog
                 LogDetailCategory.CONTROL_STREAM -> state.enableControlStreamLog
+                LogDetailCategory.EVENT_STREAM -> state.enableEventStreamLog
                 LogDetailCategory.SHELL_STREAM -> state.enableShellStreamLog
                 LogDetailCategory.MANAGEMENT -> state.enableManagementLog
             }
@@ -60,6 +62,9 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        if (!isDebugLoggingEnabledForTag(tag)) {
+            return
+        }
         if (throwable != null) {
             Log.v(tag, message, throwable)
             messageWriter.writeLog("V", tag, "$message: ${throwable.message}")
@@ -74,6 +79,9 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        if (!isDebugLoggingEnabledForTag(tag)) {
+            return
+        }
         if (throwable != null) {
             Log.d(tag, message, throwable)
             messageWriter.writeLog("D", tag, "$message: ${throwable.message}")
@@ -88,6 +96,9 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        if (!isDebugLoggingEnabledForTag(tag)) {
+            return
+        }
         if (throwable != null) {
             Log.i(tag, message, throwable)
             messageWriter.writeLog("I", tag, "$message: ${throwable.message}")
@@ -157,4 +168,68 @@ object LogManager {
     ) {
         writeRawLog(level, tag, message)
     }
+
+    private fun isDebugLoggingEnabledForTag(tag: String): Boolean {
+        val category = detailCategoryForTag(tag) ?: return true
+        return isDetailLoggingEnabled(category)
+    }
+
+    private fun detailCategoryForTag(tag: String): LogDetailCategory? =
+        when (tag) {
+            LogTags.VIDEO_DECODER,
+            LogTags.VIDEO_CODEC_SELECTOR,
+            LogTags.SCRCPY_PACKET,
+            LogTags.REMOTE_DISPLAY,
+                -> LogDetailCategory.VIDEO_STREAM
+
+            LogTags.AUDIO_DECODER,
+            LogTags.AUDIO_CODEC_SELECTOR,
+            LogTags.AAC_ENCODE,
+            LogTags.OPUS_ENCODE,
+                -> LogDetailCategory.AUDIO_STREAM
+
+            LogTags.CONTROL_HANDLER,
+            LogTags.TOUCH_HANDLER,
+            LogTags.CONTROL_VM,
+            LogTags.CIRCLE_MENU,
+                -> LogDetailCategory.CONTROL_STREAM
+
+            LogTags.SCRCPY_SERVER,
+                -> LogDetailCategory.SHELL_STREAM
+
+            LogTags.SCRCPY_CLIENT,
+            LogTags.SCRCPY_EVENT_BUS,
+            LogTags.SDL,
+            LogTags.SDL_HM,
+                -> LogDetailCategory.EVENT_STREAM
+
+            LogTags.APP,
+            LogTags.SCRCPY_SERVICE,
+            LogTags.SCRCPY_BRIDGE,
+            LogTags.ADB_CONNECTION,
+            LogTags.ADB_BRIDGE,
+            LogTags.ADB_MANAGER,
+            LogTags.ADB_KEEP_ALIVE_SERVICE,
+            LogTags.ADB_PAIRING,
+            LogTags.USB_CONNECTION,
+            LogTags.CONNECTION_VM,
+            LogTags.SCREEN_REMOTE_APP,
+            LogTags.SESSION_DIALOG,
+            LogTags.MAIN_SCREEN,
+            LogTags.SESSION_VM,
+            LogTags.GROUP_VM,
+            LogTags.MAIN_VIEW_MODEL,
+            LogTags.ADB_KEYS_VM,
+            LogTags.SETTINGS_VM,
+            LogTags.CODEC_TEST_SCREEN,
+            LogTags.FLOATING_CONTROLLER,
+            LogTags.FLOATING_CONTROLLER_MSG,
+            LogTags.LOG_MANAGER,
+            LogTags.TTS_MANAGER,
+            LogTags.LOGCAT_CAPTURE,
+            LogTags.NETWORK,
+                -> LogDetailCategory.MANAGEMENT
+
+            else -> null
+        }
 }

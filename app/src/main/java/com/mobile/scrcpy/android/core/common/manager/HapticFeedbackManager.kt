@@ -1,7 +1,6 @@
 package com.mobile.scrcpy.android.core.common.manager
 
 import android.content.Context
-import android.util.Log
 import com.mobile.scrcpy.android.core.common.LogTags
 import com.mobile.scrcpy.android.core.data.datastore.PreferencesManager
 import kotlinx.coroutines.CoroutineScope
@@ -36,9 +35,9 @@ object HapticFeedbackManager {
                 val settings = preferencesManager.settingsFlow.first()
                 isEnabled = settings.enableFloatingHapticFeedback
 
-                Log.d(LogTags.APP, "触感反馈管理器初始化: ${if (isEnabled) "开启" else "关闭"}")
+                LogManager.d(LogTags.APP, "触感反馈管理器初始化: ${if (isEnabled) "开启" else "关闭"}")
             } catch (e: Exception) {
-                Log.e(LogTags.APP, "❌ 触感反馈管理器初始化失败: ${e.message}", e)
+                LogManager.e(LogTags.APP, "触感反馈管理器初始化失败: ${e.message}", e)
                 // 初始化失败时使用默认值（开启）
                 isEnabled = true
             }
@@ -51,6 +50,6 @@ object HapticFeedbackManager {
      */
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        Log.d(LogTags.APP, "触感反馈开关更新: ${if (enabled) "开启" else "关闭"}")
+        LogManager.d(LogTags.APP, "触感反馈开关更新: ${if (enabled) "开启" else "关闭"}")
     }
 }
