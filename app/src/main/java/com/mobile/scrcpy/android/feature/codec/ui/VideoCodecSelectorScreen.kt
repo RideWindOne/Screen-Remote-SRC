@@ -28,16 +28,7 @@ fun VideoCodecSelectorScreen(
     fun loadDecoders() {
         scope.launch {
             state.updateLoading(true)
-            state.updateCodecs(
-                LocalDecoderCache.getVideoDecoders().map { name ->
-                    com.mobile.scrcpy.android.feature.codec.model.CodecInfo(
-                        name = name,
-                        type = "",
-                        isEncoder = false,
-                        capabilities = "",
-                    )
-                },
-            )
+            state.updateCodecs(buildVideoDecoderInfos(LocalDecoderCache.getVideoDecoders()))
             state.updateLoading(false)
         }
     }

@@ -4,17 +4,22 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -26,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.common.PlaceholderTexts
@@ -36,8 +40,6 @@ import com.mobile.scrcpy.android.core.designsystem.component.DialogBottomSpacer
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
 import com.mobile.scrcpy.android.core.designsystem.component.GroupSelectorDialog
 import com.mobile.scrcpy.android.core.designsystem.component.HelpIcon
-import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenu
-import com.mobile.scrcpy.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.mobile.scrcpy.android.core.designsystem.component.SectionTitle
 import com.mobile.scrcpy.android.core.domain.model.DeviceGroup
 import com.mobile.scrcpy.android.core.i18n.AdbTexts
@@ -51,7 +53,6 @@ import com.mobile.scrcpy.android.feature.codec.util.CodecUtils
 import com.mobile.scrcpy.android.feature.device.ui.component.UsbDeviceSelectionDialog
 
 private val SessionDialogSectionShape = RoundedCornerShape(8.dp)
-private val KeyFrameIntervalMenuOffset = DpOffset(0.dp, 66.dp)
 private val AudioVolumeRowHorizontalPadding = 10.dp
 private val AudioVolumeLabelMinWidth = 30.dp
 private val AudioVolumeLabelMaxWidth = 120.dp
@@ -59,6 +60,9 @@ private val AudioVolumeLabelSpacing = 6.dp
 private val AudioVolumeValueWidth = 50.dp
 private val SessionDialogAccentColor = Color(0xFF007AFF)
 private val SessionDialogDividerColor = Color(0xFFE5E5EA)
+private val AudioVolumeSliderTrackHeight = 4.dp
+private val AudioVolumeSliderThumbSize = 14.dp
+private val AudioVolumeSliderThumbHaloSize = 22.dp
 
 @Composable
 fun AddSessionDialog(
@@ -292,43 +296,6 @@ private fun VideoConfigSection(state: SessionDialogState) {
 
         AppDivider()
 
-        LabeledTextField(
-            label = SessionTexts.LABEL_VIDEO_BUFFER.get(),
-            value = state.videoBufferMs,
-            onValueChange = { state.videoBufferMs = it },
-            placeholder = "0、33、50",
-            keyboardType = KeyboardType.Number,
-            helpText = SessionTexts.HELP_VIDEO_BUFFER.get(),
-        )
-
-        AppDivider()
-
-        LabeledDropdownRow(
-            label = SessionTexts.LABEL_KEY_FRAME_INTERVAL.get(),
-            trailingText = "${state.keyFrameInterval}s",
-            onClick = { state.showKeyFrameIntervalMenu = true },
-            helpText = SessionTexts.HELP_KEY_FRAME_INTERVAL.get(),
-        ) {
-            IOSStyledDropdownMenu(
-                alignment = Alignment.TopCenter,
-                offset = KeyFrameIntervalMenuOffset,
-                expanded = state.showKeyFrameIntervalMenu,
-                onDismissRequest = { state.showKeyFrameIntervalMenu = false },
-            ) {
-                listOf(1, 2, 3, 5).forEach { interval ->
-                    IOSStyledDropdownMenuItem(
-                        text = "${interval}s",
-                        onClick = {
-                            state.keyFrameInterval = interval
-                            state.showKeyFrameIntervalMenu = false
-                        },
-                    )
-                }
-            }
-        }
-
-        AppDivider()
-
         LabeledClickableRow(
             label = SessionTexts.LABEL_VIDEO_ENCODER.get(),
             trailingText =
@@ -368,6 +335,7 @@ private fun VideoConfigSection(state: SessionDialogState) {
 }
 
 @SuppressLint("DefaultLocale")
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AudioConfigSection(state: SessionDialogState) {
     SessionDialogSection(title = SessionTexts.SECTION_AUDIO_CONFIG.get()) {
@@ -387,17 +355,6 @@ private fun AudioConfigSection(state: SessionDialogState) {
                 onValueChange = { state.audioBitrate = it },
                 placeholder = "128k、192k、256k",
                 helpText = SessionTexts.HELP_AUDIO_BITRATE.get(),
-            )
-
-            AppDivider()
-
-            LabeledTextField(
-                label = SessionTexts.LABEL_AUDIO_BUFFER.get(),
-                value = state.audioBufferMs,
-                onValueChange = { state.audioBufferMs = it },
-                placeholder = "50、120",
-                keyboardType = KeyboardType.Number,
-                helpText = SessionTexts.HELP_AUDIO_BUFFER.get(),
             )
 
             AppDivider()
@@ -460,11 +417,47 @@ private fun AudioConfigSection(state: SessionDialogState) {
                     valueRange = 0.1f..2.0f,
                     steps = 18,
                     modifier = Modifier.weight(1f),
+                    thumb = {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(AudioVolumeSliderThumbHaloSize)
+                                    .background(
+                                        color = SessionDialogAccentColor.copy(alpha = 0.12f),
+                                        shape = CircleShape,
+                                    ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(AudioVolumeSliderThumbSize)
+                                        .background(
+                                            color = SessionDialogAccentColor,
+                                            shape = CircleShape,
+                                        ),
+                            )
+                        }
+                    },
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            modifier = Modifier.height(AudioVolumeSliderTrackHeight),
+                            colors =
+                                SliderDefaults.colors(
+                                    activeTrackColor = SessionDialogAccentColor.copy(alpha = 0.82f),
+                                    inactiveTrackColor = SessionDialogDividerColor.copy(alpha = 0.72f),
+                                ),
+                            drawStopIndicator = null,
+                            thumbTrackGapSize = 0.dp,
+                            trackInsideCornerSize = 2.dp,
+                        )
+                    },
                     colors =
                         SliderDefaults.colors(
-                            thumbColor = SessionDialogAccentColor,
-                            activeTrackColor = SessionDialogAccentColor,
-                            inactiveTrackColor = SessionDialogDividerColor,
+                            thumbColor = Color.Transparent,
+                            activeTrackColor = SessionDialogAccentColor.copy(alpha = 0.82f),
+                            inactiveTrackColor = SessionDialogDividerColor.copy(alpha = 0.72f),
                         ),
                 )
                 Text(
@@ -481,12 +474,14 @@ private fun AudioConfigSection(state: SessionDialogState) {
 
 @Composable
 private fun OtherOptionsSection(state: SessionDialogState) {
+    val context = LocalContext.current
+
     SessionDialogSection(title = SessionTexts.SECTION_OTHER_OPTIONS.get()) {
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_STAY_AWAKE.get(),
-            checked = state.stayAwake,
-            onCheckedChange = { state.stayAwake = it },
-            helpText = SessionTexts.HELP_STAY_AWAKE.get(),
+            text = SessionTexts.SWITCH_ENABLE_CLIPBOARD_SYNC.get(),
+            checked = state.enableClipboardSync,
+            onCheckedChange = { state.enableClipboardSync = it },
+            helpText = SessionTexts.HELP_ENABLE_CLIPBOARD_SYNC.get(),
         )
         AppDivider()
 
@@ -503,6 +498,14 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             checked = state.powerOffOnClose,
             onCheckedChange = { state.powerOffOnClose = it },
             helpText = SessionTexts.HELP_POWER_OFF_ON_CLOSE.get(),
+        )
+        AppDivider()
+
+        CompactSwitchRow(
+            text = SessionTexts.SWITCH_NO_CLEANUP_ON_DISCONNECT.get(),
+            checked = !state.cleanupOnDisconnect,
+            onCheckedChange = { state.cleanupOnDisconnect = !it },
+            helpText = SessionTexts.HELP_NO_CLEANUP_ON_DISCONNECT.get(),
         )
         AppDivider()
 
@@ -536,6 +539,60 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             onCheckedChange = { state.showNewDisplay = it },
             helpText = SessionTexts.HELP_NEW_DISPLAY.get(),
         )
+
+        if (state.showNewDisplay) {
+            AppDivider()
+
+            LabeledTextField(
+                label = SessionTexts.LABEL_NEW_DISPLAY_WIDTH.get(),
+                value = state.newDisplayWidth,
+                onValueChange = { state.newDisplayWidth = it.filter(Char::isDigit) },
+                placeholder = "1920",
+                keyboardType = KeyboardType.Number,
+            )
+            AppDivider()
+
+            LabeledTextField(
+                label = SessionTexts.LABEL_NEW_DISPLAY_HEIGHT.get(),
+                value = state.newDisplayHeight,
+                onValueChange = { state.newDisplayHeight = it.filter(Char::isDigit) },
+                placeholder = "1080",
+                keyboardType = KeyboardType.Number,
+            )
+            AppDivider()
+
+            LabeledTextField(
+                label = SessionTexts.LABEL_NEW_DISPLAY_DPI.get(),
+                value = state.newDisplayDpi,
+                onValueChange = { state.newDisplayDpi = it.filter(Char::isDigit) },
+                placeholder = "420",
+                keyboardType = KeyboardType.Number,
+            )
+            AppDivider()
+
+            val hasExplicitSize = state.newDisplayWidth.isNotBlank() && state.newDisplayHeight.isNotBlank()
+            CompactClickableRow(
+                text =
+                    if (hasExplicitSize) {
+                        SessionTexts.ACTION_SWAP_NEW_DISPLAY_SIZE.get()
+                    } else {
+                        SessionTexts.ACTION_SYNC_LOCAL_DISPLAY_SIZE.get()
+                    },
+                trailingText = "",
+                onClick = {
+                    if (hasExplicitSize) {
+                        val currentWidth = state.newDisplayWidth
+                        state.newDisplayWidth = state.newDisplayHeight
+                        state.newDisplayHeight = currentWidth
+                    } else {
+                        val metrics = context.resources.displayMetrics
+                        state.newDisplayWidth = metrics.widthPixels.toString()
+                        state.newDisplayHeight = metrics.heightPixels.toString()
+                        state.newDisplayDpi = metrics.densityDpi.takeIf { it > 0 }?.toString().orEmpty()
+                    }
+                },
+            )
+        }
     }
 }
 

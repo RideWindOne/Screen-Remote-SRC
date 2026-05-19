@@ -32,7 +32,10 @@ data class SessionData(
     val videoBitrate: String = "",
     val maxFps: String = "", // 最大帧率
     val displayId: Int = 0,
+    val newDisplayEnabled: Boolean = false,
+    val newDisplay: String = "",
     val showTouches: Boolean = false,
+    val enableClipboardSync: Boolean = true,
     val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
     val preferredVideoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC,
     val userVideoEncoder: String = "",
@@ -42,12 +45,13 @@ data class SessionData(
     val userAudioEncoder: String = "",
     val userAudioDecoder: String = "",
     val audioBitrate: String = "", // 音频码率（如 128k）
-    val audioBufferMs: String = "", // 音频缓冲（毫秒，自动计算）
-    val videoBufferMs: String = "", // 视频缓冲（毫秒，用户配置）
-    val keyFrameInterval: Int = 2, // 关键帧间隔（秒），默认 2 秒
     val stayAwake: Boolean = false, // 改为 false，不强制保持唤醒
     val turnScreenOff: Boolean = true,
     val powerOffOnClose: Boolean = false,
+    val cleanupOnDisconnect: Boolean = true,
+    val keepDeviceAwake: Boolean = false,
+    val enableHardwareDecoding: Boolean = true,
+    val followRemoteOrientation: Boolean = false,
     val useFullScreen: Boolean = false, // 全屏模式（TextureView），默认关闭
     // 设备信息和编解码器
     val deviceSerial: String = "", // 设备序列号（通过 ro.serialno 获取），用于验证编解码器是否匹配当前设备
@@ -117,11 +121,15 @@ data class SessionData(
             sessionId = id,
             host = if (isUsbConnection()) normalizedUsbDeviceId() else normalizeEndpointHost(host),
             port = port.toIntOrNull() ?: 0,
+            forceAdb = forceAdb,
             maxSize = maxSize.toIntOrNull() ?: 1920,
             videoBitRate = parseBitRate(videoBitrate) ?: 8000000,
             maxFps = maxFps.toIntOrNull() ?: 60,
             displayId = displayId,
+            newDisplayEnabled = newDisplayEnabled,
+            newDisplay = newDisplay,
             showTouches = showTouches,
+            enableClipboardSync = enableClipboardSync,
             codecOptions = codecOptions,
             preferredVideoCodec = preferredVideoCodec,
             userVideoEncoder = userVideoEncoder,
@@ -131,11 +139,13 @@ data class SessionData(
             userAudioEncoder = userAudioEncoder,
             userAudioDecoder = userAudioDecoder,
             audioBitRate = parseBitRate(audioBitrate) ?: 128000,
-            audioBufferMs = audioBufferMs.toIntOrNull(),
-            keyFrameInterval = keyFrameInterval,
             stayAwake = stayAwake,
             turnScreenOff = turnScreenOff,
             powerOffOnClose = powerOffOnClose,
+            cleanupOnDisconnect = cleanupOnDisconnect,
+            keepDeviceAwake = keepDeviceAwake,
+            enableHardwareDecoding = enableHardwareDecoding,
+            followRemoteOrientation = followRemoteOrientation,
             selectedVideoEncoder = selectedVideoEncoder,
             selectedAudioEncoder = selectedAudioEncoder,
             selectedVideoDecoder = selectedVideoDecoder,
@@ -150,11 +160,15 @@ data class SessionData(
      */
     fun fromScrcpyOptions(options: ScrcpyOptions): SessionData =
         copy(
+            forceAdb = options.forceAdb,
             maxSize = options.maxSize.toString(),
             videoBitrate = options.videoBitRate.toString(),
             maxFps = options.maxFps.toString(),
             displayId = options.displayId,
+            newDisplayEnabled = options.newDisplayEnabled,
+            newDisplay = options.newDisplay,
             showTouches = options.showTouches,
+            enableClipboardSync = options.enableClipboardSync,
             codecOptions = options.codecOptions,
             preferredVideoCodec = options.preferredVideoCodec,
             userVideoEncoder = options.userVideoEncoder,
@@ -164,11 +178,13 @@ data class SessionData(
             userAudioEncoder = options.userAudioEncoder,
             userAudioDecoder = options.userAudioDecoder,
             audioBitrate = options.audioBitRate.toString(),
-            audioBufferMs = options.audioBufferMs?.toString() ?: "",
-            keyFrameInterval = options.keyFrameInterval,
             stayAwake = options.stayAwake,
             turnScreenOff = options.turnScreenOff,
             powerOffOnClose = options.powerOffOnClose,
+            cleanupOnDisconnect = options.cleanupOnDisconnect,
+            keepDeviceAwake = options.keepDeviceAwake,
+            enableHardwareDecoding = options.enableHardwareDecoding,
+            followRemoteOrientation = options.followRemoteOrientation,
             selectedVideoEncoder = options.selectedVideoEncoder,
             selectedAudioEncoder = options.selectedAudioEncoder,
             selectedVideoDecoder = options.selectedVideoDecoder,

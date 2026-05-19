@@ -1,5 +1,6 @@
 package com.mobile.scrcpy.android.infrastructure.scrcpy.connection.internal
 
+import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnection
 import com.mobile.scrcpy.android.core.domain.model.ScrcpyOptions
 import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import java.util.Random
@@ -14,10 +15,19 @@ import java.util.Random
  */
 
 /**
- * 连接 Socket
+ * 连接媒体与控制通道。
  */
-internal suspend fun ConnectionLifecycle.connectSockets(options: ScrcpyOptions) {
-    socketManager.connectSockets(options.enableAudio, options.keyFrameInterval)
+internal suspend fun ConnectionLifecycle.connectSockets(
+    options: ScrcpyOptions,
+    connection: AdbConnection,
+    socketName: String,
+) {
+    socketManager.connectSockets(
+        connection = connection,
+        socketName = socketName,
+        enableAudio = options.enableAudio,
+        useAdbForward = options.forceAdb,
+    )
 }
 
 /**

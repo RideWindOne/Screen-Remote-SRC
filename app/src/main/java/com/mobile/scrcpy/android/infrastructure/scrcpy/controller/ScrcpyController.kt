@@ -161,6 +161,24 @@ class ScrcpyController(
             }
         }
 
+    suspend fun setDisplayPower(on: Boolean): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            requireDeviceId() ?: return@withContext Result.failure(
+                Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
+            )
+
+            ensureControlSocketReady() ?: return@withContext Result.failure(
+                Exception(RemoteTexts.ERROR_CONTROL_NOT_READY.get()),
+            )
+
+            try {
+                transport.enqueueDisplayPower(on)
+            } catch (e: Exception) {
+                LogManager.e(LogTags.SCRCPY_CLIENT, "发送屏幕电源控制失败: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
     suspend fun wakeUpScreen(
         screenWidth: Int = 720,
         screenHeight: Int = 1280,

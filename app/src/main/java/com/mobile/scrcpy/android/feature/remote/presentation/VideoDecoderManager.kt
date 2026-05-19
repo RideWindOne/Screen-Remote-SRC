@@ -1,5 +1,9 @@
 package com.mobile.scrcpy.android.feature.remote.presentation
 
+import android.media.MediaCodecInfo
+import android.media.MediaCodecList
+import android.media.MediaFormat
+import android.view.Surface
 import android.view.SurfaceHolder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,14 +41,12 @@ class VideoDecoderManager(
 
     fun startDecoder(
         stream: VideoStream,
-        surfaceHolder: SurfaceHolder?,
+        surface: Surface?,
         scope: kotlinx.coroutines.CoroutineScope,
     ) {
         if (isDecoderStarting || videoDecoder != null) return
 
         try {
-            val surface = surfaceHolder?.surface
-
             LogManager.d(
                 LogTags.VIDEO_DECODER,
                 "${RemoteTexts.REMOTE_PREPARE_VIDEO_DECODER.get()} (surface=${surface != null && surface.isValid})",
@@ -63,7 +65,9 @@ class VideoDecoderManager(
             val videoCodec = options?.preferredVideoCodec?.ifBlank { "h264" } ?: "h264"
 
             val decoderName: String? =
-                if (!options?.userVideoDecoder.isNullOrBlank()) {
+                if (options?.enableHardwareDecoding == false) {
+                    pickSoftwareDecoder(videoCodec)
+                } else if (!options?.userVideoDecoder.isNullOrBlank()) {
                     pickCompatibleDecoder(videoCodec, options.userVideoDecoder, "用户指定")
                 } else {
                     val selected = options?.selectedVideoDecoder
@@ -138,22 +142,38 @@ class VideoDecoderManager(
 
     fun setSurface(
         surfaceHolder: SurfaceHolder?,
+        renderSurface: Surface?,
+        usePersistentSurface: Boolean,
         lifecycleState: Lifecycle.Event,
     ) {
         val decoder = videoDecoder ?: return
+        val activeSurface =
+            if (usePersistentSurface) {
+                renderSurface
+            } else {
+                surfaceHolder?.surface
+            }
 
         when (lifecycleState) {
             Lifecycle.Event.ON_PAUSE -> {
                 LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_SWITCH_TO_BACKGROUND.get())
-                decoder.setSurface(null)
-                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_DECODER_CONTINUE_RUNNING.get())
+                if (usePersistentSurface) {
+                    if (activeSurface != null && activeSurface.isValid) {
+                        decoder.setSurface(activeSurface)
+                        LogManager.d(LogTags.REMOTE_DISPLAY, "全屏模式保持 Texture Surface，跳过 dummy Surface 切换")
+                    } else {
+                        LogManager.w(LogTags.REMOTE_DISPLAY, "全屏模式 Surface 不可用，暂不切换到 dummy Surface")
+                    }
+                } else {
+                    decoder.setSurface(null)
+                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_DECODER_CONTINUE_RUNNING.get())
+                }
             }
 
             Lifecycle.Event.ON_RESUME -> {
-                val surface = surfaceHolder?.surface
-                if (surface != null && surface.isValid) {
+                if (activeSurface != null && activeSurface.isValid) {
                     LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_RESUME_TO_FOREGROUND.get())
-                    decoder.setSurface(surface)
+                    decoder.setSurface(activeSurface)
                     kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                         try {
                             connectionViewModel.wakeUpScreen()
@@ -170,9 +190,8 @@ class VideoDecoderManager(
             }
 
             else -> {
-                val surface = surfaceHolder?.surface
-                if (surface != null && surface.isValid) {
-                    decoder.setSurface(surface)
+                if (activeSurface != null && activeSurface.isValid) {
+                    decoder.setSurface(activeSurface)
                 }
             }
         }
@@ -181,6 +200,13 @@ class VideoDecoderManager(
     fun setSurfaceImmediate(surfaceHolder: SurfaceHolder?) {
         val decoder = videoDecoder ?: return
         val surface = surfaceHolder?.surface
+        if (surface != null && surface.isValid) {
+            decoder.setSurface(surface)
+        }
+    }
+
+    fun setSurfaceImmediate(surface: Surface?) {
+        val decoder = videoDecoder ?: return
         if (surface != null && surface.isValid) {
             decoder.setSurface(surface)
         }
@@ -204,6 +230,41 @@ class VideoDecoderManager(
             null
         }
     }
+
+    private fun pickSoftwareDecoder(videoCodec: String): String? {
+        val mimeType = videoCodecToMimeType(videoCodec) ?: return null
+        val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+        val softwareDecoder =
+            codecList.firstOrNull { info ->
+                !info.isEncoder &&
+                    info.supportedTypes.any { it.equals(mimeType, ignoreCase = true) } &&
+                    info.isSoftwareCodecCompat()
+            }
+        if (softwareDecoder == null) {
+            LogManager.w(LogTags.VIDEO_DECODER, "未找到软件解码器，回退系统默认解码器: codec=$videoCodec mime=$mimeType")
+        } else {
+            LogManager.d(LogTags.VIDEO_DECODER, "硬件解码已关闭，使用软件解码器: ${softwareDecoder.name}")
+        }
+        return softwareDecoder?.name
+    }
+
+    private fun MediaCodecInfo.isSoftwareCodecCompat(): Boolean =
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            isSoftwareOnly
+        } else {
+            val lowerName = name.lowercase()
+            lowerName.startsWith("omx.google.") || lowerName.startsWith("c2.android.")
+        }
+
+    private fun videoCodecToMimeType(videoCodec: String): String? =
+        when (CodecSelector.inferVideoCodecFromName(videoCodec)) {
+            "h264" -> MediaFormat.MIMETYPE_VIDEO_AVC
+            "h265" -> MediaFormat.MIMETYPE_VIDEO_HEVC
+            "av1" -> "video/av01"
+            "vp9" -> MediaFormat.MIMETYPE_VIDEO_VP9
+            "vp8" -> MediaFormat.MIMETYPE_VIDEO_VP8
+            else -> null
+        }
 }
 
 @Composable
@@ -211,6 +272,8 @@ fun rememberVideoDecoderManager(
     connectionViewModel: ConnectionViewModel,
     videoStream: VideoStream?,
     surfaceHolder: SurfaceHolder?,
+    renderSurface: Surface?,
+    usePersistentSurface: Boolean,
     lifecycleState: Lifecycle.Event,
     onVideoSizeChanged: (width: Int, height: Int, aspectRatio: Float) -> Unit,
 ): VideoDecoderManager {
@@ -236,15 +299,21 @@ fun rememberVideoDecoderManager(
         }
 
         if (videoStream != null && !manager.isDecoderStarting && manager.videoDecoder == null) {
-            manager.startDecoder(videoStream, surfaceHolder, scope)
+            val initialSurface =
+                if (usePersistentSurface) {
+                    renderSurface
+                } else {
+                    surfaceHolder?.surface
+                }
+            manager.startDecoder(videoStream, initialSurface, scope)
         } else if (videoStream == null && manager.videoDecoder != null) {
             manager.stopDecoder()
         }
     }
 
-    DisposableEffect(surfaceHolder, lifecycleState) {
+    DisposableEffect(surfaceHolder, renderSurface, usePersistentSurface, lifecycleState) {
         scope.launch {
-            manager.setSurface(surfaceHolder, lifecycleState)
+            manager.setSurface(surfaceHolder, renderSurface, usePersistentSurface, lifecycleState)
         }
         onDispose { }
     }

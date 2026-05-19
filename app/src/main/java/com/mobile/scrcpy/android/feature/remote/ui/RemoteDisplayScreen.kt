@@ -3,7 +3,9 @@ package com.mobile.scrcpy.android.feature.remote.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import android.view.Surface
 import android.view.SurfaceHolder
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -103,6 +105,8 @@ private data class RemoteDisplayScreenRouteState(
     val onKeyboardInputVisibleChange: (Boolean) -> Unit,
     val surfaceHolder: SurfaceHolder?,
     val onSurfaceHolderChanged: (SurfaceHolder?) -> Unit,
+    val renderSurface: Surface?,
+    val onRenderSurfaceChanged: (Surface?) -> Unit,
     val lifecycleState: Lifecycle.Event,
     val onLifecycleStateChanged: (Lifecycle.Event) -> Unit,
     val videoAspectRatio: Float,
@@ -183,6 +187,16 @@ private fun rememberRemoteDisplayScreenRouteState(
     }.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
 
+    DisposableEffect(sessionData?.keepDeviceAwake) {
+        val activity = context as? ComponentActivity
+        if (sessionData?.keepDeviceAwake == true) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     val messageListState = rememberMessageListState()
 
     var showKeyboardInput by remember { mutableStateOf(false) }
@@ -196,6 +210,7 @@ private fun rememberRemoteDisplayScreenRouteState(
     var layoutInspectorSnapshot by remember { mutableStateOf<RemoteUiLayoutSnapshot?>(null) }
     var layoutInspectorNodes by remember { mutableStateOf<List<RemoteUiLayoutNode>>(emptyList()) }
     var surfaceHolder by remember { mutableStateOf<SurfaceHolder?>(null) }
+    var renderSurface by remember { mutableStateOf<Surface?>(null) }
     var lifecycleState by remember { mutableStateOf(Lifecycle.Event.ON_ANY) }
     var videoAspectRatio by remember { mutableFloatStateOf(9f / 16f) }
     var videoWidth by remember { mutableIntStateOf(0) }
@@ -212,6 +227,8 @@ private fun rememberRemoteDisplayScreenRouteState(
             connectionViewModel = connectionViewModel,
             videoStream = videoStream,
             surfaceHolder = surfaceHolder,
+            renderSurface = renderSurface,
+            usePersistentSurface = sessionData?.useFullScreen ?: false,
             lifecycleState = lifecycleState,
             onVideoSizeChanged = { width, height, aspectRatio ->
                 videoWidth = width
@@ -342,6 +359,8 @@ private fun rememberRemoteDisplayScreenRouteState(
         onKeyboardInputVisibleChange = { showKeyboardInput = it },
         surfaceHolder = surfaceHolder,
         onSurfaceHolderChanged = { surfaceHolder = it },
+        renderSurface = renderSurface,
+        onRenderSurfaceChanged = { renderSurface = it },
         lifecycleState = lifecycleState,
         onLifecycleStateChanged = { lifecycleState = it },
         videoAspectRatio = videoAspectRatio,
@@ -533,6 +552,7 @@ private fun RemoteDisplayScreenContent(
                 videoHeight = routeState.videoHeight,
                 configuration = configuration,
                 onSurfaceHolderChanged = routeState.onSurfaceHolderChanged,
+                onRenderSurfaceChanged = routeState.onRenderSurfaceChanged,
                 videoDecoderManager = routeState.videoDecoderManager,
             ) {
                 if (routeState.layoutInspectorState.isOverlayVisible) {

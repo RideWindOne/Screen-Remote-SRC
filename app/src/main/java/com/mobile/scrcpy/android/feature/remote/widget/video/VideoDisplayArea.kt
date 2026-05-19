@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +39,7 @@ fun VideoDisplayArea(
     videoHeight: Int,
     configuration: android.content.res.Configuration,
     onSurfaceHolderChanged: (SurfaceHolder?) -> Unit,
+    onRenderSurfaceChanged: (Surface?) -> Unit,
     videoDecoderManager: VideoDecoderManager,
     overlayContent: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
@@ -193,12 +195,24 @@ fun VideoDisplayArea(
         ) {
             if (useFullScreen) {
                 var surfaceTexture by remember { mutableStateOf<SurfaceTexture?>(null) }
+                var renderSurface by remember { mutableStateOf<Surface?>(null) }
+
+                DisposableEffect(Unit) {
+                    onDispose {
+                        renderSurface?.release()
+                        renderSurface = null
+                        onRenderSurfaceChanged(null)
+                    }
+                }
 
                 VideoTextureView(
                     onSurfaceTextureAvailable = { texture ->
                         surfaceTexture = texture
-                        val surface = Surface(texture)
-                        videoDecoderManager.videoDecoder?.setSurface(surface)
+                        val surface =
+                            renderSurface?.takeIf { it.isValid }
+                                ?: Surface(texture).also { renderSurface = it }
+                        onRenderSurfaceChanged(surface)
+                        videoDecoderManager.setSurfaceImmediate(surface)
                     },
                     onSurfaceTextureDestroyed = {
                         surfaceTexture = null

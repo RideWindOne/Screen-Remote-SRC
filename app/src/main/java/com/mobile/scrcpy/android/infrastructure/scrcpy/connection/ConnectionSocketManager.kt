@@ -5,6 +5,7 @@ import com.mobile.scrcpy.android.core.common.NetworkConstants
 import com.mobile.scrcpy.android.core.common.constants.ScrcpyConstants.SOCKET_READ_TIMEOUT
 import com.mobile.scrcpy.android.core.common.manager.LogManager
 import com.mobile.scrcpy.android.core.i18n.RemoteTexts
+import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnection
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SocketConnectContext
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SocketConnectingContext
@@ -56,8 +57,10 @@ class ConnectionSocketManager(
      * 连接所有需要的 Socket
      */
     suspend fun connectSockets(
+        connection: AdbConnection,
+        socketName: String,
         enableAudio: Boolean,
-        keyFrameInterval: Int,
+        useAdbForward: Boolean,
     ) = withContext(Dispatchers.IO) {
         try {
             sessionContext.emit(
@@ -70,7 +73,12 @@ class ConnectionSocketManager(
                 ),
             )
 
-            connectSocketsWithRetry(enableAudio)
+            connectSocketsWithRetry(
+                connection = connection,
+                socketName = socketName,
+                enableAudio = enableAudio,
+                useAdbForward = useAdbForward,
+            )
             LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.get())
             sessionContext.emit(
                 SessionEvent.SocketConnected(
@@ -136,7 +144,12 @@ class ConnectionSocketManager(
         }
     }
 
-    private fun connectSocketsWithRetry(enableAudio: Boolean) {
+    private suspend fun connectSocketsWithRetry(
+        connection: AdbConnection,
+        socketName: String,
+        enableAudio: Boolean,
+        useAdbForward: Boolean,
+    ) {
         var lastError: Exception? = null
 
         repeat(SOCKET_CONNECT_MAX_ATTEMPTS) { attemptIndex ->
@@ -146,16 +159,16 @@ class ConnectionSocketManager(
             var controlCandidate: Socket? = null
 
             try {
-                // 先连接所有 Socket 再读取数据，避免 server 端 accept 串行导致死锁。
-                videoCandidate = createAndConnectSocket("video")
+                // 先连接所有流再读取数据，避免 server 端 accept 串行导致死锁。
+                videoCandidate = createChannel(connection, socketName, "video", useAdbForward)
                 LogManager.d(LogTags.SCRCPY_CLIENT, "Video socket connected")
 
                 if (enableAudio) {
-                    audioCandidate = createAndConnectSocket("audio")
+                    audioCandidate = createChannel(connection, socketName, "audio", useAdbForward)
                     LogManager.d(LogTags.SCRCPY_CLIENT, "Audio socket connected")
                 }
 
-                controlCandidate = createAndConnectSocket("control")
+                controlCandidate = createChannel(connection, socketName, "control", useAdbForward)
                 LogManager.d(LogTags.SCRCPY_CLIENT, "Control socket connected")
 
                 if (enableAudio) {
@@ -342,6 +355,25 @@ class ConnectionSocketManager(
     /**
      * 创建并连接 Socket
      */
+    private suspend fun createChannel(
+        connection: AdbConnection,
+        socketName: String,
+        type: String,
+        useAdbForward: Boolean,
+    ): Socket =
+        if (useAdbForward) {
+            createAndConnectSocket(type)
+        } else {
+            connection.openLocalAbstractSocket(socketName).getOrElse { error ->
+                throw IOException("Failed to open $type adb stream: ${error.message}", error)
+            }.also { socket ->
+                socket.tcpNoDelay = true
+                socket.receiveBufferSize = NetworkConstants.SOCKET_RECEIVE_BUFFER_SIZE
+                socket.sendBufferSize = NetworkConstants.SOCKET_SEND_BUFFER_SIZE
+                socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
+            }
+        }
+
     private fun createAndConnectSocket(type: String): Socket {
         val socket = Socket()
 
@@ -353,7 +385,6 @@ class ConnectionSocketManager(
         socket.sendBufferSize = NetworkConstants.SOCKET_SEND_BUFFER_SIZE
 
         // 读取超时：使用固定的 10 秒超时（用于 dummy byte 和元数据读取）
-        // 注意：keyFrameInterval 是视频关键帧间隔，不应用作 Socket 超时
         socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
 
         try {

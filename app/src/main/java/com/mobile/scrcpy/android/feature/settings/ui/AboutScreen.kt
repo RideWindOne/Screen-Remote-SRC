@@ -1,9 +1,16 @@
 package com.mobile.scrcpy.android.feature.settings.ui
 
+import android.content.ContentValues
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.os.Build
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,22 +18,30 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,14 +51,16 @@ import com.mobile.scrcpy.android.R
 import com.mobile.scrcpy.android.core.common.AppConstants
 import com.mobile.scrcpy.android.core.common.AppDimens
 import com.mobile.scrcpy.android.core.designsystem.component.DialogPage
+import com.mobile.scrcpy.android.core.i18n.CommonTexts
 import com.mobile.scrcpy.android.core.i18n.SettingsTexts
 
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    var showWechatGroupDialog by remember { mutableStateOf(false) }
 
     DialogPage(
-        title = SettingsTexts.ABOUT_TITLE.get(),
+        title = SettingsTexts.SETTINGS_ABOUT.get(),
         onDismiss = onBack,
         enableScroll = true,
     ) {
@@ -56,7 +73,7 @@ fun AboutScreen(onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Scrcpy Remote ${AppConstants.APP_VERSION}",
+                text = "Screen Remote ${AppConstants.APP_VERSION}",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
@@ -103,6 +120,15 @@ fun AboutScreen(onBack: () -> Unit) {
                     lineHeight = 20.sp,
                     color = MaterialTheme.colorScheme.error,
                 )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = SettingsTexts.ABOUT_HELP_TEXT.get(),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
 
@@ -121,40 +147,27 @@ fun AboutScreen(onBack: () -> Unit) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                // 微信二维码
-                Column(
+                Row(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                            .height(AppDimens.listItemHeight)
+                            .clickable { showWechatGroupDialog = true }
+                            .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = SettingsTexts.ABOUT_HELP_TEXT.get(),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = SettingsTexts.ABOUT_WECHAT_BUTTON.get(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Image(
-                        painter = painterResource(id = R.drawable.wechat_qr),
-                        contentDescription = SettingsTexts.ABOUT_WECHAT_QR.get(),
-                        modifier =
-                            Modifier
-                                .size(200.dp)
-                                .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Fit,
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = SettingsTexts.ABOUT_WECHAT_QR.get(),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
 
@@ -170,7 +183,6 @@ fun AboutScreen(onBack: () -> Unit) {
                         Modifier
                             .fillMaxWidth()
                             .height(AppDimens.listItemHeight)
-                            .padding(horizontal = 16.dp)
                             // 临时禁用 Telegram 频道功能
                             .clickable {
                                 val intent = Intent(Intent.ACTION_VIEW, AppConstants.TELEGRAM_CHANNEL.toUri())
@@ -229,5 +241,120 @@ fun AboutScreen(onBack: () -> Unit) {
                 }
             }
         }
+
+        if (showWechatGroupDialog) {
+            WechatGroupDialog(
+                onDismiss = { showWechatGroupDialog = false },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WechatGroupDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val bitmap =
+        remember {
+            BitmapFactory.decodeResource(context.resources, R.drawable.wechat_qr)?.asImageBitmap()
+        }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(SettingsTexts.ABOUT_WECHAT_BUTTON.get())
+        },
+        text = {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = SettingsTexts.ABOUT_WECHAT_QR.get(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+
+                bitmap?.let {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            bitmap = it,
+                            contentDescription = SettingsTexts.ABOUT_WECHAT_QR.get(),
+                            modifier =
+                                Modifier
+                                    .size(280.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            saveWechatQrToGallery(context)
+                                        },
+                                    ),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+                }
+
+                Text(
+                    text = SettingsTexts.ABOUT_WECHAT_SAVE.get(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+
+                Text(
+                    text = SettingsTexts.ABOUT_WECHAT_ID.get(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(CommonTexts.BUTTON_CLOSE.get())
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+    )
+}
+
+private fun saveWechatQrToGallery(context: android.content.Context) {
+    runCatching {
+        val bitmap =
+            BitmapFactory.decodeResource(context.resources, R.drawable.wechat_qr)
+                ?: error("decode qr failed")
+        val fileName = "scrcpy_remote_wechat_group_${System.currentTimeMillis()}.png"
+        val values =
+            ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/ScrcpyMobile")
+                }
+            }
+
+        val resolver = context.contentResolver
+        val uri =
+            resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: error("create gallery file failed")
+
+        resolver.openOutputStream(uri)?.use { output ->
+            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)) {
+                error("write gallery file failed")
+            }
+        } ?: error("open output stream failed")
+    }.onSuccess {
+        Toast.makeText(context, SettingsTexts.ABOUT_WECHAT_SAVED.get(), Toast.LENGTH_SHORT).show()
+    }.onFailure {
+        Toast.makeText(context, SettingsTexts.ABOUT_WECHAT_SAVE_F.get(), Toast.LENGTH_SHORT).show()
     }
 }

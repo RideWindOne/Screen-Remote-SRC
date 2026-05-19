@@ -83,6 +83,15 @@ internal class ScrcpyControllerTransport(
         }
     }
 
+    private data class DisplayPowerMessage(
+        val on: Boolean,
+    ) : ControlMessage {
+        override fun writeTo(output: DataOutputStream) {
+            output.writeByte(ScrcpyProtocol.MSG_TYPE_SET_DISPLAY_POWER)
+            output.writeBoolean(on)
+        }
+    }
+
     private var wakeSignal = Channel<Unit>(capacity = Channel.CONFLATED)
     private val queueLock = Any()
     private val orderedMessages = ArrayDeque<ControlMessage>()
@@ -202,6 +211,8 @@ internal class ScrcpyControllerTransport(
 
         return enqueue(TextMessage(textBytes))
     }
+
+    fun enqueueDisplayPower(on: Boolean): Result<Boolean> = enqueue(DisplayPowerMessage(on))
 
     private fun enqueue(message: ControlMessage): Result<Boolean> =
         try {

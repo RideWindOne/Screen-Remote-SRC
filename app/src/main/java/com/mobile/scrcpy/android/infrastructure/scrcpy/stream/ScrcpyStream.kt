@@ -1,6 +1,7 @@
 package com.mobile.scrcpy.android.infrastructure.scrcpy.stream
 
 import com.mobile.scrcpy.android.core.common.constants.LogTags
+import com.mobile.scrcpy.android.core.common.constants.ScrcpyConstants.SOCKET_READ_TIMEOUT
 import com.mobile.scrcpy.android.core.common.event.DemuxerError
 import com.mobile.scrcpy.android.core.common.event.DeviceDisconnected
 import com.mobile.scrcpy.android.core.common.event.ScrcpyEvent
@@ -186,7 +187,6 @@ class ScrcpySocketStream(
     private val socket: Socket,
     inputStream: InputStream = socket.inputStream,
     private val onError: (String) -> Unit,
-    keyFrameInterval: Int = 2,
     private val onVideoResolution: (Int, Int) -> Unit = { _, _ -> },
 ) : VideoStream {
     private val dataInputStream = java.io.DataInputStream(inputStream)
@@ -194,7 +194,7 @@ class ScrcpySocketStream(
     private var frameInfo: VideoFrameInfo? = null
 
     init {
-        socket.soTimeout = keyFrameInterval * 1000 // 关键帧间隔转毫秒
+        socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
     }
 
     @Throws(IOException::class)

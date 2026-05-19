@@ -18,6 +18,7 @@ object ScrcpyProtocol {
     const val MSG_TYPE_INJECT_KEYCODE = 0
     const val MSG_TYPE_INJECT_TEXT = 1
     const val MSG_TYPE_INJECT_TOUCH_EVENT = 2
+    const val MSG_TYPE_SET_DISPLAY_POWER = 10
 
     /**
      * 构建 scrcpy-server 基础命令

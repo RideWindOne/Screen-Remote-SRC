@@ -29,26 +29,30 @@ import com.mobile.scrcpy.android.core.common.AppConstants
 internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     connection: AdbConnection,
     socketName: String,
+    useAdbForward: Boolean,
 ) = coroutineScope {
     val pushTargetPath = AppConstants.SCRCPY_SERVER_PATH
 
-    // 推送 Forward 设置中事件
-    sessionContext.emit(SessionEvent.ForwardSetting)
-
     val forwardJob =
-        async {
-            connection.setupAdbForward(localPort, socketName).getOrElse { error ->
-                // 推送 ADB 断开事件（forward 失败通常意味着 ADB 连接有问题）
-                sessionContext.emit(
-                    SessionEvent.AdbDisconnected(
-                        AdbIssue(
-                            kind = AdbIssueKind.ForwardSetupFailed,
-                            detail = "Forward failed: ${error.message}",
+        if (useAdbForward) {
+            // 推送 Forward 设置中事件
+            sessionContext.emit(SessionEvent.ForwardSetting)
+            async {
+                connection.setupAdbForward(localPort, socketName).getOrElse { error ->
+                    // 推送 ADB 断开事件（forward 失败通常意味着 ADB 连接有问题）
+                    sessionContext.emit(
+                        SessionEvent.AdbDisconnected(
+                            AdbIssue(
+                                kind = AdbIssueKind.ForwardSetupFailed,
+                                detail = "Forward failed: ${error.message}",
+                            ),
                         ),
-                    ),
-                )
-                throw Exception("Forward failed: ${error.message}", error)
+                    )
+                    throw Exception("Forward failed: ${error.message}", error)
+                }
             }
+        } else {
+            null
         }
 
     // 推送 Server 推送中事件
@@ -68,7 +72,7 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
         }
 
     try {
-        forwardJob.await()
+        forwardJob?.await()
     } catch (e: Exception) {
         throw e
     }
@@ -198,7 +202,6 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
             "video_bit_rate=${options.videoBitRate}",
             "max_fps=${options.maxFps}",
             "video_codec=$videoCodec",
-            "display_id=${options.displayId.coerceAtLeast(0)}",
             "stay_awake=${options.stayAwake}",
             "power_off_on_close=${options.powerOffOnClose}",
             "tunnel_forward=true",
@@ -209,8 +212,22 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         ),
     )
 
+    if (options.newDisplayEnabled) {
+        params.add("new_display=${options.newDisplay.trim()}")
+    } else {
+        params.add("display_id=${options.displayId.coerceAtLeast(0)}")
+    }
+
     if (options.showTouches) {
         params.add("show_touches=true")
+    }
+
+    if (!options.enableClipboardSync) {
+        params.add("clipboard_autosync=false")
+    }
+
+    if (!options.cleanupOnDisconnect) {
+        params.add("cleanup=false")
     }
 
     videoEncoder.takeIf { it.isNotBlank() }?.let { encoder ->
@@ -227,7 +244,8 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         params.add("audio=false")
     }
 
-    buildVideoCodecOptions(options.codecOptions, options.keyFrameInterval)?.let { codecOptions ->
+    // 关键帧间隔不再由应用层配置，遵循 scrcpy-server 默认行为。
+    buildVideoCodecOptions(options.codecOptions)?.let { codecOptions ->
         params.add("video_codec_options=$codecOptions")
     }
 
@@ -254,20 +272,10 @@ private fun resolveVideoCodec(
     return encoderCodec
 }
 
-private fun buildVideoCodecOptions(
-    userCodecOptions: String,
-    keyFrameInterval: Int,
-): String? {
-    val options =
-        userCodecOptions
-            .split(',')
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .toMutableList()
-
-    if (options.none { it.substringBefore('=').trim() == "key-frame-interval" }) {
-        options.add("key-frame-interval=${keyFrameInterval.coerceAtLeast(0)}")
-    }
-
-    return options.takeIf { it.isNotEmpty() }?.joinToString(",")
-}
+private fun buildVideoCodecOptions(userCodecOptions: String): String? =
+    userCodecOptions
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(",")

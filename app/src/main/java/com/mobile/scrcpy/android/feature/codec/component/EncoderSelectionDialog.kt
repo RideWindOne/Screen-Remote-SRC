@@ -27,6 +27,8 @@ import com.mobile.scrcpy.android.feature.codec.component.encoder.getAudioEncoder
 import com.mobile.scrcpy.android.feature.codec.component.encoder.getVideoEncoderDialogConfig
 import com.mobile.scrcpy.android.feature.codec.component.encoder.matchesAudioCodecFilter
 import com.mobile.scrcpy.android.feature.codec.component.encoder.matchesVideoCodecFilter
+import com.mobile.scrcpy.android.feature.codec.ui.inferAudioTypesFromName
+import com.mobile.scrcpy.android.feature.codec.ui.inferVideoTypesFromName
 import com.mobile.scrcpy.android.infrastructure.adb.connection.AdbConnectionManager
 import com.mobile.scrcpy.android.infrastructure.adb.connection.EncoderInfo
 import com.mobile.scrcpy.android.service.ScrcpyForegroundService
@@ -106,8 +108,8 @@ fun EncoderSelectionDialog(
                     detectedEncoders =
                         cachedEncoders.map { name ->
                             when (encoderType) {
-                                EncoderType.VIDEO -> EncoderInfo.Video(name = name, mimeType = "")
-                                EncoderType.AUDIO -> EncoderInfo.Audio(name = name, mimeType = "")
+                                EncoderType.VIDEO -> EncoderInfo.Video(name = name, mimeType = inferVideoTypesFromName(name))
+                                EncoderType.AUDIO -> EncoderInfo.Audio(name = name, mimeType = inferAudioTypesFromName(name))
                             }
                         }
                     usedCache = true

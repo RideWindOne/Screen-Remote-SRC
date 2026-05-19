@@ -2,7 +2,6 @@ package com.mobile.scrcpy.android.feature.session.ui.component
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mobile.scrcpy.android.core.common.ScrcpyConstants
@@ -55,8 +54,6 @@ class SessionDialogState(
     var userAudioEncoder by mutableStateOf(sessionData?.userAudioEncoder ?: "")
     var userAudioDecoder by mutableStateOf(sessionData?.userAudioDecoder ?: "")
     var audioBitrate by mutableStateOf(sessionData?.audioBitrate ?: "")
-    var audioBufferMs by mutableStateOf(sessionData?.audioBufferMs ?: "")
-    var videoBufferMs by mutableStateOf(sessionData?.videoBufferMs ?: "")
     var audioVolume by mutableFloatStateOf(1.0f)
 
     // 编码器缓存（远程设备能力，每个会话独立）
@@ -69,18 +66,20 @@ class SessionDialogState(
     var deviceSerial by mutableStateOf(sessionData?.deviceSerial ?: "")
 
     // 其他选项
-    var keyFrameInterval by mutableIntStateOf(sessionData?.keyFrameInterval ?: 2)
-    var stayAwake by mutableStateOf(sessionData?.stayAwake ?: false)
+    var enableClipboardSync by mutableStateOf(sessionData?.enableClipboardSync ?: true)
     var turnScreenOff by mutableStateOf(sessionData?.turnScreenOff ?: true)
     var powerOffOnClose by mutableStateOf(sessionData?.powerOffOnClose ?: false)
+    var cleanupOnDisconnect by mutableStateOf(sessionData?.cleanupOnDisconnect ?: true)
     var useFullScreen by mutableStateOf(sessionData?.useFullScreen ?: false)
-    var keepDeviceAwake by mutableStateOf(false)
-    var enableHardwareDecoding by mutableStateOf(true)
-    var followRemoteOrientation by mutableStateOf(false)
-    var showNewDisplay by mutableStateOf(false)
+    var keepDeviceAwake by mutableStateOf(sessionData?.keepDeviceAwake ?: false)
+    var enableHardwareDecoding by mutableStateOf(sessionData?.enableHardwareDecoding ?: true)
+    var followRemoteOrientation by mutableStateOf(sessionData?.followRemoteOrientation ?: false)
+    var showNewDisplay by mutableStateOf(sessionData?.newDisplayEnabled ?: false)
+    var newDisplayWidth by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).width)
+    var newDisplayHeight by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).height)
+    var newDisplayDpi by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).dpi)
 
     // UI 状态
-    var showKeyFrameIntervalMenu by mutableStateOf(false)
     var showVideoCodecMenu by mutableStateOf(false)
     var showAudioCodecMenu by mutableStateOf(false)
     var showEncoderOptionsDialog by mutableStateOf(false)
@@ -108,6 +107,8 @@ class SessionDialogState(
             maxSize = maxSize,
             videoBitrate = videoBitrate,
             maxFps = maxFps,
+            newDisplayEnabled = showNewDisplay,
+            newDisplay = if (showNewDisplay) buildNewDisplay(newDisplayWidth, newDisplayHeight, newDisplayDpi) else "",
             preferredVideoCodec = preferredVideoCodec,
             userVideoEncoder = userVideoEncoder,
             userVideoDecoder = userVideoDecoder,
@@ -116,13 +117,15 @@ class SessionDialogState(
             userAudioEncoder = userAudioEncoder,
             userAudioDecoder = userAudioDecoder,
             audioBitrate = audioBitrate,
-            audioBufferMs = audioBufferMs,
-            videoBufferMs = videoBufferMs,
-            keyFrameInterval = keyFrameInterval,
-            stayAwake = stayAwake,
+            enableClipboardSync = enableClipboardSync,
+            stayAwake = false,
             turnScreenOff = turnScreenOff,
             powerOffOnClose = powerOffOnClose,
+            cleanupOnDisconnect = cleanupOnDisconnect,
             useFullScreen = useFullScreen,
+            keepDeviceAwake = keepDeviceAwake,
+            enableHardwareDecoding = enableHardwareDecoding,
+            followRemoteOrientation = followRemoteOrientation,
             selectedVideoEncoder = selectedVideoEncoder,
             selectedAudioEncoder = selectedAudioEncoder,
             selectedVideoDecoder = selectedVideoDecoder,
@@ -154,3 +157,41 @@ class SessionDialogState(
         return true
     }
 }
+
+internal data class NewDisplayParts(
+    val width: String = "",
+    val height: String = "",
+    val dpi: String = "",
+)
+
+internal fun parseNewDisplay(input: String?): NewDisplayParts {
+    val trimmed = input?.trim().orEmpty()
+    if (trimmed.isEmpty()) return NewDisplayParts()
+
+    val sizePart = trimmed.substringBefore('/')
+    val dpiPart = trimmed.substringAfter('/', "")
+    val width = sizePart.substringBefore('x', "")
+    val height = sizePart.substringAfter('x', "")
+    return NewDisplayParts(
+        width = width.filter(Char::isDigit),
+        height = height.filter(Char::isDigit),
+        dpi = dpiPart.filter(Char::isDigit),
+    )
+}
+
+internal fun buildNewDisplay(
+    width: String,
+    height: String,
+    dpi: String,
+): String =
+    buildString {
+        val normalizedWidth = width.filter(Char::isDigit).toIntOrNull()?.takeIf { it > 0 }
+        val normalizedHeight = height.filter(Char::isDigit).toIntOrNull()?.takeIf { it > 0 }
+        val normalizedDpi = dpi.filter(Char::isDigit).toIntOrNull()?.takeIf { it > 0 }
+        if (normalizedWidth != null && normalizedHeight != null) {
+            append("${normalizedWidth}x$normalizedHeight")
+        }
+        if (normalizedDpi != null) {
+            append("/$normalizedDpi")
+        }
+    }

@@ -22,19 +22,25 @@ data class ScrcpyOptions(
     val host: String, // 网络设备: IP地址, USB设备: 序列号
     val port: Int = 0, // 网络设备: 端口号, USB设备: 0
     // ========== 用户配置字段 ==========
+    val forceAdb: Boolean = false,
     val maxSize: Int = 1920,
     val videoBitRate: Int = 8000000,
     val maxFps: Int = 60,
     val displayId: Int = 0,
+    val newDisplayEnabled: Boolean = false,
+    val newDisplay: String = "",
     val showTouches: Boolean = false,
+    val enableClipboardSync: Boolean = true,
     val stayAwake: Boolean = true,
     val codecOptions: String = "",
     val powerOffOnClose: Boolean = false,
+    val cleanupOnDisconnect: Boolean = true,
     val enableAudio: Boolean = false,
     val audioBitRate: Int = 128000,
-    val audioBufferMs: Int? = null,
-    val keyFrameInterval: Int = 10,
     val turnScreenOff: Boolean = false,
+    val keepDeviceAwake: Boolean = false,
+    val enableHardwareDecoding: Boolean = true,
+    val followRemoteOrientation: Boolean = false,
     // ========== 编解码器辅助字段（UI 编辑 + 自动检测） ==========
     val preferredVideoCodec: String = "", // 偏好的视频编码格式（h264/h265），用于 UI 选择和自动检测参考
     val preferredAudioCodec: String = "", // 偏好的音频编码格式（opus/aac），用于 UI 选择和自动检测参考

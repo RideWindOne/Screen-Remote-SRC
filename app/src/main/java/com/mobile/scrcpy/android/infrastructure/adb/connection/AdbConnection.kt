@@ -16,6 +16,7 @@ import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ReconnectIs
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.mobile.scrcpy.android.infrastructure.scrcpy.session.runtime.SessionContext
+import com.mobile.scrcpy.android.infrastructure.scrcpy.connection.AdbStreamSocket
 import dadb.AdbShellStream
 import dadb.Dadb
 import dadb.helper.RemoteAppIconBatchData
@@ -32,6 +33,7 @@ import dadb.helper.runRemoteAppHelperProbe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -125,6 +127,16 @@ class AdbConnection(
     suspend fun openShellStream(command: String): AdbShellStream? = shellExecutor.openStream(command)
 
     suspend fun openPtyShellStream(command: String = ""): AdbShellStream? = shellExecutor.openPtyStream(command)
+
+    suspend fun openLocalAbstractSocket(socketName: String): Result<Socket> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                AdbStreamSocket(
+                    adbStream = dadb.open("localabstract:$socketName"),
+                    streamLabel = socketName,
+                )
+            }
+        }
 
     suspend fun executeService(destination: String): Result<String> =
         withContext(Dispatchers.IO) {

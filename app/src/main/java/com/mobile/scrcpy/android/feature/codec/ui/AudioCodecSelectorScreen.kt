@@ -37,14 +37,7 @@ fun AudioCodecSelectorScreen(
         scope.launch {
             state.updateLoading(true)
             state.updateCodecs(
-                LocalDecoderCache.getAudioDecoders().map { name ->
-                    CodecInfo(
-                        name = name,
-                        type = "",
-                        isEncoder = false,
-                        capabilities = "",
-                    )
-                },
+                buildAudioDecoderInfos(LocalDecoderCache.getAudioDecoders()),
             )
             state.updateLoading(false)
         }

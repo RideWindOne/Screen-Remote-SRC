@@ -27,7 +27,6 @@ class ConnectionMetadataReader(
      */
     suspend fun readMetadataAndCreateStreams(
         enableAudio: Boolean,
-        keyFrameInterval: Int,
         onVideoResolution: (Int, Int) -> Unit,
     ): Pair<VideoStream?, AudioStream?> =
         withContext(Dispatchers.IO) {
@@ -58,7 +57,6 @@ class ConnectionMetadataReader(
                                 LogManager.e(LogTags.SCRCPY_CLIENT, "Video stream error -> $error")
                             }
                         },
-                        keyFrameInterval,
                         onVideoResolution,
                     )
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
@@ -53,6 +54,7 @@ fun SessionCard(
     sessionData: SessionData?,
     index: Int,
     isConnected: Boolean = false,
+    isAdbConnected: Boolean = false,
     isConnecting: Boolean = false,
     onClick: () -> Unit = {},
     onConnect: () -> Unit = {},
@@ -129,7 +131,10 @@ fun SessionCard(
 
             SessionCardStatusBadge(
                 modifier = Modifier.align(Alignment.TopEnd),
+                sessionData = sessionData,
                 isConnected = isConnected,
+                isAdbConnected = isAdbConnected,
+                isConnecting = isConnecting,
             )
 
             Text(
@@ -197,8 +202,28 @@ fun SessionCard(
 @Composable
 private fun SessionCardStatusBadge(
     modifier: Modifier = Modifier,
+    sessionData: SessionData?,
     isConnected: Boolean,
+    isAdbConnected: Boolean,
+    isConnecting: Boolean,
 ) {
+    val isUsbConnection = sessionData?.isUsbConnection() == true
+    val transportIcon = if (isUsbConnection) Icons.Default.Usb else Icons.Default.Wifi
+    val transportLabel = if (isUsbConnection) "USB" else "WiFi"
+    val statusColor =
+        when {
+            isConnected || isAdbConnected -> Color(0xFF00C853)
+            isConnecting -> Color(0xFF42A5F5)
+            else -> Color(0xFFFFD700)
+        }
+    val statusDescription =
+        when {
+            isConnected -> "Connected"
+            isAdbConnected -> "ADB connected"
+            isConnecting -> "Connecting"
+            else -> "Disconnected"
+        }
+
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -214,32 +239,22 @@ private fun SessionCardStatusBadge(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Wifi,
-                    contentDescription = "WiFi",
+                    imageVector = transportIcon,
+                    contentDescription = transportLabel,
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(16.dp),
                 )
-                if (isConnected) {
-                    Text(
-                        text = "${(0..20).random()}ms",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF00FF00),
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Icon(
-                        imageVector = Icons.Default.FlashOn,
-                        contentDescription = "Connected",
-                        tint = Color(0xFF00FF00),
-                        modifier = Modifier.size(13.dp),
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = "Disconnected",
-                        tint = Color(0xFFFFD700),
-                        modifier = Modifier.size(13.dp),
-                    )
-                }
+                Icon(
+                    imageVector =
+                        if (isConnected || isAdbConnected || isConnecting) {
+                            Icons.Default.FlashOn
+                        } else {
+                            Icons.Default.Warning
+                        },
+                    contentDescription = statusDescription,
+                    tint = statusColor,
+                    modifier = Modifier.size(13.dp),
+                )
             }
         }
     }

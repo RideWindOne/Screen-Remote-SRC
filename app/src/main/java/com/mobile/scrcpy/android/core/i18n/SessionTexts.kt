@@ -87,7 +87,6 @@ object SessionTexts {
     val LABEL_MAX_SIZE = TextPair("最大尺寸", "Max Size")
     val LABEL_VIDEO_BITRATE = TextPair("视频码率", "Video Bitrate")
     val LABEL_MAX_FPS = TextPair("最大帧率", "Max FPS")
-    val LABEL_KEY_FRAME_INTERVAL = TextPair("关键帧间隔", "Key Frame Interval")
     val LABEL_VIDEO_CODEC = TextPair("视频编码格式", "Video Codec Format")
     val LABEL_VIDEO_ENCODER = TextPair("视频编码器", "Video Encoder")
     val LABEL_VIDEO_DECODER = TextPair("视频解码器", "Video Decoder")
@@ -104,18 +103,25 @@ object SessionTexts {
     val LABEL_DEVICE_ID = TextPair("设备 ID", "Device ID")
     val LABEL_EXECUTE_COMMAND = TextPair("执行命令", "Execute command")
     val LABEL_RECEIVED_OUTPUT = TextPair("收到输出", "Received output")
+    val LABEL_NEW_DISPLAY_WIDTH = TextPair("宽度", "Width")
+    val LABEL_NEW_DISPLAY_HEIGHT = TextPair("高度", "Height")
+    val LABEL_NEW_DISPLAY_DPI = TextPair("DPI", "DPI")
 
     // 会话对话框 - 开关
     val SWITCH_FORCE_ADB = TextPair("强制使用 ADB 转发连接", "Force ADB Forward")
     val SWITCH_ENABLE_AUDIO = TextPair("启用音频", "Enable Audio")
+    val SWITCH_ENABLE_CLIPBOARD_SYNC = TextPair("启用剪贴板同步", "Enable Clipboard Sync")
     val SWITCH_STAY_AWAKE = TextPair("保持唤醒", "Stay Awake")
     val SWITCH_TURN_SCREEN_OFF = TextPair("连接后关闭远程屏幕", "Turn Screen Off")
     val SWITCH_POWER_OFF_ON_CLOSE = TextPair("断开后锁定远程屏幕(按电源键)", "Power Off on Close")
+    val SWITCH_NO_CLEANUP_ON_DISCONNECT = TextPair("断开后不清理（保持屏幕状态）", "Don't Clean Up on Disconnect")
     val SWITCH_FULL_SCREEN = TextPair("全屏模式", "Full Screen")
     val SWITCH_KEEP_DEVICE_AWAKE = TextPair("使用期间保持设备唤醒", "Keep Device Awake")
     val SWITCH_ENABLE_HARDWARE_DECODING = TextPair("启用硬件解码", "Enable Hardware Decoding")
     val SWITCH_FOLLOW_ORIENTATION = TextPair("跟随设备旋转变化", "Follow Remote Orientation Change")
     val SWITCH_NEW_DISPLAY = TextPair("启动新的显示", "New Display")
+    val ACTION_SYNC_LOCAL_DISPLAY_SIZE = TextPair("同步本机尺寸", "Sync Local Size")
+    val ACTION_SWAP_NEW_DISPLAY_SIZE = TextPair("交换宽高", "Swap Width/Height")
 
     // 会话对话框 - 状态
     val STATUS_DETECTING_VIDEO_ENCODERS = TextPair("正在检测视频编码器...", "Detecting video encoders...")
@@ -164,8 +170,8 @@ object SessionTexts {
         )
     val HELP_FORCE_ADB =
         TextPair(
-            "强制使用 ADB 转发连接而不是直接 TCP 连接。适用于无法直接访问设备网络的情况。",
-            "Force using ADB forward connection instead of direct TCP connection. Useful when the device network is not directly accessible.",
+            "默认关闭。关闭时优先使用基于优化 DADB 驱动的 ADB 多路复用直连服务流，通常延迟更低、链路更简单；只有在兼容性或排障需要时，才建议开启并强制回退到 ADB 转发连接。",
+            "Off by default. When disabled, it prefers direct ADB stream multiplexing based on the optimized DADB transport, which is usually simpler and lower-latency. Enable it only for compatibility or troubleshooting to force fallback to ADB forward.",
         )
     val HELP_MAX_SIZE =
         TextPair(
@@ -181,11 +187,6 @@ object SessionTexts {
         TextPair(
             "限制视频的最大帧率。默认 30 fps。较低的帧率可以减少 CPU 占用和带宽。示例：15 表示 15 帧每秒。",
             "Limit the maximum video frame rate. Default is 30 fps. Lower frame rate can reduce CPU usage and bandwidth. Example: 15 for 15 frames per second.",
-        )
-    val HELP_KEY_FRAME_INTERVAL =
-        TextPair(
-            "关键帧间隔越短，画面状态更新越密，操作反馈越即时、越跟手，但编码和带宽压力越大。",
-            "Shorter key frame interval means more frequent screen updates, more responsive and smoother control, but higher encoding and bandwidth cost.",
         )
     val HELP_VIDEO_CODEC =
         TextPair(
@@ -252,6 +253,11 @@ object SessionTexts {
             "连接期间保持远程设备屏幕常亮，防止自动息屏。断开连接后恢复原设置。",
             "Keep the remote device screen on during connection to prevent auto sleep. Restores original setting after disconnection.",
         )
+    val HELP_ENABLE_CLIPBOARD_SYNC =
+        TextPair(
+            "允许 scrcpy 与远程设备同步剪贴板内容。关闭后仍可使用文本输入，但不会自动交换剪贴板。",
+            "Allow scrcpy to synchronize clipboard contents with the remote device. When disabled, text input still works, but clipboards are not exchanged automatically.",
+        )
     val HELP_TURN_SCREEN_OFF =
         TextPair(
             "连接成功后立即关闭远程设备的屏幕显示，但镜像画面仍然传输。适合需要隐私或省电的场景。",
@@ -261,6 +267,11 @@ object SessionTexts {
         TextPair(
             "断开连接时自动锁定远程设备屏幕（相当于按电源键）。适合远程控制后需要锁屏的场景。",
             "Automatically lock the remote device screen when disconnecting (equivalent to pressing power button). Suitable for scenarios requiring screen lock after remote control.",
+        )
+    val HELP_NO_CLEANUP_ON_DISCONNECT =
+        TextPair(
+            "断开连接时不恢复 scrcpy 启动期间修改的远程设备状态，例如保持当前屏幕状态。对应 cleanup=false。",
+            "Do not restore remote device state changed during scrcpy startup when disconnecting, keeping the current screen state. Maps to cleanup=false.",
         )
     val HELP_KEEP_DEVICE_AWAKE =
         TextPair(
@@ -279,7 +290,7 @@ object SessionTexts {
         )
     val HELP_NEW_DISPLAY =
         TextPair(
-            "在远程设备上创建一个新的虚拟显示器进行镜像，而不是镜像主屏幕。适合需要独立显示内容的场景。",
-            "Create a new virtual display on the remote device for mirroring instead of mirroring the main screen. Suitable for scenarios requiring independent display content.",
+            "在远程设备上创建一个新的虚拟显示器进行镜像，而不是镜像主屏幕。宽高和 DPI 留空时使用远程主屏幕默认值。",
+            "Create a new virtual display on the remote device for mirroring instead of mirroring the main screen. Leave width, height, and DPI empty to use the remote main display defaults.",
         )
 }

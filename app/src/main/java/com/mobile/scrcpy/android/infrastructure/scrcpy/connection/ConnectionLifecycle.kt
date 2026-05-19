@@ -110,7 +110,11 @@ class ConnectionLifecycle(
                 val scid = generateScid()
                 currentScid = scid
                 val socketName = "scrcpy_%08x".format(scid)
-                setupForwardAndPushServer(connection, socketName)
+                setupForwardAndPushServer(
+                    connection = connection,
+                    socketName = socketName,
+                    useAdbForward = options.forceAdb,
+                )
 
                 // 步骤 3.5: 设置 Socket 管理器的本地端口
                 socketManager.setLocalPort(localPort)
@@ -119,7 +123,11 @@ class ConnectionLifecycle(
                 startScrcpyServer(connection, scid)
 
                 // 步骤 5: 连接 Socket
-                connectSockets(options)
+                connectSockets(
+                    options = options,
+                    connection = connection,
+                    socketName = socketName,
+                )
 
                 // 步骤 6: 启动健康监控
                 healthMonitor.startMonitoring(
@@ -144,7 +152,6 @@ class ConnectionLifecycle(
                 val (videoStream, audioStream) =
                     metadataReader.readMetadataAndCreateStreams(
                         options.enableAudio,
-                        options.keyFrameInterval,
                         session.onVideoResolution,
                     )
 
@@ -183,14 +190,16 @@ class ConnectionLifecycle(
                     val deviceId = options.getDeviceIdentifier()
                     val connection = adbConnectionManager.getConnection(deviceId)
                     if (connection != null) {
-                        try {
-                            connection.removeAdbForward(localPort, ForwardRemovalTrigger.Disconnect)
-                            LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.get())
-                        } catch (e: Exception) {
-                            LogManager.w(
-                                LogTags.SCRCPY_CLIENT,
-                                "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.get()}: ${e.message}",
-                            )
+                        if (options.forceAdb) {
+                            try {
+                                connection.removeAdbForward(localPort, ForwardRemovalTrigger.Disconnect)
+                                LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.get())
+                            } catch (e: Exception) {
+                                LogManager.w(
+                                    LogTags.SCRCPY_CLIENT,
+                                    "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.get()}: ${e.message}",
+                                )
+                            }
                         }
                     }
                 }

@@ -6,7 +6,7 @@ import androidx.compose.runtime.Composable
 import com.mobile.scrcpy.android.core.domain.model.ThemeMode
 
 /**
- * Scrcpy Remote 主题
+ * Screen Remote 主题
  *
  * @param themeMode 主题模式（SYSTEM/DARK/LIGHT）
  * @param content 内容

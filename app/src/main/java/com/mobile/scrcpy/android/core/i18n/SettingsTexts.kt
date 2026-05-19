@@ -12,7 +12,7 @@ object SettingsTexts {
     val SETTINGS_FEEDBACK_SUPPORT = TextPair("反馈与支持", "Feedback & Support")
     val SETTINGS_APPEARANCE = TextPair("外观", "Appearance")
     val SETTINGS_LANGUAGE = TextPair("语言 / Language", "Language / 语言")
-    val SETTINGS_ABOUT = TextPair("关于 Scrcpy Remote", "About Scrcpy Remote")
+    val SETTINGS_ABOUT = TextPair("关于 Screen Remote", "About Screen Remote")
     val SETTINGS_KEEP_ALIVE = TextPair("后台保持活跃", "Keep Alive in Background")
     val SETTINGS_SHOW_ON_LOCK_SCREEN = TextPair("在灵动岛显示实况", "Show on Dynamic Island")
     val SETTINGS_FLOATING_HAPTIC = TextPair("悬浮球触感反馈", "Floating Ball Haptic Feedback")
@@ -66,12 +66,11 @@ object SettingsTexts {
     val DIALOG_FILE_PATH_RESET = TextPair("重置为默认", "Reset to Default")
 
     // 关于页面
-    val ABOUT_TITLE = TextPair("关于 Scrcpy Remote", "About Scrcpy Remote")
     val ABOUT_BASED_ON = TextPair("基于 Scrcpy", "Based on Scrcpy")
     val ABOUT_DESCRIPTION =
         TextPair(
-            "Scrcpy Remote 是一款基于 ADB 协议的远程桌面工具，通常用于连接具有公网 IP 地址的服务或同一局域网内的服务。",
-            "Scrcpy Remote is a remote desktop tool based on ADB protocol, typically used to connect to services with public IP addresses or services within the same local network.",
+            "Screen Remote 是一款基于 ADB 协议的远程桌面工具，通常用于连接具有公网 IP 地址的服务或同一局域网内的服务。",
+            "Screen Remote is a remote desktop tool based on ADB protocol, typically used to connect to services with public IP addresses or services within the same local network.",
         )
     val ABOUT_CONNECTION_TIP =
         TextPair(
@@ -80,12 +79,17 @@ object SettingsTexts {
         )
     val ABOUT_HELP_TEXT =
         TextPair(
-            "如果在使用过程中遇到问题并需要帮助，也可以加入我们的 Telegram 频道。",
-            "If you encounter problems during use and need help, you can also join our Telegram channel.",
+            "如果在使用过程中遇到问题并需要帮助，也可以加入我们的 Wechat / Telegram 频道。",
+            "If you encounter problems during use and need help, you can also join our Wechat / Telegram channel.",
         )
-    val ABOUT_WECHAT_QR = TextPair("扫码添加微信", "Scan to add WeChat")
+    val ABOUT_WECHAT_QR = TextPair("扫码添加微信群聊", "Scan to add WeChat Group")
+    val ABOUT_WECHAT_BUTTON = TextPair("微信 群组", "Wechat Group")
+    val ABOUT_WECHAT_ID = TextPair("微信：XR_Sec", "Wechat: XR_Sec")
+    val ABOUT_WECHAT_SAVE = TextPair("长按二维码保存到相册", "Long press to save the QR code")
+    val ABOUT_WECHAT_SAVED = TextPair("二维码已保存到相册", "QR code saved to gallery")
+    val ABOUT_WECHAT_SAVE_F = TextPair("保存二维码失败", "Failed to save QR code")
     val ABOUT_TELEGRAM_BUTTON = TextPair("Telegram 频道", "Telegram Channel")
-    val ABOUT_PORTING_BUTTON = TextPair("软件：XRsec", "Software：XRSec")
+    val ABOUT_PORTING_BUTTON = TextPair("Github：XRsec", "Github：XRSec")
 
     // 帮助说明文本
     val HELP_GROUP_MANAGE =

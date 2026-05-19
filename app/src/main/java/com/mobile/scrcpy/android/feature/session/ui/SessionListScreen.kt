@@ -60,11 +60,17 @@ fun SessionsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(filteredSessions) { index, sessionData ->
+                    val isRemoteConnected = connectedSessionId == sessionData.id
+                    val isManagementConnected =
+                        managementConnectStatus is ManagementConnectStatus.Connected &&
+                            (managementConnectStatus as? ManagementConnectStatus.Connected)?.sessionId == sessionData.id
+
                     SessionCard(
-                        session = sessionCardModel(sessionData, connectedSessionId == sessionData.id),
+                        session = sessionCardModel(sessionData, isRemoteConnected),
                         sessionData = sessionData,
                         index = index,
-                        isConnected = connectedSessionId == sessionData.id,
+                        isConnected = isRemoteConnected,
+                        isAdbConnected = isRemoteConnected || isManagementConnected,
                         isConnecting =
                             (connectStatus is ConnectStatus.Connecting &&
                                 (connectStatus as? ConnectStatus.Connecting)?.sessionId == sessionData.id) ||

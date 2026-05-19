@@ -82,6 +82,13 @@ internal class ScrcpyClientConnectionCoordinator(
                 )
             }
 
+            if (options.turnScreenOff) {
+                controller.setDisplayPower(on = false)
+                    .onFailure { error ->
+                        LogManager.w(LogTags.SCRCPY_CLIENT, "请求关闭设备屏幕失败: ${error.message}")
+                    }
+            }
+
             val resolution = videoResolution.value
             if (resolution != null) {
                 startForegroundService(deviceId, options)
