@@ -7,7 +7,7 @@
             android:enabled="true"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.mobile.scrcpy.android.debug.USB_DIAG" />
+                <action android:name="com.screen.remote.android.debug.USB_DIAG" />
             </intent-filter>
         </receiver>
     </application>

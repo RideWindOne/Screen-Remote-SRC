@@ -1,0 +1,186 @@
+package com.screen.remote.android.infrastructure.scrcpy.connection
+
+import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.i18n.RemoteTexts
+import com.screen.remote.android.infrastructure.media.audio.AudioStream
+import com.screen.remote.android.infrastructure.media.video.VideoDebugLog
+import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
+import com.screen.remote.android.infrastructure.scrcpy.stream.ScrcpyAudioStream
+import com.screen.remote.android.infrastructure.scrcpy.stream.ScrcpySocketStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.DataInputStream
+import java.io.EOFException
+import java.io.IOException
+import java.io.InputStream
+
+/**
+ * 元数据读取器
+ * 负责从 Socket 读取 scrcpy 元数据并创建视频/音频流
+ */
+class ConnectionMetadataReader(
+    private val socketManager: ConnectionSocketManager,
+) {
+    /**
+     * 读取元数据并创建流
+     */
+    suspend fun readMetadataAndCreateStreams(
+        enableAudio: Boolean,
+        onVideoResolution: (Int, Int) -> Unit,
+    ): Pair<VideoStream?, AudioStream?> =
+        withContext(Dispatchers.IO) {
+            var videoStream: VideoStream? = null
+            var audioStream: AudioStream? = null
+
+            try {
+                // 读取视频元数据
+                val videoSocket =
+                    socketManager.videoSocket
+                        ?: throw IOException(RemoteTexts.SCRCPY_VIDEO_SOCKET_NOT_CONNECTED.get())
+                val videoInput = videoSocket.getInputStream().buffered()
+
+                val videoMetadata = readVideoMetadata(videoInput)
+                val (width, height) = videoMetadata
+
+                onVideoResolution(width, height)
+
+                // 创建视频流
+                videoStream =
+                    ScrcpySocketStream(
+                        videoSocket,
+                        videoInput,
+                        { error ->
+                            if (error.contains("流关闭") || error.contains("视频流已关闭")) {
+                                VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Video stream closed -> $error" }
+                            } else {
+                                LogManager.e(LogTags.SCRCPY_CLIENT, "Video stream error -> $error")
+                            }
+                        },
+                        onVideoResolution,
+                    )
+
+                // 音频 header 由 ScrcpyAudioStream 自己消费，避免双重读取导致流错位
+                if (enableAudio) {
+                    val audioSocket = socketManager.audioSocket
+                    if (audioSocket != null) {
+                        val audioInput = audioSocket.getInputStream().buffered()
+                        audioStream = ScrcpyAudioStream(audioSocket, audioInput)
+                        LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_AUDIO_METADATA_READ.get())
+                    }
+                }
+
+                Pair(videoStream, audioStream)
+            } catch (e: Exception) {
+                videoStream?.close()
+                audioStream?.close()
+                throw IOException("${RemoteTexts.SCRCPY_METADATA_READ_FAILED.get()}: ${e.message}", e)
+            }
+        }
+
+    /**
+     * 读取视频元数据
+     * 返回 (width, height)
+     */
+    private fun readVideoMetadata(inputStream: InputStream): Pair<Int, Int> {
+        val dis = DataInputStream(inputStream)
+
+        try {
+            // scrcpy 4.0 协议：
+            // 1. dummy byte (0x00) - 已在 connectSockets 时读取
+            // 2. first socket 发送 device meta (64 bytes)
+            // 3. video socket 发送 codec id (4 bytes)
+            // 4. video socket 发送 session meta (flags + width + height, 12 bytes)
+            val deviceNameBytes = readExact(dis, DEVICE_NAME_FIELD_LENGTH, "video:device_meta")
+            val deviceName = String(deviceNameBytes, Charsets.UTF_8).trim('\u0000')
+            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "设备名称: $deviceName" }
+            VideoDebugLog.d(LogTags.SCRCPY_PACKET) { "video device meta: ${hex(deviceNameBytes, limit = 32)}" }
+
+            val codecId = dis.readInt().also {
+                VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
+                    "video stream codec: codec=0x${it.toString(16).padStart(8, '0')}"
+                }
+            }
+
+            val sessionFlags = dis.readInt()
+            val width = dis.readInt()
+            val height = dis.readInt()
+
+            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Codec ID: 0x${codecId.toString(16).padStart(8, '0')}" }
+            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "${RemoteTexts.SCRCPY_VIDEO_RESOLUTION.get()}: ${width}x$height" }
+            VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
+                "video session meta parsed: codec=0x${codecId.toString(16).padStart(8, '0')} flags=0x${sessionFlags.toString(16)} size=${width}x$height"
+            }
+
+            // 验证数据合法性
+            if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
+                throw IOException("${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.get()}: ${width}x$height (可能是数据未就绪)")
+            }
+
+            if (sessionFlags and SESSION_META_FLAG == 0) {
+                throw IOException("无效的 session meta flags: 0x${sessionFlags.toString(16)}")
+            }
+
+            if (codecId !in KNOWN_VIDEO_CODECS) {
+                throw IOException("无效的 Codec ID: 0x${codecId.toString(16)} (数据未就绪，请重试)")
+            }
+
+            return Pair(width, height)
+        } catch (e: Exception) {
+            LogManager.e(LogTags.SCRCPY_CLIENT, "读取视频元数据失败: ${e.message}", e)
+            throw IOException("${RemoteTexts.SCRCPY_METADATA_READ_FAILED.get()}: ${e.message}", e)
+        }
+    }
+
+    private fun readExact(
+        inputStream: InputStream,
+        size: Int,
+        stage: String,
+    ): ByteArray {
+        val buffer = ByteArray(size)
+        var offset = 0
+
+        while (offset < size) {
+            try {
+                val read = inputStream.read(buffer, offset, size - offset)
+                if (read < 0) {
+                    throw EOFException("$stage EOF after $offset/$size bytes")
+                }
+                offset += read
+                VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
+                    "$stage chunk=$read total=$offset/$size data=${hex(buffer.copyOf(offset))}"
+                }
+            } catch (e: java.net.SocketTimeoutException) {
+                LogManager.e(
+                    LogTags.SCRCPY_PACKET,
+                    "$stage timeout total=$offset/$size partial=${hex(buffer.copyOf(offset))}",
+                    e,
+                )
+                throw e
+            }
+        }
+
+        return buffer
+    }
+
+    private fun hex(
+        bytes: ByteArray,
+        limit: Int = bytes.size,
+    ): String {
+        if (bytes.isEmpty()) {
+            return "<empty>"
+        }
+        val preview = bytes.take(limit)
+        val hex = preview.joinToString(" ") { "0x%02x".format(it.toInt() and 0xFF) }
+        return if (bytes.size > limit) "$hex ...(${bytes.size} bytes)" else hex
+    }
+
+    private companion object {
+        const val DEVICE_NAME_FIELD_LENGTH = 64
+        const val SESSION_META_FLAG = 0x80000000.toInt()
+        const val VIDEO_CODEC_H264 = 0x68323634
+        const val VIDEO_CODEC_H265 = 0x68323635
+        const val VIDEO_CODEC_AV1 = 0x00617631
+        val KNOWN_VIDEO_CODECS = setOf(VIDEO_CODEC_H264, VIDEO_CODEC_H265, VIDEO_CODEC_AV1)
+    }
+}

@@ -27,7 +27,7 @@ fun requireStringProperty(key: String): String =
 val appVersionCode = requireStringProperty("VERSION_CODE")
 val appVersionName = requireStringProperty("VERSION_NAME")
 val appVersionCodeInt = appVersionCode.toInt()
-val appId = "com.mobile.scrcpy.android"
+val appId = "com.screen.remote.android"
 
 val abiCodes =
     mapOf(

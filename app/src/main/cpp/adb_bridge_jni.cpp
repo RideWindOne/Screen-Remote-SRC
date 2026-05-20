@@ -48,7 +48,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     }
 
     // 查找 AdbBridge 类
-    jclass local_class = env->FindClass("com/mobile/scrcpy/android/infrastructure/adb/connection/AdbBridge");
+    jclass local_class = env->FindClass("com/screen/remote/android/infrastructure/adb/connection/AdbBridge");
     if (local_class == nullptr) {
         LOGE("Failed to find AdbBridge class");
         return JNI_ERR;
@@ -74,7 +74,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     }
 
     // 初始化 LogManager JNI
-    jclass local_log_class = env->FindClass("com/mobile/scrcpy/android/core/common/manager/LogManager");
+    jclass local_log_class = env->FindClass("com/screen/remote/android/core/common/manager/LogManager");
     if (local_log_class != nullptr) {
         g_log_manager_class = reinterpret_cast<jclass>(env->NewGlobalRef(local_log_class));
         env->DeleteLocalRef(local_log_class);

@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "scrcpy-mobile"
+rootProject.name = "Screen-Remote"
 include(":app")
 includeBuild("../external/dadb") {
     dependencySubstitution {

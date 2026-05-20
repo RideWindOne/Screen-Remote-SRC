@@ -8,7 +8,7 @@
 
 # ============ JNI / 反射入口 ============
 # Native 层通过 FindClass/GetStaticMethodID 定位这些符号，不能混淆或删除。
--keep class com.mobile.scrcpy.android.infrastructure.adb.connection.AdbBridge {
+-keep class com.screen.remote.android.infrastructure.adb.connection.AdbBridge {
     public static int executeAdbCommand(java.lang.String[]);
     public static int waitProcess(int);
     public static java.lang.String readProcessOutput(int);
@@ -16,7 +16,7 @@
     public static void cleanupProcess(int);
 }
 
--keep class com.mobile.scrcpy.android.core.common.manager.LogManager {
+-keep class com.screen.remote.android.core.common.manager.LogManager {
     public static void writeRawLogJNI(java.lang.String, java.lang.String, java.lang.String);
 }
 

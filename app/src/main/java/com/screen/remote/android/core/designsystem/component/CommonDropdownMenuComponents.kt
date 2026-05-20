@@ -1,0 +1,115 @@
+package com.screen.remote.android.core.designsystem.component
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import com.screen.remote.android.core.common.IosDesignTokens
+
+@Composable
+fun IOSStyledDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier.widthIn(min = 30.dp, max = 150.dp).wrapContentWidth(),
+    offset: DpOffset = DpOffset(0.dp, 80.dp),
+    alignment: Alignment = Alignment.TopCenter,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (!expanded) {
+        return
+    }
+
+    Popup(
+        alignment = alignment,
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(focusable = true),
+        offset =
+            androidx.compose.ui.unit
+                .IntOffset(offset.x.value.toInt(), offset.y.value.toInt()),
+    ) {
+        Surface(
+            modifier =
+                modifier
+                    .widthIn(min = 30.dp, max = 160.dp)
+                    .wrapContentSize(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(IosDesignTokens.cardCornerRadius),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 8.dp,
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .padding(vertical = 4.dp)
+                        .wrapContentSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+fun IOSStyledDropdownMenuItem(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+) {
+    Box(
+        modifier =
+            modifier
+                .wrapContentSize()
+                .clickable(onClick = onClick)
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding, vertical = IosDesignTokens.compactSpacing),
+        contentAlignment = Alignment.Center,
+    ) {
+        val style =
+            if (fontSize != androidx.compose.ui.unit.TextUnit.Unspecified) {
+                MaterialTheme.typography.bodyMedium.copy(fontSize = fontSize)
+            } else {
+                MaterialTheme.typography.bodyMedium
+            }
+        Text(
+            text = text,
+            color = textColor,
+            textAlign = TextAlign.Center,
+            style = style,
+        )
+    }
+}
+
+@Composable
+fun IOSStyledDropdownMenuItem(
+    text: @Composable () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .wrapContentSize()
+                .clickable(onClick = onClick)
+                .padding(horizontal = IosDesignTokens.standardHorizontalPadding, vertical = IosDesignTokens.compactSpacing),
+        contentAlignment = Alignment.Center,
+    ) {
+        text()
+    }
+}
