@@ -70,16 +70,26 @@ internal class ScrcpyClientConnectionCoordinator(
                 onSessionStateChanged = onSessionStateChanged,
             )
 
-            if (!controller.isRunning()) {
-                controller.start(deviceId)
-            }
-
             val connectionResult = lifecycle.connect()
             if (connectionResult.isFailure) {
                 handleConnectionFailure(connectionResult.exceptionOrNull())
                 return@withContext Result.failure(
                     connectionResult.exceptionOrNull() ?: Exception("Unknown error"),
                 )
+            }
+
+            val activeDeviceId = lifecycle.activeDeviceId ?: deviceId
+            if (activeDeviceId != deviceId) {
+                LogManager.d(
+                    LogTags.SCRCPY_CLIENT,
+                    "实际连接候选已更新: prepared=$deviceId active=$activeDeviceId",
+                )
+            }
+            setCurrentIds(sessionId, activeDeviceId)
+            SessionIssueTracker.updateDeviceId(activeDeviceId)
+
+            if (!controller.isRunning()) {
+                controller.start(activeDeviceId)
             }
 
             if (options.turnScreenOff) {
@@ -91,7 +101,7 @@ internal class ScrcpyClientConnectionCoordinator(
 
             val resolution = videoResolution.value
             if (resolution != null) {
-                startForegroundService(deviceId, options)
+                startForegroundService(activeDeviceId, options)
             }
 
             withContext(Dispatchers.Main) {
@@ -186,7 +196,12 @@ internal class ScrcpyClientConnectionCoordinator(
         options: ScrcpyOptions,
         isReconnecting: Boolean,
     ): String {
-        val deviceId = options.getDeviceIdentifier()
+        val deviceId =
+            if (isReconnecting) {
+                getCurrentDeviceId() ?: options.getDeviceIdentifier()
+            } else {
+                options.getDeviceIdentifier()
+            }
         setCurrentIds(sessionId, deviceId)
         SessionIssueTracker.begin(sessionId, deviceId, isReconnecting)
         return deviceId

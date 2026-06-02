@@ -1,8 +1,5 @@
 package com.screen.remote.android.feature.remote.presentation
 
-import android.media.MediaCodecInfo
-import android.media.MediaCodecList
-import android.media.MediaFormat
 import android.view.Surface
 import android.view.SurfaceHolder
 import androidx.compose.runtime.Composable
@@ -14,7 +11,6 @@ import androidx.lifecycle.Lifecycle
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.RemoteTexts
-import com.screen.remote.android.infrastructure.media.codec.CodecSelector
 import com.screen.remote.android.infrastructure.media.video.VideoDecoder
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import kotlinx.coroutines.Dispatchers
@@ -62,30 +58,35 @@ class VideoDecoderManager(
             LogManager.d(LogTags.VIDEO_DECODER, "${RemoteTexts.REMOTE_VIDEO_RESOLUTION.get()}: ${width}x$height")
 
             val options = connectionViewModel.getCurrentSessionOptions()
-            val videoCodec = options?.preferredVideoCodec?.ifBlank { "h264" } ?: "h264"
-
-            val decoderName: String? =
-                if (options?.enableHardwareDecoding == false) {
-                    pickSoftwareDecoder(videoCodec)
-                } else if (!options?.userVideoDecoder.isNullOrBlank()) {
-                    pickCompatibleDecoder(videoCodec, options.userVideoDecoder, "用户指定")
-                } else {
-                    val selected = options?.selectedVideoDecoder
-                    if (!selected.isNullOrBlank()) {
-                        pickCompatibleDecoder(videoCodec, selected, "系统选择")
-                    } else {
-                        LogManager.w(LogTags.VIDEO_DECODER, "selectedVideoDecoder 为空，将使用系统默认解码器")
-                        null
-                    }
-                }
+            val videoCodec = stream.codec
+            val expectedDeviceSerial = options?.deviceSerial.orEmpty()
+            val rejectionKey = "$expectedDeviceSerial|video:$videoCodec"
+            val decoderName = options?.getFinalVideoDecoder()?.ifBlank { null }
+            LogManager.d(
+                LogTags.VIDEO_DECODER,
+                "视频 socket 协商格式: $videoCodec, 首选解码器: ${decoderName ?: "自动"}",
+            )
 
             videoDecoder =
                 VideoDecoder(
                     surface = surface,
                     videoCodec = videoCodec,
                     cachedDecoderName = decoderName,
+                    allowHardwareDecoders = options?.enableHardwareDecoding != false,
+                    decoderSelectionPinned = options?.userVideoDecoder?.isNotBlank() == true,
+                    initialRejectedDecoderNames = connectionViewModel.runtimeRejectedDecoders(rejectionKey),
                     sessionContext = connectionViewModel.createSessionContext(),
                 ).apply {
+                    onDecoderSelected = { decoder ->
+                        connectionViewModel.rememberResolvedVideoDecoder(
+                            decoderName = decoder,
+                            expectedDeviceSerial = expectedDeviceSerial,
+                            expectedCodec = videoCodec,
+                        )
+                    }
+                    onDecoderRejected = { decoder ->
+                        connectionViewModel.rememberRuntimeRejectedDecoder(rejectionKey, decoder)
+                    }
                     onVideoSizeChanged = { w, h, rotation ->
                         if (w > 0 && h > 0) {
                             LogManager.d(
@@ -207,64 +208,9 @@ class VideoDecoderManager(
 
     fun setSurfaceImmediate(surface: Surface?) {
         val decoder = videoDecoder ?: return
-        if (surface != null && surface.isValid) {
-            decoder.setSurface(surface)
-        }
+        decoder.setSurface(surface?.takeIf { it.isValid })
     }
 
-    private fun pickCompatibleDecoder(
-        videoCodec: String,
-        decoderName: String,
-        source: String,
-    ): String? {
-        val normalizedVideoCodec = CodecSelector.inferVideoCodecFromName(videoCodec)
-        val decoderCodec = CodecSelector.inferVideoCodecFromName(decoderName)
-        return if (decoderCodec == normalizedVideoCodec) {
-            LogManager.d(LogTags.VIDEO_DECODER, "使用${source}的解码器: $decoderName")
-            decoderName
-        } else {
-            LogManager.w(
-                LogTags.VIDEO_DECODER,
-                "${source}的解码器与当前视频格式不匹配，已忽略: decoder=$decoderName decoderCodec=$decoderCodec videoCodec=$normalizedVideoCodec",
-            )
-            null
-        }
-    }
-
-    private fun pickSoftwareDecoder(videoCodec: String): String? {
-        val mimeType = videoCodecToMimeType(videoCodec) ?: return null
-        val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
-        val softwareDecoder =
-            codecList.firstOrNull { info ->
-                !info.isEncoder &&
-                    info.supportedTypes.any { it.equals(mimeType, ignoreCase = true) } &&
-                    info.isSoftwareCodecCompat()
-            }
-        if (softwareDecoder == null) {
-            LogManager.w(LogTags.VIDEO_DECODER, "未找到软件解码器，回退系统默认解码器: codec=$videoCodec mime=$mimeType")
-        } else {
-            LogManager.d(LogTags.VIDEO_DECODER, "硬件解码已关闭，使用软件解码器: ${softwareDecoder.name}")
-        }
-        return softwareDecoder?.name
-    }
-
-    private fun MediaCodecInfo.isSoftwareCodecCompat(): Boolean =
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            isSoftwareOnly
-        } else {
-            val lowerName = name.lowercase()
-            lowerName.startsWith("omx.google.") || lowerName.startsWith("c2.android.")
-        }
-
-    private fun videoCodecToMimeType(videoCodec: String): String? =
-        when (CodecSelector.inferVideoCodecFromName(videoCodec)) {
-            "h264" -> MediaFormat.MIMETYPE_VIDEO_AVC
-            "h265" -> MediaFormat.MIMETYPE_VIDEO_HEVC
-            "av1" -> "video/av01"
-            "vp9" -> MediaFormat.MIMETYPE_VIDEO_VP9
-            "vp8" -> MediaFormat.MIMETYPE_VIDEO_VP8
-            else -> null
-        }
 }
 
 @Composable
@@ -320,18 +266,16 @@ fun rememberVideoDecoderManager(
 
     DisposableEffect(Unit) {
         onDispose {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_START_CLEANUP_RESOURCES.get())
-                    manager.stopDecoder()
-                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_CLEANUP_COMPLETE.get())
-                } catch (e: Exception) {
-                    LogManager.e(
-                        LogTags.REMOTE_DISPLAY,
-                        "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
-                        e,
-                    )
-                }
+            try {
+                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_START_CLEANUP_RESOURCES.get())
+                manager.stopDecoder()
+                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_CLEANUP_COMPLETE.get())
+            } catch (e: Exception) {
+                LogManager.e(
+                    LogTags.REMOTE_DISPLAY,
+                    "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
+                    e,
+                )
             }
         }
     }

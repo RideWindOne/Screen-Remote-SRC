@@ -1,11 +1,13 @@
 
 import com.android.build.api.variant.FilterConfiguration
+import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
 }
 
 abstract class SyncDadbHelperAssetTask : Sync() {
@@ -28,6 +30,23 @@ val appVersionCode = requireStringProperty("VERSION_CODE")
 val appVersionName = requireStringProperty("VERSION_NAME")
 val appVersionCodeInt = appVersionCode.toInt()
 val appId = "com.screen.remote.android"
+val scrcpyServerVersion = "4.1"
+val scrcpyServerSha256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"
+val scrcpyServerAsset = layout.projectDirectory.file("src/main/assets/scrcpy-server.jar")
+val scrcpyServerDownloadUrl =
+    "https://github.com/Genymobile/scrcpy/releases/download/v$scrcpyServerVersion/scrcpy-server-v$scrcpyServerVersion"
+
+fun sha256(file: File): String =
+    file.inputStream().use { input ->
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
 val abiCodes =
     mapOf(
@@ -39,16 +58,20 @@ val abiCodes =
 
 android {
     namespace = appId
-    compileSdk = 36
+    compileSdk = 37
+    buildToolsVersion = "37.0.0"
+    ndkVersion = "30.0.15729638"
 
     defaultConfig {
         applicationId = appId
         minSdk = 23
-        targetSdk = 36
+        targetSdk = 37
         versionCode = appVersionCodeInt
         versionName = appVersionName
 
         buildConfigField("String", "APP_VERSION", "\"v$appVersionName\"")
+        buildConfigField("String", "SCRCPY_VERSION", "\"$scrcpyServerVersion\"")
+        buildConfigField("String", "SCRCPY_SERVER_SHA256", "\"$scrcpyServerSha256\"")
 
         vectorDrawables.useSupportLibrary = true
 
@@ -90,6 +113,10 @@ android {
     signingConfigs {
         create("release") {
             val keystoreFile = rootProject.file("keystore.properties")
+            storeFile = file("./Screen-Remote/release.keystore")
+            storePassword = "android"
+            keyPassword = "android"
+            keyAlias = "Screen-Remote"
             if (keystoreFile.exists()) {
                 val props = Properties().apply { load(keystoreFile.inputStream()) }
                 storeFile = props["storeFile"]?.let { rootProject.file(it.toString()) }
@@ -152,7 +179,7 @@ android {
                 project.layout.projectDirectory
                     .file("src/main/cpp/CMakeLists.txt")
                     .asFile
-            version = "3.22.1"
+            version = "4.1.2"
         }
     }
 
@@ -170,12 +197,56 @@ android {
     }
 }
 
-val syncDadbIconHelperAsset by tasks.registering(SyncDadbHelperAssetTask::class) {
+val syncDadbHelperAsset = tasks.register<SyncDadbHelperAssetTask>("syncDadbHelperAsset") {
     val generatedDir = layout.buildDirectory.dir("generated/assets/dadbHelper")
     dependsOn(gradle.includedBuild("dadb").task(":dadb-helper:dexJar"))
-    from(rootProject.file("../external/dadb/dadb-helper/build/libs/dadb-icon-helper.jar"))
+    from(rootProject.file("../external/dadb/dadb-helper/build/libs/dadb-device-helper.jar"))
     outputDir.set(generatedDir)
     into(generatedDir)
+}
+
+tasks.register("updateScrcpyServer") {
+    group = "build setup"
+    description = "Download and verify scrcpy-server v$scrcpyServerVersion"
+
+    doLast {
+        val target = scrcpyServerAsset.asFile
+        target.parentFile.mkdirs()
+        val temporary = target.resolveSibling("${target.name}.download")
+        try {
+            URI(scrcpyServerDownloadUrl).toURL().openStream().use { input ->
+                temporary.outputStream().use(input::copyTo)
+            }
+            val actualSha256 = sha256(temporary)
+            check(actualSha256 == scrcpyServerSha256) {
+                "scrcpy-server v$scrcpyServerVersion SHA256 mismatch: expected=$scrcpyServerSha256 actual=$actualSha256"
+            }
+            temporary.copyTo(target, overwrite = true)
+        } finally {
+            temporary.delete()
+        }
+    }
+}
+
+val verifyScrcpyServerVersion = tasks.register("verifyScrcpyServerVersion") {
+    group = "verification"
+    description = "Verify the bundled scrcpy-server version by its official SHA256"
+    inputs.file(scrcpyServerAsset)
+
+    doLast {
+        val target = scrcpyServerAsset.asFile
+        check(target.isFile) { "Missing bundled scrcpy-server: ${target.absolutePath}" }
+        val actualSha256 = sha256(target)
+        check(actualSha256 == scrcpyServerSha256) {
+            "Bundled scrcpy-server is not v$scrcpyServerVersion: expected=$scrcpyServerSha256 actual=$actualSha256. " +
+                "Run ./gradlew :app:updateScrcpyServer."
+        }
+    }
+}
+
+// 每次正常构建都先验证内置 server，避免版本常量、协议代码与 JAR 静默漂移。
+tasks.matching { it.name == "preBuild" || it.name == "check" }.configureEach {
+    dependsOn(verifyScrcpyServerVersion)
 }
 
 // --------------------
@@ -184,7 +255,7 @@ val syncDadbIconHelperAsset by tasks.registering(SyncDadbHelperAssetTask::class)
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(
-            syncDadbIconHelperAsset,
+            syncDadbHelperAsset,
             SyncDadbHelperAssetTask::outputDir,
         )
 
@@ -208,38 +279,38 @@ androidComponents {
 // --------------------
 dependencies {
     // Core Android
-    implementation("androidx.core:core-ktx:1.18.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
-    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
 
     // Compose BOM
-    implementation(platform("androidx.compose:compose-bom:2026.03.01"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material3:material3-window-size-class")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.dynamicanimation:dynamicanimation-ktx:1.1.0")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material3.window.size)
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.dynamicanimation.ktx)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Navigation & ViewModel
-    implementation("androidx.navigation:navigation-compose:2.9.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Coroutines & DataStore
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.datastore.preferences)
 
     // Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    implementation(libs.kotlinx.serialization.json)
 
     // DADB
-    implementation("dev.mobile:dadb:1.2.10")
-    implementation("dev.mobile:dadb-android:1.2.10")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.83")
+    implementation(libs.dadb)
+    implementation(libs.dadb.android)
+    implementation(libs.bouncycastle.bcpkix)
 
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.junit)
 }

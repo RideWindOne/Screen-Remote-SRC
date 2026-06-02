@@ -9,17 +9,18 @@ import com.screen.remote.android.infrastructure.adb.connection.EncoderDetectionR
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionComponentStateStore
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionResourceFacade
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionResourceRegistry
-import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionRuntimeFacade
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionRuntimeBindings
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionRuntimeFacade
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionStateStore
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
-import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.processEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.stopMonitor
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionComponentStateSnapshot
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
+import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
@@ -37,6 +38,9 @@ class Session(
     private val storage: SessionStorage,
     val onVideoResolution: (Int, Int) -> Unit,
 ) {
+    private val optionsLock = Any()
+    private val rejectedDecoderLock = Any()
+    private val runtimeRejectedDecoderNamesByKey = mutableMapOf<String, MutableSet<String>>()
     private val stateStore = SessionStateStore()
     private val componentStateStore = SessionComponentStateStore()
     private val runtimeBindings = SessionRuntimeBindings()
@@ -46,7 +50,7 @@ class Session(
     internal val resources = SessionResourceFacade(resourceRegistry)
 
     val options: ScrcpyOptions
-        get() = _options
+        get() = synchronized(optionsLock) { _options }
 
     val sessionId: String
         get() = _options.sessionId
@@ -76,10 +80,46 @@ class Session(
         }
 
     internal fun setOptions(options: ScrcpyOptions) {
-        _options = options
+        synchronized(optionsLock) {
+            _options = options
+        }
     }
 
+    internal fun updateOptionsInMemory(update: (ScrcpyOptions) -> ScrcpyOptions): ScrcpyOptions =
+        synchronized(optionsLock) {
+            update(_options).also { _options = it }
+        }
+
     internal fun storage(): SessionStorage = resources.storage()
+
+    internal fun runtimeRejectedDecoders(key: String): Set<String> =
+        synchronized(rejectedDecoderLock) {
+            runtimeRejectedDecoderNamesByKey[key]?.toSet().orEmpty()
+        }
+
+    internal fun rememberRuntimeRejectedDecoder(
+        key: String,
+        decoderName: String,
+    ) {
+        if (key.isBlank() || decoderName.isBlank()) return
+        synchronized(rejectedDecoderLock) {
+            runtimeRejectedDecoderNamesByKey.getOrPut(key) { linkedSetOf() } += decoderName
+        }
+    }
+
+    internal fun persistOptionsInBackground(update: (ScrcpyOptions) -> ScrcpyOptions) {
+        val targetSessionId = sessionId
+        eventScope.launch {
+            runCatching {
+                storage().updateOptions(targetSessionId, update)
+            }.onFailure { error ->
+                LogManager.w(
+                    LogTags.SCRCPY_CLIENT,
+                    "后台保存会话配置失败: sessionId=$targetSessionId, ${error.message}",
+                )
+            }
+        }
+    }
 
     fun handleEvent(event: SessionEvent) {
         eventScope.launch {
@@ -99,5 +139,7 @@ class Session(
         }
         resources.stopMonitorBus()
         resources.clearRuntimeResources()
+        synchronized(rejectedDecoderLock) { runtimeRejectedDecoderNamesByKey.clear() }
+        eventScope.cancel()
     }
 }

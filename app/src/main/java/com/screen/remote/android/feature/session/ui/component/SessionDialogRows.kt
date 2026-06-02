@@ -32,7 +32,6 @@ import com.screen.remote.android.core.designsystem.component.IOSSwitch
 
 private val DialogRowLabelMaxWidth = IosDesignTokens.dialogLabelMaxWidth
 private val DialogRowSpacing = IosDesignTokens.compactSpacing
-private val DialogTrailingActionWidth = IosDesignTokens.dialogTrailingActionWidth
 private val DialogTrailingActionHorizontalPadding = IosDesignTokens.dialogHeaderHorizontalPadding
 
 @Composable
@@ -88,12 +87,13 @@ fun CompactClickableRow(
             helpText = helpText,
             modifier =
                 Modifier
-                    .weight(1f)
+                    .widthIn(max = DialogRowLabelMaxWidth)
                     .padding(end = DialogRowSpacing),
         )
         DialogTrailingAction(
             text = trailingText,
             onClick = onClick,
+            modifier = Modifier.weight(1f),
             showArrow = showArrow,
         )
     }
@@ -169,6 +169,7 @@ fun LabeledClickableRow(
         DialogTrailingAction(
             text = trailingText,
             onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
             showArrow = showArrow,
             leadingIcon = leadingIcon,
             leadingIconTint = leadingIconTint,
@@ -202,9 +203,7 @@ fun LabeledDropdownRow(
                     .widthIn(max = DialogRowLabelMaxWidth)
                     .padding(end = DialogRowSpacing),
         )
-        Box(
-            modifier = Modifier.width(DialogTrailingActionWidth),
-        ) {
+        Box(modifier = Modifier.weight(1f)) {
             Row(
                 modifier =
                     Modifier
@@ -244,7 +243,6 @@ private fun DialogTrailingAction(
     Row(
             modifier =
                 modifier
-                    .width(DialogTrailingActionWidth)
                     .fillMaxHeight()
                     .clickable(onClick = onClick)
                     .padding(

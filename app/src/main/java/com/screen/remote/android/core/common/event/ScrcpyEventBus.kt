@@ -8,7 +8,11 @@ import com.screen.remote.android.core.domain.model.ScrcpyStatus
 import com.screen.remote.android.core.domain.model.ScrcpyStatusEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Scrcpy 事件总线（单例）
@@ -195,4 +199,95 @@ object ScrcpyEventBus {
 
         pushEvent(ScrcpyError(event))
     }
+}
+
+class ScrcpyEventLoop(
+    private val scope: CoroutineScope,
+) {
+    private val eventChannel = Channel<ScrcpyEvent>(Channel.UNLIMITED)
+    private var loopJob: Job? = null
+    private var isRunning = false
+
+    val eventHandlers = mutableMapOf<Class<out ScrcpyEvent>, (ScrcpyEvent) -> Unit>()
+
+    companion object {
+        private const val TAG = LogTags.SCRCPY_EVENT_BUS
+    }
+
+    inline fun <reified T : ScrcpyEvent> on(noinline handler: (T) -> Unit) {
+        eventHandlers[T::class.java] = { event ->
+            @Suppress("UNCHECKED_CAST")
+            handler(event as T)
+        }
+    }
+
+    fun pushEvent(event: ScrcpyEvent): Boolean = eventChannel.trySend(event).isSuccess
+
+    fun start() {
+        if (isRunning) {
+            LogManager.w(TAG, "Event loop already running")
+            return
+        }
+
+        isRunning = true
+        loopJob =
+            scope.launch {
+                LogManager.d(TAG, "Event loop started")
+
+                try {
+                    for (event in eventChannel) {
+                        handleEvent(event)
+
+                        if (event is Quit) {
+                            LogManager.d(TAG, "Quit event received, stopping loop")
+                            break
+                        }
+                    }
+                } catch (e: Exception) {
+                    LogManager.e(TAG, "Event loop error", e)
+                } finally {
+                    isRunning = false
+                    LogManager.d(TAG, "Event loop stopped")
+                }
+            }
+    }
+
+    fun stop() {
+        if (!isRunning) return
+
+        pushEvent(Quit)
+        loopJob?.cancel()
+        loopJob = null
+        isRunning = false
+    }
+
+    private suspend fun handleEvent(event: ScrcpyEvent) {
+        ScrcpyEventLogger.logEvent(event)
+
+        if (event is RunOnMainThread) {
+            withContext(Dispatchers.Main) {
+                try {
+                    event.task()
+                } catch (e: Exception) {
+                    LogManager.e(TAG, "Error running task on main thread", e)
+                }
+            }
+            return
+        }
+
+        val handler = eventHandlers[event::class.java]
+        if (handler != null) {
+            try {
+                handler(event)
+            } catch (e: Exception) {
+                LogManager.e(TAG, "Error handling event: ${event::class.simpleName}", e)
+            }
+        } else {
+            LogManager.v(TAG, "No handler for event: ${event::class.simpleName}")
+        }
+    }
+
+    fun postToMainThread(task: () -> Unit): Boolean = pushEvent(RunOnMainThread(task))
+
+    fun isRunning(): Boolean = isRunning
 }

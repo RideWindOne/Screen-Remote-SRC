@@ -8,6 +8,7 @@ object CodecTexts {
     val CODEC_TEST_TITLE = TextPair("测试音频编解码器", "Test Audio Codecs")
     val CODEC_TEST_BUTTON = TextPair("测试", "Test")
     val CODEC_TEST_SUCCESS = TextPair("测试成功", "Test Successful")
+    val CODEC_TEST_FAILED = TextPair("测试失败：该解码器无法完成编解码回环", "Test failed: this decoder could not complete the codec loopback")
     val CODEC_TEST_SEARCH_PLACEHOLDER = TextPair("搜索编解码器", "Search codec")
     val CODEC_TEST_FOUND_COUNT = TextPair("共找到", "Found")
     val CODEC_TEST_AUDIO_CODECS = TextPair("个音频编解码器", "audio codecs")
@@ -57,8 +58,8 @@ object CodecTexts {
     // 编解码器协议匹配
     val CODEC_PROTOCOL_MISMATCH =
         TextPair(
-            "协议不匹配，已重置为默认",
-            "Protocol mismatch, Reset to Default",
+            "音视频编解码器组合不兼容，请修改后再保存",
+            "The audio/video codec combination is incompatible. Update it before saving.",
         )
     val CODEC_TTS_INIT_SUCCESS =
         TextPair(

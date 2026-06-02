@@ -2,20 +2,181 @@ package com.screen.remote.android.feature.remote.widget.floating
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlin.math.hypot
 
+data class FloatingMenuActions(
+    val controlViewModel: ControlViewModel,
+    val captureTargetDeviceScreenshot: suspend () -> Result<String>,
+    val disconnect: suspend () -> Unit,
+    val showKeyboardInput: () -> Unit,
+    val requestUploadFilePicker: () -> Unit,
+    val requestLayoutInspectorRender: () -> Unit,
+    val hapticEnabled: Boolean,
+)
+
+internal object FloatingDebugLog {
+    inline fun d(
+        tag: String,
+        message: () -> String,
+    ) {
+        if (LogManager.isDetailLoggingEnabled(com.screen.remote.android.core.common.manager.LogDetailCategory.MANAGEMENT)) {
+            LogManager.d(tag, message())
+        }
+    }
+
+    fun d(
+        tag: String,
+        message: String,
+    ) {
+        if (LogManager.isDetailLoggingEnabled(com.screen.remote.android.core.common.manager.LogDetailCategory.MANAGEMENT)) {
+            LogManager.d(tag, message)
+        }
+    }
+}
+
+internal const val BALL_A_SIZE_DP = 48
+internal const val BALL_B_SIZE_DP = 41
+internal const val FLOATING_BALL_INITIAL_BOTTOM_MARGIN_DP = 85f
+internal const val FLOATING_BALL_INITIAL_RIGHT_MARGIN_DP = 20f
+internal const val CLICK_TIME_MS = 300L
+internal const val LONG_PRESS_TIME_MS = 300L
+internal const val RESERVED_FUNCTION_TIME_MS = 800L
+internal const val MOVE_SLOP_DP = 12f
+internal const val LONG_PRESS_CANCEL_SLOP_DP = 3f
+internal const val MAX_DISTANCE_FROM_B_DP = 40f
+internal const val DIRECTION_THRESHOLD_DP = 15f
+internal const val DIRECTION_HAPTIC_DELAY_MS = 300L
+internal const val RESET_ANIMATION_DURATION_MS = 200L
+internal const val EDGE_SNAP_THRESHOLD_DP = 40f
+internal const val EDGE_VISIBLE_WIDTH_DP = 16f
+internal const val EDGE_DRAG_OUT_THRESHOLD_DP = 30f
+internal const val EDGE_HAPTIC_RESET_DISTANCE_DP = 40f
+
+internal class FloatingMenuGestureState {
+    var downTime = 0L
+    var downRawX = 0f
+    var downRawY = 0f
+    var lastRawX = 0f
+    var lastRawY = 0f
+    var hasMoved = false
+    var isLongPress = false
+    var canEnterLongPress = false
+    var isSecondStageLongPress = false
+    var longPressHandler: Handler? = null
+    var longPressRunnable: Runnable? = null
+    var reservedFunctionHandler: Handler? = null
+    var reservedFunctionRunnable: Runnable? = null
+    var ballBCenterX = 0f
+    var ballBCenterY = 0f
+    var lastAngle: Double? = null
+    var downOffsetX = 0f
+    var downOffsetY = 0f
+    var isSnappedToEdge = false
+    var snappedEdge: Edge? = null
+    var hasTriggeredEdgeHaptic = false
+    var detectedDirection: Direction? = null
+    var directionLocked = false
+    var lastHapticDirection: Direction? = null
+    var directionEnterTime = 0L
+    var hasTriggeredHapticInCurrentDirection = false
+    var isMenuShown = false
+
+    enum class Edge {
+        LEFT,
+        RIGHT,
+        TOP,
+        BOTTOM,
+    }
+
+    enum class Direction(
+        val actionName: String,
+    ) {
+        UP("桌面"),
+        DOWN("通知栏"),
+        LEFT("返回"),
+        RIGHT("后台任务"),
+    }
+
+    fun reset() {
+        hasMoved = false
+        isLongPress = false
+        canEnterLongPress = false
+        isSecondStageLongPress = false
+        lastAngle = null
+        downOffsetX = 0f
+        downOffsetY = 0f
+        detectedDirection = null
+        directionLocked = false
+        hasTriggeredEdgeHaptic = false
+        lastHapticDirection = null
+        directionEnterTime = 0L
+        hasTriggeredHapticInCurrentDirection = false
+    }
+
+    fun cancelLongPressCallbacks() {
+        longPressRunnable?.let { longPressHandler?.removeCallbacks(it) }
+        reservedFunctionRunnable?.let { reservedFunctionHandler?.removeCallbacks(it) }
+    }
+
+    fun initHandlers() {
+        longPressHandler = Handler(Looper.getMainLooper())
+        reservedFunctionHandler = Handler(Looper.getMainLooper())
+    }
+
+    fun cleanup() {
+        cancelLongPressCallbacks()
+        longPressHandler = null
+        reservedFunctionHandler = null
+        longPressRunnable = null
+        reservedFunctionRunnable = null
+    }
+}
+
+internal class FloatingMenuLongPressScheduler(
+    private val state: FloatingMenuGestureState,
+    private val hapticEnabled: Boolean,
+) {
+    fun schedule() {
+        val longPressRunnable =
+            Runnable {
+                if (!state.hasMoved) {
+                    state.canEnterLongPress = true
+                    if (hapticEnabled) {
+                        performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
+                    }
+                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住300ms未移动，可以进入长按模式")
+                }
+            }
+        val reservedFunctionRunnable =
+            Runnable {
+                if (!state.hasMoved && state.canEnterLongPress) {
+                    state.isSecondStageLongPress = true
+                    if (hapticEnabled) {
+                        performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
+                    }
+                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住800ms未移动，预留功能触发")
+                }
+            }
+
+        state.longPressRunnable = longPressRunnable
+        state.reservedFunctionRunnable = reservedFunctionRunnable
+        state.longPressHandler?.postDelayed(longPressRunnable, LONG_PRESS_TIME_MS)
+        state.reservedFunctionHandler?.postDelayed(reservedFunctionRunnable, RESERVED_FUNCTION_TIME_MS)
+    }
+}
+
 /**
  * 手势识别处理器（纯 WindowManager 实现）
- *
- * 入口职责只保留：
- * 1. 触摸命中判断
- * 2. 手势状态记录
- * 3. 将长按调度、移动逻辑、松手动作分发给协作对象
  */
 @SuppressLint("ClickableViewAccessibility")
 class FloatingMenuGestureHandler(

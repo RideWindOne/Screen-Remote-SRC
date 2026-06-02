@@ -5,9 +5,18 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.screen.remote.android.core.common.ScrcpyConstants
+import com.screen.remote.android.core.common.constants.NetworkConstants
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.common.util.normalizeEndpointHost
-import com.screen.remote.android.core.common.util.parseHostPort
 import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.data.repository.toData
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.formatSessionAddress
+import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
+import com.screen.remote.android.core.domain.model.parseTcpHostPort
+import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import java.util.UUID
 
 /**
@@ -16,22 +25,40 @@ import java.util.UUID
 class SessionDialogState(
     sessionData: SessionData? = null,
 ) {
+    private val initialPrimaryCandidate =
+        sessionData?.toConnectionCandidates()?.minByOrNull(ConnectionCandidate::priority)
+    var deviceType by mutableStateOf(SessionDeviceType.from(sessionData))
+
     // 基本信息
     var sessionName by mutableStateOf(sessionData?.name ?: "")
     var host by mutableStateOf(
-        if (sessionData?.isUsbConnection() == true) {
-            ""
-        } else {
-            sessionData?.host ?: ""
+        when (initialPrimaryCandidate?.transport) {
+            ConnectionTransport.USB -> ""
+            ConnectionTransport.MDNS -> normalizeMdnsServiceName(initialPrimaryCandidate.host)
+            ConnectionTransport.TCP -> initialPrimaryCandidate.host
+            null -> ""
         },
     )
-    var port by mutableStateOf(sessionData?.port ?: "")
+    var port by mutableStateOf(
+        initialPrimaryCandidate
+            ?.takeIf { it.transport == ConnectionTransport.TCP }
+            ?.port
+            ?.toString()
+            ?: "0",
+    )
     var color by mutableStateOf(sessionData?.color ?: "BLUE")
+    var profileId by mutableStateOf(sessionData?.profileId ?: "")
+    var useProfileDefaults by mutableStateOf(sessionData?.useProfileDefaults ?: false)
+    var backupEndpoints by mutableStateOf(backupEndpointsFrom(sessionData))
 
     // USB 模式
-    var isUsbMode by mutableStateOf(sessionData?.isUsbConnection() ?: false)
+    var isUsbMode: Boolean
+        get() = deviceType == SessionDeviceType.USB
+        set(value) {
+            deviceType = if (value) SessionDeviceType.USB else SessionDeviceType.TCP
+        }
     var usbSerialNumber by mutableStateOf(
-        sessionData?.getUsbSerialNumber() ?: "",
+        normalizeUsbSerial(initialPrimaryCandidate?.takeIf { it.transport == ConnectionTransport.USB }?.host ?: ""),
     )
 
     // 分组
@@ -57,10 +84,14 @@ class SessionDialogState(
     var audioVolume by mutableFloatStateOf(1.0f)
 
     // 编码器缓存（远程设备能力，每个会话独立）
-    var remoteVideoEncoders by mutableStateOf(sessionData?.remoteVideoEncoders ?: emptyList())
-    var remoteAudioEncoders by mutableStateOf(sessionData?.remoteAudioEncoders ?: emptyList())
+    var remoteVideoEncoders: List<EncoderCapability> by
+        mutableStateOf(sessionData?.remoteVideoEncoders ?: emptyList())
+    var remoteAudioEncoders: List<EncoderCapability> by
+        mutableStateOf(sessionData?.remoteAudioEncoders ?: emptyList())
     var selectedVideoEncoder by mutableStateOf(sessionData?.selectedVideoEncoder ?: "")
     var selectedAudioEncoder by mutableStateOf(sessionData?.selectedAudioEncoder ?: "")
+    var selectedVideoCodec by mutableStateOf(sessionData?.selectedVideoCodec ?: "")
+    var selectedAudioCodec by mutableStateOf(sessionData?.selectedAudioCodec ?: "")
     var selectedVideoDecoder by mutableStateOf(sessionData?.selectedVideoDecoder ?: "")
     var selectedAudioDecoder by mutableStateOf(sessionData?.selectedAudioDecoder ?: "")
     var deviceSerial by mutableStateOf(sessionData?.deviceSerial ?: "")
@@ -70,10 +101,12 @@ class SessionDialogState(
     var turnScreenOff by mutableStateOf(sessionData?.turnScreenOff ?: true)
     var powerOffOnClose by mutableStateOf(sessionData?.powerOffOnClose ?: false)
     var cleanupOnDisconnect by mutableStateOf(sessionData?.cleanupOnDisconnect ?: true)
+    var ignoreVideoEncoderConstraints by mutableStateOf(sessionData?.ignoreVideoEncoderConstraints ?: false)
     var useFullScreen by mutableStateOf(sessionData?.useFullScreen ?: false)
     var keepDeviceAwake by mutableStateOf(sessionData?.keepDeviceAwake ?: false)
     var enableHardwareDecoding by mutableStateOf(sessionData?.enableHardwareDecoding ?: true)
     var followRemoteOrientation by mutableStateOf(sessionData?.followRemoteOrientation ?: false)
+    private val tcpPortForwardRules = sessionData?.tcpPortForwardRules
     var showNewDisplay by mutableStateOf(sessionData?.newDisplayEnabled ?: false)
     var newDisplayWidth by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).width)
     var newDisplayHeight by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).height)
@@ -87,22 +120,37 @@ class SessionDialogState(
     var showVideoDecoderSelector by mutableStateOf(false)
     var showAudioDecoderSelector by mutableStateOf(false)
     var showUsbDeviceDialog by mutableStateOf(false)
+    var showMdnsServiceDialog by mutableStateOf(false)
     var showGroupSelector by mutableStateOf(false)
+    var showDeviceTypeMenu by mutableStateOf(false)
+    var showSessionAddressDialog by mutableStateOf(false)
+    var showConnectionLatencyTest by mutableStateOf(false)
 
     /**
      * 转换为 SessionData
      */
     fun toSessionData(existingId: String? = null): SessionData {
-        val parsedEndpoint = if (!isUsbMode) parseHostPort(host) else null
-        val finalHost = if (isUsbMode) usbSerialNumber else normalizeEndpointHost(parsedEndpoint?.host ?: host)
-        val finalPort = if (isUsbMode) "0" else parsedEndpoint?.port?.toString() ?: port.trim()
+        val parsedEndpoint = if (deviceType == SessionDeviceType.TCP) parseTcpHostPort(host) else null
+        val finalHost =
+            when (deviceType) {
+                SessionDeviceType.USB -> normalizeUsbSerial(usbSerialNumber)
+                SessionDeviceType.MDNS -> normalizeMdnsServiceName(host)
+                SessionDeviceType.TCP -> normalizeEndpointHost(parsedEndpoint?.host ?: host)
+            }
+        val finalPort =
+            when (deviceType) {
+                SessionDeviceType.USB -> "0"
+                SessionDeviceType.MDNS -> "0"
+                SessionDeviceType.TCP -> parsedEndpoint?.port?.toString() ?: port.trim()
+            }
 
         return SessionData(
             id = existingId ?: UUID.randomUUID().toString(),
             name = sessionName,
-            host = finalHost,
-            port = finalPort,
+            connectionCandidates = buildConnectionCandidates(finalHost, finalPort).map { it.toData() },
             color = color,
+            profileId = profileId,
+            useProfileDefaults = useProfileDefaults,
             forceAdb = forceAdb,
             maxSize = maxSize,
             videoBitrate = videoBitrate,
@@ -122,12 +170,16 @@ class SessionDialogState(
             turnScreenOff = turnScreenOff,
             powerOffOnClose = powerOffOnClose,
             cleanupOnDisconnect = cleanupOnDisconnect,
+            ignoreVideoEncoderConstraints = ignoreVideoEncoderConstraints,
             useFullScreen = useFullScreen,
             keepDeviceAwake = keepDeviceAwake,
             enableHardwareDecoding = enableHardwareDecoding,
             followRemoteOrientation = followRemoteOrientation,
+            tcpPortForwardRules = tcpPortForwardRules ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),
             selectedVideoEncoder = selectedVideoEncoder,
             selectedAudioEncoder = selectedAudioEncoder,
+            selectedVideoCodec = selectedVideoCodec,
+            selectedAudioCodec = selectedAudioCodec,
             selectedVideoDecoder = selectedVideoDecoder,
             selectedAudioDecoder = selectedAudioDecoder,
             deviceSerial = deviceSerial,
@@ -141,20 +193,153 @@ class SessionDialogState(
      * 检查是否有有效的设备连接信息
      */
     fun hasValidDevice(): Boolean =
-        if (isUsbMode) {
-            usbSerialNumber.isNotBlank()
-        } else {
-            host.isNotBlank()
+        when (deviceType) {
+            SessionDeviceType.USB -> usbSerialNumber.isNotBlank()
+            SessionDeviceType.TCP, SessionDeviceType.MDNS -> host.isNotBlank()
         }
+
+    fun isMdnsMode(): Boolean = deviceType == SessionDeviceType.MDNS
+
+    fun addBackupEndpoint() {
+        backupEndpoints = backupEndpoints + ""
+    }
+
+    fun updateBackupEndpoint(
+        index: Int,
+        value: String,
+    ) {
+        backupEndpoints = backupEndpoints.mapIndexed { itemIndex, item -> if (itemIndex == index) value else item }
+    }
+
+    fun removeBackupEndpoint(index: Int) {
+        backupEndpoints = backupEndpoints.filterIndexed { itemIndex, _ -> itemIndex != index }
+    }
+
+    fun sessionAddressPreview(): String = primarySessionAddressPreview()
+
+    fun primarySessionAddressPreview(): String =
+        when (deviceType) {
+            SessionDeviceType.TCP -> {
+                val parsedEndpoint = parseTcpHostPort(host)
+                val displayHost = parsedEndpoint?.host ?: host
+                val displayPort =
+                    parsedEndpoint?.port
+                        ?: port.toIntOrNull() ?: NetworkConstants.DEFAULT_ADB_PORT_INT
+                if (displayHost.isBlank()) {
+                    ""
+                } else {
+                    formatSessionAddress(ConnectionTransport.TCP, normalizeEndpointHost(displayHost), displayPort)
+                }
+            }
+            SessionDeviceType.USB -> formatSessionAddress(ConnectionTransport.USB, normalizeUsbSerial(usbSerialNumber.ifBlank { "..." }))
+            SessionDeviceType.MDNS -> formatSessionAddress(ConnectionTransport.MDNS, normalizeMdnsServiceName(host.ifBlank { "..." }))
+        }.let(DeviceTransportSerial::stripAnyTransportPrefix)
+
+    fun selectDeviceType(type: SessionDeviceType) {
+        deviceType = type
+        when (type) {
+            SessionDeviceType.USB -> port = "0"
+            SessionDeviceType.MDNS -> port = "0"
+            SessionDeviceType.TCP -> {
+                if (port.isBlank() || port == "0") {
+                    port = "5555"
+                }
+            }
+        }
+    }
+
+    fun updateUsbSerialNumber(value: String) {
+        usbSerialNumber = normalizeUsbSerial(value)
+    }
+
+    fun updateMdnsServiceName(value: String) {
+        host = normalizeMdnsServiceName(value)
+        port = "0"
+    }
+
+    fun selectMdnsService(
+        serviceName: String,
+        displayName: String,
+    ) {
+        deviceType = SessionDeviceType.MDNS
+        host = normalizeMdnsServiceName(serviceName)
+        port = "0"
+        if (sessionName.isBlank()) {
+            sessionName = displayName
+        }
+    }
 
     /**
      * 验证输入
      */
     fun validate(): Boolean {
         if (sessionName.isBlank()) return false
-        if (!isUsbMode && host.isBlank()) return false
-        if (isUsbMode && usbSerialNumber.isBlank()) return false
+        if (deviceType != SessionDeviceType.USB && host.isBlank()) return false
+        if (deviceType == SessionDeviceType.USB && usbSerialNumber.isBlank()) return false
         return true
+    }
+
+    private fun buildConnectionCandidates(
+        finalHost: String,
+        finalPort: String,
+    ): List<ConnectionCandidate> {
+        val primary =
+            when (deviceType) {
+                SessionDeviceType.TCP ->
+                    ConnectionCandidate(
+                        transport = ConnectionTransport.TCP,
+                        host = finalHost,
+                        port = finalPort.toIntOrNull() ?: 5555,
+                    )
+                SessionDeviceType.USB ->
+                    ConnectionCandidate(
+                        transport = ConnectionTransport.USB,
+                        host = finalHost,
+                    )
+                SessionDeviceType.MDNS ->
+                    ConnectionCandidate(
+                        transport = ConnectionTransport.MDNS,
+                        host = finalHost,
+                    )
+            }
+
+        val backups =
+            backupEndpoints
+                .mapNotNull { parseSessionAddressCandidate(it) }
+                .filterNot { it.transport == primary.transport && it.host == primary.host && it.port == primary.port }
+
+        return (listOf(primary) + backups)
+            .distinctBy { "${it.transport}:${it.host}:${it.port}" }
+            .mapIndexed { index, candidate -> candidate.copy(priority = index) }
+    }
+}
+
+private fun backupEndpointsFrom(sessionData: SessionData?): List<String> =
+    sessionData
+        ?.toConnectionCandidates()
+        ?.drop(1)
+        ?.map { it.toAddressEndpoint() }
+        .orEmpty()
+
+private fun normalizeUsbSerial(value: String): String =
+    DeviceTransportSerial.stripUsbPrefix(value)
+
+private fun normalizeMdnsServiceName(value: String): String =
+    DeviceTransportSerial.mdnsDeviceSerial(value)
+
+enum class SessionDeviceType {
+    TCP,
+    USB,
+    MDNS,
+    ;
+
+    companion object {
+        fun from(sessionData: SessionData?): SessionDeviceType =
+            when {
+                sessionData?.isUsbConnection() == true -> USB
+                sessionData?.isMdnsConnection() == true -> MDNS
+                else -> TCP
+            }
     }
 }
 

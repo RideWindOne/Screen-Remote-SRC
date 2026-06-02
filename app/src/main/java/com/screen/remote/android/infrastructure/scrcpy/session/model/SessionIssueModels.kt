@@ -80,6 +80,9 @@ data class DecoderIssue(
     val kind: DecoderIssueKind,
     val decoderType: DecoderType,
     val detail: String,
+    val width: Int? = null,
+    val height: Int? = null,
+    val suggestedMaxSize: Int? = null,
 ) {
     val message: String
         get() = detail
@@ -87,6 +90,7 @@ data class DecoderIssue(
 
 enum class DecoderIssueKind {
     CreateFailed,
+    UnsupportedSize,
     ConnectionLost,
     RuntimeError,
     Unknown,

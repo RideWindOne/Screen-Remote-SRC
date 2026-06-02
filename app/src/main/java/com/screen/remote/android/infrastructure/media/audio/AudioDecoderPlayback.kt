@@ -12,6 +12,7 @@ internal class AudioDecoderPlayback(
     private val setDecoder: (MediaCodec?) -> Unit,
     private val isRunning: () -> Boolean,
     private val isStopped: () -> Boolean,
+    private val onPlaybackReady: () -> Unit,
 ) {
     private val bootstrapper = AudioDecoderBootstrapper(formatHandler)
     private val outputDrainer =
@@ -28,11 +29,11 @@ internal class AudioDecoderPlayback(
     ) {
         val track = trackManager.createAudioTrack(sampleRate, channelCount)
         if (track == null) {
-            LogManager.e(LogTags.AUDIO_DECODER, "无法创建 AudioTrack")
-            return
+            throw IllegalStateException("无法创建 RAW AudioTrack")
         }
 
         trackManager.play()
+        onPlaybackReady()
 
         var packetCount = 0
         AudioDebugLog.d(LogTags.AUDIO_DECODER) { "开始播放 RAW 音频" }
@@ -57,14 +58,13 @@ internal class AudioDecoderPlayback(
                         }
                     }
 
-                    is dadb.AdbShellPacket.Exit -> break
+                    is dadb.AdbShellPacket.Exit -> throw java.io.EOFException("Audio Stream closed by peer")
                     else -> continue
                 }
             } catch (e: Exception) {
-                if (isRunning() && !isStopped()) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "RAW 音频播放错误: ${e.message}", e)
-                }
-                break
+                if (!isRunning() || isStopped()) break
+                LogManager.e(LogTags.AUDIO_DECODER, "RAW 音频播放错误: ${e.message}", e)
+                throw e
             }
         }
 
@@ -77,7 +77,9 @@ internal class AudioDecoderPlayback(
         sampleRate: Int,
         channelCount: Int,
     ) {
-        val bootstrap = bootstrapper.readBootstrap(audioStream, codec) ?: return
+        val bootstrap =
+            bootstrapper.readBootstrap(audioStream, codec)
+                ?: throw IllegalStateException("无法读取 $codec 音频初始化数据")
         val resolvedFormat =
             formatHandler.resolvePlaybackFormat(
                 codec = codec,
@@ -93,8 +95,7 @@ internal class AudioDecoderPlayback(
                 configData = bootstrap.configData,
             )
         if (createdDecoder == null) {
-            LogManager.e(LogTags.AUDIO_DECODER, "无法创建解码器")
-            return
+            throw IllegalStateException("无法创建 $codec 音频解码器")
         }
         setDecoder(createdDecoder)
 
@@ -104,33 +105,80 @@ internal class AudioDecoderPlayback(
                 channelCount = resolvedFormat.channelCount,
             )
         if (track == null) {
-            LogManager.e(LogTags.AUDIO_DECODER, "无法创建 AudioTrack")
             getDecoder()?.release()
             setDecoder(null)
-            return
+            throw IllegalStateException("无法创建 AudioTrack")
         }
 
         trackManager.play()
+        onPlaybackReady()
 
         AudioDebugLog.d(LogTags.AUDIO_DECODER) { "开始解码循环" }
-        decodeLoop(audioStream = audioStream, firstAudioPacket = bootstrap.firstAudioPacket)
+        var firstAudioPacket = bootstrap.firstAudioPacket
+        var firstAudioPts = bootstrap.firstAudioPts
+        while (isRunning() && !isStopped()) {
+            try {
+                decodeLoop(
+                    audioStream = audioStream,
+                    firstAudioPacket = firstAudioPacket,
+                    firstAudioPts = firstAudioPts,
+                )
+                return
+            } catch (error: AudioTrackPlaybackException) {
+                // 输出设备故障与 MediaCodec 无关，不能因此拉黑并轮换解码器。
+                throw error
+            } catch (error: IllegalStateException) {
+                val failedDecoder = getDecoder() ?: throw error
+                if (!formatHandler.prepareRuntimeFallback(failedDecoder, error)) throw error
+
+                synchronized(decoderLock) {
+                    if (getDecoder() == failedDecoder) {
+                        runCatching { failedDecoder.stop() }
+                        runCatching { failedDecoder.release() }
+                        setDecoder(null)
+                    }
+                }
+                if (!isRunning() || isStopped()) return
+                val fallbackDecoder =
+                    formatHandler.createDecoder(
+                        codec = codec,
+                        sampleRate = resolvedFormat.sampleRate,
+                        channelCount = resolvedFormat.channelCount,
+                        configData = bootstrap.configData,
+                    ) ?: throw IllegalStateException("所有 $codec 音频解码器均运行失败", error)
+                synchronized(decoderLock) {
+                    if (!isRunning() || isStopped()) {
+                        runCatching { fallbackDecoder.stop() }
+                        runCatching { fallbackDecoder.release() }
+                        return
+                    }
+                    setDecoder(fallbackDecoder)
+                }
+                outputDrainer.resetAfterDecoderFallback()
+                firstAudioPacket = null
+                firstAudioPts = null
+                LogManager.w(LogTags.AUDIO_DECODER, "音频解码器运行失败，已切换到 ${fallbackDecoder.name}")
+            }
+        }
     }
 
     private fun decodeLoop(
         audioStream: AudioStream,
         firstAudioPacket: ByteArray?,
+        firstAudioPts: Long?,
     ) {
         val bufferInfo = MediaCodec.BufferInfo()
         var frameCount = 0
         var inputCount = 0
         var outputCount = 0
-        var pts = 0L
+        var lastPts = firstAudioPts ?: 0L
+        var inputsWithoutOutput = 0
+        var lastObservedOutputCount = outputDrainer.outputCount()
 
         AudioDebugLog.d(LogTags.AUDIO_DECODER) { "解码循环开始" }
 
-        inputCount += queueFirstAudioPacket(firstAudioPacket, pts)
+        inputCount += queueFirstAudioPacket(firstAudioPacket, lastPts)
         if (inputCount > 0) {
-            pts += 20000
             frameCount++
         }
 
@@ -145,55 +193,75 @@ internal class AudioDecoderPlayback(
                 if (drainedCount > 0) {
                     outputCount += drainedCount
                 }
+                val observedOutputCount = outputDrainer.outputCount()
+                if (observedOutputCount > lastObservedOutputCount) {
+                    lastObservedOutputCount = observedOutputCount
+                    inputsWithoutOutput = 0
+                }
 
                 when (val packet = audioStream.read()) {
                     is dadb.AdbShellPacket.StdOut -> {
                         if (packet.payload.isEmpty()) {
                             continue
                         }
-                        if (packet.payload.size < 3) {
-                            if (frameCount < 10) {
-                                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "跳过小包: size=${packet.payload.size}" }
-                            }
-                            continue
-                        }
-
                         frameCount++
+                        val frameInfo = audioStream.currentFrameInfo()
+                        val packetPts = frameInfo?.pts ?: lastPts
                         if (frameCount <= INPUT_LOG_SAMPLES || frameCount % INPUT_LOG_INTERVAL == 0) {
                             AudioDebugLog.d(LogTags.AUDIO_DECODER) { "音频帧 #$frameCount, size=${packet.payload.size}" }
                         }
 
-                        when (val result = queuePacketIntoDecoder(currentDecoder, packet.payload, frameCount, inputCount, pts)) {
+                        val flags = if (frameInfo?.isConfig == true) MediaCodec.BUFFER_FLAG_CODEC_CONFIG else 0
+                        var result: QueuePacketResult
+                        do {
+                            result =
+                                queuePacketIntoDecoder(
+                                    currentDecoder,
+                                    packet.payload,
+                                    frameCount,
+                                    inputCount,
+                                    packetPts,
+                                    flags,
+                                )
+                            if (result == QueuePacketResult.Skipped && isRunning() && !isStopped()) {
+                                outputCount += outputDrainer.drainOutputBuffers(bufferInfo)
+                            }
+                        } while (result == QueuePacketResult.Skipped && isRunning() && !isStopped())
+
+                        when (result) {
                             QueuePacketResult.Break -> {
                             break
                             }
                             QueuePacketResult.Queued -> {
                                 inputCount++
-                                pts += 20000
+                                inputsWithoutOutput++
+                                lastPts = packetPts
+                                if (inputsWithoutOutput >= MAX_INPUTS_WITHOUT_OUTPUT) {
+                                    throw IllegalStateException(
+                                        "音频解码器持续收到 $inputsWithoutOutput 个包但没有任何新输出",
+                                    )
+                                }
                             }
                             QueuePacketResult.Skipped -> Unit
                         }
                     }
 
-                    is dadb.AdbShellPacket.Exit -> break
+                    is dadb.AdbShellPacket.Exit -> throw java.io.EOFException("Audio Stream closed by peer")
                     else -> continue
                 }
             } catch (e: IllegalStateException) {
+                if (!isRunning() || isStopped()) break
                 if (e.message?.contains("executing state") == true ||
                     e.message?.contains("Released state") == true
                 ) {
-                    break
+                    throw e
                 }
                 throw e
             } catch (e: Exception) {
-                if (isRunning() && !isStopped()) {
-                    if (e.isExpectedShutdown()) {
-                        LogManager.w(LogTags.AUDIO_DECODER, "解码结束: ${e.message}")
-                    } else {
-                        LogManager.e(LogTags.AUDIO_DECODER, "解码错误: ${e.message}", e)
-                    }
-                }
-                break
+                if (!isRunning() || isStopped()) break
+                if (e.isExpectedShutdown()) LogManager.w(LogTags.AUDIO_DECODER, "解码结束: ${e.message}")
+                else LogManager.e(LogTags.AUDIO_DECODER, "解码错误: ${e.message}", e)
+                throw e
             }
         }
 
@@ -209,41 +277,19 @@ internal class AudioDecoderPlayback(
         pts: Long,
     ): Int {
         val packet = firstAudioPacket ?: return 0
-        if (packet.isEmpty()) {
-            return 0
-        }
-
-        return try {
-            val currentDecoder = getDecoder()
-            if (currentDecoder != null && !isStopped()) {
-                val inputIndex = currentDecoder.dequeueInputBuffer(10000)
-                if (inputIndex >= 0) {
-                    val inputBuffer = currentDecoder.getInputBuffer(inputIndex)
-                    if (inputBuffer != null) {
-                        inputBuffer.clear()
-                        inputBuffer.put(packet)
-                        currentDecoder.queueInputBuffer(
-                            inputIndex,
-                            0,
-                            packet.size,
-                            pts,
-                            0,
-                        )
-                        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "已处理第一个音频包: size=${packet.size}" }
-                        1
-                    } else {
-                        0
-                    }
-                } else {
-                    0
+        if (packet.isEmpty()) return 0
+        val currentDecoder = getDecoder() ?: throw IllegalStateException("音频解码器不存在")
+        while (isRunning() && !isStopped()) {
+            when (queuePacketIntoDecoder(currentDecoder, packet, 1, 0, pts, 0)) {
+                QueuePacketResult.Queued -> {
+                    AudioDebugLog.d(LogTags.AUDIO_DECODER) { "已处理第一个音频包: size=${packet.size}, pts=$pts" }
+                    return 1
                 }
-            } else {
-                0
+                QueuePacketResult.Break -> return 0
+                QueuePacketResult.Skipped -> Thread.yield()
             }
-        } catch (e: Exception) {
-            LogManager.e(LogTags.AUDIO_DECODER, "处理第一个音频包失败: ${e.message}", e)
-            0
         }
+        return 0
     }
 
     private fun queuePacketIntoDecoder(
@@ -252,6 +298,7 @@ internal class AudioDecoderPlayback(
         frameCount: Int,
         inputCount: Int,
         pts: Long,
+        flags: Int,
     ): QueuePacketResult {
         var result = QueuePacketResult.Skipped
         synchronized(decoderLock) {
@@ -261,25 +308,23 @@ internal class AudioDecoderPlayback(
                 val inputIndex = currentDecoder.dequeueInputBuffer(10000)
                 if (inputIndex >= 0) {
                     val inputBuffer = currentDecoder.getInputBuffer(inputIndex)
-                    if (inputBuffer != null) {
-                        inputBuffer.clear()
-                        inputBuffer.put(payload)
-                        currentDecoder.queueInputBuffer(
-                            inputIndex,
-                            0,
-                            payload.size,
-                            pts,
-                            0,
+                        ?: throw IllegalStateException("音频解码器未返回输入缓冲区")
+                    inputBuffer.clear()
+                    if (payload.size > inputBuffer.remaining()) {
+                        throw IllegalStateException(
+                            "音频包超过解码器输入容量: packet=${payload.size}, capacity=${inputBuffer.remaining()}",
                         )
-
-                        val nextInputCount = inputCount + 1
-                        if (nextInputCount <= INPUT_LOG_SAMPLES || nextInputCount % INPUT_LOG_INTERVAL == 0) {
-                            AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                                "帧 #$frameCount 已送入解码器 (total=$nextInputCount, pts=${(pts + 20000) / 1000}ms)"
-                            }
-                        }
-                        result = QueuePacketResult.Queued
                     }
+                    inputBuffer.put(payload)
+                    currentDecoder.queueInputBuffer(inputIndex, 0, payload.size, pts, flags)
+
+                    val nextInputCount = inputCount + 1
+                    if (nextInputCount <= INPUT_LOG_SAMPLES || nextInputCount % INPUT_LOG_INTERVAL == 0) {
+                        AudioDebugLog.d(LogTags.AUDIO_DECODER) {
+                            "帧 #$frameCount 已送入解码器 (total=$nextInputCount, pts=${pts / 1000}ms, flags=$flags)"
+                        }
+                    }
+                    result = QueuePacketResult.Queued
                 }
             }
         }
@@ -300,5 +345,6 @@ internal class AudioDecoderPlayback(
     private companion object {
         const val INPUT_LOG_SAMPLES = 3
         const val INPUT_LOG_INTERVAL = 500
+        const val MAX_INPUTS_WITHOUT_OUTPUT = 150
     }
 }

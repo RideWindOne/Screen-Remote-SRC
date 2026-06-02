@@ -12,7 +12,10 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIs
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -27,8 +30,15 @@ internal class ScrcpyClientReconnect(
     private val connect: suspend (String, ScrcpyOptions, Boolean) -> Result<Boolean>,
     private val sessionManager: SessionManager,
 ) {
+    private companion object {
+        private const val MAX_RECONNECT_BACKOFF_MS = 3000L
+    }
+
     private var reconnectAttempts: Int = 0
     private var isReconnecting: Boolean = false
+    private val reconnectLock = Any()
+    private val reconnectScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var reconnectJob: Job? = null
 
     /**
      * 触发重连（由 ScrcpySessionMonitor 调用）
@@ -48,75 +58,88 @@ internal class ScrcpyClientReconnect(
             return
         }
 
-        if (isReconnecting) {
-            LogManager.w(LogTags.SCRCPY_CLIENT, "重连正在进行中，跳过本次重连请求")
-            return
-        }
+        val attempt = synchronized(reconnectLock) {
+            if (isReconnecting) {
+                LogManager.w(LogTags.SCRCPY_CLIENT, "重连正在进行中，跳过本次重连请求")
+                return
+            }
 
-        isReconnecting = true
-        reconnectAttempts++
+            isReconnecting = true
+            reconnectAttempts++
+            reconnectAttempts
+        }
 
         LogManager.d(
             LogTags.SCRCPY_CLIENT,
-            "========== 执行重连 (尝试 $reconnectAttempts/${ScrcpyConstants.MAX_RECONNECT_ATTEMPTS}) ==========",
+            "========== 执行重连 (尝试 $attempt/${ScrcpyConstants.MAX_RECONNECT_ATTEMPTS}) ==========",
         )
 
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                // 检查 ADB 连接状态
-                LogManager.d(LogTags.SCRCPY_CLIENT, "检查 ADB 连接状态...")
-                val conn = adbConnectionManager.getConnection(deviceId)
-                if (conn == null) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "✗ ADB 连接不存在")
-                    handleReconnectFailure(deviceId, "ADB 会话已断开，请重新连接设备")
-                    return@launch
-                }
-
-                val testResult = conn.executeShell("echo test", retryOnFailure = false)
-                if (testResult.isFailure) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "✗ ADB 连接不可用: ${testResult.exceptionOrNull()?.message}")
-                    handleReconnectFailure(deviceId, "ADB 会话已断开，请重新连接设备")
-                    return@launch
-                }
-                LogManager.d(LogTags.SCRCPY_CLIENT, "ADB 连接正常")
-
-                // 尝试重新连接
-                LogManager.d(LogTags.SCRCPY_CLIENT, "尝试重新连接...")
-                withContext(Dispatchers.Main) {
-                    connectionState.value = ConnectionState.Connecting
-                }
-
-                // 获取会话配置
-                val session = sessionManager.currentOrNull
-                if (session == null) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "✗ 会话不存在")
-                    handleReconnectFailure(deviceId, "会话配置丢失")
-                    return@launch
-                }
-
-                val reconnectResult =
-                    connect(
-                        sessionId,
-                        session.options,
-                        true,
-                    )
-
-                if (reconnectResult.isSuccess) {
-                    LogManager.d(LogTags.SCRCPY_CLIENT, "========== 重连成功 (尝试 $reconnectAttempts 次) ==========")
-                    isReconnecting = false
-                } else {
-                    val errorMsg = reconnectResult.exceptionOrNull()?.message ?: "未知错误"
-                    LogManager.e(
-                        LogTags.SCRCPY_CLIENT,
-                        "========== 重连失败 (尝试 $reconnectAttempts 次): $errorMsg ==========",
-                    )
-                    handleReconnectFailure(deviceId, errorMsg)
-                }
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "========== 重连过程出错: ${e.message} ==========", e)
-                handleReconnectFailure(deviceId, e.message ?: "未知错误")
-            }
+        val retryDelayMs = computeReconnectDelay(attempt)
+        if (retryDelayMs > 0) {
+            LogManager.d(
+                LogTags.SCRCPY_CLIENT,
+                "重连前等待 ${retryDelayMs}ms（尝试 #$attempt）",
+            )
         }
+
+        reconnectJob?.cancel()
+        reconnectJob =
+            reconnectScope.launch {
+                try {
+                    if (retryDelayMs > 0) {
+                        delay(retryDelayMs)
+                    }
+
+                    // 不在这里重复执行 shell 验证。正式 connect 流程会复用、验证或重建 ADB，
+                    // 缓存连接缺失也不应阻止使用会话候选地址恢复连接。
+                    val hasCachedAdbConnection = adbConnectionManager.getConnection(deviceId) != null
+                    LogManager.d(
+                        LogTags.SCRCPY_CLIENT,
+                        if (hasCachedAdbConnection) "复用现有 ADB 连接进入重连" else "ADB 缓存连接不存在，按会话地址重建",
+                    )
+
+                    // 尝试重新连接
+                    LogManager.d(LogTags.SCRCPY_CLIENT, "尝试重新连接...")
+                    withContext(Dispatchers.Main) {
+                        connectionState.value = ConnectionState.Connecting
+                    }
+
+                    // 获取会话配置
+                    val session = sessionManager.currentOrNull
+                    if (session == null) {
+                        LogManager.e(LogTags.SCRCPY_CLIENT, "✗ 会话不存在")
+                        handleReconnectFailure(deviceId, "会话配置丢失")
+                        return@launch
+                    }
+
+                    val reconnectResult =
+                        connect(
+                            sessionId,
+                            session.options,
+                            true,
+                        )
+
+                    if (reconnectResult.isSuccess) {
+                        LogManager.d(
+                            LogTags.SCRCPY_CLIENT,
+                            "========== 重连成功 (尝试 $attempt 次) ==========",
+                        )
+                        synchronized(reconnectLock) {
+                            isReconnecting = false
+                        }
+                    } else {
+                        val errorMsg = reconnectResult.exceptionOrNull()?.message ?: "未知错误"
+                        LogManager.e(
+                            LogTags.SCRCPY_CLIENT,
+                            "========== 重连失败 (尝试 $attempt 次): $errorMsg ==========",
+                        )
+                        handleReconnectFailure(deviceId, errorMsg)
+                    }
+                } catch (e: Exception) {
+                    LogManager.e(LogTags.SCRCPY_CLIENT, "========== 重连过程出错: ${e.message} ==========", e)
+                    handleReconnectFailure(deviceId, e.message ?: "未知错误")
+                }
+            }
     }
 
     /**
@@ -126,11 +149,16 @@ internal class ScrcpyClientReconnect(
         deviceId: String,
         errorMessage: String,
     ) {
-        isReconnecting = false
+        synchronized(reconnectLock) {
+            isReconnecting = false
+        }
 
         // 推送重连失败事件，由 ScrcpySessionMonitor 决定是否继续重试
         if (reconnectAttempts < ScrcpyConstants.MAX_RECONNECT_ATTEMPTS && !isPermanentError(errorMessage)) {
-            LogManager.d(LogTags.SCRCPY_CLIENT, "将继续重试...")
+            LogManager.d(
+                LogTags.SCRCPY_CLIENT,
+                "将继续重试 (间隔 ${computeReconnectDelay(reconnectAttempts + 1)}ms)...",
+            )
             sessionManager.currentOrNull?.handleEvent(
                 SessionEvent.RequestReconnect(
                     ReconnectIssue(
@@ -144,7 +172,9 @@ internal class ScrcpyClientReconnect(
             withContext(Dispatchers.Main) {
                 connectionState.value = ConnectionState.Error(errorMessage)
             }
-            reconnectAttempts = 0
+            synchronized(reconnectLock) {
+                reconnectAttempts = 0
+            }
         }
     }
 
@@ -170,12 +200,24 @@ internal class ScrcpyClientReconnect(
      * 重置重连状态
      */
     fun reset() {
-        reconnectAttempts = 0
-        isReconnecting = false
+        synchronized(reconnectLock) {
+            reconnectAttempts = 0
+            isReconnecting = false
+        }
     }
 
     /**
      * 获取重连状态
      */
-    fun isReconnecting() = isReconnecting
+    fun isReconnecting() = synchronized(reconnectLock) { isReconnecting }
+
+    private fun computeReconnectDelay(attempt: Int): Long =
+        if (attempt <= 1) {
+            0L
+        } else {
+            val exponent = (attempt - 2).coerceAtLeast(0)
+            ((ScrcpyConstants.DEFAULT_RECONNECT_DELAY / 2L) * (1L shl exponent)).coerceAtMost(
+                MAX_RECONNECT_BACKOFF_MS,
+            )
+        }
 }

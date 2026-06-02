@@ -2,6 +2,8 @@ package com.screen.remote.android.feature.settings.ui
 
 import android.content.Context
 import android.net.Uri
+import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.CommonTexts
@@ -12,6 +14,11 @@ import com.screen.remote.android.infrastructure.adb.key.core.adb.AdbKeyManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import java.io.File
 
 internal object BackupManager {
@@ -35,7 +42,7 @@ internal object BackupManager {
 
             val backupData =
                 BackupData(
-                    version = 2,
+                    version = 3,
                     sessions = sessions,
                     groups =
                         groups.map {
@@ -55,13 +62,18 @@ internal object BackupManager {
 
             val jsonString = exportJson.encodeToString(BackupData.serializer(), backupData)
 
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+            val outputStream =
+                context.contentResolver.openOutputStream(uri, "wt")
+                    ?: throw Exception("无法写入文件")
+            outputStream.use {
                 outputStream.write(jsonString.toByteArray())
+                outputStream.flush()
             }
 
             "导出成功"
         } catch (e: Exception) {
-            throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}")
+            LogManager.e(LogTags.BACKUP_RESTORE, "导出备份失败: uri=$uri", e)
+            throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
         }
 
     suspend fun importData(
@@ -70,11 +82,12 @@ internal object BackupManager {
         uri: Uri,
     ): String =
         try {
-            val jsonString =
+            val rawJsonString =
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     inputStream.readBytes().toString(Charsets.UTF_8)
                 } ?: throw Exception("无法读取文件")
 
+            val jsonString = sanitizeBackupRuntimeCaches(extractFirstJsonObject(rawJsonString))
             val backupData = importJson.decodeFromString(BackupData.serializer(), jsonString)
 
             restoreAdbKeys(context, backupData.adbKeys)
@@ -83,7 +96,8 @@ internal object BackupManager {
 
             "导入成功"
         } catch (e: Exception) {
-            throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}")
+            LogManager.e(LogTags.BACKUP_RESTORE, "导入备份失败: uri=$uri", e)
+            throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
         }
 
     private fun readAdbKeys(context: Context): AdbKeysData {
@@ -235,4 +249,102 @@ internal object BackupManager {
             }
         }
     }
+}
+
+private val runtimeEncoderListFields =
+    setOf(
+        "remoteVideoEncoders",
+        "remoteAudioEncoders",
+    )
+
+private val runtimeCodecStringFields =
+    setOf(
+        "deviceSerial",
+        "selectedVideoCodec",
+        "selectedAudioCodec",
+        "selectedVideoDecoder",
+        "selectedAudioDecoder",
+        "selectedVideoEncoder",
+        "selectedAudioEncoder",
+    )
+
+private val backupSanitizerJson = Json { ignoreUnknownKeys = true }
+
+/**
+ * 备份中的编解码器探测结果只是运行时缓存。缓存结构不匹配时忽略该字段，
+ * 让 SessionData 使用默认空值并在下次连接时重新探测；其它会话字段仍严格反序列化。
+ */
+internal fun sanitizeBackupRuntimeCaches(rawJson: String): String {
+    val root = backupSanitizerJson.parseToJsonElement(rawJson).jsonObject
+    val sessions = root["sessions"]?.jsonArray ?: return rawJson
+    val sanitizedSessions =
+        sessions.map { sessionElement ->
+            val session = sessionElement as? JsonObject ?: return@map sessionElement
+            val fields = session.toMutableMap()
+
+            runtimeEncoderListFields.forEach { fieldName ->
+                val value = fields[fieldName] ?: return@forEach
+                val isStructuredEncoderList =
+                    value is JsonArray && value.all(::isValidEncoderCacheEntry)
+                if (!isStructuredEncoderList) {
+                    fields.remove(fieldName)
+                }
+            }
+            runtimeCodecStringFields.forEach { fieldName ->
+                val value = fields[fieldName] ?: return@forEach
+                if (value !is JsonPrimitive || !value.isString) {
+                    fields.remove(fieldName)
+                }
+            }
+
+            JsonObject(fields)
+        }
+
+    return JsonObject(root + ("sessions" to JsonArray(sanitizedSessions))).toString()
+}
+
+private fun isValidEncoderCacheEntry(element: kotlinx.serialization.json.JsonElement): Boolean {
+    val encoder = element as? JsonObject ?: return false
+    return listOf("name", "codec", "mimeType", "mediaType").all { fieldName ->
+        val value = encoder[fieldName]
+        value is JsonPrimitive && value.isString
+    }
+}
+
+/**
+ * 部分 DocumentsProvider 在覆盖已有文件时可能没有截断旧内容，导致一个完整备份后残留旧 JSON 尾部。
+ * 只提取第一个完整的根对象；对象内部字符串里的花括号和转义字符不会参与层级计算。
+ */
+internal fun extractFirstJsonObject(raw: String): String {
+    val start = raw.indexOfFirst { !it.isWhitespace() && it != '\uFEFF' }
+    require(start >= 0 && raw[start] == '{') { "备份文件不是有效的 JSON 对象" }
+
+    var depth = 0
+    var inString = false
+    var escaped = false
+    for (index in start until raw.length) {
+        val char = raw[index]
+        if (inString) {
+            when {
+                escaped -> escaped = false
+                char == '\\' -> escaped = true
+                char == '"' -> inString = false
+            }
+            continue
+        }
+
+        when (char) {
+            '"' -> inString = true
+            '{' -> depth++
+            '}' -> {
+                depth--
+                require(depth >= 0) { "备份文件 JSON 结构无效" }
+                if (depth == 0) {
+                    return raw.substring(start, index + 1)
+                }
+            }
+        }
+    }
+
+    throw IllegalArgumentException("备份文件 JSON 不完整")
 }

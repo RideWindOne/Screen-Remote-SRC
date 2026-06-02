@@ -20,8 +20,9 @@ internal object OpusConfigParser {
     private const val OPUS_HEAD_MAGIC = "OpusHead"
 
     fun isOpusHead(data: ByteArray): Boolean =
-        data.size == OPUS_HEADER_SIZE &&
-            String(data, 0, OPUS_HEAD_MAGIC.length, Charsets.US_ASCII) == OPUS_HEAD_MAGIC
+        data.size >= OPUS_HEADER_SIZE &&
+            String(data, 0, OPUS_HEAD_MAGIC.length, Charsets.US_ASCII) == OPUS_HEAD_MAGIC &&
+            hasCompleteChannelMapping(data)
 
     fun parse(data: ByteArray): OpusConfig? {
         if (!isOpusHead(data)) {
@@ -30,7 +31,7 @@ internal object OpusConfigParser {
 
         val version = data[8].toInt() and 0xFF
         val channelCount = data[9].toInt() and 0xFF
-        if (channelCount <= 0) {
+        if (version > 15 || channelCount <= 0 || !hasValidChannelMapping(data, channelCount)) {
             return null
         }
 
@@ -51,6 +52,32 @@ internal object OpusConfigParser {
             nativeOrderLongToByteArray(samplesToNanoseconds(config.preSkipSamples.toLong())),
             nativeOrderLongToByteArray(samplesToNanoseconds(DEFAULT_SEEK_PRE_ROLL_SAMPLES.toLong())),
         )
+
+    private fun hasCompleteChannelMapping(data: ByteArray): Boolean {
+        if (data.size < OPUS_HEADER_SIZE) return false
+        val channelCount = data[9].toInt() and 0xFF
+        val mappingFamily = data[18].toInt() and 0xFF
+        return channelCount > 0 && (mappingFamily == 0 || data.size >= 21 + channelCount)
+    }
+
+    private fun hasValidChannelMapping(
+        data: ByteArray,
+        channelCount: Int,
+    ): Boolean {
+        val mappingFamily = data[18].toInt() and 0xFF
+        if (mappingFamily == 0) return channelCount in 1..2
+
+        val streamCount = data[19].toInt() and 0xFF
+        val coupledStreamCount = data[20].toInt() and 0xFF
+        if (streamCount <= 0 || coupledStreamCount > streamCount || streamCount + coupledStreamCount != channelCount) {
+            return false
+        }
+        val codedChannelCount = streamCount + coupledStreamCount
+        return (0 until channelCount).all { index ->
+            val mapping = data[21 + index].toInt() and 0xFF
+            mapping == 255 || mapping < codedChannelCount
+        }
+    }
 
     private fun samplesToNanoseconds(samples: Long): Long = samples * 1_000_000_000L / OPUS_OUTPUT_SAMPLE_RATE
 

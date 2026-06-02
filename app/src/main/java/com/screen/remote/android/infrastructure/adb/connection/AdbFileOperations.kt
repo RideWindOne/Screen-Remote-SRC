@@ -5,7 +5,11 @@ import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.AdbTexts
+import dadb.AdbOperationFailedException
 import dadb.Dadb
+import dadb.InstallResult
+import dadb.SyncResult
+import dadb.UninstallResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -26,7 +30,10 @@ object AdbFileOperations {
         withContext(Dispatchers.IO) {
             try {
                 val file = File(localPath)
-                dadb.push(file, remotePath)
+                when (val operation = dadb.push(file, remotePath)) {
+                    SyncResult.Success -> Unit
+                    is SyncResult.Failure -> throw AdbOperationFailedException(operation.reason)
+                }
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
                     "${AdbTexts.ADB_FILE_PUSH_SUCCESS.get()}: $localPath -> $remotePath",
@@ -49,7 +56,10 @@ object AdbFileOperations {
         withContext(Dispatchers.IO) {
             try {
                 val file = File(localPath)
-                dadb.pull(file, remotePath)
+                when (val operation = dadb.pull(file, remotePath)) {
+                    SyncResult.Success -> Unit
+                    is SyncResult.Failure -> throw AdbOperationFailedException(operation.reason)
+                }
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
                     "${AdbTexts.ADB_FILE_PULL_SUCCESS.get()}: $remotePath -> $localPath",
@@ -71,8 +81,40 @@ object AdbFileOperations {
         withContext(Dispatchers.IO) {
             try {
                 val file = File(apkPath)
-                dadb.install(file)
+                when (val operation = dadb.install(file, "-r")) {
+                    InstallResult.Success -> Unit
+                    is InstallResult.Failure -> throw AdbOperationFailedException(operation.reason)
+                }
                 LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.get()}: $apkPath")
+                Result.success(true)
+            } catch (e: Exception) {
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.get()}: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * Install one base APK together with all of its split APKs.
+     */
+    suspend fun installApks(
+        dadb: Dadb,
+        apkPaths: List<String>,
+    ): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val apkFiles = apkPaths.distinct().map(::File)
+                require(apkFiles.isNotEmpty()) { "No APK files provided" }
+                val operation =
+                    if (apkFiles.size == 1) {
+                        dadb.install(apkFiles.single(), "-r")
+                    } else {
+                        dadb.installMultiple(apkFiles, "-r")
+                    }
+                when (operation) {
+                    InstallResult.Success -> Unit
+                    is InstallResult.Failure -> throw AdbOperationFailedException(operation.reason)
+                }
+                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.get()}: ${apkFiles.joinToString()}")
                 Result.success(true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.get()}: ${e.message}", e)
@@ -89,7 +131,12 @@ object AdbFileOperations {
     ): Result<Boolean> =
         withContext(Dispatchers.IO) {
             try {
-                dadb.uninstall(packageName)
+                when (val operation = dadb.uninstall(packageName)) {
+                    UninstallResult.Success -> Unit
+                    is UninstallResult.Failure -> {
+                        throw AdbOperationFailedException(operation.reason, operation.exitCode)
+                    }
+                }
                 LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_SUCCESS.get()}: $packageName")
                 Result.success(true)
             } catch (e: Exception) {
@@ -121,18 +168,6 @@ object AdbFileOperations {
                         if (pushResult.isFailure) {
                             return@withContext pushResult
                         }
-
-                        // 设置执行权限
-                        val chmodCommand = "chmod 755 $scrcpyServerPath"
-                        logShellCommandStart(LogTags.ADB_CONNECTION, chmodCommand)
-                        val chmodResponse = dadb.shell(chmodCommand)
-                        logShellCommandResult(
-                            tag = LogTags.ADB_CONNECTION,
-                            command = chmodCommand,
-                            exitCode = chmodResponse.exitCode,
-                            output = chmodResponse.output,
-                            errorOutput = chmodResponse.errorOutput,
-                        )
                     }
                 } catch (e: Exception) {
                     return@withContext Result.failure(

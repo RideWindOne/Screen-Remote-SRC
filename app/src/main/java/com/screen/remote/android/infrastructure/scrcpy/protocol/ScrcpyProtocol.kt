@@ -41,12 +41,23 @@ data class VideoFrameInfo(
     val isKeyFrame: Boolean,
 )
 
+data class VideoSessionInfo(
+    val width: Int,
+    val height: Int,
+)
+
 /**
  * 视频流接口，用于统一 AdbShellStream 和 ScrcpySocketStream
  */
 interface VideoStream : AutoCloseable {
+    /** Codec announced by the scrcpy video socket header. This is the runtime source of truth. */
+    val codec: String
+
     @Throws(IOException::class)
     fun read(): AdbShellPacket
 
     fun currentFrameInfo(): VideoFrameInfo? = null
+
+    /** Returns and clears the latest dynamic session metadata observed before the current frame. */
+    fun consumeSessionInfo(): VideoSessionInfo? = null
 }

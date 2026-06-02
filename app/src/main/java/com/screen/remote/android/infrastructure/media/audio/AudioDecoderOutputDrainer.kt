@@ -13,6 +13,13 @@ internal class AudioDecoderOutputDrainer(
     private var totalOutputCount = 0
     private var firstOutputLogged = false
 
+    fun outputCount(): Int = totalOutputCount
+
+    fun resetAfterDecoderFallback() {
+        totalOutputCount = 0
+        firstOutputLogged = false
+    }
+
     fun drainOutputBuffers(bufferInfo: MediaCodec.BufferInfo): Int {
         if (isStopped()) {
             return 0
@@ -22,8 +29,7 @@ internal class AudioDecoderOutputDrainer(
         var drainedCount = 0
 
         try {
-            val timeout = if (drainedCount == 0) 100000L else 0L
-            var outputIndex = codec.dequeueOutputBuffer(bufferInfo, timeout)
+            var outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
             var loopCount = 0
 
             while (!isStopped() && outputIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
@@ -49,10 +55,15 @@ internal class AudioDecoderOutputDrainer(
                                     }
                             drainedCount++
                             totalOutputCount++
-                            val written = trackManager.writeDecodedData(outputSlice, bufferInfo.size)
+                            val written =
+                                try {
+                                    trackManager.writeDecodedData(outputSlice, bufferInfo.size)
+                                } catch (error: Exception) {
+                                    throw AudioTrackPlaybackException("AudioTrack 写入异常: ${error.message}", error)
+                                }
 
                             if (written < 0) {
-                                LogManager.e(LogTags.AUDIO_DECODER, "AudioTrack 写入失败: $written")
+                                throw AudioTrackPlaybackException("AudioTrack 写入失败: $written")
                             } else if (!firstOutputLogged) {
                                 firstOutputLogged = true
                                 AudioDebugLog.d(LogTags.AUDIO_DECODER) {
@@ -82,7 +93,15 @@ internal class AudioDecoderOutputDrainer(
                         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
                             "输出格式变化: $outputFormat, rate=$sampleRate, channels=$channelCount, pcmEncoding=$pcmEncoding"
                         }
-                        trackManager.reconfigureFromOutputFormat(outputFormat)
+                        val trackReconfigured =
+                            try {
+                                trackManager.reconfigureFromOutputFormat(outputFormat)
+                            } catch (error: Exception) {
+                                throw AudioTrackPlaybackException("AudioTrack 输出格式重建异常: ${error.message}", error)
+                            }
+                        if (!trackReconfigured) {
+                            throw AudioTrackPlaybackException("无法按解码输出格式重建 AudioTrack: $outputFormat")
+                        }
                         outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
                     }
 
@@ -105,7 +124,8 @@ internal class AudioDecoderOutputDrainer(
             throw e
         } catch (e: Exception) {
             LogManager.e(LogTags.AUDIO_DECODER, "输出数据异常: ${e.message}", e)
-            return 0
+            if (isStopped()) return 0
+            throw e
         }
     }
 
@@ -113,3 +133,8 @@ internal class AudioDecoderOutputDrainer(
         const val OUTPUT_LOG_INTERVAL = 500
     }
 }
+
+internal class AudioTrackPlaybackException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)

@@ -1,5 +1,6 @@
 package com.screen.remote.android.infrastructure.adb
 
+import android.content.Context
 import dadb.android.runtime.ExperimentalDadbAndroidApi
 import dadb.android.runtime.AdbRuntimeOptions
 import dadb.android.runtime.AdbRuntime
@@ -14,6 +15,7 @@ object AdbRuntimeProvider {
     private var runtimeRoot: File? = null
 
     fun init(
+        context: Context,
         rootDir: File,
         options: AdbRuntimeOptions = AdbRuntimeOptions(),
     ) {
@@ -24,7 +26,7 @@ object AdbRuntimeProvider {
         synchronized(this) {
             if (runtime == null) {
                 runtimeRoot = rootDir
-                runtime = AdbRuntime(rootDir, options)
+                runtime = AdbRuntime(rootDir, options, context.applicationContext)
             }
         }
     }

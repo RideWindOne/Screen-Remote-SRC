@@ -103,6 +103,13 @@ internal class AdbStreamSocket(
             if (!closed) {
                 terminalError.set(e)
             }
+        } catch (e: InterruptedException) {
+            // close() 会主动中断可能阻塞在 dadb MessageQueue.take() 的 pump 线程。
+            // 这是正常的关闭唤醒，不允许作为未捕获异常杀死进程。
+            Thread.currentThread().interrupt()
+            if (!closed) {
+                terminalError.set(IOException("ADB stream pump interrupted: $streamLabel", e))
+            }
         } finally {
             connected = false
             pendingChunks.offer(Chunk.Eof)
@@ -156,12 +163,20 @@ internal class AdbStreamSocket(
         }
 
         private fun takeChunk(): Chunk {
-            val timeout = timeoutMs
-            return if (timeout > 0) {
-                pendingChunks.poll(timeout.toLong(), TimeUnit.MILLISECONDS)
-                    ?: throw SocketTimeoutException("ADB stream read timed out: $streamLabel")
-            } else {
-                pendingChunks.take()
+            try {
+                val timeout = timeoutMs
+                return if (timeout > 0) {
+                    pendingChunks.poll(timeout.toLong(), TimeUnit.MILLISECONDS)
+                        ?: throw SocketTimeoutException("ADB stream read timed out: $streamLabel")
+                } else {
+                    pendingChunks.take()
+                }
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                if (closed) {
+                    return Chunk.Eof
+                }
+                throw IOException("ADB stream read interrupted: $streamLabel", e)
             }
         }
     }

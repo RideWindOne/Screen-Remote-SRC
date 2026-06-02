@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -59,24 +60,88 @@ fun DialogHeader(
     onRightButtonClick: (() -> Unit)? = null,
     rightButtonEnabled: Boolean = true,
     trailingContent: @Composable (() -> Unit)? = null,
+    centerTitleInWindow: Boolean = false,
 ) {
     Column(modifier = modifier) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(IosDesignTokens.dialogHeaderHeight)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = IosDesignTokens.dialogHeaderBackgroundAlpha))
-                    .padding(horizontal = IosDesignTokens.dialogHeaderHorizontalPadding),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        val headerModifier =
+            Modifier
+                .fillMaxWidth()
+                .height(IosDesignTokens.dialogHeaderHeight)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = IosDesignTokens.dialogHeaderBackgroundAlpha))
+                .padding(horizontal = IosDesignTokens.dialogHeaderHorizontalPadding)
+
+        if (centerTitleInWindow) {
+            Box(modifier = headerModifier) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.align(Alignment.Center),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                if (leftButtonText != null) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.CenterStart),
+                    ) {
+                        Text(
+                            leftButtonText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                } else if (showBackButton) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.CenterStart),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+
+                if (trailingContent != null) {
+                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                        trailingContent()
+                    }
+                } else if (rightButtonText != null && onRightButtonClick != null) {
+                    TextButton(
+                        onClick = onRightButtonClick,
+                        enabled = rightButtonEnabled,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    ) {
+                        Text(
+                            rightButtonText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color =
+                                if (rightButtonEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = IosDesignTokens.disabledActionAlpha)
+                                },
+                        )
+                    }
+                }
+            }
+        } else {
+            Row(
+                modifier = headerModifier,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             if (leftButtonText != null) {
                 TextButton(onClick = onDismiss) {
                     Text(
                         leftButtonText,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = AppColors.iOSBlue,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             } else if (showBackButton) {
@@ -84,7 +149,7 @@ fun DialogHeader(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "返回",
-                        tint = AppColors.iOSBlue,
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
             } else {
@@ -98,6 +163,8 @@ fun DialogHeader(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
 
             if (trailingContent != null) {
@@ -112,14 +179,15 @@ fun DialogHeader(
                         style = MaterialTheme.typography.bodyMedium,
                         color =
                             if (rightButtonEnabled) {
-                                AppColors.iOSBlue
+                                MaterialTheme.colorScheme.primary
                             } else {
-                                AppColors.iOSBlue.copy(alpha = IosDesignTokens.disabledActionAlpha)
+                                MaterialTheme.colorScheme.primary.copy(alpha = IosDesignTokens.disabledActionAlpha)
                             },
                     )
                 }
             } else {
                 Spacer(modifier = Modifier.width(IosDesignTokens.dialogActionSlotWidth))
+            }
             }
         }
 

@@ -21,19 +21,21 @@ internal class VideoDecoderConfigurator(
         pps: ByteArray,
         surface: Surface?,
         dummySurface: Surface?,
-        onConfigured: (MediaFormat) -> Unit,
-    ) {
-        val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
-        format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
-        format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
-        configureDecoder(
-            decoder = decoder,
-            format = format,
-            surface = surface,
-            dummySurface = dummySurface,
-            codecLabel = "解码器",
-            onConfigured = onConfigured,
-        )    }
+        onConfigured: ((MediaFormat) -> Unit)?,
+    ): MediaCodec =
+        configureWithFallback(decoder, width, height, "H.264 解码器") { candidate ->
+            val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
+            format.setByteBuffer("csd-0", ByteBuffer.wrap(sps))
+            format.setByteBuffer("csd-1", ByteBuffer.wrap(pps))
+            configureDecoder(
+                decoder = candidate,
+                format = format,
+                surface = surface,
+                dummySurface = dummySurface,
+                codecLabel = "H.264 解码器",
+                onConfigured = onConfigured,
+            )
+        }
 
     fun reconfigureH264(
         oldDecoder: MediaCodec?,
@@ -43,25 +45,12 @@ internal class VideoDecoderConfigurator(
         pps: ByteArray,
         surface: Surface?,
         dummySurface: Surface?,
-        onConfigured: (MediaFormat) -> Unit,
-    ): MediaCodec =
-        recreateDecoder(
-            oldDecoder = oldDecoder,
-            width = width,
-            height = height,
-            reconfigureLabel = "解码器",
-        ) { newDecoder ->
-            configureH264(
-                decoder = newDecoder,
-                width = width,
-                height = height,
-                sps = sps,
-                pps = pps,
-                surface = surface,
-                dummySurface = dummySurface,
-                onConfigured = onConfigured,
-            )
-        }
+        onConfigured: ((MediaFormat) -> Unit)?,
+    ): MediaCodec {
+        releaseDecoder(oldDecoder)
+        val decoder = codecManager.createDecoder(width, height) ?: throw createFailure("H.264 解码器")
+        return configureH264(decoder, width, height, sps, pps, surface, dummySurface, onConfigured)
+    }
 
     fun configureH265(
         decoder: MediaCodec,
@@ -72,40 +61,41 @@ internal class VideoDecoderConfigurator(
         pps: ByteArray,
         surface: Surface?,
         dummySurface: Surface?,
-    ) {
-        val standardFormat = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
-        standardFormat.setByteBuffer("csd-0", ByteBuffer.wrap(vps))
-        standardFormat.setByteBuffer("csd-1", ByteBuffer.wrap(sps))
-        standardFormat.setByteBuffer("csd-2", ByteBuffer.wrap(pps))
-
-        try {
-            configureDecoder(
-                decoder = decoder,
-                format = standardFormat,
-                surface = surface,
-                dummySurface = dummySurface,
-                codecLabel = "H.265 解码器",
-                onConfigured = null,
-            )
-        } catch (standardError: VideoDecoderConfigurationException) {
-            LogManager.w(
-                LogTags.VIDEO_DECODER,
-                "H.265 解码器标准 csd-0/1/2 配置失败，尝试单一 csd-0 兼容模式: ${standardError.message}",
-            )
-            runCatching { decoder.reset() }
-
+    ): MediaCodec =
+        configureWithFallback(decoder, width, height, "H.265 解码器") { candidate ->
             val combinedFormat = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
             combinedFormat.setByteBuffer("csd-0", ByteBuffer.wrap(vps + sps + pps))
-            configureDecoder(
-                decoder = decoder,
-                format = combinedFormat,
-                surface = surface,
-                dummySurface = dummySurface,
-                codecLabel = "H.265 解码器(兼容模式)",
-                onConfigured = null,
-            )
+
+            try {
+                configureDecoder(
+                    decoder = candidate,
+                    format = combinedFormat,
+                    surface = surface,
+                    dummySurface = dummySurface,
+                    codecLabel = "H.265 解码器",
+                    onConfigured = null,
+                )
+            } catch (standardError: VideoDecoderConfigurationException) {
+                LogManager.w(
+                    LogTags.VIDEO_DECODER,
+                    "H.265 解码器单一 csd-0 配置失败，尝试拆分 csd-0/1/2: ${standardError.message}",
+                )
+                candidate.reset()
+
+                val splitFormat = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
+                splitFormat.setByteBuffer("csd-0", ByteBuffer.wrap(vps))
+                splitFormat.setByteBuffer("csd-1", ByteBuffer.wrap(sps))
+                splitFormat.setByteBuffer("csd-2", ByteBuffer.wrap(pps))
+                configureDecoder(
+                    decoder = candidate,
+                    format = splitFormat,
+                    surface = surface,
+                    dummySurface = dummySurface,
+                    codecLabel = "H.265 解码器(拆分 CSD)",
+                    onConfigured = null,
+                )
+            }
         }
-    }
 
     fun reconfigureH265(
         oldDecoder: MediaCodec?,
@@ -116,25 +106,11 @@ internal class VideoDecoderConfigurator(
         pps: ByteArray,
         surface: Surface?,
         dummySurface: Surface?,
-    ): MediaCodec =
-        recreateDecoder(
-            oldDecoder = oldDecoder,
-            width = width,
-            height = height,
-            reconfigureLabel = "H.265 解码器",
-        ) { newDecoder ->
-            configureH265(
-                decoder = newDecoder,
-                width = width,
-                height = height,
-                vps = vps,
-                sps = sps,
-                pps = pps,
-                surface = surface,
-                dummySurface = dummySurface,
-            )
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H.265 解码器重新配置完成" }
-        }
+    ): MediaCodec {
+        releaseDecoder(oldDecoder)
+        val decoder = codecManager.createDecoder(width, height) ?: throw createFailure("H.265 解码器")
+        return configureH265(decoder, width, height, vps, sps, pps, surface, dummySurface)
+    }
 
     fun configureAV1(
         decoder: MediaCodec,
@@ -142,16 +118,18 @@ internal class VideoDecoderConfigurator(
         height: Int,
         surface: Surface?,
         dummySurface: Surface?,
-    ) {
-        val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
-        configureDecoder(
-            decoder = decoder,
-            format = format,
-            surface = surface,
-            dummySurface = dummySurface,
-            codecLabel = "AV1 解码器",
-            onConfigured = null,
-        )    }
+    ): MediaCodec =
+        configureWithFallback(decoder, width, height, "AV1 解码器") { candidate ->
+            val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
+            configureDecoder(
+                decoder = candidate,
+                format = format,
+                surface = surface,
+                dummySurface = dummySurface,
+                codecLabel = "AV1 解码器",
+                onConfigured = null,
+            )
+        }
 
     fun reconfigureAV1(
         oldDecoder: MediaCodec?,
@@ -159,22 +137,42 @@ internal class VideoDecoderConfigurator(
         height: Int,
         surface: Surface?,
         dummySurface: Surface?,
+    ): MediaCodec {
+        releaseDecoder(oldDecoder)
+        val decoder = codecManager.createDecoder(width, height) ?: throw createFailure("AV1 解码器")
+        return configureAV1(decoder, width, height, surface, dummySurface)
+    }
+
+    fun configureVpx(
+        decoder: MediaCodec,
+        width: Int,
+        height: Int,
+        surface: Surface?,
+        dummySurface: Surface?,
     ): MediaCodec =
-        recreateDecoder(
-            oldDecoder = oldDecoder,
-            width = width,
-            height = height,
-            reconfigureLabel = "AV1 解码器",
-        ) { newDecoder ->
-            configureAV1(
-                decoder = newDecoder,
-                width = width,
-                height = height,
+        configureWithFallback(decoder, width, height, "VPx 解码器") { candidate ->
+            val format = MediaFormat.createVideoFormat(codecManager.mimeType, width, height)
+            configureDecoder(
+                decoder = candidate,
+                format = format,
                 surface = surface,
                 dummySurface = dummySurface,
+                codecLabel = "VPx 解码器",
+                onConfigured = null,
             )
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "AV1 解码器重新配置完成" }
         }
+
+    fun reconfigureVpx(
+        oldDecoder: MediaCodec?,
+        width: Int,
+        height: Int,
+        surface: Surface?,
+        dummySurface: Surface?,
+    ): MediaCodec {
+        releaseDecoder(oldDecoder)
+        val decoder = codecManager.createDecoder(width, height) ?: throw createFailure("VPx 解码器")
+        return configureVpx(decoder, width, height, surface, dummySurface)
+    }
 
     private fun configureDecoder(
         decoder: MediaCodec,
@@ -212,34 +210,68 @@ internal class VideoDecoderConfigurator(
         }
     }
 
-    private fun recreateDecoder(
-        oldDecoder: MediaCodec?,
+    private fun configureWithFallback(
+        initialDecoder: MediaCodec,
         width: Int,
         height: Int,
-        reconfigureLabel: String,
+        codecLabel: String,
         configure: (MediaCodec) -> Unit,
-    ): MediaCodec =
-        try {
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "重新配置$reconfigureLabel: ${width}x$height" }
-            oldDecoder?.stop()
-            oldDecoder?.release()
+    ): MediaCodec {
+        val attemptedNames = linkedSetOf<String>()
+        var candidate = initialDecoder
+        var lastFailure: Throwable? = null
 
-            val newDecoder = codecManager.createDecoder(width, height)
-            if (newDecoder == null) {
-                val reason = "无法创建新解码器"
-                LogManager.e(LogTags.VIDEO_DECODER, reason)
-                throw VideoDecoderConfigurationException(reconfigureLabel, reason)
-            } else {
-                configure(newDecoder)
-                newDecoder
+        repeat(MAX_CONFIGURE_ATTEMPTS) {
+            val candidateName = runCatching { candidate.name }.getOrDefault("unknown")
+            if (!attemptedNames.add(candidateName)) {
+                releaseDecoder(candidate)
+                throw VideoDecoderConfigurationException(
+                    codecLabel,
+                    "候选解码器重复且没有可用回退: $candidateName",
+                    lastFailure,
+                )
             }
-        } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "重新配置$reconfigureLabel 失败: ${e.message}", e)
-            if (e is VideoDecoderConfigurationException) {
-                throw e
+
+            try {
+                configure(candidate)
+                codecManager.reportDecoderSelected(candidateName)
+                if (attemptedNames.size > 1) {
+                    LogManager.w(LogTags.VIDEO_DECODER, "$codecLabel 已回退到 $candidateName")
+                }
+                return candidate
+            } catch (error: Exception) {
+                lastFailure = error
+                codecManager.rejectDecoder(candidateName, error)
+                releaseDecoder(candidate)
+                if (codecManager.decoderSelectionPinned) {
+                    throw VideoDecoderConfigurationException(
+                        codecLabel,
+                        "用户固定的解码器配置失败: $candidateName",
+                        error,
+                    )
+                }
+                candidate =
+                    codecManager.createDecoder(width, height)
+                        ?: throw VideoDecoderConfigurationException(
+                            codecLabel,
+                            "所有候选解码器均配置失败",
+                            error,
+                        )
             }
-            throw VideoDecoderConfigurationException(reconfigureLabel, e.message ?: e.javaClass.simpleName, e)
         }
+
+        releaseDecoder(candidate)
+        throw VideoDecoderConfigurationException(codecLabel, "超过最大候选尝试次数", lastFailure)
+    }
+
+    private fun createFailure(codecLabel: String): VideoDecoderConfigurationException =
+        VideoDecoderConfigurationException(codecLabel, "无法创建新解码器")
+
+    private fun releaseDecoder(decoder: MediaCodec?) {
+        if (decoder == null) return
+        runCatching { decoder.stop() }
+        runCatching { decoder.release() }
+    }
 
 
 
@@ -265,9 +297,15 @@ internal class VideoDecoderConfigurator(
                 LogManager.w(LogTags.VIDEO_DECODER, "设置 OPERATING_RATE 失败: ${e.message}")
             }
 
-            ApiCompatHelper.setAllowFrameDropIfSupported(format, 0)
+            // Remote control favors the newest frame. Let Surface decoders discard late output
+            // instead of building an ever-growing presentation backlog.
+            ApiCompatHelper.setAllowFrameDropIfSupported(format, 1)
         } catch (e: Exception) {
             LogManager.e(LogTags.VIDEO_DECODER, "应用低延迟配置失败: ${e.message}")
         }
+    }
+
+    private companion object {
+        const val MAX_CONFIGURE_ATTEMPTS = 8
     }
 }

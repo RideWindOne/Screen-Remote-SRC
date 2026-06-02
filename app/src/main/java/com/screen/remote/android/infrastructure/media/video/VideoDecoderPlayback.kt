@@ -24,8 +24,8 @@ internal class VideoDecoderPlayback(
     private val onConnectionLost: () -> Unit,
 ) {
     private companion object {
-        const val BUFFER_SIZE = 10 * 1024 * 1024
-        const val FRAME_DURATION_US = 33333L
+        const val BUFFER_SIZE = 32 * 1024 * 1024
+        const val FIRST_OUTPUT_WATCHDOG_INPUT_FRAMES = 120
     }
 
     private val packetProcessor =
@@ -53,7 +53,9 @@ internal class VideoDecoderPlayback(
         val nalBuffer = ByteBuffer.allocate(BUFFER_SIZE)
         var configured = false
         var frameCount = 0
-        var pts = 0L
+        var lastPts = 0L
+        var inputsWithoutOutput = 0
+        var lastRenderedFrameCount = 0
 
         VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码循环开始: ${packetProcessor.videoCodec}" }
 
@@ -61,12 +63,27 @@ internal class VideoDecoderPlayback(
             try {
                 if (configured) {
                     outputDrainer.drainOutputBuffers(bufferInfo)
+                    val renderedFrameCount = outputDrainer.renderedFrameCount()
+                    if (renderedFrameCount > lastRenderedFrameCount) {
+                        lastRenderedFrameCount = renderedFrameCount
+                        inputsWithoutOutput = 0
+                    }
                 }
 
+                val queuedFramesBeforePacket = packetProcessor.queuedFrameCount()
                 when (val packet = videoStream.read()) {
                     is dadb.AdbShellPacket.StdOut -> {
+                        videoStream.consumeSessionInfo()?.let { sessionInfo ->
+                            configured =
+                                packetProcessor.handleSessionInfo(
+                                    width = sessionInfo.width,
+                                    height = sessionInfo.height,
+                                    configured = configured,
+                                )
+                        }
                         val frameInfo = videoStream.currentFrameInfo()
-                        val packetPts = frameInfo?.pts ?: pts
+                        val packetPts = frameInfo?.pts ?: lastPts
+                        frameInfo?.let { lastPts = it.pts }
                         configured =
                             packetProcessor.processStdOutPacket(
                                 payload = packet.payload,
@@ -79,17 +96,42 @@ internal class VideoDecoderPlayback(
                             )
                     }
 
-                    is dadb.AdbShellPacket.Exit -> break
+                    is dadb.AdbShellPacket.Exit -> {
+                        if (isRunning() && shouldReportConnectionLost()) {
+                            LogManager.w(LogTags.VIDEO_DECODER, "视频流由远端结束，触发重连")
+                            onConnectionLost()
+                            ScrcpyEventBus.pushEvent(DeviceDisconnected)
+                        }
+                        break
+                    }
                     else -> continue
                 }
 
-                if (configured) {
-                    frameCount++
-                    pts += FRAME_DURATION_US
+                val queuedFrameDelta = packetProcessor.queuedFrameCount() - queuedFramesBeforePacket
+                if (configured && queuedFrameDelta > 0) {
+                    frameCount += queuedFrameDelta
+                    inputsWithoutOutput += queuedFrameDelta
+                    if (inputsWithoutOutput >= FIRST_OUTPUT_WATCHDOG_INPUT_FRAMES) {
+                        throw IllegalStateException("解码器持续接收 $inputsWithoutOutput 个视频帧但没有任何新输出")
+                    }
                 }
             } catch (e: Exception) {
                 if (e is VideoDecoderConfigurationException) {
                     throw e
+                }
+                if (configured && e is IllegalStateException) {
+                    val recovered =
+                        runCatching { packetProcessor.recoverAfterRuntimeFailure(e) }
+                            .onFailure { fallbackError ->
+                                LogManager.e(LogTags.VIDEO_DECODER, "视频解码器运行时回退失败: ${fallbackError.message}", fallbackError)
+                            }.getOrDefault(false)
+                    if (recovered) {
+                        outputDrainer.resetAfterDecoderFallback()
+                        lastRenderedFrameCount = 0
+                        inputsWithoutOutput = 0
+                        configured = true
+                        continue
+                    }
                 }
                 if (isRunning()) {
                     handleDecodeError(e)

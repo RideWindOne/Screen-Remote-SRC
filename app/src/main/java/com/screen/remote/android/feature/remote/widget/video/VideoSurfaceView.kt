@@ -5,7 +5,6 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
@@ -48,8 +47,6 @@ fun VideoSurfaceView(
     onTouch: ((android.view.View, android.view.MotionEvent) -> Boolean)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current // TODO
-
     AndroidView(
         factory = { ctx ->
             TouchableSurfaceView(ctx).apply {
@@ -88,9 +85,11 @@ fun VideoSurfaceView(
         },
         update = { view ->
             // 更新触摸监听器
-            view.setOnTouchListener(
-                if (onTouch != null) { v, event -> onTouch(v, event) } else null, // TODO
-            )
+            if (onTouch != null) {
+                view.setOnTouchListener { v, event -> onTouch(v, event) }
+            } else {
+                view.setOnTouchListener(null)
+            }
 
             // 每次重组时立即检查并更新 Surface
             val holder = view.holder

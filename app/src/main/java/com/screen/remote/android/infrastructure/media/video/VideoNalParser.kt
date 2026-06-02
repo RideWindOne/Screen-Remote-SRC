@@ -1,7 +1,5 @@
 package com.screen.remote.android.infrastructure.media.video
 
-import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.common.manager.LogManager
 import java.nio.ByteBuffer
 
 /**
@@ -26,57 +24,30 @@ class VideoNalParser {
         const val H265_NAL_IDR_N_LP = 20
         const val H265_NAL_CRA_NUT = 21
 
-        const val FRAME_META_MIN_SIZE = 6
-        const val FRAME_META_MAX_SIZE = 10
     }
 
     /**
      * 提取 NAL 单元
      */
     fun extractNalUnit(buffer: ByteBuffer): ByteArray? {
-        if (buffer.position() < 4) return null
+        if (buffer.position() < 3) return null
 
         buffer.flip()
-
-        var startPos = -1
         val limit = buffer.limit()
-
-        // 查找第一个起始码
-        for (i in 0 until limit - 3) {
-            if (buffer.get(i) == 0.toByte() &&
-                buffer.get(i + 1) == 0.toByte() &&
-                buffer.get(i + 2) == 0.toByte() &&
-                buffer.get(i + 3) == 1.toByte()
-            ) {
-                startPos = i
-                break
-            }
-        }
-
-        if (startPos < 0) {
+        val start = findStartCode(buffer, 0, limit)
+        if (start == null) {
             buffer.compact()
             return null
         }
 
-        // 查找下一个起始码
-        var endPos = -1
-        for (i in startPos + 4 until limit - 3) {
-            if (buffer.get(i) == 0.toByte() &&
-                buffer.get(i + 1) == 0.toByte() &&
-                buffer.get(i + 2) == 0.toByte() &&
-                buffer.get(i + 3) == 1.toByte()
-            ) {
-                endPos = i
-                break
-            }
-        }
-
-        val nalSize = if (endPos > 0) endPos - startPos else limit - startPos
+        val next = findStartCode(buffer, start.index + start.length, limit)
+        val endPos = next?.index ?: limit
+        val nalSize = endPos - start.index
         val nalUnit = ByteArray(nalSize)
-        buffer.position(startPos)
+        buffer.position(start.index)
         buffer.get(nalUnit)
 
-        if (endPos > 0) {
+        if (next != null) {
             buffer.position(endPos)
             buffer.compact()
         } else {
@@ -90,40 +61,23 @@ class VideoNalParser {
      * 检查是否为 NAL 起始码
      */
     fun isNalStartCode(data: ByteArray): Boolean =
-        data.size >= 4 &&
-            data[0] == 0.toByte() &&
-            data[1] == 0.toByte() &&
-            data[2] == 0.toByte() &&
-            data[3] == 1.toByte()
-
-    /**
-     * 解析 Frame Meta 消息
-     * @return Triple(width, height, rotation) 或 null
-     */
-    fun parseFrameMeta(data: ByteArray): Triple<Int, Int, Int>? {
-        try {
-            if (data.size < FRAME_META_MIN_SIZE) return null
-
-            val width = ((data[1].toInt() and 0xFF) shl 8) or (data[2].toInt() and 0xFF)
-            val height = ((data[3].toInt() and 0xFF) shl 8) or (data[4].toInt() and 0xFF)
-            val rotation = data[5].toInt() and 0xFF
-
-            return Triple(width, height, rotation)
-        } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "解析 Frame Meta 失败: ${e.message}")
-            return null
-        }
-    }
+        startCodeLength(data) > 0
 
     /**
      * 获取 H.264 NAL 类型
      */
-    fun getH264NalType(nalUnit: ByteArray): Int = if (nalUnit.size > 4) nalUnit[4].toInt() and 0x1F else -1
+    fun getH264NalType(nalUnit: ByteArray): Int {
+        val offset = startCodeLength(nalUnit)
+        return if (offset > 0 && nalUnit.size > offset) nalUnit[offset].toInt() and 0x1F else -1
+    }
 
     /**
      * 获取 H.265 NAL 类型
      */
-    fun getH265NalType(nalUnit: ByteArray): Int = if (nalUnit.size > 4) (nalUnit[4].toInt() and 0x7E) shr 1 else -1
+    fun getH265NalType(nalUnit: ByteArray): Int {
+        val offset = startCodeLength(nalUnit)
+        return if (offset > 0 && nalUnit.size > offset) (nalUnit[offset].toInt() and 0x7E) shr 1 else -1
+    }
 
     /**
      * 检查是否为 H.264 关键帧
@@ -135,5 +89,30 @@ class VideoNalParser {
      */
     fun isH265KeyFrame(nalType: Int): Boolean =
         nalType in H265_NAL_BLA_W_LP..H265_NAL_CRA_NUT
+
+    private fun startCodeLength(data: ByteArray): Int =
+        when {
+            data.size >= 4 && data[0] == 0.toByte() && data[1] == 0.toByte() &&
+                data[2] == 0.toByte() && data[3] == 1.toByte() -> 4
+            data.size >= 3 && data[0] == 0.toByte() && data[1] == 0.toByte() && data[2] == 1.toByte() -> 3
+            else -> 0
+        }
+
+    private fun findStartCode(
+        buffer: ByteBuffer,
+        fromIndex: Int,
+        limit: Int,
+    ): StartCode? {
+        for (index in fromIndex until limit - 2) {
+            if (buffer.get(index) != 0.toByte() || buffer.get(index + 1) != 0.toByte()) continue
+            if (buffer.get(index + 2) == 1.toByte()) return StartCode(index, 3)
+            if (index + 3 < limit && buffer.get(index + 2) == 0.toByte() && buffer.get(index + 3) == 1.toByte()) {
+                return StartCode(index, 4)
+            }
+        }
+        return null
+    }
+
+    private data class StartCode(val index: Int, val length: Int)
 
 }

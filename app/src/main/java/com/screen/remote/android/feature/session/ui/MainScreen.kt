@@ -69,6 +69,7 @@ import com.screen.remote.android.feature.remote.ui.RemoteDisplayScreen
 import com.screen.remote.android.feature.session.ui.component.AddSessionDialog
 import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
+import com.screen.remote.android.feature.session.viewmodel.SessionOnboardingState
 import com.screen.remote.android.feature.settings.ui.AboutScreen
 import com.screen.remote.android.feature.settings.ui.AppearanceScreen
 import com.screen.remote.android.feature.settings.ui.BackupRestoreScreen
@@ -160,7 +161,7 @@ private class MainScreenRouteState {
 private fun rememberMainScreenRouteState(): MainScreenRouteState = remember { MainScreenRouteState() }
 
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel()) {
+fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.provideFactory(LocalContext.current))) {
     val context = LocalContext.current
     val routeState = rememberMainScreenRouteState()
     val showAddDialog by viewModel.showAddSessionDialog.collectAsState()
@@ -173,8 +174,12 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
     val groups by viewModel.groups.collectAsState()
     val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
     val selectedAutomationGroupPath by viewModel.selectedAutomationGroupPath.collectAsState()
+    val onboardingState by viewModel.sessionOnboardingState.collectAsState()
 
-    RequestNotificationPermissionEffect(context = context)
+    RequestNotificationPermissionEffect(
+        context = context,
+        enabled = onboardingState == SessionOnboardingState.HIDDEN,
+    )
 
     LaunchedEffect(managementConnectStatus, routeState.pendingManagementSessionId) {
         when (val status = managementConnectStatus) {
@@ -219,48 +224,90 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
         return
     }
 
-    MainScreenContent(
-        routeState = routeState,
-        viewModel = viewModel,
-        groups = groups,
-        selectedGroupPath = selectedGroupPath,
-        selectedAutomationGroupPath = selectedAutomationGroupPath,
-    )
-
-    MainScreenDialogs(
-        routeState = routeState,
-        viewModel = viewModel,
-        showAddDialog = showAddDialog,
-        editingSessionId = editingSessionId,
-        sessionDataList = sessionDataList,
-        showAddActionDialog = showAddActionDialog,
-        groups = groups,
-    )
-
-    val pendingManagementSessionId = routeState.pendingManagementSessionId
-    if (pendingManagementSessionId != null) {
-        val pendingSession = sessionDataList.find { it.id == pendingManagementSessionId }
-        val loadingMessage =
-            when (managementConnectStatus) {
-                is ManagementConnectStatus.Connecting ->
-                    ManagementTexts.text("正在连接 ${pendingSession?.name ?: "目标设备"}", "Connecting to ${pendingSession?.name ?: "target device"}")
-                else -> ManagementTexts.text("正在准备管理功能", "Preparing management")
-            }
-        ManagementLoadingDialog(
-            title = ManagementTexts.text("管理功能", "Management"),
-            message = loadingMessage,
+    Box(modifier = Modifier.fillMaxSize()) {
+        MainScreenContent(
+            routeState = routeState,
+            viewModel = viewModel,
+            groups = groups,
+            selectedGroupPath = selectedGroupPath,
+            selectedAutomationGroupPath = selectedAutomationGroupPath,
         )
+
+        if (onboardingState == SessionOnboardingState.HIDDEN) {
+            MainScreenDialogs(
+                routeState = routeState,
+                viewModel = viewModel,
+                showAddDialog = showAddDialog,
+                editingSessionId = editingSessionId,
+                sessionDataList = sessionDataList,
+                showAddActionDialog = showAddActionDialog,
+                groups = groups,
+            )
+
+            val pendingManagementSessionId = routeState.pendingManagementSessionId
+            if (pendingManagementSessionId != null) {
+                val pendingSession = sessionDataList.find { it.id == pendingManagementSessionId }
+                val loadingMessage =
+                    when (managementConnectStatus) {
+                        is ManagementConnectStatus.Connecting ->
+                            ManagementTexts.General.CONNECTING_TO_DEVICE.format(
+                                pendingSession?.name ?: ManagementTexts.General.TARGET_DEVICE.get(),
+                            )
+                        else -> ManagementTexts.General.PREPARING_MANAGEMENT.get()
+                    }
+                ManagementLoadingDialog(
+                    title = ManagementTexts.General.MANAGEMENT.get(),
+                    message = loadingMessage,
+                    onDismiss = {
+                        routeState.cancelPendingSessionManagement(pendingManagementSessionId)
+                        viewModel.cancelManagementConnect(pendingManagementSessionId)
+                    },
+                )
+            }
+        }
+
+        if (onboardingState != SessionOnboardingState.HIDDEN) {
+            SessionOnboardingBackground(
+                showLogo = onboardingState == SessionOnboardingState.LOADING,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(1f),
+            )
+        }
+
+        when (onboardingState) {
+            SessionOnboardingState.INTRODUCTION ->
+                FirstSessionWelcomeCard(
+                    onDismiss = viewModel::completeSessionOnboarding,
+                    modifier = Modifier.zIndex(2f),
+                )
+
+            SessionOnboardingState.RECENT_UPDATES ->
+                RecentUpdatesCard(
+                    onDismiss = viewModel::completeSessionOnboarding,
+                    modifier = Modifier.zIndex(2f),
+                )
+
+            else -> Unit
+        }
     }
 }
 
 @Composable
-private fun RequestNotificationPermissionEffect(context: Context) {
+private fun RequestNotificationPermissionEffect(
+    context: Context,
+    enabled: Boolean,
+) {
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
         ) { }
 
-    LaunchedEffect(context) {
+    LaunchedEffect(context, enabled) {
+        if (!enabled) {
+            return@LaunchedEffect
+        }
         if (!ApiCompatHelper.needsNotificationPermission()) {
             return@LaunchedEffect
         }
@@ -281,12 +328,13 @@ private fun RequestNotificationPermissionEffect(context: Context) {
 private fun ManagementLoadingDialog(
     title: String,
     message: String,
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
-        onDismissRequest = {},
+        onDismissRequest = onDismiss,
         showActionBar = false,
         widthRatio = 0.72f,
-        dismissOnBackPress = false,
+        dismissOnBackPress = true,
         dismissOnClickOutside = false,
         title = { Text(title) },
         text = {
@@ -343,7 +391,7 @@ private fun MainScreenContent(
                     IconButton(onClick = routeState::openSettings) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = ManagementTexts.text("设置", "Settings"),
+                            contentDescription = ManagementTexts.General.SETTINGS.get(),
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }

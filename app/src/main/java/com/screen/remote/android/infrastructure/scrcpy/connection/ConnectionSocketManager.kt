@@ -16,6 +16,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketType
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -29,10 +30,10 @@ class ConnectionSocketManager(
     private val sessionContext: SessionContext,
 ) {
     private companion object {
-        private const val SOCKET_CONNECT_MAX_ATTEMPTS = 3
-        private const val SOCKET_RETRY_DELAY_MS = 150L
-        private const val SOCKET_ROLE_PROBE_TIMEOUT_MS = 250
-        private const val SOCKET_ROLE_PROBE_ROUNDS = 6
+        private const val DIRECT_VIDEO_CONNECT_TIMEOUT_MS = 10_000L
+        private const val DIRECT_VIDEO_CONNECT_RETRY_DELAY_MS = 30L
+        private const val SOCKET_DUMMY_BYTE_MAX_RETRIES = 2
+        private const val SOCKET_DUMMY_BYTE_RETRY_DELAY_MS = 80L
     }
 
     private var localPort: Int = 0
@@ -61,6 +62,7 @@ class ConnectionSocketManager(
         socketName: String,
         enableAudio: Boolean,
         useAdbForward: Boolean,
+        shouldAbortDirectProbe: () -> Boolean = { false },
     ) = withContext(Dispatchers.IO) {
         try {
             sessionContext.emit(
@@ -73,11 +75,12 @@ class ConnectionSocketManager(
                 ),
             )
 
-            connectSocketsWithRetry(
+            connectSocketsOnce(
                 connection = connection,
                 socketName = socketName,
                 enableAudio = enableAudio,
                 useAdbForward = useAdbForward,
+                shouldAbortDirectProbe = shouldAbortDirectProbe,
             )
             LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.get())
             sessionContext.emit(
@@ -144,159 +147,140 @@ class ConnectionSocketManager(
         }
     }
 
-    private suspend fun connectSocketsWithRetry(
+    private suspend fun connectSocketsOnce(
         connection: AdbConnection,
         socketName: String,
         enableAudio: Boolean,
         useAdbForward: Boolean,
+        shouldAbortDirectProbe: () -> Boolean,
     ) {
-        var lastError: Exception? = null
-
-        repeat(SOCKET_CONNECT_MAX_ATTEMPTS) { attemptIndex ->
-            val attempt = attemptIndex + 1
-            var videoCandidate: Socket? = null
-            var audioCandidate: Socket? = null
-            var controlCandidate: Socket? = null
-
-            try {
-                // 先连接所有流再读取数据，避免 server 端 accept 串行导致死锁。
-                videoCandidate = createChannel(connection, socketName, "video", useAdbForward)
-                LogManager.d(LogTags.SCRCPY_CLIENT, "Video socket connected")
-
-                if (enableAudio) {
-                    audioCandidate = createChannel(connection, socketName, "audio", useAdbForward)
-                    LogManager.d(LogTags.SCRCPY_CLIENT, "Audio socket connected")
-                }
-
-                controlCandidate = createChannel(connection, socketName, "control", useAdbForward)
-                LogManager.d(LogTags.SCRCPY_CLIENT, "Control socket connected")
-
-                if (enableAudio) {
-                    waitForDummyByte(videoCandidate, "video")
-                    videoSocket = videoCandidate
-                    audioSocket = audioCandidate
-                    controlSocket = controlCandidate
-                } else {
-                    val resolvedSockets =
-                        resolveVideoAndControlSocketsWithoutAudio(
-                            firstSocket = videoCandidate,
-                            secondSocket = controlCandidate,
-                        )
-                    videoSocket = resolvedSockets.videoSocket
-                    controlSocket = resolvedSockets.controlSocket
-                }
-
-                return
-            } catch (e: Exception) {
-                lastError = e
-                closeSocketSilently(videoCandidate)
-                closeSocketSilently(audioCandidate)
-                closeSocketSilently(controlCandidate)
-                videoSocket = null
-                audioSocket = null
-                controlSocket = null
-
-                if (attempt < SOCKET_CONNECT_MAX_ATTEMPTS) {
-                    LogManager.w(
-                        LogTags.SCRCPY_CLIENT,
-                        "Socket 建链失败，准备重试 $attempt/$SOCKET_CONNECT_MAX_ATTEMPTS: ${e.message}",
-                    )
-                    Thread.sleep(SOCKET_RETRY_DELAY_MS)
-                }
-            }
-        }
-
-        throw IOException(lastError?.message ?: "Socket 建链失败")
-    }
-
-    private fun resolveVideoAndControlSocketsWithoutAudio(
-        firstSocket: Socket,
-        secondSocket: Socket,
-    ): ResolvedVideoControlSockets {
-        val firstResult =
-            waitForDummyByteWithFallback(
-                primarySocket = firstSocket,
-                primaryLabel = "video",
-                secondarySocket = secondSocket,
-                secondaryLabel = "control",
+        var socketCandidates: Map<String, Socket>? = null
+        try {
+            socketCandidates = openSocketCandidatesInProtocolOrder(
+                connection = connection,
+                socketName = socketName,
+                useAdbForward = useAdbForward,
+                enableAudio = enableAudio,
+                shouldAbortDirectProbe = shouldAbortDirectProbe,
             )
 
-        return when (firstResult) {
-            DummySocketResolution.Primary -> ResolvedVideoControlSockets(videoSocket = firstSocket, controlSocket = secondSocket)
-            DummySocketResolution.Secondary -> {
-                LogManager.w(
-                    LogTags.SCRCPY_CLIENT,
-                    "检测到 dummy byte 出现在 control socket，已自动交换 video/control 角色。",
-                )
-                ResolvedVideoControlSockets(videoSocket = secondSocket, controlSocket = firstSocket)
-            }
+            val videoCandidate = socketCandidates.getValue("video")
+            waitForDummyByte(videoCandidate, "video")
+
+            videoSocket = videoCandidate
+            audioSocket = socketCandidates["audio"]
+            controlSocket = socketCandidates.getValue("control")
+        } catch (e: Exception) {
+            socketCandidates?.values?.forEach(::closeSocketSilently)
+            videoSocket = null
+            audioSocket = null
+            controlSocket = null
+            // scrcpy assigns roles to accepted sockets once. Reopening another trio against the
+            // same server cannot restart its accept sequence; a retry requires a new server/SCID.
+            throw e
         }
+    }
+
+    /**
+     * scrcpy server 按 accept() 顺序将连接固定映射为 video -> audio -> control。
+     * 协议没有客户端 socket 角色握手，所以建链顺序必须与 server 保持一致。
+     */
+    private suspend fun openSocketCandidatesInProtocolOrder(
+        connection: AdbConnection,
+        socketName: String,
+        useAdbForward: Boolean,
+        enableAudio: Boolean,
+        shouldAbortDirectProbe: () -> Boolean,
+    ): Map<String, Socket> {
+        val sockets = linkedMapOf<String, Socket>()
+        try {
+            openScrcpyChannelsSequentially(enableAudio, sockets) { type ->
+                val socket =
+                    if (type == "video" && !useAdbForward) {
+                        createDirectVideoChannelWhenReady(connection, socketName, shouldAbortDirectProbe)
+                    } else {
+                        createChannel(connection, socketName, type, useAdbForward)
+                    }
+                LogManager.d(LogTags.SCRCPY_CLIENT, "$type socket connected")
+                socket
+            }
+            return sockets
+        } catch (e: Exception) {
+            sockets.values.forEach(::closeSocketSilently)
+            throw e
+        }
+    }
+
+    /**
+     * localabstract 尚未创建时，ADB open 会直接失败且不会被 server accept，因此只重试
+     * 第一条 video 通道是安全的。forward 模式不能使用此策略：本地 TCP accept 可能先成功，
+     * 随后远端 open 才失败，从而破坏 scrcpy 的 socket 角色顺序。
+     */
+    private suspend fun createDirectVideoChannelWhenReady(
+        connection: AdbConnection,
+        socketName: String,
+        shouldAbort: () -> Boolean,
+    ): Socket {
+        val startedAtNanos = System.nanoTime()
+        val deadlineNanos = System.nanoTime() + DIRECT_VIDEO_CONNECT_TIMEOUT_MS * 1_000_000L
+        var lastError: Throwable? = null
+        var attemptCount = 0
+
+        while (System.nanoTime() < deadlineNanos) {
+            if (shouldAbort()) {
+                throw IOException("scrcpy-server failed before video socket became ready", lastError)
+            }
+
+            attemptCount++
+            connection.openLocalAbstractSocket(socketName)
+                .onSuccess { socket ->
+                    val durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000L
+                    LogManager.i(
+                        LogTags.SCRCPY_CLIENT,
+                        "Direct localabstract 已建立: $socketName channel=video attempts=$attemptCount durationMs=$durationMs",
+                    )
+                    return socket.also(::configureSocket)
+                }.onFailure { error ->
+                    lastError = error
+                }
+
+            delay(DIRECT_VIDEO_CONNECT_RETRY_DELAY_MS)
+        }
+
+        throw IOException("Failed to open video adb stream: ${lastError?.message ?: "server socket not ready"}", lastError)
     }
 
     /**
      * 等待并验证 dummy byte（Server 准备就绪信号）
      * 参考：scrcpy Server 在 accept 后立即发送 dummy byte (0x00)
      */
-    private fun waitForDummyByte(
+    private suspend fun waitForDummyByte(
         socket: Socket,
         socketType: String,
     ) {
-        when (readDummyByte(socket, socketType, maxRetries = 3, retryDelayMs = 200L)) {
+        val result =
+            readDummyByte(
+                socket,
+                socketType,
+                maxRetries = SOCKET_DUMMY_BYTE_MAX_RETRIES,
+                retryDelayMs = SOCKET_DUMMY_BYTE_RETRY_DELAY_MS,
+            )
+
+        when (result) {
             is DummyReadResult.Success -> return
             is DummyReadResult.Closed ->
                 throw IOException("$socketType socket -> Server 未发送 dummy byte（连接已关闭）")
             is DummyReadResult.Timeout ->
                 throw IOException("$socketType socket -> 读取 dummy byte 超时")
+            is DummyReadResult.Invalid ->
+                throw IOException(
+                    "$socketType socket -> 收到非预期的 dummy byte: " +
+                        "0x${result.value.toString(16).padStart(2, '0')}",
+                )
         }
     }
 
-    private fun waitForDummyByteWithFallback(
-        primarySocket: Socket,
-        primaryLabel: String,
-        secondarySocket: Socket,
-        secondaryLabel: String,
-    ): DummySocketResolution {
-        val primaryTimeout = primarySocket.soTimeout
-        val secondaryTimeout = secondarySocket.soTimeout
-
-        primarySocket.soTimeout = SOCKET_ROLE_PROBE_TIMEOUT_MS
-        secondarySocket.soTimeout = SOCKET_ROLE_PROBE_TIMEOUT_MS
-
-        try {
-            repeat(SOCKET_ROLE_PROBE_ROUNDS) { round ->
-                when (readDummyByte(primarySocket, primaryLabel, maxRetries = 1, retryDelayMs = 0L, logRetries = false)) {
-                    is DummyReadResult.Success -> return DummySocketResolution.Primary
-                    is DummyReadResult.Closed ->
-                        LogManager.w(
-                            LogTags.SCRCPY_CLIENT,
-                            "$primaryLabel socket 在 dummy byte 探测阶段已关闭，继续尝试另一条连接。",
-                        )
-                    is DummyReadResult.Timeout -> Unit
-                }
-
-                when (readDummyByte(secondarySocket, secondaryLabel, maxRetries = 1, retryDelayMs = 0L, logRetries = false)) {
-                    is DummyReadResult.Success -> return DummySocketResolution.Secondary
-                    is DummyReadResult.Closed ->
-                        LogManager.w(
-                            LogTags.SCRCPY_CLIENT,
-                            "$secondaryLabel socket 在 dummy byte 探测阶段已关闭。",
-                        )
-                    is DummyReadResult.Timeout -> Unit
-                }
-
-                if (round < SOCKET_ROLE_PROBE_ROUNDS - 1) {
-                    Thread.sleep(SOCKET_RETRY_DELAY_MS)
-                }
-            }
-        } finally {
-            primarySocket.soTimeout = primaryTimeout
-            secondarySocket.soTimeout = secondaryTimeout
-        }
-
-        throw IOException("video/control sockets 均未收到 dummy byte")
-    }
-
-    private fun readDummyByte(
+    private suspend fun readDummyByte(
         socket: Socket,
         socketType: String,
         maxRetries: Int,
@@ -309,16 +293,6 @@ class ConnectionSocketManager(
             try {
                 val dummyByte = inputStream.read()
                 if (dummyByte == -1) {
-                    if (logRetries && retryIndex < maxRetries - 1) {
-                        LogManager.w(
-                            LogTags.SCRCPY_CLIENT,
-                            "$socketType socket: Server 未发送 dummy byte，重试 ${retryIndex + 1}/$maxRetries",
-                        )
-                    }
-                    if (retryIndex < maxRetries - 1) {
-                        Thread.sleep(retryDelayMs)
-                        return@repeat
-                    }
                     return DummyReadResult.Closed
                 }
 
@@ -327,6 +301,7 @@ class ConnectionSocketManager(
                         LogTags.SCRCPY_CLIENT,
                         "$socketType socket: 收到非预期的 dummy byte: 0x${dummyByte.toString(16).padStart(2, '0')}",
                     )
+                    return DummyReadResult.Invalid(dummyByte)
                 }
 
                 LogManager.d(
@@ -342,7 +317,7 @@ class ConnectionSocketManager(
                     )
                 }
                 if (retryIndex < maxRetries - 1) {
-                    Thread.sleep(retryDelayMs)
+                    delay(retryDelayMs)
                     return@repeat
                 }
                 return DummyReadResult.Timeout
@@ -366,13 +341,15 @@ class ConnectionSocketManager(
         } else {
             connection.openLocalAbstractSocket(socketName).getOrElse { error ->
                 throw IOException("Failed to open $type adb stream: ${error.message}", error)
-            }.also { socket ->
-                socket.tcpNoDelay = true
-                socket.receiveBufferSize = NetworkConstants.SOCKET_RECEIVE_BUFFER_SIZE
-                socket.sendBufferSize = NetworkConstants.SOCKET_SEND_BUFFER_SIZE
-                socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
-            }
+            }.also(::configureSocket)
         }
+
+    private fun configureSocket(socket: Socket) {
+        socket.tcpNoDelay = true
+        socket.receiveBufferSize = NetworkConstants.SOCKET_RECEIVE_BUFFER_SIZE
+        socket.sendBufferSize = NetworkConstants.SOCKET_SEND_BUFFER_SIZE
+        socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
+    }
 
     private fun createAndConnectSocket(type: String): Socket {
         val socket = Socket()
@@ -489,23 +466,32 @@ class ConnectionSocketManager(
         }
     }
 
-    private data class ResolvedVideoControlSockets(
-        val videoSocket: Socket,
-        val controlSocket: Socket,
-    )
-
-    private enum class DummySocketResolution {
-        Primary,
-        Secondary,
-    }
-
     private sealed interface DummyReadResult {
         data class Success(
+            val value: Int,
+        ) : DummyReadResult
+
+        data class Invalid(
             val value: Int,
         ) : DummyReadResult
 
         data object Closed : DummyReadResult
 
         data object Timeout : DummyReadResult
+    }
+}
+
+/**
+ * scrcpy 没有通道角色握手，server 只按 accept() 次序分配角色。
+ * 这个 helper 故意逐个 await opener，禁止用 async/awaitAll 改写。
+ */
+internal suspend fun <T> openScrcpyChannelsSequentially(
+    enableAudio: Boolean,
+    destination: MutableMap<String, T>,
+    opener: suspend (String) -> T,
+) {
+    val order = if (enableAudio) listOf("video", "audio", "control") else listOf("video", "control")
+    for (type in order) {
+        destination[type] = opener(type)
     }
 }

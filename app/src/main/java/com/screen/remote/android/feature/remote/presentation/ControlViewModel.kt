@@ -1,5 +1,7 @@
 package com.screen.remote.android.feature.remote.presentation
 
+import com.screen.remote.android.core.common.manager.LogManager.dShell
+
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -7,7 +9,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.common.manager.ShellDebugLog
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutBounds
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -269,7 +270,7 @@ class ControlViewModel(
                         logShellStreamOpen(LogTags.CONTROL_VM, UI_LAYOUT_DUMP_COMMAND)
                         logShellStreamReady(LogTags.CONTROL_VM, UI_LAYOUT_DUMP_COMMAND)
                         val response = shellStream.readAll()
-                        ShellDebugLog.d(LogTags.CONTROL_VM) {
+                        dShell(LogTags.CONTROL_VM) {
                             "ui-layout shell result: exit=${response.exitCode} stdout=${shellLogPreview(
                                 response.output,
                             )} stderr=${shellLogPreview(response.errorOutput)}"

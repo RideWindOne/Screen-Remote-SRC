@@ -1,5 +1,6 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,30 +16,52 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
-import com.screen.remote.android.core.common.util.formatHostForAuthority
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.domain.model.SessionColor
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun SessionsScreen(
     viewModel: MainViewModel,
     onManageSession: (SessionData) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val filteredSessions by viewModel.filteredSessions.collectAsState()
     val connectStatus by viewModel.connectStatus.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
+    val mdnsSessionPresence by viewModel.mdnsSessionPresence.collectAsState()
+    val usbDevices by viewModel.usbDevices.collectAsState()
+    val connectedAdbDevices by viewModel.connectedAdbDevices.collectAsState()
+    val connectedAdbDeviceIds =
+        connectedAdbDevices.mapTo(linkedSetOf()) { it.deviceId }
+    val discoveredDeviceIds =
+        buildSet {
+            mdnsSessionPresence.connectServices
+                .mapNotNull { service -> service.deviceSerial.trim().takeIf(String::isNotEmpty) }
+                .map(DeviceTransportSerial::mdns)
+                .forEach(::add)
+            usbDevices.toDeviceIdentifiers().forEach(::add)
+        }
     var sessionToDelete by remember { mutableStateOf<ScrcpySession?>(null) }
+    var resettingConnectionSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val connectionResetSuccess = rememberText(SessionTexts.SESSION_RESET_CONNECTION_SUCCESS)
+    val connectionResetFailed = rememberText(SessionTexts.SESSION_RESET_CONNECTION_FAILED)
 
     SessionDeleteDialog(
         sessionToDelete = sessionToDelete,
@@ -60,26 +83,53 @@ fun SessionsScreen(
             ) {
                 itemsIndexed(filteredSessions) { index, sessionData ->
                     val isRemoteConnected = connectedSessionId == sessionData.id
-                    val isManagementConnected =
-                        managementConnectStatus is ManagementConnectStatus.Connected &&
-                            (managementConnectStatus as? ManagementConnectStatus.Connected)?.sessionId == sessionData.id
+                    val isConnecting =
+                        (connectStatus is ConnectStatus.Connecting &&
+                            (connectStatus as? ConnectStatus.Connecting)?.sessionId == sessionData.id) ||
+                            (managementConnectStatus is ManagementConnectStatus.Connecting &&
+                                (managementConnectStatus as? ManagementConnectStatus.Connecting)?.sessionId == sessionData.id)
+                    val badgeState =
+                        resolveSessionBadgeState(
+                            sessionData = sessionData,
+                            connectedAdbDeviceIds = connectedAdbDeviceIds,
+                            discoveredDeviceIds = discoveredDeviceIds,
+                        )
 
                     SessionCard(
                         session = sessionCardModel(sessionData, isRemoteConnected),
                         sessionData = sessionData,
                         index = index,
                         isConnected = isRemoteConnected,
-                        isAdbConnected = isRemoteConnected || isManagementConnected,
-                        isConnecting =
-                            (connectStatus is ConnectStatus.Connecting &&
-                                (connectStatus as? ConnectStatus.Connecting)?.sessionId == sessionData.id) ||
-                                (managementConnectStatus is ManagementConnectStatus.Connecting &&
-                                    (managementConnectStatus as? ManagementConnectStatus.Connecting)?.sessionId == sessionData.id),
+                        endpointStatus = badgeState.status,
+                        displayTransport = badgeState.displayTransport,
+                        isConnecting = isConnecting,
+                        isResettingConnection = sessionData.id in resettingConnectionSessionIds,
                         onClick = { viewModel.connectSession(sessionData.id) },
                         onConnect = { viewModel.connectSession(sessionData.id) },
                         onManage = { onManageSession(sessionData) },
                         onEdit = { viewModel.showEditSessionDialog(sessionData.id) },
                         onCopy = { data -> viewModel.copySession(data) },
+                        onResetConnection = {
+                            if (sessionData.id !in resettingConnectionSessionIds) {
+                                resettingConnectionSessionIds += sessionData.id
+                                scope.launch {
+                                    val result = viewModel.resetSessionConnectionAndDetection(sessionData.id)
+                                    resettingConnectionSessionIds -= sessionData.id
+                                    Toast.makeText(
+                                        context,
+                                        if (result.isSuccess) {
+                                            connectionResetSuccess
+                                        } else {
+                                            result.exceptionOrNull()?.message
+                                                ?.takeIf(String::isNotBlank)
+                                                ?.let { "$connectionResetFailed: $it" }
+                                                ?: connectionResetFailed
+                                        },
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            }
+                        },
                         onDelete = {
                             sessionToDelete = sessionCardModel(sessionData, isConnected = false)
                         },
@@ -90,36 +140,10 @@ fun SessionsScreen(
     }
 }
 
-fun buildUrlScheme(sessionData: SessionData): String {
-    val params = mutableListOf<String>()
-
-    if (sessionData.maxSize.isNotBlank()) {
-        params.add("max-size=${sessionData.maxSize}")
-    }
-    if (sessionData.videoBitrate.isNotBlank()) {
-        params.add("video-bit-rate=${sessionData.videoBitrate}")
-    }
-    if (sessionData.forceAdb) {
-        params.add("force-adb-forward=true")
-    }
-    if (sessionData.stayAwake) {
-        params.add("stay-awake=true")
-    }
-    if (sessionData.turnScreenOff) {
-        params.add("turn-screen-off=true")
-    }
-    if (sessionData.powerOffOnClose) {
-        params.add("power-off-on-close=true")
-    }
-    if (sessionData.enableAudio) {
-        params.add("enable-audio=true")
-    }
-
-    val port = if (sessionData.port.isNotBlank()) ":${sessionData.port}" else ""
-    val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
-
-    return "scrcpy2://${formatHostForAuthority(sessionData.host)}$port$query"
-}
+private fun List<com.screen.remote.android.infrastructure.adb.usb.UsbDeviceInfo>.toDeviceIdentifiers(): Set<String> =
+    flatMap { device -> listOf(device.serialNumber, device.deviceName) }
+        .mapNotNull { it.trim().takeIf(String::isNotEmpty) }
+        .mapTo(linkedSetOf(), DeviceTransportSerial::usb)
 
 @Composable
 private fun SessionDeleteDialog(
@@ -166,6 +190,6 @@ private fun sessionCardModel(
         name = sessionData.name,
         color = SessionColor.valueOf(sessionData.color),
         isConnected = isConnected,
-        hasWifi = sessionData.host.isNotBlank(),
+        hasWifi = sessionData.toConnectionCandidates().any { it.transport != ConnectionTransport.USB },
         hasWarning = false,
     )

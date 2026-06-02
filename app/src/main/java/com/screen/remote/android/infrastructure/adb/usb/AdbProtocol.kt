@@ -207,20 +207,20 @@ interface AdbChannel {
     /**
      * 写入数据到通道
      */
-    fun write(data: ByteBuffer) // TODO
+    fun write(data: ByteBuffer)
 
     /**
      * 从通道读取指定大小的数据
      */
-    fun read(size: Int): ByteBuffer // TODO
+    fun read(size: Int): ByteBuffer
 
     /**
      * 刷新通道
      */
-    fun flush() // TODO
+    fun flush()
 
     /**
      * 关闭通道
      */
-    fun close() // TODO
+    fun close()
 }

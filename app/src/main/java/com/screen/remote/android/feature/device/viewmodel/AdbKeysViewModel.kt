@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalDadbAndroidApi::class)
 class AdbKeysViewModel(
-    private val context: Context, // TODO
+    private val context: Context,
     private val adbConnectionManager: AdbConnectionManager,
 ) : ViewModel() {
     private val storageRoot

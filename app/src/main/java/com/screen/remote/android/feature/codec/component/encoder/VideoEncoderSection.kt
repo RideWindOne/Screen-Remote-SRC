@@ -3,7 +3,7 @@ package com.screen.remote.android.feature.codec.component.encoder
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.EncoderDialogConfig
-import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
+import com.screen.remote.android.core.domain.model.EncoderCapability
 
 /**
  * 视频编码器配置
@@ -15,7 +15,7 @@ import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
 /**
  * 获取视频编码器对话框配置
  */
-fun getVideoEncoderDialogConfig(detectedEncoders: List<EncoderInfo>): EncoderDialogConfig {
+fun getVideoEncoderDialogConfig(detectedEncoders: List<EncoderCapability>): EncoderDialogConfig {
     // 动态提取视频编码器类型
     val types = mutableSetOf<String>()
     detectedEncoders.forEach { encoder ->
@@ -31,10 +31,6 @@ fun getVideoEncoderDialogConfig(detectedEncoders: List<EncoderInfo>): EncoderDia
 
             encoder.mimeType.contains("vp9", ignoreCase = true) -> types.add("VP9")
 
-            encoder.mimeType.contains("mpeg4", ignoreCase = true) -> types.add("MPEG4")
-
-            encoder.mimeType.contains("h263", ignoreCase = true) ||
-                encoder.mimeType.contains("3gpp", ignoreCase = true) -> types.add("H.263")
         }
     }
 
@@ -64,8 +60,6 @@ fun matchesVideoCodecFilter(
         "AV1" -> mimeType.contains("av01", ignoreCase = true) || mimeType.contains("av1", ignoreCase = true)
         "VP8" -> mimeType.contains("vp8", ignoreCase = true)
         "VP9" -> mimeType.contains("vp9", ignoreCase = true)
-        "MPEG4" -> mimeType.contains("mpeg4", ignoreCase = true)
-        "H.263" -> mimeType.contains("h263", ignoreCase = true) || mimeType.contains("3gpp", ignoreCase = true)
         else -> mimeType.contains(filter, ignoreCase = true)
     }
 }

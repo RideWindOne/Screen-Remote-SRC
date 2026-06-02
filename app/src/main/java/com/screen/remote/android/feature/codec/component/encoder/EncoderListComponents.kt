@@ -29,7 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
-import com.screen.remote.android.core.common.util.formatHostPort
+import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
@@ -37,7 +37,6 @@ import com.screen.remote.android.core.i18n.CodecTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.EncoderType
 import com.screen.remote.android.feature.session.ui.component.CompactTextField
-import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
 
 /**
  * 编码器列表组件
@@ -52,8 +51,7 @@ import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
 @Composable
 fun DetectingCard(
     status: String,
-    host: String,
-    port: String,
+    endpoint: String,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -70,7 +68,7 @@ fun DetectingCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = formatHostPort(host, port.ifBlank { "5555" }),
+                text = endpoint,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
@@ -179,14 +177,15 @@ fun EncoderOptionsSection(
  */
 @Composable
 fun EncoderListSection(
-    encoders: List<EncoderInfo>,
+    encoders: List<EncoderCapability>,
     searchText: String,
     onSearchTextChange: (String) -> Unit,
     codecTypeFilter: String,
     onCodecTypeFilterChange: (String) -> Unit,
     filterOptions: List<String>,
     selectedEncoder: String,
-    onEncoderSelected: (EncoderInfo) -> Unit,
+    selectedEncoderCodec: String,
+    onEncoderSelected: (EncoderCapability) -> Unit,
     encoderType: EncoderType,
     matchesCodecFilter: (String, String, String) -> Boolean,
 ) {
@@ -300,7 +299,7 @@ fun EncoderListSection(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            if (selectedEncoder == encoder.name) {
+                            if (selectedEncoder == encoder.name && selectedEncoderCodec == encoder.codec) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = null,

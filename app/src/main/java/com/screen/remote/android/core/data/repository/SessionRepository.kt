@@ -7,8 +7,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.screen.remote.android.core.common.ScrcpyConstants
-import com.screen.remote.android.core.common.util.formatHostPort
-import com.screen.remote.android.core.common.util.normalizeEndpointHost
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.toAddressEndpoint
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.domain.model.SessionColor
@@ -21,11 +24,17 @@ import kotlinx.serialization.json.Json
 private val Context.sessionDataStore: DataStore<Preferences> by preferencesDataStore(name = "sessions")
 
 @Serializable
+data class TcpPortForwardRule(
+    val targetHost: String = "192.168.1.1",
+    val targetPort: Int = 80,
+    val localPort: Int = 18080,
+)
+
+@Serializable
 data class SessionData(
     val id: String,
     val name: String,
-    val host: String,
-    val port: String,
+    val connectionCandidates: List<ConnectionCandidateData>,
     val color: String,
     val forceAdb: Boolean = false,
     val maxSize: String = "",
@@ -49,14 +58,21 @@ data class SessionData(
     val turnScreenOff: Boolean = true,
     val powerOffOnClose: Boolean = false,
     val cleanupOnDisconnect: Boolean = true,
+    val ignoreVideoEncoderConstraints: Boolean = false,
+    val profileId: String = "",
+    val useProfileDefaults: Boolean = false,
     val keepDeviceAwake: Boolean = false,
     val enableHardwareDecoding: Boolean = true,
     val followRemoteOrientation: Boolean = false,
     val useFullScreen: Boolean = false, // 全屏模式（TextureView），默认关闭
+    val tcpPortForwardRules: List<TcpPortForwardRule> = listOf(TcpPortForwardRule()),
     // 设备信息和编解码器
-    val deviceSerial: String = "", // 设备序列号（通过 ro.serialno 获取），用于验证编解码器是否匹配当前设备
-    val remoteVideoEncoders: List<String> = emptyList(), // 远程设备视频编码器列表
-    val remoteAudioEncoders: List<String> = emptyList(), // 远程设备音频编码器列表
+    // 编解码器能力签名：ro.serialno|ro.build.fingerprint|scrcpyVersion|cacheVersion
+    val deviceSerial: String = "",
+    val remoteVideoEncoders: List<EncoderCapability> = emptyList(),
+    val remoteAudioEncoders: List<EncoderCapability> = emptyList(),
+    val selectedVideoCodec: String = "",
+    val selectedAudioCodec: String = "",
     val selectedVideoDecoder: String = "", // 选中的最佳视频解码器
     val selectedAudioDecoder: String = "", // 选中的最佳音频解码器
     val selectedVideoEncoder: String = "", // 选中的最佳视频编解器
@@ -64,24 +80,26 @@ data class SessionData(
     // 分组信息
     val groupIds: List<String> = emptyList(), // 所属分组 ID 列表，支持多分组
 ) {
-    private fun normalizedUsbDeviceId(): String =
-        when {
-            !isUsbConnection() -> host
-            host.startsWith("usb:") -> host
-            else -> "usb:$host"
-        }
+    init {
+        require(connectionCandidates.isNotEmpty()) { "会话必须至少包含一个 connectionCandidate" }
+    }
+
+    private fun primaryConnectionCandidate(): ConnectionCandidate =
+        toConnectionCandidates().minBy(ConnectionCandidate::priority)
 
     /**
      * 判断是否为 USB 连接
      */
-    fun isUsbConnection(): Boolean = port == "0" || port.isBlank()
+    fun isUsbConnection(): Boolean = primaryConnectionCandidate().transport == ConnectionTransport.USB
+
+    fun isMdnsConnection(): Boolean = primaryConnectionCandidate().transport == ConnectionTransport.MDNS
 
     /**
      * 获取 USB 序列号（仅 USB 模式有效）
      */
     fun getUsbSerialNumber(): String? =
         if (isUsbConnection()) {
-            host.removePrefix("usb:")
+            DeviceTransportSerial.stripUsbPrefix(primaryConnectionCandidate().host)
         } else {
             null
         }
@@ -108,10 +126,38 @@ data class SessionData(
     }
 
     /**
-     * 获取设备唯一标识
-     * USB 模式使用序列号，TCP 模式使用 host:port
+     * 清空连接过程中自动探测出的设备身份和编解码器能力。
+     *
+     * 用户手动选择的编解码器与偏好格式属于配置，不属于探测缓存，必须保留。
+     * 清空设备序列号可确保下次连接从设备身份校验开始完整执行探测流程。
      */
-    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else formatHostPort(host, port)
+    fun clearAutoDetectedCodecState(): SessionData =
+        copy(
+            deviceSerial = "",
+            remoteVideoEncoders = emptyList(),
+            remoteAudioEncoders = emptyList(),
+            selectedVideoCodec = "",
+            selectedAudioCodec = "",
+            selectedVideoEncoder = "",
+            selectedAudioEncoder = "",
+            selectedVideoDecoder = "",
+            selectedAudioDecoder = "",
+        )
+
+    /**
+     * 获取设备唯一标识
+     * USB/TCP/mDNS 模式都使用带 transport 前缀的 ADB serial
+     */
+    fun getDeviceIdentifier(): String = primaryConnectionCandidate().deviceIdentifier()
+
+    fun primaryConnectionEndpointForDisplay(): String = primaryConnectionCandidate().toAddressEndpoint()
+
+    fun allConnectionEndpointsForDisplay(): List<String> =
+        toConnectionCandidates().sortedBy(ConnectionCandidate::priority).map { it.toAddressEndpoint() }
+
+    fun toConnectionCandidates(): List<ConnectionCandidate> {
+        return connectionCandidates.map { it.toDomain() }
+    }
 
     /**
      * 转换为 ScrcpyOptions
@@ -119,11 +165,12 @@ data class SessionData(
     fun toScrcpyOptions(): ScrcpyOptions =
         ScrcpyOptions(
             sessionId = id,
-            host = if (isUsbConnection()) normalizedUsbDeviceId() else normalizeEndpointHost(host),
-            port = port.toIntOrNull() ?: 0,
+            profileId = profileId.takeIf { useProfileDefaults }.orEmpty(),
+            connectionCandidates = toConnectionCandidates(),
             forceAdb = forceAdb,
-            maxSize = maxSize.toIntOrNull() ?: 1920,
-            videoBitRate = parseBitRate(videoBitrate) ?: 8000000,
+            // 0 means that max_size is omitted from the scrcpy server command.
+            maxSize = maxSize.toIntOrNull()?.takeIf { it > 0 } ?: 0,
+            videoBitRate = parseBitRate(videoBitrate) ?: ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
             maxFps = maxFps.toIntOrNull() ?: 60,
             displayId = displayId,
             newDisplayEnabled = newDisplayEnabled,
@@ -143,11 +190,14 @@ data class SessionData(
             turnScreenOff = turnScreenOff,
             powerOffOnClose = powerOffOnClose,
             cleanupOnDisconnect = cleanupOnDisconnect,
+            ignoreVideoEncoderConstraints = ignoreVideoEncoderConstraints,
             keepDeviceAwake = keepDeviceAwake,
             enableHardwareDecoding = enableHardwareDecoding,
             followRemoteOrientation = followRemoteOrientation,
             selectedVideoEncoder = selectedVideoEncoder,
             selectedAudioEncoder = selectedAudioEncoder,
+            selectedVideoCodec = selectedVideoCodec,
+            selectedAudioCodec = selectedAudioCodec,
             selectedVideoDecoder = selectedVideoDecoder,
             selectedAudioDecoder = selectedAudioDecoder,
             deviceSerial = deviceSerial,
@@ -161,8 +211,8 @@ data class SessionData(
     fun fromScrcpyOptions(options: ScrcpyOptions): SessionData =
         copy(
             forceAdb = options.forceAdb,
-            maxSize = options.maxSize.toString(),
-            videoBitrate = options.videoBitRate.toString(),
+            maxSize = preserveOptionalLimitText(maxSize, options.maxSize),
+            videoBitrate = preserveBitRateText(videoBitrate, options.videoBitRate),
             maxFps = options.maxFps.toString(),
             displayId = options.displayId,
             newDisplayEnabled = options.newDisplayEnabled,
@@ -177,16 +227,22 @@ data class SessionData(
             preferredAudioCodec = options.preferredAudioCodec,
             userAudioEncoder = options.userAudioEncoder,
             userAudioDecoder = options.userAudioDecoder,
-            audioBitrate = options.audioBitRate.toString(),
+            audioBitrate = preserveBitRateText(audioBitrate, options.audioBitRate),
             stayAwake = options.stayAwake,
             turnScreenOff = options.turnScreenOff,
             powerOffOnClose = options.powerOffOnClose,
             cleanupOnDisconnect = options.cleanupOnDisconnect,
+            ignoreVideoEncoderConstraints = options.ignoreVideoEncoderConstraints,
+            profileId = options.profileId,
+            useProfileDefaults = options.profileId.isNotBlank(),
+            connectionCandidates = options.connectionCandidates.map { it.toData() },
             keepDeviceAwake = options.keepDeviceAwake,
             enableHardwareDecoding = options.enableHardwareDecoding,
             followRemoteOrientation = options.followRemoteOrientation,
             selectedVideoEncoder = options.selectedVideoEncoder,
             selectedAudioEncoder = options.selectedAudioEncoder,
+            selectedVideoCodec = options.selectedVideoCodec,
+            selectedAudioCodec = options.selectedAudioCodec,
             selectedVideoDecoder = options.selectedVideoDecoder,
             selectedAudioDecoder = options.selectedAudioDecoder,
             deviceSerial = options.deviceSerial,
@@ -194,6 +250,44 @@ data class SessionData(
             remoteAudioEncoders = options.remoteAudioEncoders,
         )
 }
+
+@Serializable
+data class ConnectionCandidateData(
+    val transport: String,
+    val host: String,
+    val port: Int = 0,
+    val priority: Int = 0,
+    val lastSuccessfulAtMillis: Long = 0L,
+    val failureCount: Int = 0,
+) {
+    fun toDomain(): ConnectionCandidate {
+        val parsedTransport = runCatching { ConnectionTransport.valueOf(transport) }.getOrDefault(ConnectionTransport.TCP)
+        val normalizedHost =
+            if (parsedTransport == ConnectionTransport.MDNS) {
+                DeviceTransportSerial.mdnsDeviceSerial(host)
+            } else {
+                host
+            }
+        return ConnectionCandidate(
+            transport = parsedTransport,
+            host = normalizedHost,
+            port = port,
+            priority = priority,
+            lastSuccessfulAtMillis = lastSuccessfulAtMillis,
+            failureCount = failureCount,
+        )
+    }
+}
+
+fun ConnectionCandidate.toData(): ConnectionCandidateData =
+    ConnectionCandidateData(
+        transport = transport.name,
+        host = if (transport == ConnectionTransport.MDNS) DeviceTransportSerial.mdnsDeviceSerial(host) else host,
+        port = port,
+        priority = priority,
+        lastSuccessfulAtMillis = lastSuccessfulAtMillis,
+        failureCount = failureCount,
+    )
 
 internal fun parseBitRate(rawValue: String): Int? {
     val value = rawValue.trim()
@@ -216,6 +310,32 @@ internal fun parseBitRate(rawValue: String): Int? {
     val bitsPerSecond = (parsed * multiplier).toLong()
     return bitsPerSecond.coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
 }
+
+/**
+ * ScrcpyOptions uses bps integers, while SessionData keeps the text entered by the user.
+ * Preserve that text when an unrelated options update round-trips through the integer model.
+ */
+internal fun preserveBitRateText(
+    currentText: String,
+    bitsPerSecond: Int,
+): String =
+    if (parseBitRate(currentText) == bitsPerSecond) {
+        currentText
+    } else {
+        bitsPerSecond.toString()
+    }
+
+/** Keep an empty optional limit empty while it round-trips through the integer options model. */
+internal fun preserveOptionalLimitText(
+    currentText: String,
+    value: Int,
+): String =
+    when {
+        currentText.isBlank() && value <= 0 -> currentText
+        currentText.toIntOrNull() == value -> currentText
+        value > 0 -> value.toString()
+        else -> ""
+    }
 
 class SessionRepository(
     private val context: Context,
@@ -350,7 +470,7 @@ class SessionRepository(
             name = name,
             color = SessionColor.valueOf(color),
             isConnected = false,
-            hasWifi = host.isNotBlank(),
+            hasWifi = toConnectionCandidates().any { it.transport != ConnectionTransport.USB },
             hasWarning = false,
         )
 }

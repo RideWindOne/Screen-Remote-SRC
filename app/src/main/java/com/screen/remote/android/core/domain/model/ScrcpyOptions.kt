@@ -1,6 +1,6 @@
 package com.screen.remote.android.core.domain.model
 
-import com.screen.remote.android.core.common.util.formatHostPort
+import com.screen.remote.android.core.common.ScrcpyConstants
 
 /**
  * Scrcpy 配置选项 - 唯一配置载体
@@ -18,13 +18,13 @@ import com.screen.remote.android.core.common.util.formatHostPort
 data class ScrcpyOptions(
     // ========== 标识字段 ==========
     val sessionId: String, // 会话 UUID，作为全局唯一标识
+    val profileId: String = "",
     // ========== 连接信息 ==========
-    val host: String, // 网络设备: IP地址, USB设备: 序列号
-    val port: Int = 0, // 网络设备: 端口号, USB设备: 0
+    val connectionCandidates: List<ConnectionCandidate>,
     // ========== 用户配置字段 ==========
     val forceAdb: Boolean = false,
     val maxSize: Int = 1920,
-    val videoBitRate: Int = 8000000,
+    val videoBitRate: Int = ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
     val maxFps: Int = 60,
     val displayId: Int = 0,
     val newDisplayEnabled: Boolean = false,
@@ -35,6 +35,7 @@ data class ScrcpyOptions(
     val codecOptions: String = "",
     val powerOffOnClose: Boolean = false,
     val cleanupOnDisconnect: Boolean = true,
+    val ignoreVideoEncoderConstraints: Boolean = false,
     val enableAudio: Boolean = false,
     val audioBitRate: Int = 128000,
     val turnScreenOff: Boolean = false,
@@ -42,28 +43,31 @@ data class ScrcpyOptions(
     val enableHardwareDecoding: Boolean = true,
     val followRemoteOrientation: Boolean = false,
     // ========== 编解码器辅助字段（UI 编辑 + 自动检测） ==========
-    val preferredVideoCodec: String = "", // 偏好的视频编码格式（h264/h265），用于 UI 选择和自动检测参考
-    val preferredAudioCodec: String = "", // 偏好的音频编码格式（opus/aac），用于 UI 选择和自动检测参考
+    val preferredVideoCodec: String = CodecCatalog.DEFAULT_VIDEO_CODEC,
+    val preferredAudioCodec: String = CodecCatalog.DEFAULT_AUDIO_CODEC,
     // ========== 用户手动选择的编解码器 ==========
     val userVideoEncoder: String = "", // 用户手动选择的视频编码器（优先级最高）
     val userAudioEncoder: String = "", // 用户手动选择的音频编码器（优先级最高）
     val userVideoDecoder: String = "", // 用户手动选择的视频解码器（优先级最高）
     val userAudioDecoder: String = "", // 用户手动选择的音频解码器（优先级最高）
     // ========== 设备能力字段（自动检测填充） ==========
-    val deviceSerial: String = "", // 设备序列号（通过 ro.serialno 获取）
-    val remoteVideoEncoders: List<String> = emptyList(), // 远程设备视频编码器列表
-    val remoteAudioEncoders: List<String> = emptyList(), // 远程设备音频编码器列表
+    // 编解码器能力签名：ro.serialno|ro.build.fingerprint|scrcpyVersion|cacheVersion
+    val deviceSerial: String = "",
+    val remoteVideoEncoders: List<EncoderCapability> = emptyList(),
+    val remoteAudioEncoders: List<EncoderCapability> = emptyList(),
+    val selectedVideoCodec: String = "", // 自动匹配后实际启动的视频格式（不覆盖用户偏好）
+    val selectedAudioCodec: String = "", // 自动匹配后实际启动的音频格式（不覆盖用户偏好）
     val selectedVideoEncoder: String = "", // 系统自动选择的最佳视频编码器
     val selectedAudioEncoder: String = "", // 系统自动选择的最佳音频编码器
     val selectedVideoDecoder: String = "", // 系统自动选择的最佳视频解码器
     val selectedAudioDecoder: String = "", // 系统自动选择的最佳音频解码器
 ) {
-    private fun normalizedUsbDeviceId(): String =
-        when {
-            !isUsbConnection() -> host
-            host.startsWith("usb:") -> host
-            else -> "usb:$host"
-        }
+    init {
+        require(connectionCandidates.isNotEmpty()) { "ScrcpyOptions 必须至少包含一个 connectionCandidate" }
+    }
+
+    private fun primaryConnectionCandidate(): ConnectionCandidate =
+        connectionCandidates.minBy(ConnectionCandidate::priority)
 
     /**
      * 判断编解码器是否匹配当前设备
@@ -78,12 +82,14 @@ data class ScrcpyOptions(
     /**
      * 判断是否为 USB 连接
      */
-    fun isUsbConnection(): Boolean = port == 0
+    fun isUsbConnection(): Boolean = primaryConnectionCandidate().transport == ConnectionTransport.USB
+
+    fun isMdnsConnection(): Boolean = primaryConnectionCandidate().transport == ConnectionTransport.MDNS
 
     /**
      * 获取设备标识（用于日志和显示）
      */
-    fun getDeviceIdentifier(): String = if (isUsbConnection()) normalizedUsbDeviceId() else formatHostPort(host, port)
+    fun getDeviceIdentifier(): String = primaryConnectionCandidate().deviceIdentifier()
 
     /**
      * 获取最终使用的视频编码器（用户选择 > 系统自动选择）

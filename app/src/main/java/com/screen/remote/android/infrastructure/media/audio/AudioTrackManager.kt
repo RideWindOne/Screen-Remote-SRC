@@ -1,8 +1,10 @@
 package com.screen.remote.android.infrastructure.media.audio
 
+import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.MediaFormat
 import android.media.AudioTrack
+import android.os.Build
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import java.nio.ByteBuffer
@@ -38,11 +40,17 @@ class AudioTrackManager(
                 )
                 return null
             }
-            val bufferSize = minBufferSize * 4
+            val bufferSize = minBufferSize * 2
 
-            val track =
+            val trackBuilder =
                 AudioTrack
                     .Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build(),
+                    )
                     .setAudioFormat(
                         AudioFormat
                             .Builder()
@@ -52,7 +60,10 @@ class AudioTrackManager(
                             .build(),
                     ).setBufferSizeInBytes(bufferSize)
                     .setTransferMode(AudioTrack.MODE_STREAM)
-                    .build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                trackBuilder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+            }
+            val track = trackBuilder.build()
 
             audioTrack = track
             trackConfig = config
@@ -131,7 +142,7 @@ class AudioTrackManager(
                 data
             }
 
-        return track.write(scaledData, 0, scaledData.size)
+        return writeFully(track, scaledData)
     }
 
     /**
@@ -144,9 +155,18 @@ class AudioTrackManager(
         val track = audioTrack ?: return -1
         val config = trackConfig
 
-        if (volumeScale != 1.0f && config?.encoding == AudioFormat.ENCODING_PCM_16BIT) {
-            applyVolumeScaleToBuffer(buffer, size, volumeScale)
-        } else if (volumeScale != 1.0f && config?.encoding != null && !nonPcm16ScalingWarningLogged) {
+        val bytes = ByteArray(size)
+        buffer.duplicate().get(bytes)
+        val output =
+            if (volumeScale != 1.0f && config?.encoding == AudioFormat.ENCODING_PCM_16BIT) {
+                applyVolumeScale(bytes, volumeScale)
+            } else {
+                bytes
+            }
+
+        if (volumeScale != 1.0f && config?.encoding != AudioFormat.ENCODING_PCM_16BIT &&
+            config?.encoding != null && !nonPcm16ScalingWarningLogged
+        ) {
             nonPcm16ScalingWarningLogged = true
             LogManager.w(
                 LogTags.AUDIO_DECODER,
@@ -154,7 +174,7 @@ class AudioTrackManager(
             )
         }
 
-        return track.write(buffer, size, AudioTrack.WRITE_BLOCKING)
+        return writeFully(track, output)
     }
 
     /**
@@ -192,40 +212,18 @@ class AudioTrackManager(
         return scaledData
     }
 
-    /**
-     * 应用音量缩放到 ByteBuffer (PCM 16-bit)
-     * @param buffer PCM 数据缓冲区
-     * @param size 数据大小
-     * @param scale 音量缩放系数 (0.1 ~ 2.0)
-     */
-    private fun applyVolumeScaleToBuffer(
-        buffer: ByteBuffer,
-        size: Int,
-        scale: Float,
-    ) {
-        if (scale == 1.0f) return
-
-        val position = buffer.position()
-
-        // PCM 16-bit 数据，每 2 个字节是一个样本
-        for (i in 0 until size step 2) {
-            if (i + 1 >= size) break
-
-            // 读取 16-bit 样本 (小端序)
-            val byte1 = buffer.get(position + i).toInt() and 0xFF
-            val byte2 = buffer.get(position + i + 1).toInt()
-            val sample = ((byte2 shl 8) or byte1).toShort()
-
-            // 应用音量缩放
-            var scaledSample = (sample * scale).toInt()
-
-            // 限制在 16-bit 范围内，避免溢出
-            scaledSample = scaledSample.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-
-            // 写回数据 (小端序)
-            buffer.put(position + i, (scaledSample and 0xFF).toByte())
-            buffer.put(position + i + 1, ((scaledSample shr 8) and 0xFF).toByte())
+    private fun writeFully(
+        track: AudioTrack,
+        data: ByteArray,
+    ): Int {
+        var offset = 0
+        while (offset < data.size) {
+            val written = track.write(data, offset, data.size - offset, AudioTrack.WRITE_BLOCKING)
+            if (written < 0) return written
+            if (written == 0) continue
+            offset += written
         }
+        return offset
     }
 
     /**

@@ -1,5 +1,10 @@
 package com.screen.remote.android.feature.codec.util
 
+import android.media.MediaCodecList
+import com.screen.remote.android.core.domain.model.CodecCatalog
+import com.screen.remote.android.core.domain.model.CodecMediaType
+import com.screen.remote.android.core.domain.model.EncoderCapability
+
 /**
  * 编解码器工具类
  */
@@ -10,97 +15,47 @@ object CodecUtils {
     }
 
     /**
-     * 检查两个编解码器是否协议匹配
-     * 通过检查编解码器名称中是否包含相同的协议关键字
-     * @param type 编解码器类型（VIDEO/AUDIO），用于限定协议范围
+     * Resolve the negotiated MIME from structured remote capabilities. Implementation-name
+     * inference is deliberately only a fallback for a manually entered encoder.
      */
-    fun isCodecProtocolMatch(
-        codec1: String,
-        codec2: String,
+    fun resolveEncoderMimeType(
+        encoders: List<EncoderCapability>,
+        encoderName: String,
+        preferredCodec: String,
         type: CodecType,
+    ): String? {
+        val mediaType = type.toMediaType()
+        val preferredSpec = CodecCatalog.find(mediaType, preferredCodec)
+        val namedEncoders = encoders.filter { it.mediaType == mediaType && it.name == encoderName }
+        if (namedEncoders.isNotEmpty()) {
+            return namedEncoders.firstOrNull { it.codec == preferredSpec?.name }?.mimeType
+                ?: namedEncoders.singleOrNull()?.mimeType
+        }
+        return preferredSpec?.mimeType
+            ?: CodecCatalog.inferFromImplementationName(mediaType, encoderName)?.mimeType
+    }
+
+    /** Match by the decoder's advertised MediaCodec MIME types, never by its implementation name. */
+    fun isDecoderCompatible(
+        decoderName: String,
+        mimeType: String?,
     ): Boolean {
-        if (codec1.isBlank() || codec2.isBlank()) return true // 空值不校验
-
-        val lower1 = codec1.lowercase()
-        val lower2 = codec2.lowercase()
-
-        val protocols = when (type) {
-            CodecType.AUDIO -> listOf(
-                "opus",
-                "aac",
-                "mp4a",
-                "flac",
-                "vorbis",
-                "amr",
-                "3gpp",
-                "raw",
-                "pcm",
-            )
-            CodecType.VIDEO -> listOf(
-                "avc",
-                "h264",
-                "h.264",
-                "hevc",
-                "h265",
-                "h.265",
-                "av01",
-                "av1",
-                "vp8",
-                "vp9",
-                "mpeg4",
-                "h263",
-                "h.263",
-            )
+        if (decoderName.isBlank() || mimeType.isNullOrBlank() || mimeType.equals("audio/raw", ignoreCase = true)) {
+            return true
         }
-
-        // 检查是否有共同的协议关键字
-        for (protocol in protocols) {
-            if (lower1.contains(protocol) && lower2.contains(protocol)) {
-                return true
-            }
-        }
-
-        return false
+        return runCatching {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .firstOrNull { !it.isEncoder && it.name == decoderName }
+                ?.supportedTypes
+                ?.any { it.equals(mimeType, ignoreCase = true) }
+                ?: false
+        }.getOrDefault(false)
     }
 
-    /**
-     * 从编解码器名称中提取协议类型（用于显示等场景）
-     */
-    fun extractCodecProtocol(codecName: String): String? {
-        if (codecName.isBlank()) return null
-
-        val lowerName = codecName.lowercase()
-
-        return when {
-            // 音频协议
-            lowerName.contains("opus") -> "opus"
-
-            lowerName.contains("aac") || lowerName.contains("mp4a") -> "aac"
-
-            lowerName.contains("flac") -> "flac"
-
-            lowerName.contains("vorbis") -> "vorbis"
-
-            lowerName.contains("amr") || lowerName.contains("3gpp") -> "amr"
-
-            lowerName.contains("raw") || lowerName.contains("pcm") -> "raw"
-
-            // 视频协议
-            lowerName.contains("avc") || lowerName.contains("h264") || lowerName.contains("h.264") -> "h264"
-
-            lowerName.contains("hevc") || lowerName.contains("h265") || lowerName.contains("h.265") -> "h265"
-
-            lowerName.contains("av01") || lowerName.contains("av1") -> "av1"
-
-            lowerName.contains("vp8") -> "vp8"
-
-            lowerName.contains("vp9") -> "vp9"
-
-            lowerName.contains("mpeg4") -> "mpeg4"
-
-            lowerName.contains("h263") || lowerName.contains("h.263") -> "h263"
-
-            else -> null
+    private fun CodecType.toMediaType(): CodecMediaType =
+        when (this) {
+            CodecType.VIDEO -> CodecMediaType.VIDEO
+            CodecType.AUDIO -> CodecMediaType.AUDIO
         }
-    }
+
 }

@@ -1,5 +1,6 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -13,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -23,13 +26,13 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,12 +44,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.AppColors
+import com.screen.remote.android.core.common.util.FilePickerHelper
+import com.screen.remote.android.core.i18n.ManagementTexts
+import com.screen.remote.android.core.designsystem.component.ClickableBreadcrumb
+import com.screen.remote.android.core.designsystem.component.ClickableBreadcrumbItem
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private val BuiltInEditorUnsupportedFileKinds =
+    setOf(RemoteFileKind.Image, RemoteFileKind.Video, RemoteFileKind.Audio)
+
+private enum class RemoteFileClipboardOperation {
+    Copy,
+    Cut,
+}
+
+private data class RemoteFileClipboard(
+    val operation: RemoteFileClipboardOperation,
+    val entries: List<RemoteFileEntry>,
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -65,9 +84,13 @@ internal fun SessionManagementFileBrowser(
     var textEditorState by remember { mutableStateOf<RemoteTextEditorState?>(null) }
     var imagePreviewState by remember { mutableStateOf<RemotePreparedFileState?>(null) }
     var videoPreviewState by remember { mutableStateOf<RemotePreparedFileState?>(null) }
-    var audioPreviewState by remember { mutableStateOf<RemotePreparedFileState?>(null) }
     var binaryPreviewState by remember { mutableStateOf<RemoteBinaryPreviewState?>(null) }
     var overwriteConfirmState by remember { mutableStateOf<RemoteOverwriteConfirmState?>(null) }
+    val audioPreviewPlayerState = remember { mutableStateOf<MediaPlayer?>(null) }
+    var audioPreviewPlayer by audioPreviewPlayerState
+    var fileClipboard by remember { mutableStateOf<RemoteFileClipboard?>(null) }
+    var pendingDownloadEntries by remember { mutableStateOf<List<RemoteFileEntry>>(emptyList()) }
+    var pendingUploadTargetDirectory by remember { mutableStateOf<String?>(null) }
     var selectedPaths by remember { mutableStateOf(setOf<String>()) }
     var addMenuOpen by remember { mutableStateOf(false) }
     var handledAddMenuRequestTick by remember { mutableIntStateOf(externalAddMenuRequestTick) }
@@ -77,16 +100,55 @@ internal fun SessionManagementFileBrowser(
     var deleteTargets by remember { mutableStateOf<List<RemoteFileEntry>>(emptyList()) }
     var fileActionMessage by remember { mutableStateOf<String?>(null) }
     var fileActionProgress by remember { mutableStateOf<String?>(null) }
-    val isSelectionMode = selectedPaths.isNotEmpty()
-    val fileSnapshot by produceState(
-        initialValue = FileBrowserSnapshot.loading(currentPath),
-        key1 = currentPath,
-        key2 = refreshToken,
-        key3 = localRefreshTick,
-    ) {
-        value = loadFileBrowserSnapshot(currentPath)
+    var fileSnapshot by remember { mutableStateOf(FileBrowserSnapshot.loading(currentPath)) }
+    var fileSnapshotPath by remember { mutableStateOf(currentPath) }
+    var fileRefreshing by remember { mutableStateOf(true) }
+    val isSelectionMode by remember {
+        derivedStateOf { selectedPaths.isNotEmpty() }
     }
-    val selectedEntries = fileSnapshot.entries.filter { it.fullPath in selectedPaths }
+    val selectedEntries by remember {
+        derivedStateOf { fileSnapshot.entries.filter { it.fullPath in selectedPaths } }
+    }
+    val pathBreadcrumbItems by remember {
+        derivedStateOf {
+            buildRemotePathBreadcrumb(fileSnapshot.currentPath.ifBlank { currentPath })
+                .map { ClickableBreadcrumbItem(label = it.label, value = it.path) }
+        }
+    }
+
+    fun stopAudioPreview() {
+        audioPreviewPlayer?.let { player ->
+            runCatching { player.release() }
+        }
+        audioPreviewPlayer = null
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            audioPreviewPlayerState.value?.let { player ->
+                runCatching { player.release() }
+            }
+            audioPreviewPlayerState.value = null
+        }
+    }
+
+    LaunchedEffect(currentPath, refreshToken, localRefreshTick) {
+        val pathChanged = fileSnapshotPath != currentPath
+        val canKeepCurrentContent = !pathChanged && fileSnapshot.entries.isNotEmpty() && fileSnapshot.errorMessage == null
+        if (pathChanged) {
+            fileSnapshotPath = currentPath
+            fileSnapshot = FileBrowserSnapshot.loading(currentPath)
+            selectedPaths = emptySet()
+        }
+        fileRefreshing = true
+        val nextSnapshot = loadFileBrowserSnapshot(currentPath)
+        fileRefreshing = false
+        if (nextSnapshot.errorMessage != null && canKeepCurrentContent) {
+            fileActionMessage = nextSnapshot.errorMessage
+        } else {
+            fileSnapshot = nextSnapshot
+        }
+    }
 
     LaunchedEffect(externalAddMenuRequestTick) {
         if (externalAddMenuRequestTick > handledAddMenuRequestTick) {
@@ -118,17 +180,66 @@ internal fun SessionManagementFileBrowser(
 
     fun launchFileAction(
         progress: String,
+        onSuccess: () -> Unit = {},
         block: suspend () -> Result<String>,
     ) {
         fileActionProgress = progress
         scope.launch {
             val result = block()
             fileActionProgress = null
-            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.text("文件操作失败", "File action failed"))
+            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Files.FILE_ACTION_FAILED.get())
+            if (result.isSuccess) {
+                onSuccess()
+            }
             selectedPaths = emptySet()
             refreshCurrentDirectory()
         }
     }
+
+    fun savePendingDownload(destinationUri: android.net.Uri?) {
+        val entriesToDownload = pendingDownloadEntries
+        pendingDownloadEntries = emptyList()
+        if (destinationUri != null && entriesToDownload.isNotEmpty()) {
+            launchFileAction(
+                progress = ManagementTexts.Files.DOWNLOADING_ITEM_S.format(entriesToDownload.size),
+            ) {
+                downloadRemoteEntriesToDocument(
+                    context = context,
+                    entries = entriesToDownload,
+                    destinationUri = destinationUri,
+                )
+            }
+        }
+    }
+
+    val singleFileDownloadLauncher =
+        FilePickerHelper.rememberExportFileLauncher(
+            mimeType = "*/*",
+            initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
+            onResult = ::savePendingDownload,
+        )
+    val archiveDownloadLauncher =
+        FilePickerHelper.rememberExportFileLauncher(
+            mimeType = "application/zip",
+            initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
+            onResult = ::savePendingDownload,
+        )
+    val uploadFileLauncher =
+        FilePickerHelper.rememberImportMultipleFilesLauncher { sourceUris ->
+            val targetDirectory = pendingUploadTargetDirectory
+            pendingUploadTargetDirectory = null
+            if (sourceUris.isNotEmpty() && targetDirectory != null) {
+                launchFileAction(
+                    progress = ManagementTexts.Files.UPLOADING_FILE_S.format(sourceUris.size),
+                ) {
+                    uploadLocalFilesToRemoteDirectory(
+                        context = context,
+                        sourceUris = sourceUris,
+                        targetDirectory = targetDirectory,
+                    )
+                }
+            }
+        }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -137,8 +248,9 @@ internal fun SessionManagementFileBrowser(
         ) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = managementPanelColor(),
-                tonalElevation = 0.5.dp,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                shadowElevation = 1.dp,
             ) {
                 Row(
                     modifier =
@@ -148,23 +260,26 @@ internal fun SessionManagementFileBrowser(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = fileSnapshot.currentPath.ifBlank { currentPath },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    ClickableBreadcrumb(
+                        items = pathBreadcrumbItems,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .padding(end = 10.dp),
+                        onItemClick = { item ->
+                            currentPath = item.value
+                            selectedPaths = emptySet()
+                        },
                     )
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 1.dp,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        tonalElevation = 0.dp,
                     ) {
                         Text(
-                            text = if (currentPath == "/") ManagementTexts.text("返回 sdcard", "Back to sdcard") else ManagementTexts.text("返回上一级", "Go up"),
+                            text = if (currentPath == "/") ManagementTexts.Files.BACK_SDCARD.get() else ManagementTexts.Files.GO_UP.get(),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier =
                                 Modifier
                                     .clip(RoundedCornerShape(999.dp))
@@ -180,71 +295,84 @@ internal fun SessionManagementFileBrowser(
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(20.dp),
-                color = managementPanelColor(),
-                tonalElevation = 1.dp,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                shadowElevation = 1.dp,
             ) {
-                when {
-                    fileSnapshot.isLoading -> {
-                        SessionManagementFileListSkeleton()
-                    }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when {
+                        fileSnapshot.isLoading -> {
+                            SessionManagementFileListSkeleton()
+                        }
 
-                    fileSnapshot.errorMessage != null -> {
-                        SessionManagementNoteCard(
-                            title = ManagementTexts.text("目录读取失败", "Couldn't load folder"),
-                            text = fileSnapshot.errorMessage ?: ManagementTexts.text("目录读取失败。", "Couldn't load this folder."),
-                        )
-                    }
+                        fileSnapshot.errorMessage != null -> {
+                            SessionManagementNoteCard(
+                                title = ManagementTexts.Files.FOLDER_LOAD_FAILED_TITLE.get(),
+                                text = fileSnapshot.errorMessage ?: ManagementTexts.Files.FOLDER_LOAD_FAILED_MESSAGE.get(),
+                            )
+                        }
 
-                    fileSnapshot.entries.isEmpty() -> {
-                        SessionManagementNoteCard(
-                            title = ManagementTexts.text("目录为空", "Folder is empty"),
-                            text = ManagementTexts.text("当前目录没有可展示的文件或文件夹。", "No files or folders here."),
-                        )
-                    }
+                        fileSnapshot.entries.isEmpty() -> {
+                            SessionManagementNoteCard(
+                                title = ManagementTexts.Files.FOLDER_EMPTY.get(),
+                                text = ManagementTexts.Files.NO_FILES_FOLDERS.get(),
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(top = 12.dp)
+                                        .fillMaxWidth(0.95f),
+                            )
+                        }
 
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = if (isSelectionMode) 82.dp else 76.dp),
-                        ) {
-                            items(fileSnapshot.entries.size) { index ->
-                                val entry = fileSnapshot.entries[index]
-                                SessionManagementFileRow(
-                                    entry = entry,
-                                    selected = entry.fullPath in selectedPaths,
-                                    selectionMode = isSelectionMode,
-                                    onClick = {
-                                        if (isSelectionMode) {
-                                            selectedPaths =
-                                                selectedPaths.toMutableSet().apply {
-                                                    if (!add(entry.fullPath)) {
-                                                        remove(entry.fullPath)
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = if (isSelectionMode) 82.dp else 76.dp),
+                            ) {
+                                itemsIndexed(
+                                    items = fileSnapshot.entries,
+                                    key = { _, entry -> entry.fullPath },
+                                ) { index, entry ->
+                                    SessionManagementFileRow(
+                                        entry = entry,
+                                        selected = entry.fullPath in selectedPaths,
+                                        selectionMode = isSelectionMode,
+                                        onClick = {
+                                            if (isSelectionMode) {
+                                                selectedPaths =
+                                                    selectedPaths.toMutableSet().apply {
+                                                        if (!add(entry.fullPath)) {
+                                                            remove(entry.fullPath)
+                                                        }
                                                     }
-                                                }
-                                        } else if (entry.isDirectory) {
-                                            currentPath = entry.fullPath
-                                            selectedPaths = emptySet()
-                                        } else {
-                                            selectedFile = entry
-                                        }
-                                    },
-                                    onLongPress = {
-                                        selectedPaths = (selectedPaths + entry.fullPath).toSet()
-                                    },
-                                )
-                                if (index != fileSnapshot.entries.lastIndex) {
-                                    Box(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(start = 64.dp, end = 16.dp)
-                                                .background(
-                                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                                ).height(1.dp),
+                                            } else if (entry.isDirectory) {
+                                                currentPath = entry.fullPath
+                                                selectedPaths = emptySet()
+                                            } else {
+                                                selectedFile = entry
+                                            }
+                                        },
+                                        onLongPress = {
+                                            selectedPaths = (selectedPaths + entry.fullPath).toSet()
+                                        },
                                     )
+                                    if (index != fileSnapshot.entries.lastIndex) {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(start = 64.dp, end = 16.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                                    ).height(1.dp),
+                                        )
+                                    }
                                 }
                             }
                         }
+                    }
+                    if (fileRefreshing) {
+                        SessionManagementLoadingBar(modifier = Modifier.align(Alignment.TopCenter))
                     }
                 }
             }
@@ -256,8 +384,9 @@ internal fun SessionManagementFileBrowser(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth(),
-                color = managementPanelColor(),
-                tonalElevation = 0.5.dp,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                shadowElevation = 1.dp,
             ) {
                 Row(
                     modifier =
@@ -269,49 +398,77 @@ internal fun SessionManagementFileBrowser(
                 ) {
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.Download,
-                        label = ManagementTexts.text("下载", "Download"),
+                        label = ManagementTexts.Files.DOWNLOAD.get(),
+                        iconTint = AppColors.info,
                         showLabel = false,
-                        onClick = { fileActionMessage = ManagementTexts.text("暂不支持批量下载。", "Bulk download isn't available yet.") },
+                        onClick = {
+                            val entriesToDownload = selectedEntries.toList()
+                            pendingDownloadEntries = entriesToDownload
+                            if (entriesToDownload.size == 1 && !entriesToDownload.single().isDirectory) {
+                                singleFileDownloadLauncher.launch(entriesToDownload.single().name)
+                            } else {
+                                archiveDownloadLauncher.launch(buildArchiveDownloadName(entriesToDownload))
+                            }
+                        },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.ContentCopy,
-                        label = ManagementTexts.text("复制", "Copy"),
+                        label = ManagementTexts.Files.COPY.get(),
+                        iconTint = MaterialTheme.colorScheme.primary,
                         showLabel = false,
-                        onClick = { fileActionMessage = ManagementTexts.text("暂不支持复制。", "Copy isn't available yet.") },
+                        onClick = {
+                            fileClipboard =
+                                RemoteFileClipboard(
+                                    operation = RemoteFileClipboardOperation.Copy,
+                                    entries = selectedEntries.toList(),
+                                )
+                            selectedPaths = emptySet()
+                        },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.ContentCut,
-                        label = ManagementTexts.text("剪切", "Cut"),
+                        label = ManagementTexts.Files.CUT.get(),
+                        iconTint = AppColors.warning,
                         showLabel = false,
-                        onClick = { fileActionMessage = ManagementTexts.text("暂不支持剪切。", "Cut isn't available yet.") },
+                        onClick = {
+                            fileClipboard =
+                                RemoteFileClipboard(
+                                    operation = RemoteFileClipboardOperation.Cut,
+                                    entries = selectedEntries.toList(),
+                                )
+                            selectedPaths = emptySet()
+                        },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.Edit,
-                        label = ManagementTexts.text("重命名", "Rename"),
+                        label = ManagementTexts.Files.RENAME.get(),
+                        iconTint = AppColors.commandWindowAccent,
                         showLabel = false,
                         onClick = {
                             renameTarget = selectedEntries.singleOrNull()
                                 ?: run {
-                                    fileActionMessage = ManagementTexts.text("重命名仅支持单个文件或文件夹。", "Rename only supports a single file or folder.")
+                                    fileActionMessage = ManagementTexts.Files.RENAME_ONLY_SUPPORTS_SINGLE_FILE_FOLDER.get()
                                     null
                                 }
                         },
                     )
                     SessionManagementBottomIconAction(
                         icon = androidx.compose.material.icons.Icons.Outlined.Info,
-                        label = ManagementTexts.text("详情", "Details"),
+                        label = ManagementTexts.Files.DETAILS.get(),
+                        iconTint = AppColors.info,
                         showLabel = false,
                         onClick = {
                             fileDetailEntry = selectedEntries.singleOrNull()
                                 ?: run {
-                                    fileActionMessage = ManagementTexts.text("详情仅支持单个文件或文件夹。", "Details only supports a single file or folder.")
+                                    fileActionMessage = ManagementTexts.Files.DETAILS_ONLY_SUPPORTS_SINGLE_FILE_FOLDER.get()
                                     null
                                 }
                         },
                     )
                     SessionManagementBottomIconAction(
                         icon = Icons.Default.DeleteOutline,
-                        label = ManagementTexts.text("删除", "Delete"),
+                        label = ManagementTexts.Files.DELETE.get(),
+                        iconTint = AppColors.destructive,
                         showLabel = false,
                         onClick = {
                             if (selectedEntries.isNotEmpty()) {
@@ -326,6 +483,7 @@ internal fun SessionManagementFileBrowser(
 
     if (addMenuOpen) {
         SessionManagementFileAddDialog(
+            canPaste = fileClipboard?.entries?.isNotEmpty() == true,
             onDismiss = { addMenuOpen = false },
             onCreateFolder = {
                 addMenuOpen = false
@@ -337,24 +495,56 @@ internal fun SessionManagementFileBrowser(
             },
             onUpload = {
                 addMenuOpen = false
-                fileActionMessage = ManagementTexts.text("本地上传暂不可用。", "Upload from device isn't available yet.")
+                pendingUploadTargetDirectory = currentPath
+                uploadFileLauncher.launch(arrayOf("*/*"))
+            },
+            onPaste = {
+                addMenuOpen = false
+                val clipboard = fileClipboard ?: return@SessionManagementFileAddDialog
+                val targetDirectory = currentPath
+                launchFileAction(
+                    progress =
+                        when (clipboard.operation) {
+                            RemoteFileClipboardOperation.Copy -> ManagementTexts.Files.COPYING_ITEM_S.format(clipboard.entries.size)
+                            RemoteFileClipboardOperation.Cut -> ManagementTexts.Files.MOVING_ITEM_S.format(clipboard.entries.size)
+                        },
+                    onSuccess = {
+                        if (clipboard.operation == RemoteFileClipboardOperation.Cut && fileClipboard == clipboard) {
+                            fileClipboard = null
+                        }
+                    },
+                ) {
+                    when (clipboard.operation) {
+                        RemoteFileClipboardOperation.Copy ->
+                            copyRemoteEntries(
+                                entries = clipboard.entries,
+                                targetDirectory = targetDirectory,
+                            )
+
+                        RemoteFileClipboardOperation.Cut ->
+                            moveRemoteEntries(
+                                entries = clipboard.entries,
+                                targetDirectory = targetDirectory,
+                            )
+                    }
+                }
             },
         )
     }
 
     if (createFolderDialogOpen) {
         SessionManagementTextInputDialog(
-            title = ManagementTexts.text("新建文件夹", "New folder"),
-            label = ManagementTexts.text("文件夹名称", "Folder name"),
+            title = ManagementTexts.Files.NEW_FOLDER.get(),
+            label = ManagementTexts.Files.FOLDER_NAME.get(),
             initialValue = "",
-            confirmText = ManagementTexts.text("创建", "Create"),
+            confirmText = ManagementTexts.Files.CREATE.get(),
             onDismiss = { createFolderDialogOpen = false },
             onConfirm = { folderName ->
                 createFolderDialogOpen = false
-                launchFileAction(progress = ManagementTexts.text("正在创建文件夹", "Creating folder")) {
+                launchFileAction(progress = ManagementTexts.Files.CREATING_FOLDER.get()) {
                     runShellAction(
                         command = "mkdir -p ${quoteShellArg(joinRemotePath(currentPath, folderName))}",
-                        successMessage = ManagementTexts.text("文件夹已创建。", "Folder created."),
+                        successMessage = ManagementTexts.Files.FOLDER_CREATED.get(),
                     )
                 }
             },
@@ -363,17 +553,17 @@ internal fun SessionManagementFileBrowser(
 
     if (createFileDialogOpen) {
         SessionManagementTextInputDialog(
-            title = ManagementTexts.text("新建文件", "New file"),
-            label = ManagementTexts.text("文件名称", "File name"),
+            title = ManagementTexts.Files.NEW_FILE.get(),
+            label = ManagementTexts.Files.FILE_NAME.get(),
             initialValue = "",
-            confirmText = ManagementTexts.text("创建", "Create"),
+            confirmText = ManagementTexts.Files.CREATE.get(),
             onDismiss = { createFileDialogOpen = false },
             onConfirm = { fileName ->
                 createFileDialogOpen = false
-                launchFileAction(progress = ManagementTexts.text("正在创建文件", "Creating file")) {
+                launchFileAction(progress = ManagementTexts.Files.CREATING_FILE.get()) {
                     runShellAction(
                         command = "touch ${quoteShellArg(joinRemotePath(currentPath, fileName))}",
-                        successMessage = ManagementTexts.text("文件已创建。", "File created."),
+                        successMessage = ManagementTexts.Files.FILE_CREATED.get(),
                     )
                 }
             },
@@ -382,19 +572,19 @@ internal fun SessionManagementFileBrowser(
 
     renameTarget?.let { entry ->
         SessionManagementTextInputDialog(
-            title = ManagementTexts.text("重命名", "Rename"),
-            label = ManagementTexts.text("新的名称", "New name"),
+            title = ManagementTexts.Files.RENAME.get(),
+            label = ManagementTexts.Files.NEW_NAME.get(),
             initialValue = entry.name,
-            confirmText = ManagementTexts.text("应用", "Apply"),
+            confirmText = ManagementTexts.Files.APPLY.get(),
             onDismiss = { renameTarget = null },
             onConfirm = { newName ->
                 renameTarget = null
-                launchFileAction(progress = ManagementTexts.text("正在重命名 ${entry.name}", "Renaming ${entry.name}")) {
+                launchFileAction(progress = ManagementTexts.Files.RENAMING.format(entry.name)) {
                     runShellAction(
                         command =
                             "mv ${quoteShellArg(entry.fullPath)} " +
                                 quoteShellArg(joinRemotePath(parentRemotePath(entry.fullPath), newName)),
-                        successMessage = ManagementTexts.text("重命名已完成。", "Rename complete."),
+                        successMessage = ManagementTexts.Files.RENAME_COMPLETE.get(),
                     )
                 }
             },
@@ -408,10 +598,10 @@ internal fun SessionManagementFileBrowser(
             onConfirm = {
                 val targetPaths = deleteTargets.map { it.fullPath }
                 deleteTargets = emptyList()
-                launchFileAction(progress = ManagementTexts.text("正在删除 ${targetPaths.size} 项", "Deleting ${targetPaths.size} item(s)")) {
+                launchFileAction(progress = ManagementTexts.Files.DELETING_ITEM_S.format(targetPaths.size)) {
                     runShellAction(
                         command = "rm -rf ${targetPaths.joinToString(" ") { quoteShellArg(it) }}",
-                        successMessage = ManagementTexts.text("删除已完成。", "Delete complete."),
+                        successMessage = ManagementTexts.Files.DELETE_COMPLETE.get(),
                     )
                 }
             },
@@ -419,23 +609,37 @@ internal fun SessionManagementFileBrowser(
     }
 
     selectedFile?.let { entry ->
+        val fileKind = classifyRemoteFileKind(entry.name)
+        val canPushBack by produceState(
+            initialValue = false,
+            key1 = entry.fullPath,
+        ) {
+            value =
+                withContext(Dispatchers.IO) {
+                    getPreparedLocalFile(context, entry).exists()
+                }
+        }
         SessionManagementFileActionDialog(
             entry = entry,
-            fileKind = classifyRemoteFileKind(entry.name),
+            fileKind = fileKind,
             canEdit =
-                classifyRemoteFileKind(entry.name) !in
-                    setOf(RemoteFileKind.Image, RemoteFileKind.Video, RemoteFileKind.Audio),
-            canPushBack = getPreparedLocalFile(context, entry).exists(),
-            onDismiss = { selectedFile = null },
-            onPreview = {
+                fileKind !in BuiltInEditorUnsupportedFileKinds,
+            canPushBack = canPushBack,
+            onDismiss = {
+                stopAudioPreview()
                 selectedFile = null
-                fileActionProgress = ManagementTexts.text("正在准备预览文件", "Preparing preview")
+            },
+            onPreview = {
+                if (fileKind != RemoteFileKind.Audio) {
+                    selectedFile = null
+                }
+                fileActionProgress = ManagementTexts.Files.PREPARING_PREVIEW.get()
                 scope.launch {
                     val result = prepareRemoteFileForLocalOpen(context, entry)
                     fileActionProgress = null
                     result.fold(
                         onSuccess = { localFile ->
-                            when (classifyRemoteFileKind(entry.name)) {
+                            when (fileKind) {
                                 RemoteFileKind.Image -> {
                                     imagePreviewState = RemotePreparedFileState(entry, localFile)
                                 }
@@ -445,7 +649,36 @@ internal fun SessionManagementFileBrowser(
                                 }
 
                                 RemoteFileKind.Audio -> {
-                                    audioPreviewState = RemotePreparedFileState(entry, localFile)
+                                    stopAudioPreview()
+                                    val player = MediaPlayer()
+                                    audioPreviewPlayer = player
+                                    player.setOnPreparedListener { preparedPlayer ->
+                                        preparedPlayer.start()
+                                    }
+                                    player.setOnCompletionListener { completedPlayer ->
+                                        if (audioPreviewPlayer === completedPlayer) {
+                                            audioPreviewPlayer = null
+                                        }
+                                        completedPlayer.release()
+                                    }
+                                    player.setOnErrorListener { failedPlayer, _, _ ->
+                                        if (audioPreviewPlayer === failedPlayer) {
+                                            audioPreviewPlayer = null
+                                        }
+                                        failedPlayer.release()
+                                        fileActionMessage = ManagementTexts.Files.COULDN_T_PLAY_AUDIO.get()
+                                        true
+                                    }
+                                    runCatching {
+                                        player.setDataSource(localFile.absolutePath)
+                                        player.prepareAsync()
+                                    }.onFailure { error ->
+                                        if (audioPreviewPlayer === player) {
+                                            audioPreviewPlayer = null
+                                        }
+                                        player.release()
+                                        fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_PLAY_AUDIO.get()
+                                    }
                                 }
 
                                 RemoteFileKind.Binary -> {
@@ -453,7 +686,10 @@ internal fun SessionManagementFileBrowser(
                                         RemoteBinaryPreviewState(
                                             entry = entry,
                                             localFile = localFile,
-                                            preview = readBinaryPreview(localFile),
+                                            preview =
+                                                withContext(Dispatchers.IO) {
+                                                    readBinaryPreview(localFile)
+                                                },
                                         )
                                 }
 
@@ -463,14 +699,15 @@ internal fun SessionManagementFileBrowser(
                             }
                         },
                         onFailure = { error ->
-                            fileActionMessage = error.message ?: ManagementTexts.text("准备预览失败", "Couldn't prepare preview")
+                            fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_PREPARE_PREVIEW.get()
                         },
                     )
                 }
             },
             onOpenExternal = {
+                stopAudioPreview()
                 selectedFile = null
-                fileActionProgress = ManagementTexts.text("正在准备本机临时文件", "Preparing local temp file")
+                fileActionProgress = ManagementTexts.Files.PREPARING_LOCAL_TEMP_FILE.get()
                 scope.launch {
                     val result =
                         prepareRemoteFileForLocalOpen(context, entry).mapCatching { file ->
@@ -478,27 +715,30 @@ internal fun SessionManagementFileBrowser(
                         }
                     fileActionProgress = null
                     result.exceptionOrNull()?.let { error ->
-                        fileActionMessage = error.message ?: ManagementTexts.text("打开文件失败", "Couldn't open file")
+                        fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_FILE.get()
                     }
                 }
             },
             onPushBack = {
+                stopAudioPreview()
                 selectedFile = null
                 overwriteConfirmState = RemoteOverwriteConfirmState.PushBack(entry)
             },
             onEdit = {
+                stopAudioPreview()
                 selectedFile = null
-                fileActionProgress = ManagementTexts.text("正在加载文本文件", "Loading text file")
+                fileActionProgress = ManagementTexts.Files.LOADING_TEXT_FILE.get()
                 scope.launch {
                     val result = loadRemoteTextEditorState(context, entry)
                     fileActionProgress = null
                     result.fold(
                         onSuccess = { editorState -> textEditorState = editorState },
-                        onFailure = { error -> fileActionMessage = error.message ?: ManagementTexts.text("加载文本文件失败", "Couldn't load text file") },
+                        onFailure = { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_LOAD_TEXT_FILE.get() },
                     )
                 }
             },
             onDetails = {
+                stopAudioPreview()
                 selectedFile = null
                 fileDetailEntry = entry
             },
@@ -518,13 +758,13 @@ internal fun SessionManagementFileBrowser(
             onDismiss = { textEditorState = null },
             onSave = { content ->
                 textEditorState = null
-                launchFileAction(progress = ManagementTexts.text("正在保存并回写设备", "Saving and pushing back")) {
+                launchFileAction(progress = ManagementTexts.Files.SAVING_PUSHING_BACK.get()) {
                     saveRemoteTextFile(editorState, content)
                 }
             },
             onOpenExternal = {
                 textEditorState = null
-                fileActionProgress = ManagementTexts.text("正在准备本机临时文件", "Preparing local temp file")
+                fileActionProgress = ManagementTexts.Files.PREPARING_LOCAL_TEMP_FILE.get()
                 scope.launch {
                     val result =
                         prepareRemoteFileForLocalOpen(context, editorState.entry).mapCatching { file ->
@@ -532,7 +772,7 @@ internal fun SessionManagementFileBrowser(
                         }
                     fileActionProgress = null
                     result.exceptionOrNull()?.let { error ->
-                        fileActionMessage = error.message ?: ManagementTexts.text("打开文件失败", "Couldn't open file")
+                        fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_FILE.get()
                     }
                 }
             },
@@ -548,7 +788,7 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.text("打开图片失败", "Couldn't open image") }
+                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_IMAGE.get() }
                 }
             },
             onPushBack = {
@@ -567,30 +807,11 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.text("打开视频失败", "Couldn't open video") }
+                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_VIDEO.get() }
                 }
             },
             onPushBack = {
                 videoPreviewState = null
-                overwriteConfirmState = RemoteOverwriteConfirmState.PushBack(state.entry)
-            },
-        )
-    }
-
-    audioPreviewState?.let { state ->
-        SessionManagementAudioPreviewDialog(
-            state = state,
-            onDismiss = { audioPreviewState = null },
-            onOpenExternal = {
-                audioPreviewState = null
-                scope.launch {
-                    openLocalFileExternal(context, state.localFile)
-                        .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.text("打开音频失败", "Couldn't open audio") }
-                }
-            },
-            onPushBack = {
-                audioPreviewState = null
                 overwriteConfirmState = RemoteOverwriteConfirmState.PushBack(state.entry)
             },
         )
@@ -605,7 +826,7 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.text("打开文件失败", "Couldn't open file") }
+                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_FILE.get() }
                 }
             },
             onPushBack = {
@@ -623,7 +844,7 @@ internal fun SessionManagementFileBrowser(
                 overwriteConfirmState = null
                 when (confirmState) {
                     is RemoteOverwriteConfirmState.PushBack -> {
-                        launchFileAction(progress = ManagementTexts.text("正在回写设备", "Pushing back to device")) {
+                        launchFileAction(progress = ManagementTexts.Files.PUSHING_BACK_DEVICE.get()) {
                             pushPreparedLocalFileToDevice(context, confirmState.entry)
                         }
                     }
@@ -634,22 +855,16 @@ internal fun SessionManagementFileBrowser(
 
     fileActionProgress?.let { message ->
         SessionManagementProgressDialog(
-            title = ManagementTexts.text("文件管理", "Files"),
+            title = ManagementTexts.Files.FILES.get(),
             message = message,
         )
     }
 
     fileActionMessage?.let { message ->
-        AlertDialog(
-            onDismissRequest = { fileActionMessage = null },
-            title = { Text(ManagementTexts.text("文件管理", "Files")) },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { fileActionMessage = null }) {
-                    Text(ManagementTexts.text("确定", "OK"))
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
+        SessionManagementMessageDialog(
+            title = ManagementTexts.Files.FILES.get(),
+            message = message,
+            onDismiss = { fileActionMessage = null },
         )
     }
 }

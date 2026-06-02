@@ -1,16 +1,30 @@
 package com.screen.remote.android.infrastructure.media.audio
 
 import android.media.MediaCodec
+import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.domain.model.CodecCatalog
+import com.screen.remote.android.core.domain.model.CodecMediaType
 import java.nio.ByteBuffer
 
 /**
  * AudioFormatHandler - 音频格式处理器
  * 负责配置包验证、解码器创建和配置
  */
-class AudioFormatHandler {
+class AudioFormatHandler(
+    private val preferredDecoderName: String? = null,
+    private val allowHardwareDecoders: Boolean = true,
+    private val decoderSelectionPinned: Boolean = false,
+    initialRejectedDecoderNames: Set<String> = emptySet(),
+) {
+    private val rejectedDecoderNames = linkedSetOf<String>().apply { addAll(initialRejectedDecoderNames) }
+    var onDecoderSelected: ((String) -> Unit)? = null
+    var onDecoderRejected: ((String) -> Unit)? = null
+
     internal fun resolvePlaybackFormat(
         codec: String,
         sampleRate: Int,
@@ -54,6 +68,15 @@ class AudioFormatHandler {
                 }
             }
 
+            "aac" -> {
+                val aacConfig = configData?.let(AacConfigParser::parse)
+                if (aacConfig != null) {
+                    ResolvedAudioFormat(sampleRate = aacConfig.sampleRate, channelCount = aacConfig.channelCount)
+                } else {
+                    ResolvedAudioFormat(sampleRate = sampleRate, channelCount = channelCount)
+                }
+            }
+
             else -> ResolvedAudioFormat(sampleRate = sampleRate, channelCount = channelCount)
         }
 
@@ -67,9 +90,8 @@ class AudioFormatHandler {
         when (codec.lowercase()) {
             "opus" -> validateOpusConfig(data)
 
-            "aac" -> data.size == 2
-
-            // AudioSpecificConfig: 2 字节
+            // AudioSpecificConfig 最短 2 字节，也可能携带扩展字段。
+            "aac" -> data.size >= 2
             "flac" -> validateFlacConfig(data)
 
             // STREAMINFO: 34 字节
@@ -80,8 +102,8 @@ class AudioFormatHandler {
      * 验证 Opus 配置包
      */
     private fun validateOpusConfig(data: ByteArray): Boolean {
-        if (data.size != OpusConfigParser.OPUS_HEADER_SIZE) {
-            LogManager.e(LogTags.AUDIO_DECODER, "Opus 配置包大小错误: ${data.size}, 期望 19")
+        if (data.size < OpusConfigParser.OPUS_HEADER_SIZE) {
+            LogManager.e(LogTags.AUDIO_DECODER, "Opus 配置包大小错误: ${data.size}, 至少需要 19")
             return false
         }
 
@@ -144,28 +166,26 @@ class AudioFormatHandler {
 
             AudioDebugLog.d(LogTags.AUDIO_DECODER) { "MediaFormat: $format" }
 
-            val mediaCodec = MediaCodec.createDecoderByType(mime)
-
-            try {
-                mediaCodec.configure(format, null, null, 0)
-                mediaCodec.start()
-
-                // 验证解码器状态
-                if (!validateDecoderState(mediaCodec)) {
-                    mediaCodec.release()
-                    return null
+            val candidates = decoderCandidates(mime)
+            for (info in candidates) {
+                val mediaCodec = runCatching { MediaCodec.createByCodecName(info.name) }.getOrElse { error ->
+                    LogManager.w(LogTags.AUDIO_DECODER, "创建音频解码器失败: ${info.name}: ${error.message}")
+                    continue
                 }
-
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "解码器创建成功: ${mediaCodec.name}" }
-                return mediaCodec
-            } catch (e: Exception) {
-                LogManager.e(LogTags.AUDIO_DECODER, "配置解码器失败: ${e.message}", e)
                 try {
-                    mediaCodec.release()
-                } catch (ignored: Exception) {
+                    mediaCodec.configure(format, null, null, 0)
+                    mediaCodec.start()
+                    onDecoderSelected?.invoke(mediaCodec.name)
+                    AudioDebugLog.d(LogTags.AUDIO_DECODER) { "音频解码器创建成功: ${mediaCodec.name}" }
+                    return mediaCodec
+                } catch (e: Exception) {
+                    LogManager.w(LogTags.AUDIO_DECODER, "音频解码器配置失败，尝试下一候选: ${info.name}: ${e.message}")
+                    runCatching { mediaCodec.stop() }
+                    runCatching { mediaCodec.release() }
                 }
-                return null
             }
+            LogManager.e(LogTags.AUDIO_DECODER, "没有可用的音频解码器: mime=$mime")
+            null
         } catch (e: Exception) {
             LogManager.e(LogTags.AUDIO_DECODER, "创建解码器失败: ${e.message}", e)
             null
@@ -176,24 +196,44 @@ class AudioFormatHandler {
      * 获取 MIME 类型
      */
     private fun getMediaMimeType(codec: String): String? =
-        when (codec.lowercase()) {
-            "opus" -> {
-                MediaFormat.MIMETYPE_AUDIO_OPUS
+        CodecCatalog.mimeType(CodecMediaType.AUDIO, codec).also { mime ->
+            if (mime == null || mime == "audio/raw") {
+                LogManager.e(LogTags.AUDIO_DECODER, "不支持的压缩音频格式: $codec")
             }
+        }?.takeUnless { it == "audio/raw" }
 
-            "aac" -> {
-                MediaFormat.MIMETYPE_AUDIO_AAC
+    private fun decoderCandidates(mime: String): List<MediaCodecInfo> {
+        val matching =
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { info ->
+                !info.isEncoder &&
+                    info.supportedTypes.any { it.equals(mime, ignoreCase = true) } &&
+                    info.name !in rejectedDecoderNames &&
+                    (allowHardwareDecoders || !ApiCompatHelper.isHardwareAccelerated(info))
             }
-
-            "flac" -> {
-                MediaFormat.MIMETYPE_AUDIO_FLAC
-            }
-
-            else -> {
-                LogManager.e(LogTags.AUDIO_DECODER, "不支持的编码格式: $codec")
-                null
-            }
+        if (decoderSelectionPinned) {
+            return matching.filter { it.name == preferredDecoderName }
         }
+        return matching.sortedWith(
+            compareBy<MediaCodecInfo> { it.name != preferredDecoderName }
+                .thenBy { if (allowHardwareDecoders) !ApiCompatHelper.isHardwareAccelerated(it) else false }
+                .thenBy { it.name },
+        )
+    }
+
+    internal fun prepareRuntimeFallback(
+        decoder: MediaCodec,
+        cause: Throwable,
+    ): Boolean {
+        if (decoderSelectionPinned) return false
+        val decoderName = runCatching { decoder.name }.getOrNull() ?: return false
+        rejectedDecoderNames += decoderName
+        onDecoderRejected?.invoke(decoderName)
+        LogManager.w(
+            LogTags.AUDIO_DECODER,
+            "本次会话淘汰音频解码器: $decoderName, reason=${cause.message}",
+        )
+        return true
+    }
 
     /**
      * 创建 MediaFormat
@@ -209,7 +249,7 @@ class AudioFormatHandler {
 
         applyCodecSpecificData(codec = codec, format = format, configData = configData)
 
-        format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 8192)
+        format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 64 * 1024)
         return format
     }
 
@@ -262,23 +302,6 @@ class AudioFormatHandler {
         }
     }
 
-    /**
-     * 验证解码器状态
-     */
-    private fun validateDecoderState(decoder: MediaCodec): Boolean {
-        return try {
-            val testIndex = decoder.dequeueInputBuffer(0)
-            if (testIndex < 0 && testIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
-                LogManager.e(LogTags.AUDIO_DECODER, "解码器状态异常: $testIndex")
-                return false
-            }
-            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "解码器状态验证成功" }
-            true
-        } catch (e: IllegalStateException) {
-            LogManager.e(LogTags.AUDIO_DECODER, "解码器状态验证失败: ${e.message}", e)
-            false
-        }
-    }
 }
 
 internal data class ResolvedAudioFormat(

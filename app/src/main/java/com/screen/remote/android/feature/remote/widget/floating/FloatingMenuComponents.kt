@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import com.screen.remote.android.core.common.LogTags
+import android.content.Context
 
 /**
  * 悬浮菜单控制器组件（自动显示版本）
@@ -108,8 +109,7 @@ fun AutoFloatingMenuDirect(actions: FloatingMenuActions) {
 }
 
 /**
- * TODO App 首页悬浮菜单控制器组件 测试用途 请勿删除
- * 提供双球体系统的悬浮窗交互功能
+ * App 首页悬浮菜单控制器组件，提供双球体系统的悬浮窗交互功能。
  */
 @Composable
 fun FloatingMenuController(actions: FloatingMenuActions) {
@@ -153,4 +153,23 @@ fun FloatingMenuController(actions: FloatingMenuActions) {
             tint = if (isFloatingShown) Color(0xFFFF3B30) else Color(0xFF007AFF),
         )
     }
+}
+
+internal fun repositionBallsOnRotation(
+    context: Context,
+    reference: BallSystemReference,
+) {
+    val (ballA, ballB, _, _) = reference
+    val displayMetrics = context.resources.displayMetrics
+    val isLandscape = displayMetrics.widthPixels > displayMetrics.heightPixels
+
+    val paramsA = ballA.layoutParams as android.view.WindowManager.LayoutParams
+    val paramsB = ballB.layoutParams as android.view.WindowManager.LayoutParams
+
+    FloatingDebugLog.d(
+        LogTags.FLOATING_CONTROLLER_MSG,
+        "屏幕旋转检测 (${if (isLandscape) "横屏" else "竖屏"})，当前小球位置: A=(${paramsA.x}, ${paramsA.y}), B=(${paramsB.x}, ${paramsB.y})",
+    )
+
+    // 仅记录旋转后的状态；回位策略由浮窗交互层统一处理。
 }

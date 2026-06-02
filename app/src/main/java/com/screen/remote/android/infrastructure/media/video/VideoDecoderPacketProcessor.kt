@@ -17,14 +17,55 @@ internal class VideoDecoderPacketProcessor(
     private val onVideoStateChanged: (width: Int, height: Int, rotation: Int) -> Unit,
 ) {
     private var queuedFrameCount = 0
-    private var queuedConfigCount = 0
     private var observedPacketCount = 0
+    private var consecutiveInputDrops = 0
+    private var waitingForKeyFrameAfterFallback = false
     private var decoderConfigured = false
     private var lastH264Sps: ByteArray? = null
     private var lastH264Pps: ByteArray? = null
+    private var pendingH264Sps: ByteArray? = null
+    private var pendingH264Pps: ByteArray? = null
     private var lastH265Vps: ByteArray? = null
     private var lastH265Sps: ByteArray? = null
     private var lastH265Pps: ByteArray? = null
+    private var pendingH265Vps: ByteArray? = null
+    private var pendingH265Sps: ByteArray? = null
+    private var pendingH265Pps: ByteArray? = null
+    private var lastAv1Config: ByteArray? = null
+    private var lastAv1ConfigPts = 0L
+
+    fun handleSessionInfo(
+        width: Int,
+        height: Int,
+        configured: Boolean,
+    ): Boolean {
+        if (width == runtimeState.currentWidth && height == runtimeState.currentHeight) return configured
+        onVideoStateChanged(width, height, runtimeState.currentRotation)
+        surfaceController.resizeDummySurface(width, height)
+        if (!configured) return false
+
+        val newDecoder =
+            when (videoPacketCodecMode(videoCodec)) {
+                VideoPacketCodecMode.AV1 ->
+                    formatHandler.reconfigureAV1(
+                        getDecoder(), width, height,
+                        surfaceController.currentSurface(), surfaceController.currentDummySurface(),
+                    )
+                VideoPacketCodecMode.VPX ->
+                    formatHandler.reconfigureVpx(
+                        getDecoder(), width, height,
+                        surfaceController.currentSurface(), surfaceController.currentDummySurface(),
+                    )
+                VideoPacketCodecMode.H264, VideoPacketCodecMode.H265 -> return true
+                VideoPacketCodecMode.UNSUPPORTED ->
+                    throw VideoDecoderConfigurationException(videoCodec, "不支持动态尺寸变化")
+            } ?: throw VideoDecoderConfigurationException(videoCodec, "动态尺寸重配失败: ${width}x$height")
+        setDecoder(newDecoder)
+        decoderConfigured = true
+        surfaceController.applyPendingSurface(newDecoder, isStopped())
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$videoCodec 已按 session meta 重配为 ${width}x$height" }
+        return true
+    }
 
     fun processStdOutPacket(
         payload: ByteArray,
@@ -49,19 +90,23 @@ internal class VideoDecoderPacketProcessor(
             }
         }
 
-        if (payload.size in VideoNalParser.FRAME_META_MIN_SIZE..VideoNalParser.FRAME_META_MAX_SIZE &&
-            !nalParser.isNalStartCode(payload)
-        ) {
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "收到 frame meta: size=${payload.size}" }
-            handleFrameMeta(payload)
-            return effectiveConfigured
-        }
-
         if (effectiveConfigured && !packetIsConfig) {
+            if (waitingForKeyFrameAfterFallback && !packetIsKeyFrame) {
+                return true
+            }
+            if (packetIsKeyFrame) {
+                waitingForKeyFrameAfterFallback = false
+            }
             decodeFrame(payload, pts, packetIsKeyFrame)
             return true
         }
 
+        if (payload.size > nalBuffer.remaining()) {
+            throw VideoDecoderConfigurationException(
+                videoCodec,
+                "编码包超过聚合缓冲区: payload=${payload.size}, remaining=${nalBuffer.remaining()}",
+            )
+        }
         nalBuffer.put(payload)
         if (observedPacketCount <= 12 || observedPacketCount % 60 == 0) {
             VideoDebugLog.d(LogTags.VIDEO_DECODER) {
@@ -70,15 +115,95 @@ internal class VideoDecoderPacketProcessor(
         }
 
         val result =
-            when (videoCodec.lowercase()) {
-                "h264" -> drainH264(nalBuffer, effectiveConfigured, frameCount, pts, packetIsKeyFrame)
-                "h265", "hevc" -> drainH265(nalBuffer, effectiveConfigured, frameCount, pts, packetIsKeyFrame)
-                "av1" -> processAV1(nalBuffer, effectiveConfigured, pts)
-                else -> effectiveConfigured
+            when (videoPacketCodecMode(videoCodec)) {
+                VideoPacketCodecMode.H264 -> drainH264(nalBuffer, effectiveConfigured, frameCount, pts, packetIsKeyFrame)
+                VideoPacketCodecMode.H265 -> drainH265(nalBuffer, effectiveConfigured, frameCount, pts, packetIsKeyFrame)
+                VideoPacketCodecMode.AV1 ->
+                    processAV1(nalBuffer, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
+                VideoPacketCodecMode.VPX ->
+                    processVpx(nalBuffer, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
+                VideoPacketCodecMode.UNSUPPORTED ->
+                    throw VideoDecoderConfigurationException(videoCodec, "不支持的视频格式")
             }
         decoderConfigured = decoderConfigured || result
         return decoderConfigured
     }
+
+    fun recoverAfterRuntimeFailure(cause: IllegalStateException): Boolean {
+        val oldDecoder = getDecoder() ?: return false
+        val mode = videoPacketCodecMode(videoCodec)
+        if (mode == VideoPacketCodecMode.H264 && (lastH264Sps == null || lastH264Pps == null)) return false
+        if (mode == VideoPacketCodecMode.H265 &&
+            (lastH265Vps == null || lastH265Sps == null || lastH265Pps == null)
+        ) {
+            return false
+        }
+        if (mode == VideoPacketCodecMode.AV1 && lastAv1Config == null) return false
+        if (!formatHandler.prepareRuntimeFallback(oldDecoder, cause)) return false
+
+        val newDecoder =
+            when (mode) {
+                VideoPacketCodecMode.H264 ->
+                    formatHandler.reconfigureH264(
+                        oldDecoder = oldDecoder,
+                        width = runtimeState.currentWidth,
+                        height = runtimeState.currentHeight,
+                        sps = requireNotNull(lastH264Sps),
+                        pps = requireNotNull(lastH264Pps),
+                        surface = surfaceController.currentSurface(),
+                        dummySurface = surfaceController.currentDummySurface(),
+                    )
+                VideoPacketCodecMode.H265 ->
+                    formatHandler.reconfigureH265(
+                        oldDecoder = oldDecoder,
+                        width = runtimeState.currentWidth,
+                        height = runtimeState.currentHeight,
+                        vps = requireNotNull(lastH265Vps),
+                        sps = requireNotNull(lastH265Sps),
+                        pps = requireNotNull(lastH265Pps),
+                        surface = surfaceController.currentSurface(),
+                        dummySurface = surfaceController.currentDummySurface(),
+                    )
+                VideoPacketCodecMode.AV1 ->
+                    formatHandler.reconfigureAV1(
+                        oldDecoder,
+                        runtimeState.currentWidth,
+                        runtimeState.currentHeight,
+                        surfaceController.currentSurface(),
+                        surfaceController.currentDummySurface(),
+                    )
+                VideoPacketCodecMode.VPX ->
+                    formatHandler.reconfigureVpx(
+                        oldDecoder,
+                        runtimeState.currentWidth,
+                        runtimeState.currentHeight,
+                        surfaceController.currentSurface(),
+                        surfaceController.currentDummySurface(),
+                    )
+                VideoPacketCodecMode.UNSUPPORTED -> null
+            } ?: return false
+
+        setDecoder(newDecoder)
+        decoderConfigured = true
+        consecutiveInputDrops = 0
+        if (mode == VideoPacketCodecMode.AV1) {
+            if (!decodeFrame(
+                    frameData = requireNotNull(lastAv1Config),
+                    pts = lastAv1ConfigPts,
+                    isKeyFrame = false,
+                    isCodecConfig = true,
+                )
+            ) {
+                throw IllegalStateException("AV1 fallback 解码器无法接收缓存配置")
+            }
+        }
+        waitingForKeyFrameAfterFallback = true
+        surfaceController.applyPendingSurface(newDecoder, isStopped())
+        LogManager.w(LogTags.VIDEO_DECODER, "视频解码器运行失败，已切换候选并等待关键帧: ${cause.message}")
+        return true
+    }
+
+    fun queuedFrameCount(): Int = queuedFrameCount
 
     private fun drainH264(
         nalBuffer: ByteBuffer,
@@ -128,70 +253,54 @@ internal class VideoDecoderPacketProcessor(
         val nalUnit = nalParser.extractNalUnit(nalBuffer) ?: return configured
         val nalType = nalParser.getH264NalType(nalUnit)
 
-        return when {
-            nalType == VideoNalParser.H264_NAL_SPS -> {
-                val ppsNal = nalParser.extractNalUnit(nalBuffer)
-                if (ppsNal != null && nalParser.getH264NalType(ppsNal) == VideoNalParser.H264_NAL_PPS) {
-                    val sameConfig =
-                        lastH264Sps?.contentEquals(nalUnit) == true &&
-                            lastH264Pps?.contentEquals(ppsNal) == true
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                        "检测到 H264 配置: sps=${nalUnit.size} pps=${ppsNal.size} configured=$configured same=$sameConfig"
-                    }
-                    if (configured && sameConfig) {
-                        return true
-                    }
-                    val newDecoder = if (configured) {
-                        formatHandler.reconfigureH264(
-                            getDecoder(),
-                            runtimeState.currentWidth,
-                            runtimeState.currentHeight,
-                            nalUnit,
-                            ppsNal,
-                            surfaceController.currentSurface(),
-                            surfaceController.currentDummySurface(),
-                        )
-                    } else {
-                        getDecoder()?.let {
-                            formatHandler.configureH264(
-                                it,
-                                runtimeState.currentWidth,
-                                runtimeState.currentHeight,
-                                nalUnit,
-                                ppsNal,
-                                surfaceController.currentSurface(),
-                                surfaceController.currentDummySurface(),
-                            )
-                            it // Return the configured decoder
-                        }
-                    }
-                    setDecoder(newDecoder) // Ensure the new decoder is set
-                    decoderConfigured = true
-                    lastH264Sps = nalUnit.copyOf()
-                    lastH264Pps = ppsNal.copyOf()
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H264 解码器已完成配置" }
-                    surfaceController.applyPendingSurface(newDecoder, isStopped())
-                    newDecoder?.let {
-                        queueConfigNalUnit(it, nalUnit, pts)
-                        queueConfigNalUnit(it, ppsNal, pts)
-                    }
-                    true
-                } else {
-                    configured
-                }
+        return when (nalType) {
+            VideoNalParser.H264_NAL_SPS -> {
+                pendingH264Sps = nalUnit.copyOf()
+                configureH264IfReady(configured)
             }
-
-            configured && nalType != VideoNalParser.H264_NAL_PPS -> {
+            VideoNalParser.H264_NAL_PPS -> {
+                pendingH264Pps = nalUnit.copyOf()
+                configureH264IfReady(configured)
+            }
+            else -> if (configured) {
                 val isKeyFrame = packetIsKeyFrame || nalParser.isH264KeyFrame(nalType)
                 if (isKeyFrame) {
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "🎯 收到关键帧 (IDR) #$frameCount" }
                 }
                 decodeFrame(nalUnit, pts, isKeyFrame)
-                configured
-            }
-
-            else -> configured
+                true
+            } else configured
         }
+    }
+
+    private fun configureH264IfReady(configured: Boolean): Boolean {
+        val sps = pendingH264Sps ?: return configured
+        val pps = pendingH264Pps ?: return configured
+        pendingH264Sps = null
+        pendingH264Pps = null
+        val sameConfig = lastH264Sps?.contentEquals(sps) == true && lastH264Pps?.contentEquals(pps) == true
+        if (configured && sameConfig) return true
+
+        val newDecoder =
+            if (configured) {
+                formatHandler.reconfigureH264(
+                    getDecoder(), runtimeState.currentWidth, runtimeState.currentHeight, sps, pps,
+                    surfaceController.currentSurface(), surfaceController.currentDummySurface(),
+                )
+            } else {
+                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.264", "解码器不存在")
+                formatHandler.configureH264(
+                    decoder, runtimeState.currentWidth, runtimeState.currentHeight, sps, pps,
+                    surfaceController.currentSurface(), surfaceController.currentDummySurface(),
+                )
+            } ?: throw VideoDecoderConfigurationException("H.264", "无法配置解码器")
+        setDecoder(newDecoder)
+        decoderConfigured = true
+        lastH264Sps = sps
+        lastH264Pps = pps
+        surfaceController.applyPendingSurface(newDecoder, isStopped())
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H264 CSD 已累积并完成配置: sps=${sps.size} pps=${pps.size}" }
+        return true
     }
 
     private fun processH265(
@@ -204,82 +313,74 @@ internal class VideoDecoderPacketProcessor(
         val nalUnit = nalParser.extractNalUnit(nalBuffer) ?: return configured
         val nalType = nalParser.getH265NalType(nalUnit)
 
-        return when {
-            nalType == VideoNalParser.H265_NAL_VPS -> {
-                val spsNal = nalParser.extractNalUnit(nalBuffer)
-                val ppsNal = nalParser.extractNalUnit(nalBuffer)
-                if (spsNal != null && ppsNal != null) {
-                    val sameConfig =
-                        lastH265Vps?.contentEquals(nalUnit) == true &&
-                            lastH265Sps?.contentEquals(spsNal) == true &&
-                            lastH265Pps?.contentEquals(ppsNal) == true
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                        "检测到 H265 配置: vps=${nalUnit.size} sps=${spsNal.size} pps=${ppsNal.size} configured=$configured same=$sameConfig"
-                    }
-                    if (configured && sameConfig) {
-                        return true
-                    }
-                    val newDecoder = if (configured) {
-                        formatHandler.reconfigureH265(
-                            getDecoder(),
-                            runtimeState.currentWidth,
-                            runtimeState.currentHeight,
-                            nalUnit,
-                            spsNal,
-                            ppsNal,
-                            surfaceController.currentSurface(),
-                            surfaceController.currentDummySurface(),
-                        )
-                    } else {
-                        getDecoder()?.let {
-                            formatHandler.configureH265(
-                                it,
-                                runtimeState.currentWidth,
-                                runtimeState.currentHeight,
-                                nalUnit,
-                                spsNal,
-                                ppsNal,
-                                surfaceController.currentSurface(),
-                                surfaceController.currentDummySurface(),
-                            )
-                            it // Return the configured decoder
-                        }
-                    }
-                    setDecoder(newDecoder) // Ensure the new decoder is set
-                    decoderConfigured = true
-                    lastH265Vps = nalUnit.copyOf()
-                    lastH265Sps = spsNal.copyOf()
-                    lastH265Pps = ppsNal.copyOf()
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H265 解码器已完成配置" }
-                    surfaceController.applyPendingSurface(newDecoder, isStopped())
-                    newDecoder?.let {
-                        queueConfigNalUnit(it, nalUnit, pts)
-                        queueConfigNalUnit(it, spsNal, pts)
-                        queueConfigNalUnit(it, ppsNal, pts)
-                    }
-                    true
-                } else {
-                    configured
-                }
+        return when (nalType) {
+            VideoNalParser.H265_NAL_VPS -> {
+                pendingH265Vps = nalUnit.copyOf()
+                configureH265IfReady(configured)
             }
-
-            configured && nalType !in listOf(VideoNalParser.H265_NAL_SPS, VideoNalParser.H265_NAL_PPS) -> {
+            VideoNalParser.H265_NAL_SPS -> {
+                pendingH265Sps = nalUnit.copyOf()
+                configureH265IfReady(configured)
+            }
+            VideoNalParser.H265_NAL_PPS -> {
+                pendingH265Pps = nalUnit.copyOf()
+                configureH265IfReady(configured)
+            }
+            else -> if (configured) {
                 val isKeyFrame = packetIsKeyFrame || nalParser.isH265KeyFrame(nalType)
                 if (isKeyFrame) {
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "🎯 收到关键帧 (H265 IDR) #$frameCount" }
                 }
                 decodeFrame(nalUnit, pts, isKeyFrame)
-                configured
-            }
-
-            else -> configured
+                true
+            } else configured
         }
+    }
+
+    private fun configureH265IfReady(configured: Boolean): Boolean {
+        val vps = pendingH265Vps ?: return configured
+        val sps = pendingH265Sps ?: return configured
+        val pps = pendingH265Pps ?: return configured
+        pendingH265Vps = null
+        pendingH265Sps = null
+        pendingH265Pps = null
+        val sameConfig =
+            lastH265Vps?.contentEquals(vps) == true &&
+                lastH265Sps?.contentEquals(sps) == true &&
+                lastH265Pps?.contentEquals(pps) == true
+        if (configured && sameConfig) return true
+
+        val newDecoder =
+            if (configured) {
+                formatHandler.reconfigureH265(
+                    getDecoder(), runtimeState.currentWidth, runtimeState.currentHeight, vps, sps, pps,
+                    surfaceController.currentSurface(), surfaceController.currentDummySurface(),
+                )
+            } else {
+                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.265", "解码器不存在")
+                formatHandler.configureH265(
+                    decoder, runtimeState.currentWidth, runtimeState.currentHeight, vps, sps, pps,
+                    surfaceController.currentSurface(), surfaceController.currentDummySurface(),
+                )
+            } ?: throw VideoDecoderConfigurationException("H.265", "无法配置解码器")
+        setDecoder(newDecoder)
+        decoderConfigured = true
+        lastH265Vps = vps
+        lastH265Sps = sps
+        lastH265Pps = pps
+        surfaceController.applyPendingSurface(newDecoder, isStopped())
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) {
+            "H265 CSD 已累积并完成配置: vps=${vps.size} sps=${sps.size} pps=${pps.size}"
+        }
+        return true
     }
 
     private fun processAV1(
         nalBuffer: ByteBuffer,
         configured: Boolean,
         pts: Long,
+        packetIsConfig: Boolean,
+        packetIsKeyFrame: Boolean,
     ): Boolean {
         if (nalBuffer.position() <= 0) {
             return configured
@@ -290,106 +391,141 @@ internal class VideoDecoderPacketProcessor(
         nalBuffer.get(frameData)
         nalBuffer.clear()
 
+        if (packetIsConfig) {
+            lastAv1Config = frameData.copyOf()
+            lastAv1ConfigPts = pts
+        }
+
         if (!configured) {
-            val newDecoder =
-                formatHandler.reconfigureAV1(
-                    getDecoder(),
+            val newDecoder = getDecoder()?.let {
+                formatHandler.configureAV1(
+                    it,
                     runtimeState.currentWidth,
                     runtimeState.currentHeight,
                     surfaceController.currentSurface(),
                     surfaceController.currentDummySurface(),
                 )
+            }
             setDecoder(newDecoder)
             decoderConfigured = true
             VideoDebugLog.d(LogTags.VIDEO_DECODER) { "AV1 解码器已完成配置" }
             surfaceController.applyPendingSurface(newDecoder, isStopped())
-            return true
         }
 
-        decodeFrame(frameData, pts, false)
-        return configured
+        decodeFrame(frameData, pts, packetIsKeyFrame, packetIsConfig)
+        return true
     }
 
-    private fun handleFrameMeta(data: ByteArray) {
-        nalParser.parseFrameMeta(data)?.let { (width, height, rotation) ->
-            if (width != runtimeState.currentWidth ||
-                height != runtimeState.currentHeight ||
-                rotation != runtimeState.currentRotation
-            ) {
-                VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                    "视频参数变化: ${runtimeState.currentWidth}x${runtimeState.currentHeight}@${runtimeState.currentRotation}° -> ${width}x$height@$rotation°"
-                }
-                onVideoStateChanged(width, height, rotation)
+    private fun processVpx(
+        frameBuffer: ByteBuffer,
+        configured: Boolean,
+        pts: Long,
+        packetIsConfig: Boolean,
+        packetIsKeyFrame: Boolean,
+    ): Boolean {
+        if (frameBuffer.position() <= 0) return configured
+
+        frameBuffer.flip()
+        val frameData = ByteArray(frameBuffer.remaining())
+        frameBuffer.get(frameData)
+        frameBuffer.clear()
+
+        if (!configured) {
+            val newDecoder = getDecoder()?.let {
+                formatHandler.configureVpx(
+                    it,
+                    runtimeState.currentWidth,
+                    runtimeState.currentHeight,
+                    surfaceController.currentSurface(),
+                    surfaceController.currentDummySurface(),
+                )
             }
+            setDecoder(newDecoder)
+            decoderConfigured = true
+            surfaceController.applyPendingSurface(newDecoder, isStopped())
         }
+
+        decodeFrame(frameData, pts, packetIsKeyFrame, packetIsConfig)
+        return true
     }
 
     private fun decodeFrame(
         frameData: ByteArray,
         pts: Long,
         isKeyFrame: Boolean,
-    ) {
+        isCodecConfig: Boolean = false,
+    ): Boolean {
         val decoder = getDecoder()
         if (isStopped() || decoder == null) {
-            return
+            return false
         }
 
         try {
-            val timeoutUs = if (isKeyFrame) CRITICAL_INPUT_TIMEOUT_US else INPUT_TIMEOUT_US
+            val timeoutUs = if (isKeyFrame || isCodecConfig) CRITICAL_INPUT_TIMEOUT_US else INPUT_TIMEOUT_US
             val inputIndex = decoder.dequeueInputBuffer(timeoutUs)
             if (inputIndex < 0) {
-                return
+                consecutiveInputDrops++
+                if (isKeyFrame || consecutiveInputDrops >= MAX_CONSECUTIVE_INPUT_DROPS) {
+                    throw IllegalStateException(
+                        "视频解码器输入持续阻塞: drops=$consecutiveInputDrops keyFrame=$isKeyFrame",
+                    )
+                }
+                return false
             }
+            consecutiveInputDrops = 0
 
             val inputBuffer = decoder.getInputBuffer(inputIndex)
-            inputBuffer?.clear()
-            inputBuffer?.put(frameData)
+                ?: throw IllegalStateException("解码器未返回输入缓冲区")
+            inputBuffer.clear()
+            if (frameData.size > inputBuffer.remaining()) {
+                throw IllegalStateException(
+                    "视频帧超过解码器输入容量: frame=${frameData.size}, capacity=${inputBuffer.remaining()}",
+                )
+            }
+            inputBuffer.put(frameData)
 
-            val flags = if (isKeyFrame) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
-            decoder.queueInputBuffer(inputIndex, 0, frameData.size, pts / 1000, flags)
-            queuedFrameCount++
-            if (queuedFrameCount <= 8 || queuedFrameCount % 60 == 0) {
+            val flags =
+                (if (isKeyFrame) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0) or
+                    (if (isCodecConfig) MediaCodec.BUFFER_FLAG_CODEC_CONFIG else 0)
+            decoder.queueInputBuffer(inputIndex, 0, frameData.size, mediaCodecPresentationTimeUs(pts), flags)
+            if (!isCodecConfig) {
+                queuedFrameCount++
+            }
+            if (!isCodecConfig && (queuedFrameCount <= 8 || queuedFrameCount % 60 == 0)) {
                 VideoDebugLog.d(LogTags.VIDEO_DECODER) {
                     "已送入视频帧 #$queuedFrameCount: size=${frameData.size} key=$isKeyFrame ptsUs=$pts"
                 }
             }
-        } catch (e: IllegalStateException) {
-            if (!isStopped()) {
-                LogManager.w(LogTags.VIDEO_DECODER, "解码器状态异常: ${e.message}")
-            }
+            return true
         } catch (e: Exception) {
+            if (isStopped()) return false
             LogManager.e(LogTags.VIDEO_DECODER, "解码帧失败: ${e.message}", e)
-        }
-    }
-
-    private fun queueConfigNalUnit(
-        decoder: MediaCodec,
-        nalUnit: ByteArray,
-        pts: Long,
-    ) {
-        try {
-            val inputIndex = decoder.dequeueInputBuffer(0)
-            if (inputIndex < 0) {
-                LogManager.w(LogTags.VIDEO_DECODER, "Config NAL unit queue failed: no input buffer")
-                return
-            }
-
-            val inputBuffer = decoder.getInputBuffer(inputIndex)
-            inputBuffer?.clear()
-            inputBuffer?.put(nalUnit)
-            decoder.queueInputBuffer(inputIndex, 0, nalUnit.size, pts / 1000, MediaCodec.BUFFER_FLAG_CODEC_CONFIG)
-            queuedConfigCount++
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                "已送入配置 NAL #$queuedConfigCount: size=${nalUnit.size} ptsUs=$pts"
-            }
-        } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "Failed to queue config NAL unit: ${e.message}", e)
+            throw e
         }
     }
 
     private companion object {
         const val INPUT_TIMEOUT_US = 10_000L
         const val CRITICAL_INPUT_TIMEOUT_US = 50_000L
+        const val MAX_CONSECUTIVE_INPUT_DROPS = 30
     }
-
 }
+
+internal fun mediaCodecPresentationTimeUs(scrcpyPtsUs: Long): Long = scrcpyPtsUs
+
+internal enum class VideoPacketCodecMode {
+    H264,
+    H265,
+    AV1,
+    VPX,
+    UNSUPPORTED,
+}
+
+internal fun videoPacketCodecMode(codec: String): VideoPacketCodecMode =
+    when (codec.trim().lowercase()) {
+        "h264", "avc" -> VideoPacketCodecMode.H264
+        "h265", "hevc" -> VideoPacketCodecMode.H265
+        "av1" -> VideoPacketCodecMode.AV1
+        "vp8", "vp9" -> VideoPacketCodecMode.VPX
+        else -> VideoPacketCodecMode.UNSUPPORTED
+    }

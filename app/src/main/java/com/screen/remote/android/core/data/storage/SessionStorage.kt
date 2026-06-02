@@ -2,7 +2,9 @@ package com.screen.remote.android.core.data.storage
 
 import android.content.Context
 import com.screen.remote.android.core.data.repository.SessionRepository
+import com.screen.remote.android.core.data.repository.ScrcpyProfileRepository
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.withProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -42,13 +44,14 @@ class SessionStorage(
     private val context: Context,
 ) {
     private val repository = SessionRepository(context)
+    private val profileRepository = ScrcpyProfileRepository(context)
 
     /**
      * 获取配置
      */
     suspend fun getOptions(sessionId: String): ScrcpyOptions? {
         val sessionData = repository.getSessionData(sessionId) ?: return null
-        return sessionData.toScrcpyOptions()
+        return sessionData.toScrcpyOptions().applyProfileIfNeeded()
     }
 
     /**
@@ -74,9 +77,11 @@ class SessionStorage(
         sessionId: String,
         update: (ScrcpyOptions) -> ScrcpyOptions,
     ) {
-        val current = getOptions(sessionId) ?: return
-        val updated = update(current)
-        saveOptions(updated)
+        // 在 DataStore 的原子 edit 中读取并写回，避免多个后台能力更新各自拿着
+        // 旧快照覆盖对方。这里只更新会话自身存储值，不把 profile 展开后写回。
+        repository.updateSessionFields(sessionId) { current ->
+            current.fromScrcpyOptions(update(current.toScrcpyOptions()))
+        }
     }
 
     /**
@@ -91,7 +96,7 @@ class SessionStorage(
      */
     suspend fun getAllSessions(): List<ScrcpyOptions> {
         return repository.sessionDataFlow
-            .map { list -> list.map { it.toScrcpyOptions() } }
+            .map { list -> list.map { it.toScrcpyOptions().applyProfileIfNeeded() } }
             .first()
     }
 
@@ -100,7 +105,7 @@ class SessionStorage(
      */
     fun getOptionsFlow(sessionId: String): Flow<ScrcpyOptions?> {
         return repository.getSessionDataFlow(sessionId)
-            .map { it?.toScrcpyOptions() }
+            .map { it?.toScrcpyOptions()?.applyProfileIfNeeded() }
     }
 
     /**
@@ -108,6 +113,24 @@ class SessionStorage(
      */
     fun getAllSessionsFlow(): Flow<List<ScrcpyOptions>> {
         return repository.sessionDataFlow
-            .map { list -> list.map { it.toScrcpyOptions() } }
+            .map { list -> list.map { it.toScrcpyOptions().applyProfileIfNeeded() } }
+    }
+
+    private suspend fun ScrcpyOptions.applyProfileIfNeeded(): ScrcpyOptions {
+        val profile = profileId.takeIf { it.isNotBlank() }?.let { profileRepository.getProfile(it) } ?: return this
+        return withProfile(profile).copy(
+            sessionId = sessionId,
+            profileId = profileId,
+            connectionCandidates = connectionCandidates,
+            deviceSerial = deviceSerial,
+            remoteVideoEncoders = remoteVideoEncoders,
+            remoteAudioEncoders = remoteAudioEncoders,
+            selectedVideoCodec = selectedVideoCodec,
+            selectedAudioCodec = selectedAudioCodec,
+            selectedVideoEncoder = selectedVideoEncoder,
+            selectedAudioEncoder = selectedAudioEncoder,
+            selectedVideoDecoder = selectedVideoDecoder,
+            selectedAudioDecoder = selectedAudioDecoder,
+        )
     }
 }

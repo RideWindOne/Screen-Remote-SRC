@@ -126,6 +126,7 @@ internal object SessionMonitorEventProjector {
     private fun DecoderIssueKind.toExceptionType(): ExceptionType =
         when (this) {
             DecoderIssueKind.CreateFailed,
+            DecoderIssueKind.UnsupportedSize,
             DecoderIssueKind.ConnectionLost,
             DecoderIssueKind.RuntimeError,
             DecoderIssueKind.Unknown,

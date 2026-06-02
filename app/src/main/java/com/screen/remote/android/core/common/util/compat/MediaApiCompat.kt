@@ -35,7 +35,7 @@ fun isAV1Supported(): Boolean = Build.VERSION.SDK_INT >= 29
  * 获取支持的视频编解码器列表（根据 API 级别过滤）
  */
 fun getSupportedVideoCodecs(): List<String> {
-    val codecs = mutableListOf("h264", "h265")
+    val codecs = mutableListOf("h264", "h265", "vp9", "vp8")
     if (isAV1Supported()) {
         codecs.add("av1")
     }

@@ -1,6 +1,7 @@
 package com.screen.remote.android.core.domain.model
 
 import kotlinx.serialization.Serializable
+import com.screen.remote.android.core.update.UpdateChannel
 
 /**
  * 主题模式
@@ -29,8 +30,6 @@ enum class AppLanguage {
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val language: AppLanguage = AppLanguage.AUTO,
-    val keepAliveMinutes: Int = 5,
-    val showOnLockScreen: Boolean = false,
     val enableActivityLog: Boolean = true,
     val enableAudioStreamLog: Boolean = false,
     val enableVideoStreamLog: Boolean = false,
@@ -38,6 +37,7 @@ data class AppSettings(
     val enableEventStreamLog: Boolean = false,
     val enableShellStreamLog: Boolean = false,
     val enableManagementLog: Boolean = false,
-    val fileTransferPath: String = "",
+    val enableDebugMode: Boolean = false,
     val enableFloatingHapticFeedback: Boolean = true,
+    val updateChannel: UpdateChannel = UpdateChannel.STABLE,
 )

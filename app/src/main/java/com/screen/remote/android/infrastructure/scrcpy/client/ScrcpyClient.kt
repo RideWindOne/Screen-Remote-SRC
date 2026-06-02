@@ -41,8 +41,9 @@ class ScrcpyClient(
     // 当前会话 ID（UUID）
     private var currentSessionId: String? = null
 
-    // 当前设备 ID（host:port 或 usb:serial）
+    // 当前设备 ID（ADB transport serial，例如 tcp:host:port、mdns:service 或 usb:serial）
     private var currentDeviceId: String? = null
+    private var protectedDeviceId: String? = null
 
     private val sessionContext: SessionContext = sessionRuntime.sessionContext
 
@@ -223,15 +224,17 @@ class ScrcpyClient(
     ) {
         try {
             val deviceId = currentDeviceId ?: return
+            protectedDeviceId
+                ?.takeIf { it != deviceId }
+                ?.let { previousDeviceId ->
+                    ScrcpyForegroundService.unprotectDevice(context, previousDeviceId)
+                }
             ScrcpyForegroundService.protectDevice(
                 context = context,
                 deviceId = deviceId,
                 deviceName = deviceName,
-                delayedAck = false,
-                host = options.host,
-                port = options.port,
-                isUsbConnection = options.isUsbConnection(),
             )
+            protectedDeviceId = deviceId
 
             LogManager.d(LogTags.SCRCPY_CLIENT, "已添加设备到保活列表: $deviceName")
         } catch (e: Exception) {

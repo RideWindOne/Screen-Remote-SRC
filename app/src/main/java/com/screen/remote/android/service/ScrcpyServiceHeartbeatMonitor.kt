@@ -4,10 +4,18 @@ import android.content.Context
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
+import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -18,7 +26,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
     private val protectedDevices: ConcurrentHashMap<String, ProtectedAdbDevice>,
     private val onDevicesChanged: () -> Unit,
 ) {
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var heartbeatJob: Job? = null
 
     companion object {
@@ -40,57 +48,69 @@ internal class ScrcpyServiceHeartbeatMonitor(
                     }
 
                     val adbManager = AdbConnectionManager.getInstance(applicationContext)
-                    val devicesToRemove = mutableListOf<String>()
+                    val protectedSnapshots = protectedDevices.entries.toList()
+                    val devicesToRemove =
+                        protectedSnapshots
+                            .map { (deviceId, protectedDevice) ->
+                                async {
+                                    val expectedConnection = adbManager.getConnection(deviceId)
+                                    val reconnectSucceeded =
+                                        try {
+                                            checkDeviceHeartbeat(
+                                                deviceId = deviceId,
+                                                protectedDevice = protectedDevice,
+                                                connection = expectedConnection,
+                                                adbManager = adbManager,
+                                            )
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (_: Exception) {
+                                            false
+                                        }
 
-                    protectedDevices.forEach { (deviceId, protectedDevice) ->
-                        val reconnectSucceeded =
-                            try {
-                                val connection = adbManager.getConnection(deviceId)
-                                if (connection == null) {
-                                    LogManager.w(
-                                        LogTags.SCRCPY_SERVICE,
-                                        "ADB 连接不存在: $deviceId，尝试重建 delayedAck=${protectedDevice.delayedAck} protected=${protectedDevices.keys.joinToString()}",
-                                    )
-                                    tryReconnect(deviceId, protectedDevice, adbManager)
-                                } else {
-                                    val result = connection.executeShell("echo 1", retryOnFailure = false)
-                                    if (result.isSuccess) {
-                                        LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 心跳正常: $deviceId")
-                                        true
-                                    } else {
-                                        LogManager.w(
-                                            LogTags.SCRCPY_SERVICE,
-                                            "ADB 心跳失败: $deviceId delayedAck=${protectedDevice.delayedAck} connectionDelayedAck=${connection.supportsDelayedAck()}，尝试重连",
+                                    if (!reconnectSucceeded) {
+                                        FailedProtectedDeviceHeartbeat(
+                                            deviceId = deviceId,
+                                            protectedDevice = protectedDevice,
+                                            expectedConnection = expectedConnection,
                                         )
-                                        SessionIssueTracker.record("adb.heartbeat", "Heartbeat failed for $deviceId")
-                                        tryReconnect(deviceId, protectedDevice, adbManager)
+                                    } else {
+                                        null
                                     }
                                 }
-                            } catch (e: Exception) {
-                                LogManager.e(
-                                    LogTags.SCRCPY_SERVICE,
-                                    "ADB 心跳异常 $deviceId delayedAck=${protectedDevice.delayedAck}: ${e.message}，尝试重连",
-                                )
-                                SessionIssueTracker.record("adb.heartbeat", "Heartbeat exception for $deviceId: ${e.message}")
-                                tryReconnect(deviceId, protectedDevice, adbManager)
                             }
+                            .awaitAll()
+                            .filterNotNull()
 
-                        if (!reconnectSucceeded) {
-                            devicesToRemove.add(deviceId)
+                    if (protectedSnapshots.isNotEmpty()) {
+                        LogManager.d(
+                            LogTags.SCRCPY_SERVICE,
+                            "本轮心跳检测完成 protected=${protectedSnapshots.size}, remove=${devicesToRemove.size}",
+                        )
+                    }
+
+                    var removedAny = false
+                    devicesToRemove.forEach { failure ->
+                        val deviceId = failure.deviceId
+                        val expectedDevice = failure.protectedDevice
+                        if (!removeProtectedDeviceIfCurrent(protectedDevices, deviceId, expectedDevice)) {
+                            LogManager.d(LogTags.SCRCPY_SERVICE, "跳过已更新的心跳失败设备: $deviceId")
+                            return@forEach
+                        }
+                        removedAny = true
+                        LogManager.d(LogTags.SCRCPY_SERVICE, "已移除失败设备: ${expectedDevice.deviceName} ($deviceId)")
+                        failure.expectedConnection?.let { expectedConnection ->
+                            try {
+                                adbManager.disconnectDeviceIfCurrent(deviceId, expectedConnection)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (e: Exception) {
+                                LogManager.e(LogTags.SCRCPY_SERVICE, "条件断开 ADB 连接失败: ${e.message}")
+                            }
                         }
                     }
 
-                    devicesToRemove.forEach { deviceId ->
-                        val device = protectedDevices.remove(deviceId)
-                        LogManager.d(LogTags.SCRCPY_SERVICE, "已移除失败设备: ${device?.deviceName} ($deviceId)")
-                        try {
-                            adbManager.disconnectDevice(deviceId)
-                        } catch (e: Exception) {
-                            LogManager.e(LogTags.SCRCPY_SERVICE, "断开 ADB 连接失败: ${e.message}")
-                        }
-                    }
-
-                    if (devicesToRemove.isNotEmpty()) {
+                    if (removedAny) {
                         onDevicesChanged()
                     }
                 }
@@ -102,47 +122,140 @@ internal class ScrcpyServiceHeartbeatMonitor(
         heartbeatJob = null
     }
 
+    fun destroy() {
+        heartbeatJob = null
+        serviceScope.cancel()
+    }
+
+    private suspend fun checkDeviceHeartbeat(
+        deviceId: String,
+        protectedDevice: ProtectedAdbDevice,
+        connection: AdbConnection?,
+        adbManager: AdbConnectionManager,
+    ): Boolean =
+        try {
+            if (!isStillProtected(deviceId, protectedDevice)) {
+                return true
+            }
+            if (connection == null) {
+                LogManager.w(
+                    LogTags.SCRCPY_SERVICE,
+                    "ADB 连接不存在: $deviceId，尝试按原连接重建 protected=${protectedDevices.keys.joinToString()}",
+                )
+                return tryReconnect(deviceId, protectedDevice, adbManager)
+            }
+
+            if (connection.isConnected()) {
+                LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 心跳正常: $deviceId")
+                return true
+            }
+
+            LogManager.w(
+                LogTags.SCRCPY_SERVICE,
+                "ADB 心跳失败: $deviceId delayedAck=${connection.supportsDelayedAck()}，尝试按原连接重连",
+            )
+            SessionIssueTracker.record("adb.heartbeat", "Heartbeat failed for $deviceId")
+            tryReconnect(deviceId, protectedDevice, adbManager)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            LogManager.e(
+                LogTags.SCRCPY_SERVICE,
+                "ADB 心跳异常 $deviceId: ${e.message}，尝试按原连接重连",
+            )
+            SessionIssueTracker.record("adb.heartbeat", "Heartbeat exception for $deviceId: ${e.message}")
+            tryReconnect(deviceId, protectedDevice, adbManager)
+        }
+
     private suspend fun tryReconnect(
         deviceId: String,
         protectedDevice: ProtectedAdbDevice,
         adbManager: AdbConnectionManager,
     ): Boolean =
         try {
-            val delayedAck = protectedDevice.delayedAck
-            LogManager.d(LogTags.SCRCPY_SERVICE, "开始重连 ADB: $deviceId delayedAck=$delayedAck")
-
-            if (protectedDevice.isUsbConnection) {
-                val result = adbManager.connectUsbDeviceById(deviceId, withDelayedAck = delayedAck)
-                if (result.isSuccess) {
-                    LogManager.d(LogTags.SCRCPY_SERVICE, "USB ADB 重连成功: $deviceId")
-                    return true
-                }
-
-                LogManager.e(
-                    LogTags.SCRCPY_SERVICE,
-                    "✗ USB ADB 重连失败: $deviceId - ${result.exceptionOrNull()?.message}",
-                )
-                return false
+            if (!isStillProtected(deviceId, protectedDevice)) {
+                return true
             }
+            LogManager.d(LogTags.SCRCPY_SERVICE, "开始按原连接重连 ADB: $deviceId")
 
-            val host = protectedDevice.host
-            val port = protectedDevice.port
-            if (host.isNullOrBlank() || port <= 0) {
-                LogManager.e(LogTags.SCRCPY_SERVICE, "设备缺少会话连接配置，无法重连: $deviceId host=${host ?: "-"} port=$port")
-                return false
-            }
-
-            val result = adbManager.connectDevice(host, port, forceReconnect = true, withDelayedAck = delayedAck)
-
-            if (result.isSuccess) {
-                LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 重连成功: $deviceId")
-                true
-            } else {
-                LogManager.e(LogTags.SCRCPY_SERVICE, "✗ ADB 重连失败: $deviceId - ${result.exceptionOrNull()?.message}")
-                false
-            }
+            reconnectExactDevice(
+                deviceId = deviceId,
+                protectedDevice = protectedDevice,
+                adbManager = adbManager,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             LogManager.e(LogTags.SCRCPY_SERVICE, "✗ ADB 重连异常: $deviceId - ${e.message}")
             false
         }
+
+    private suspend fun reconnectExactDevice(
+        deviceId: String,
+        protectedDevice: ProtectedAdbDevice,
+        adbManager: AdbConnectionManager,
+    ): Boolean {
+        val candidate = parseExactProtectedConnection(deviceId)
+        if (candidate == null) {
+            LogManager.e(LogTags.SCRCPY_SERVICE, "无法解析受保护的精确 ADB 连接标识: $deviceId")
+            return false
+        }
+        if (!isStillProtected(deviceId, protectedDevice)) return true
+
+        val result =
+            when (candidate.transport) {
+                ConnectionTransport.USB -> adbManager.connectUsbDeviceById(deviceId)
+                ConnectionTransport.MDNS ->
+                    adbManager.connectMdnsService(
+                        serviceName = candidate.host,
+                    )
+                ConnectionTransport.TCP ->
+                    adbManager.connectDevice(
+                        host = candidate.host,
+                        port = candidate.port,
+                    )
+            }
+
+        result.exceptionOrNull()?.let { error ->
+            if (error is CancellationException) throw error
+        }
+        if (!isStillProtected(deviceId, protectedDevice)) return true
+
+        val connectedDeviceId = result.getOrNull()
+        if (result.isSuccess && connectedDeviceId == deviceId) {
+            LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 原连接重连成功: $deviceId")
+            return true
+        }
+
+        if (!connectedDeviceId.isNullOrBlank() && connectedDeviceId != deviceId) {
+            runCatching { adbManager.disconnectDevice(connectedDeviceId) }
+        }
+        LogManager.e(
+            LogTags.SCRCPY_SERVICE,
+            "✗ ADB 原连接重连失败: $deviceId result=$connectedDeviceId error=${result.exceptionOrNull()?.message}",
+        )
+        return false
+    }
+
+    private fun isStillProtected(
+        deviceId: String,
+        protectedDevice: ProtectedAdbDevice,
+    ): Boolean = protectedDevices[deviceId] === protectedDevice
+
 }
+
+internal fun removeProtectedDeviceIfCurrent(
+    protectedDevices: ConcurrentHashMap<String, ProtectedAdbDevice>,
+    deviceId: String,
+    expectedDevice: ProtectedAdbDevice,
+): Boolean = protectedDevices.remove(deviceId, expectedDevice)
+
+internal fun parseExactProtectedConnection(deviceId: String) =
+    parseSessionAddressCandidate(deviceId)
+        ?.takeIf { candidate -> candidate.deviceIdentifier() == deviceId }
+
+private data class FailedProtectedDeviceHeartbeat(
+    val deviceId: String,
+    val protectedDevice: ProtectedAdbDevice,
+    val expectedConnection: AdbConnection?,
+)

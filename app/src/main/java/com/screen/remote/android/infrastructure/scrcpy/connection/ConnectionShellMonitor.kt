@@ -1,9 +1,10 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection
 
+import com.screen.remote.android.core.common.manager.LogManager.dShell
+
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
-import com.screen.remote.android.core.common.manager.ShellDebugLog
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
@@ -63,7 +64,7 @@ class ConnectionShellMonitor(
             readerFinished = false
         }
         startReader(stream)
-        ShellDebugLog.d(LogTags.SCRCPY_SERVER) { "shell stream attached" }
+        dShell(LogTags.SCRCPY_SERVER) { "shell stream attached" }
     }
 
     /**
@@ -99,7 +100,7 @@ class ConnectionShellMonitor(
                             runtimeMonitoringEnabled = true
                         }
                     }
-                    ShellDebugLog.d(LogTags.SCRCPY_SERVER) {
+                    dShell(LogTags.SCRCPY_SERVER) {
                         "startup ready confirmed for shell stream=${currentStream.hashCode()}"
                     }
                     return@withContext true
@@ -128,14 +129,19 @@ class ConnectionShellMonitor(
         synchronized(stateLock) {
             runtimeMonitoringEnabled = true
         }
-        ShellDebugLog.d(LogTags.SCRCPY_SERVER) { "shell runtime monitor started" }
+        dShell(LogTags.SCRCPY_SERVER) { "shell runtime monitor started" }
     }
+
+    fun hasStartupFailed(): Boolean =
+        synchronized(stateLock) {
+            startupFailure != null || readerFinished || intentionalStop
+        }
 
     /**
      * 停止监控
      */
     fun stopMonitor() {
-        ShellDebugLog.d(LogTags.SCRCPY_SERVER) { "shell runtime monitor stopped" }
+        dShell(LogTags.SCRCPY_SERVER) { "shell runtime monitor stopped" }
         synchronized(stateLock) {
             intentionalStop = true
             runtimeMonitoringEnabled = false
@@ -151,7 +157,7 @@ class ConnectionShellMonitor(
             synchronized(stateLock) {
                 intentionalStop = true
             }
-            ShellDebugLog.d(LogTags.SCRCPY_SERVER) { "closing shell stream" }
+            dShell(LogTags.SCRCPY_SERVER) { "closing shell stream" }
             shellStream?.close()
             shellStream = null
         } catch (e: Exception) {
@@ -199,7 +205,7 @@ class ConnectionShellMonitor(
         type: String,
         payload: String,
     ) {
-        ShellDebugLog.d(LogTags.SCRCPY_SERVER) {
+        dShell(LogTags.SCRCPY_SERVER) {
             val normalized = payload.replace('\n', ' ').replace('\r', ' ').take(240)
             "shell packet stage=$stage type=$type length=${payload.length} payload=${normalized.ifBlank { "<empty>" }}"
         }
@@ -226,7 +232,7 @@ class ConnectionShellMonitor(
                     synchronized(stateLock) {
                         readerFinished = true
                     }
-                    ShellDebugLog.d(LogTags.SCRCPY_SERVER) { "shell reader finished" }
+                    dShell(LogTags.SCRCPY_SERVER) { "shell reader finished" }
                 }
             }
     }
@@ -322,7 +328,7 @@ class ConnectionShellMonitor(
 
     private fun handleExit(packet: dadb.AdbShellPacket.Exit) {
         val exitCode = packet.payload.getOrNull(0)?.toInt() ?: -1
-        ShellDebugLog.d(LogTags.SCRCPY_SERVER) { "${currentStageLabel()} exit packet: exitCode=$exitCode" }
+        dShell(LogTags.SCRCPY_SERVER) { "${currentStageLabel()} exit packet: exitCode=$exitCode" }
         dumpRecentShellLines("${currentStageLabel()}-exit")
         SessionIssueTracker.record("server.exit", "Server process exited: $exitCode")
 
@@ -354,7 +360,7 @@ class ConnectionShellMonitor(
                 intentionalStop
             }
         if (stopRequested) {
-            ShellDebugLog.d(LogTags.SCRCPY_SERVER) {
+            dShell(LogTags.SCRCPY_SERVER) {
                 "shell reader stopped intentionally: ${error.javaClass.simpleName}: ${error.message ?: "<no-message>"}"
             }
             return

@@ -35,6 +35,7 @@ object LogManager {
     }
 
     fun applySettings(settings: AppSettings) {
+        LiveLogStore.setEnabled(settings.enableDebugMode)
         if (state.isEnabled != settings.enableActivityLog) {
             fileController.setEnabled(settings.enableActivityLog)
         }
@@ -57,6 +58,33 @@ object LogManager {
                 LogDetailCategory.MANAGEMENT -> state.enableManagementLog
             }
 
+    inline fun dControl(
+        tag: String,
+        message: () -> String,
+    ) {
+        if (isDetailLoggingEnabled(LogDetailCategory.CONTROL_STREAM)) {
+            d(tag, message())
+        }
+    }
+
+    inline fun dManagement(
+        tag: String,
+        message: () -> String,
+    ) {
+        if (isDetailLoggingEnabled(LogDetailCategory.MANAGEMENT)) {
+            d(tag, message())
+        }
+    }
+
+    inline fun dShell(
+        tag: String,
+        message: () -> String,
+    ) {
+        if (isDetailLoggingEnabled(LogDetailCategory.SHELL_STREAM)) {
+            d(tag, message())
+        }
+    }
+
     fun v(
         tag: String,
         message: String,
@@ -65,6 +93,7 @@ object LogManager {
         if (!isDebugLoggingEnabledForTag(tag)) {
             return
         }
+        LiveLogStore.append("V", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.v(tag, message, throwable)
             messageWriter.writeLog("V", tag, "$message: ${throwable.message}")
@@ -82,6 +111,7 @@ object LogManager {
         if (!isDebugLoggingEnabledForTag(tag)) {
             return
         }
+        LiveLogStore.append("D", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.d(tag, message, throwable)
             messageWriter.writeLog("D", tag, "$message: ${throwable.message}")
@@ -99,6 +129,7 @@ object LogManager {
         if (!isDebugLoggingEnabledForTag(tag)) {
             return
         }
+        LiveLogStore.append("I", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.i(tag, message, throwable)
             messageWriter.writeLog("I", tag, "$message: ${throwable.message}")
@@ -113,6 +144,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        LiveLogStore.append("W", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.w(tag, message, throwable)
             messageWriter.writeLog("W", tag, "$message: ${throwable.message}")
@@ -127,6 +159,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        LiveLogStore.append("E", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.e(tag, message, throwable)
             messageWriter.writeLog("E", tag, "$message: ${throwable.message}")
@@ -157,6 +190,7 @@ object LogManager {
         tag: String,
         message: String,
     ) {
+        LiveLogStore.append(level, tag, message)
         messageWriter.writeRawLog(level, tag, message)
     }
 
@@ -173,6 +207,16 @@ object LogManager {
         val category = detailCategoryForTag(tag) ?: return true
         return isDetailLoggingEnabled(category)
     }
+
+    private fun messageWithThrowable(
+        message: String,
+        throwable: Throwable?,
+    ): String =
+        if (throwable == null) {
+            message
+        } else {
+            "$message: ${throwable.message}"
+        }
 
     private fun detailCategoryForTag(tag: String): LogDetailCategory? =
         when (tag) {
@@ -219,6 +263,7 @@ object LogManager {
             LogTags.SESSION_VM,
             LogTags.GROUP_VM,
             LogTags.MAIN_VIEW_MODEL,
+            LogTags.MANAGEMENT,
             LogTags.ADB_KEYS_VM,
             LogTags.SETTINGS_VM,
             LogTags.CODEC_TEST_SCREEN,

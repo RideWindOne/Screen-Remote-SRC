@@ -1,8 +1,11 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 
+import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.SessionTexts
+import com.screen.remote.android.core.domain.model.CodecCatalog
+import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.media.codec.CodecSelector
@@ -17,7 +20,6 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerStart
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import com.screen.remote.android.core.common.AppConstants
 
 /**
  * Server 设置逻辑 - 负责 Forward 设置、Server 推送和启动
@@ -30,6 +32,7 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     connection: AdbConnection,
     socketName: String,
     useAdbForward: Boolean,
+    onServerAvailable: (suspend () -> Unit)? = null,
 ) = coroutineScope {
     val pushTargetPath = AppConstants.SCRCPY_SERVER_PATH
 
@@ -62,66 +65,65 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
         ),
     )
 
+    var pushDurationMs = -1L
     val pushJob =
         async {
             val pushStartTime = System.currentTimeMillis()
-            connection.pushScrcpyServer(context).getOrElse { error ->
-                throw Exception("Push failed: ${error.message}", error)
+            if (!connection.hasRemoteScrcpyServer(pushTargetPath)) {
+                connection.pushScrcpyServer(context).getOrElse { error ->
+                    throw Exception("Push failed: ${error.message}", error)
+                }
             }
-            System.currentTimeMillis() - pushStartTime
+            pushDurationMs = System.currentTimeMillis() - pushStartTime
+            onServerAvailable?.invoke()
         }
 
-    try {
-        forwardJob?.await()
-    } catch (e: Exception) {
-        throw e
+    val setupJobs = mutableListOf<kotlinx.coroutines.Deferred<*>>()
+    setupJobs.add(pushJob)
+    forwardJob?.let {
+        setupJobs.add(it)
     }
 
     try {
-        val duration = pushJob.await()
-        // 推送 Server 推送成功事件
+        kotlinx.coroutines.joinAll(*setupJobs.toTypedArray())
         sessionContext.emit(
             SessionEvent.ServerPushed(
                 ServerPushContext(
                     targetPath = pushTargetPath,
-                    durationMs = duration,
+                    durationMs = pushDurationMs,
                 ),
             ),
         )
     } catch (e: Exception) {
-        // 推送 Server 推送失败事件
-        sessionContext.emit(
-            SessionEvent.ServerPushFailed(
-                ServerIssue(
-                    kind = ServerIssueKind.PushFailed,
-                    detail = e.message ?: "Unknown error",
+        val forwardFailedForReal =
+            runCatching { forwardJob?.await() }.isFailure
+
+        val pushFailed = runCatching { pushJob.await() }.isFailure
+
+        if (pushFailed && !forwardFailedForReal) {
+            sessionContext.emit(
+                SessionEvent.ServerPushFailed(
+                    ServerIssue(
+                        kind = ServerIssueKind.PushFailed,
+                        detail = e.message ?: "Unknown error",
+                    ),
                 ),
-            ),
-        )
+            )
+        }
         throw e
     }
-
-    // Push 成功后，检测远程编码器（如果需要）
-    val session = sessionContext.currentSession()
-    val needDetect =
-        session?.options?.let { options ->
-            // 需要检测的情况：用户选择的编解码器为空（需要自动选择）
-            options.userVideoEncoder.isBlank() || // 用户手动选择的视频编码器（优先级最高）
-                options.userAudioEncoder.isBlank() || // 用户手动选择的音频编码器（优先级最高）
-                options.userVideoDecoder.isBlank() || // 用户手动选择的视频解码器（优先级最高）
-                options.userAudioDecoder.isBlank() || // 用户手动选择的音频解码器（优先级最高）
-                options.selectedVideoEncoder.isBlank() ||
-                options.selectedAudioEncoder.isBlank() ||
-                options.selectedVideoDecoder.isBlank() ||
-                options.selectedAudioDecoder.isBlank() ||
-                options.preferredVideoCodec.isBlank() ||
-                options.preferredAudioCodec.isBlank()
-        } ?: true
-
-    if (needDetect) {
-        detectRemoteEncodersAfterPush(connection)
-    }
 }
+
+private suspend fun AdbConnection.hasRemoteScrcpyServer(path: String): Boolean =
+    runCatching {
+        executeShell(
+            "if [ -s '$path' ] && [ \"\$(sha256sum '$path' 2>/dev/null | cut -d' ' -f1)\" = " +
+                "'${AppConstants.SCRCPY_SERVER_SHA256}' ]; then echo 1; else echo 0; fi",
+            retryOnFailure = false,
+        )
+            .getOrNull()
+            ?.trim() == "1"
+    }.getOrDefault(false)
 
 /**
  * 启动 Scrcpy 服务器
@@ -129,6 +131,7 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
 internal suspend fun ConnectionLifecycle.startScrcpyServer(
     connection: AdbConnection,
     scid: Int,
+    waitForReady: Boolean = true,
 ) {
     // 推送 Server 启动事件
     sessionContext.emit(SessionEvent.ServerStarting)
@@ -138,7 +141,6 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
     LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
     val stream =
         connection.openShellStream(command) ?: run {
-            // 推送 Server 启动失败事件
             sessionContext.emit(
                 SessionEvent.ServerFailed(
                     ServerIssue(
@@ -152,10 +154,12 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
 
     shellMonitor.setShellStream(stream)
 
-    // 等待 scrcpy-server 启动完成
+    if (!waitForReady) {
+        return
+    }
+
     val serverReady = shellMonitor.waitForServerReady(timeoutMs = 10000)
     if (!serverReady) {
-        // 推送 Server 启动失败事件
         sessionContext.emit(
             SessionEvent.ServerFailed(
                 ServerIssue(
@@ -167,15 +171,12 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
         throw Exception("scrcpy-server 启动超时或失败")
     }
 
-    // 启动持续监控（监控运行时日志和进程退出）
-    shellMonitor.startMonitor()
+    completeScrcpyServerStartup(scid)
+}
 
-    // 推送 Server 启动成功事件
-    sessionContext.emit(
-        SessionEvent.ServerStarted(
-            ServerStartContext(scid = scid),
-        ),
-    )
+internal fun ConnectionLifecycle.completeScrcpyServerStartup(scid: Int) {
+    shellMonitor.startMonitor()
+    sessionContext.emit(SessionEvent.ServerStarted(ServerStartContext(scid = scid)))
 }
 
 /**
@@ -230,14 +231,19 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         params.add("cleanup=false")
     }
 
+    if (options.ignoreVideoEncoderConstraints) {
+        params.add("ignore_video_encoder_constraints=true")
+    }
+
     videoEncoder.takeIf { it.isNotBlank() }?.let { encoder ->
         params.add("video_encoder=$encoder")
     }
 
     if (options.enableAudio) {
-        params.add("audio_codec=${options.preferredAudioCodec}")
+        val audioCodec = resolveAudioCodec(options, options.getFinalAudioEncoder())
+        params.add("audio_codec=$audioCodec")
         params.add("audio_bit_rate=${options.audioBitRate}")
-        options.getFinalAudioEncoder().takeIf { it.isNotBlank() }?.let { encoder ->
+        options.getFinalAudioEncoder().takeIf { it.isNotBlank() && audioCodec != "raw" }?.let { encoder ->
             params.add("audio_encoder=$encoder")
         }
     } else {
@@ -252,24 +258,60 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
     return ScrcpyProtocol.buildScrcpyServerCommand(*params.toTypedArray())
 }
 
-private fun resolveVideoCodec(
+internal fun resolveVideoCodec(
     options: ScrcpyOptions,
     videoEncoder: String,
 ): String {
-    val preferredCodec = options.preferredVideoCodec.ifBlank { "h264" }
+    val preferredCodec =
+        CodecCatalog.normalizedName(CodecMediaType.VIDEO, options.preferredVideoCodec)
+            ?: CodecCatalog.DEFAULT_VIDEO_CODEC
+    val selectedCodec = CodecCatalog.normalizedName(CodecMediaType.VIDEO, options.selectedVideoCodec)
+    if (selectedCodec != null &&
+        (videoEncoder.isBlank() || options.remoteVideoEncoders.any { it.name == videoEncoder && it.codec == selectedCodec })
+    ) {
+        return selectedCodec
+    }
     if (videoEncoder.isBlank()) {
         return preferredCodec
     }
 
-    val encoderCodec = CodecSelector.inferVideoCodecFromName(videoEncoder)
-    val normalizedPreferred = CodecSelector.inferVideoCodecFromName(preferredCodec)
-    if (encoderCodec != normalizedPreferred) {
+    val encoderCodec =
+        options.remoteVideoEncoders
+            .firstOrNull { it.name == videoEncoder && it.codec == preferredCodec }
+            ?.codec
+            ?: options.remoteVideoEncoders.firstOrNull { it.name == videoEncoder }?.codec
+            ?: CodecSelector.inferVideoCodecFromName(videoEncoder).ifBlank { preferredCodec }
+    if (encoderCodec != preferredCodec) {
         LogManager.w(
             LogTags.SCRCPY_CLIENT,
             "视频编码格式与编码器不匹配，使用编码器推导格式: preferred=$preferredCodec encoder=$videoEncoder codec=$encoderCodec",
         )
     }
     return encoderCodec
+}
+
+internal fun resolveAudioCodec(
+    options: ScrcpyOptions,
+    audioEncoder: String,
+): String {
+    val preferredCodec =
+        CodecCatalog.normalizedName(CodecMediaType.AUDIO, options.preferredAudioCodec)
+            ?: CodecCatalog.DEFAULT_AUDIO_CODEC
+    if (preferredCodec == "raw") return preferredCodec
+    val selectedCodec = CodecCatalog.normalizedName(CodecMediaType.AUDIO, options.selectedAudioCodec)
+    if (selectedCodec == "raw" ||
+        (selectedCodec != null &&
+            (audioEncoder.isBlank() || options.remoteAudioEncoders.any { it.name == audioEncoder && it.codec == selectedCodec }))
+    ) {
+        return selectedCodec
+    }
+    if (audioEncoder.isBlank()) return preferredCodec
+
+    return options.remoteAudioEncoders
+        .firstOrNull { it.name == audioEncoder && it.codec == preferredCodec }
+        ?.codec
+        ?: options.remoteAudioEncoders.firstOrNull { it.name == audioEncoder }?.codec
+        ?: CodecSelector.inferAudioCodecFromName(audioEncoder).ifBlank { preferredCodec }
 }
 
 private fun buildVideoCodecOptions(userCodecOptions: String): String? =

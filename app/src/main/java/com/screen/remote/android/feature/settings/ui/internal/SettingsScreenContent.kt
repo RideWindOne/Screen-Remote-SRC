@@ -7,12 +7,10 @@ import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.HapticFeedbackManager
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.designsystem.component.DialogPage
-import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.feature.settings.ui.SettingsCard
 import com.screen.remote.android.feature.settings.ui.SettingsDivider
 import com.screen.remote.android.feature.settings.ui.SettingsItem
-import com.screen.remote.android.feature.settings.ui.SettingsItemWithMenu
 import com.screen.remote.android.feature.settings.ui.SettingsSwitch
 
 @Composable
@@ -123,32 +121,6 @@ private fun GeneralSettingsSection(
             onClick = onNavigateToBackupRestore,
         )
         SettingsDivider()
-        SettingsItemWithMenu(
-            title = texts.keepAlive,
-            subtitle = texts.keepAliveLabel(settings.keepAliveMinutes),
-            expanded = routeState.showKeepAliveMenu,
-            onExpandedChange = routeState::setKeepAliveMenuVisible,
-            helpText = texts.helpKeepAlive,
-            menuContent = {
-                listOf(
-                    1 to texts.oneMinute,
-                    5 to texts.fiveMinutes,
-                    10 to texts.tenMinutes,
-                    30 to texts.thirtyMinutes,
-                    60 to texts.oneHour,
-                    -1 to texts.always,
-                ).forEach { (minutes, label) ->
-                    IOSStyledDropdownMenuItem(
-                        text = label,
-                        onClick = {
-                            onUpdateSettings(settings.copy(keepAliveMinutes = minutes))
-                            routeState.setKeepAliveMenuVisible(false)
-                        },
-                    )
-                }
-            },
-        )
-        SettingsDivider()
         SettingsSwitch(
             title = texts.floatingHaptic,
             checked = settings.enableFloatingHapticFeedback,
@@ -162,16 +134,6 @@ private fun GeneralSettingsSection(
         SettingsItem(
             title = texts.language,
             onClick = onNavigateToLanguage,
-        )
-        SettingsDivider()
-        SettingsSwitch(
-            title = texts.showOnLockScreen,
-            checked = settings.showOnLockScreen,
-            enabled = false,
-            helpText = texts.helpShowOnLockScreen,
-            onCheckedChange = {
-                onUpdateSettings(settings.copy(showOnLockScreen = it))
-            },
         )
         SettingsDivider()
         SettingsItem(
@@ -200,13 +162,6 @@ private fun AdbManagementSection(
             helpText = texts.helpDevicePairing,
             onClick = routeState::openDevicePairingDialog,
         )
-        SettingsDivider()
-        SettingsItem(
-            title = texts.fileTransferPath,
-            subtitle = settings.fileTransferPath.substringAfterLast('/'),
-            helpText = texts.helpFileTransferPath,
-            onClick = routeState::openFilePathDialog,
-        )
     }
 }
 
@@ -219,6 +174,17 @@ private fun LogSettingsSection(
     onUpdateSettings: (AppSettings) -> Unit,
 ) {
     SettingsCard(title = texts.appLogs) {
+        SettingsSwitch(
+            title = texts.debugMode,
+            checked = settings.enableDebugMode,
+            helpText = texts.helpDebugMode,
+            onCheckedChange = {
+                val updated = settings.copy(enableDebugMode = it)
+                onUpdateSettings(updated)
+                LogManager.applySettings(updated)
+            },
+        )
+        SettingsDivider()
         SettingsSwitch(
             title = texts.enableLog,
             checked = settings.enableActivityLog,

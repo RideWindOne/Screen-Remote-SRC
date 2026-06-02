@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.designsystem.component.tree.TreeActions
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.i18n.CommonTexts
@@ -59,7 +60,8 @@ private fun GroupSelectorDialogActions(
         ) {
             Text(
                 text = CommonTexts.BUTTON_SAVE.get(),
-                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppColors.iOSBlue,
             )
         }
 

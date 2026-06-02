@@ -7,18 +7,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.designsystem.component.DialogContainer
 import com.screen.remote.android.core.designsystem.component.DialogHeader
 import com.screen.remote.android.feature.device.ui.component.AddDeviceDialog
 import com.screen.remote.android.feature.device.viewmodel.DeviceViewModel
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun DeviceManagementScreen(
-    viewModel: DeviceViewModel = viewModel(),
+    viewModel: DeviceViewModel = viewModel(factory = rememberDeviceViewModelFactory()),
     onDeviceSelected: (String) -> Unit = {},
     onDismiss: () -> Unit = {},
 ) {
@@ -73,5 +76,15 @@ fun DeviceManagementScreen(
             showAddDialog = false
             viewModel.resetConnectionState()
         }
+    }
+}
+
+@Composable
+private fun rememberDeviceViewModelFactory(): ViewModelProvider.Factory {
+    val context = LocalContext.current.applicationContext
+    return remember(context) {
+        DeviceViewModel.Factory(
+            adbConnectionManager = AdbConnectionManager.getInstance(context),
+        )
     }
 }

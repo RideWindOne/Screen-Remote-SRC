@@ -1,5 +1,6 @@
 package com.screen.remote.android.feature.settings.ui
 
+import android.content.ActivityNotFoundException
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +32,7 @@ fun BackupRestoreScreen(
     val exportLauncher =
         FilePickerHelper.rememberExportFileLauncher(
             mimeType = "application/json",
+            initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
         ) { uri ->
             uri ?: return@rememberExportFileLauncher
             scope.launch {
@@ -44,6 +46,7 @@ fun BackupRestoreScreen(
     val importLauncher =
         FilePickerHelper.rememberImportFileLauncher(
             mimeTypes = arrayOf("application/json"),
+            initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
         ) { uri ->
             uri ?: return@rememberImportFileLauncher
             scope.launch {
@@ -74,7 +77,14 @@ fun BackupRestoreScreen(
                 helpText = SettingsTexts.HELP_BACKUP_DATA.get(),
                 onClick = {
                     val timestamp = System.currentTimeMillis()
-                    exportLauncher.launch("scrcpy_backup_$timestamp.json")
+                    try {
+                        exportLauncher.launch("screen_remote_backup_$timestamp.json")
+                    } catch (_: ActivityNotFoundException) {
+                        dialogState =
+                            BackupRestoreDialogState(
+                                errorMessage = SettingsTexts.FILE_PICKER_UNAVAILABLE.get(),
+                            )
+                    }
                 },
             )
             SettingsDivider()
@@ -82,7 +92,14 @@ fun BackupRestoreScreen(
                 title = txtRestoreData,
                 helpText = SettingsTexts.HELP_RESTORE_DATA.get(),
                 onClick = {
-                    importLauncher.launch(arrayOf("application/json", "*/*"))
+                    try {
+                        importLauncher.launch(arrayOf("application/json"))
+                    } catch (_: ActivityNotFoundException) {
+                        dialogState =
+                            BackupRestoreDialogState(
+                                errorMessage = SettingsTexts.FILE_PICKER_UNAVAILABLE.get(),
+                            )
+                    }
                 },
             )
         }

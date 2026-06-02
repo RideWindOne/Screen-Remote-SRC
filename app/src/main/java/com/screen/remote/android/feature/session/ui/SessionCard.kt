@@ -17,12 +17,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,6 +49,7 @@ import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.screen.remote.android.core.domain.model.ScrcpySession
+import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.i18n.SessionTexts
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -54,16 +59,20 @@ fun SessionCard(
     sessionData: SessionData?,
     index: Int,
     isConnected: Boolean = false,
-    isAdbConnected: Boolean = false,
+    endpointStatus: SessionEndpointStatus = SessionEndpointStatus.UNAVAILABLE,
+    displayTransport: ConnectionTransport = ConnectionTransport.TCP,
     isConnecting: Boolean = false,
     onClick: () -> Unit = {},
     onConnect: () -> Unit = {},
     onManage: () -> Unit = {},
     onEdit: () -> Unit = {},
     onCopy: (SessionData) -> Unit = {},
+    isResettingConnection: Boolean = false,
+    onResetConnection: () -> Unit = {},
     onDelete: () -> Unit = {},
 ) {
     val cardColor = getCardColorByIndex(index)
+    val connectionResetEnabled = !isConnecting && !isResettingConnection
     var showMenu by remember { mutableStateOf(false) }
     var menuOffsetX by remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
@@ -74,6 +83,7 @@ fun SessionCard(
     val txtConnect = rememberText(SessionTexts.SESSION_CONNECT)
     val txtCopySession = rememberText(SessionTexts.SESSION_COPY)
     val txtManage = rememberText(SessionTexts.SESSION_MANAGE)
+    val txtResetConnection = rememberText(SessionTexts.SESSION_RESET_CONNECTION)
 
     Card(
         modifier =
@@ -131,10 +141,8 @@ fun SessionCard(
 
             SessionCardStatusBadge(
                 modifier = Modifier.align(Alignment.TopEnd),
-                sessionData = sessionData,
-                isConnected = isConnected,
-                isAdbConnected = isAdbConnected,
-                isConnecting = isConnecting,
+                displayTransport = displayTransport,
+                endpointStatus = endpointStatus,
             )
 
             Text(
@@ -143,6 +151,32 @@ fun SessionCard(
                 modifier = Modifier.align(Alignment.BottomStart),
                 color = Color.White.copy(alpha = 0.9f),
             )
+
+            if (sessionData != null) {
+                IconButton(
+                    onClick = onResetConnection,
+                    enabled = connectionResetEnabled,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(32.dp),
+                ) {
+                    if (isResettingConnection) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.White.copy(alpha = 0.9f),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = txtResetConnection,
+                            tint = Color.White.copy(alpha = if (connectionResetEnabled) 0.9f else 0.4f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
 
             if (showMenu && sessionData != null) {
                 Box(
@@ -202,26 +236,28 @@ fun SessionCard(
 @Composable
 private fun SessionCardStatusBadge(
     modifier: Modifier = Modifier,
-    sessionData: SessionData?,
-    isConnected: Boolean,
-    isAdbConnected: Boolean,
-    isConnecting: Boolean,
+    displayTransport: ConnectionTransport,
+    endpointStatus: SessionEndpointStatus,
 ) {
-    val isUsbConnection = sessionData?.isUsbConnection() == true
-    val transportIcon = if (isUsbConnection) Icons.Default.Usb else Icons.Default.Wifi
-    val transportLabel = if (isUsbConnection) "USB" else "WiFi"
+    val transportIcon =
+        when (displayTransport) {
+            ConnectionTransport.TCP -> Icons.Default.Wifi
+            ConnectionTransport.USB -> Icons.Default.Usb
+            ConnectionTransport.MDNS -> Icons.Default.Sensors
+        }
+    val transportLabel = displayTransport.name
     val statusColor =
-        when {
-            isConnected || isAdbConnected -> Color(0xFF00C853)
-            isConnecting -> Color(0xFF42A5F5)
-            else -> Color(0xFFFFD700)
+        when (endpointStatus) {
+            SessionEndpointStatus.ADB_CONNECTED -> Color(0xFF00C853)
+            SessionEndpointStatus.DISCOVERED,
+            SessionEndpointStatus.UNAVAILABLE,
+            -> Color(0xFFFFD700)
         }
     val statusDescription =
-        when {
-            isConnected -> "Connected"
-            isAdbConnected -> "ADB connected"
-            isConnecting -> "Connecting"
-            else -> "Disconnected"
+        when (endpointStatus) {
+            SessionEndpointStatus.ADB_CONNECTED -> "ADB connected"
+            SessionEndpointStatus.DISCOVERED -> "Device discovered"
+            SessionEndpointStatus.UNAVAILABLE -> "Unavailable"
         }
 
     Row(
@@ -246,10 +282,10 @@ private fun SessionCardStatusBadge(
                 )
                 Icon(
                     imageVector =
-                        if (isConnected || isAdbConnected || isConnecting) {
-                            Icons.Default.FlashOn
-                        } else {
-                            Icons.Default.Warning
+                        when (endpointStatus) {
+                            SessionEndpointStatus.ADB_CONNECTED -> Icons.Default.FlashOn
+                            SessionEndpointStatus.DISCOVERED -> Icons.Default.FlashOn
+                            SessionEndpointStatus.UNAVAILABLE -> Icons.Default.Warning
                         },
                     contentDescription = statusDescription,
                     tint = statusColor,

@@ -3,7 +3,6 @@ package com.screen.remote.android.feature.settings.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,11 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +25,7 @@ import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.designsystem.component.HelpIcon
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSSwitch
-import com.screen.remote.android.core.designsystem.component.SectionTitle
+import com.screen.remote.android.core.designsystem.component.SectionCard
 
 /**
  * 设置卡片容器
@@ -40,26 +36,7 @@ import com.screen.remote.android.core.designsystem.component.SectionTitle
 fun SettingsCard(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        SectionTitle(title)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(AppDimens.cardCornerRadius),
-            colors =
-                CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                content()
-            }
-        }
-    }
-}
+) = SectionCard(title = title, content = content)
 
 /**
  * 设置分隔线
@@ -266,26 +243,5 @@ fun SettingsSwitch(
             enabled = enabled,
             onCheckedChange = onCheckedChange,
         )
-    }
-}
-
-/**
- * 设置区域（已废弃，使用 SettingsCard 替代）
- */
-@Deprecated("Use SettingsCard instead")
-@Composable
-fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        content()
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }

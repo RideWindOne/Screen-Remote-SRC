@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.screen.remote.android.core.domain.model.DeviceGroup
+import com.screen.remote.android.core.domain.model.GroupTreeNode
 
 /**
  * 树形结构展开状态管理
@@ -204,3 +206,93 @@ fun <T> rememberTreeMultiSelectionState(initialSelection: Set<T> = emptySet()): 
     remember {
         TreeMultiSelectionState(initialSelection)
     }
+
+object TreeActions {
+    fun buildGroupTree(groups: List<DeviceGroup>): List<GroupTreeNode> {
+        val groupMap = groups.associateBy { it.path }
+        val rootNodes = mutableListOf<GroupTreeNode>()
+
+        fun buildNode(
+            path: String,
+            level: Int,
+        ): GroupTreeNode? {
+            val group = groupMap[path] ?: return null
+            val children =
+                groups
+                    .filter { it.parentPath == path }
+                    .sortedBy { it.name }
+                    .mapNotNull { buildNode(it.path, level + 1) }
+            return GroupTreeNode(group, children, false, level)
+        }
+
+        groups
+            .filter { it.parentPath == "/" }
+            .sortedBy { it.name }
+            .forEach { group ->
+                buildNode(group.path, 0)?.let { rootNodes.add(it) }
+            }
+
+        return rootNodes
+    }
+
+    fun findNodeByPath(
+        nodes: List<GroupTreeNode>,
+        path: String,
+    ): GroupTreeNode? {
+        for (node in nodes) {
+            if (node.group.path == path) {
+                return node
+            }
+            val found = findNodeByPath(node.children, path)
+            if (found != null) {
+                return found
+            }
+        }
+        return null
+    }
+
+    fun getAllPaths(nodes: List<GroupTreeNode>): List<String> {
+        val paths = mutableListOf<String>()
+
+        fun collectPaths(nodeList: List<GroupTreeNode>) {
+            for (node in nodeList) {
+                paths.add(node.group.path)
+                collectPaths(node.children)
+            }
+        }
+        collectPaths(nodes)
+        return paths
+    }
+
+    fun pathExists(
+        nodes: List<GroupTreeNode>,
+        path: String,
+    ): Boolean = findNodeByPath(nodes, path) != null
+
+    fun getDescendantPaths(node: GroupTreeNode): List<String> {
+        val paths = mutableListOf(node.group.path)
+
+        fun collectDescendants(nodeList: List<GroupTreeNode>) {
+            for (child in nodeList) {
+                paths.add(child.group.path)
+                collectDescendants(child.children)
+            }
+        }
+        collectDescendants(node.children)
+        return paths
+    }
+
+    fun canMoveTo(
+        sourcePath: String,
+        targetPath: String,
+        nodes: List<GroupTreeNode>,
+    ): Boolean {
+        if (sourcePath == targetPath) return false
+
+        val sourceNode = findNodeByPath(nodes, sourcePath) ?: return false
+        val descendantPaths = getDescendantPaths(sourceNode)
+        if (targetPath in descendantPaths) return false
+
+        return true
+    }
+}

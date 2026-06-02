@@ -5,13 +5,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.screen.remote.android.core.common.constants.FilePathConstants.DEFAULT_FILE_TRANSFER_PATH
 import com.screen.remote.android.core.domain.model.AppLanguage
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.ThemeMode
+import com.screen.remote.android.core.update.UpdateChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -23,8 +22,6 @@ class PreferencesManager(
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val LANGUAGE = stringPreferencesKey("language")
-        val KEEP_ALIVE_MINUTES = intPreferencesKey("keep_alive_minutes")
-        val SHOW_ON_LOCK_SCREEN = booleanPreferencesKey("show_on_lock_screen")
         val ENABLE_ACTIVITY_LOG = booleanPreferencesKey("enable_activity_log")
         val ENABLE_AUDIO_STREAM_LOG = booleanPreferencesKey("enable_audio_stream_log")
         val ENABLE_VIDEO_STREAM_LOG = booleanPreferencesKey("enable_video_stream_log")
@@ -32,8 +29,22 @@ class PreferencesManager(
         val ENABLE_EVENT_STREAM_LOG = booleanPreferencesKey("enable_event_stream_log")
         val ENABLE_SHELL_STREAM_LOG = booleanPreferencesKey("enable_shell_stream_log")
         val ENABLE_MANAGEMENT_LOG = booleanPreferencesKey("enable_management_log")
-        val FILE_TRANSFER_PATH = stringPreferencesKey("file_transfer_path")
+        val ENABLE_DEBUG_MODE = booleanPreferencesKey("enable_debug_mode")
         val ENABLE_FLOATING_HAPTIC_FEEDBACK = booleanPreferencesKey("enable_floating_haptic_feedback")
+        val UPDATE_CHANNEL = stringPreferencesKey("update_channel")
+        val LAST_SEEN_ONBOARDING_VERSION = stringPreferencesKey("last_seen_onboarding_version")
+    }
+
+    val lastSeenOnboardingVersionFlow: Flow<String?> =
+        context.dataStore.data.map {
+            preferences -> preferences[Keys.LAST_SEEN_ONBOARDING_VERSION]
+//            "v4.4.2" // 修改这里临时预览更新页面
+        }
+
+    suspend fun markOnboardingVersionSeen(version: String) {
+        context.dataStore.edit { preferences ->
+            preferences[Keys.LAST_SEEN_ONBOARDING_VERSION] = version
+        }
     }
 
     val settingsFlow: Flow<AppSettings> =
@@ -55,8 +66,6 @@ class PreferencesManager(
                             AppLanguage.AUTO
                         }
                     } ?: AppLanguage.AUTO,
-                keepAliveMinutes = preferences[Keys.KEEP_ALIVE_MINUTES] ?: 5,
-                showOnLockScreen = preferences[Keys.SHOW_ON_LOCK_SCREEN] ?: false,
                 enableActivityLog = preferences[Keys.ENABLE_ACTIVITY_LOG] ?: true,
                 enableAudioStreamLog = preferences[Keys.ENABLE_AUDIO_STREAM_LOG] ?: false,
                 enableVideoStreamLog = preferences[Keys.ENABLE_VIDEO_STREAM_LOG] ?: false,
@@ -64,8 +73,12 @@ class PreferencesManager(
                 enableEventStreamLog = preferences[Keys.ENABLE_EVENT_STREAM_LOG] ?: false,
                 enableShellStreamLog = preferences[Keys.ENABLE_SHELL_STREAM_LOG] ?: false,
                 enableManagementLog = preferences[Keys.ENABLE_MANAGEMENT_LOG] ?: false,
-                fileTransferPath = preferences[Keys.FILE_TRANSFER_PATH] ?: DEFAULT_FILE_TRANSFER_PATH,
+                enableDebugMode = preferences[Keys.ENABLE_DEBUG_MODE] ?: false,
                 enableFloatingHapticFeedback = preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] ?: true,
+                updateChannel =
+                    preferences[Keys.UPDATE_CHANNEL]?.let {
+                        runCatching { UpdateChannel.valueOf(it) }.getOrDefault(UpdateChannel.STABLE)
+                    } ?: UpdateChannel.STABLE,
             )
         }
 
@@ -73,8 +86,6 @@ class PreferencesManager(
         context.dataStore.edit { preferences ->
             preferences[Keys.THEME_MODE] = settings.themeMode.name
             preferences[Keys.LANGUAGE] = settings.language.name
-            preferences[Keys.KEEP_ALIVE_MINUTES] = settings.keepAliveMinutes
-            preferences[Keys.SHOW_ON_LOCK_SCREEN] = settings.showOnLockScreen
             preferences[Keys.ENABLE_ACTIVITY_LOG] = settings.enableActivityLog
             preferences[Keys.ENABLE_AUDIO_STREAM_LOG] = settings.enableAudioStreamLog
             preferences[Keys.ENABLE_VIDEO_STREAM_LOG] = settings.enableVideoStreamLog
@@ -82,8 +93,9 @@ class PreferencesManager(
             preferences[Keys.ENABLE_EVENT_STREAM_LOG] = settings.enableEventStreamLog
             preferences[Keys.ENABLE_SHELL_STREAM_LOG] = settings.enableShellStreamLog
             preferences[Keys.ENABLE_MANAGEMENT_LOG] = settings.enableManagementLog
-            preferences[Keys.FILE_TRANSFER_PATH] = settings.fileTransferPath
+            preferences[Keys.ENABLE_DEBUG_MODE] = settings.enableDebugMode
             preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] = settings.enableFloatingHapticFeedback
+            preferences[Keys.UPDATE_CHANNEL] = settings.updateChannel.name
         }
     }
 }

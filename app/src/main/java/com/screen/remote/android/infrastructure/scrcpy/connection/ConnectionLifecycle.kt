@@ -3,27 +3,40 @@ package com.screen.remote.android.infrastructure.scrcpy.connection
 import android.content.Context
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.data.repository.SessionRepository
+import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.i18n.RemoteTexts
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager.killProcess
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.cleanupOldResources
+import com.screen.remote.android.infrastructure.scrcpy.connection.internal.completeScrcpyServerStartup
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.connectSockets
+import com.screen.remote.android.infrastructure.scrcpy.connection.internal.detectRemoteEncodersAfterPush
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.generateScid
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.setupAdbConnection
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.setupForwardAndPushServer
+import com.screen.remote.android.infrastructure.scrcpy.connection.internal.shouldDetectAudioCodec
+import com.screen.remote.android.infrastructure.scrcpy.connection.internal.shouldDetectVideoCodec
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.startScrcpyServer
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberNegotiatedAudioCodec
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberNegotiatedVideoCodec
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardRemovalTrigger
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketType
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 连接生命周期管理器 - 管理 Scrcpy 连接和断开的完整生命周期
@@ -83,28 +96,46 @@ class ConnectionLifecycle(
     private val onVideoStreamReady: (VideoStream?) -> Unit,
     private val onAudioStreamReady: (AudioStream?) -> Unit,
 ) {
-    // SessionRepository 作为基础设施，可以直接使用
-    private val sessionRepository =
-        SessionRepository(context)
     internal var localPort: Int = 0
+    internal var activeDeviceId: String? = null
     var currentScid: Int? = null
         internal set
     val healthMonitor = ConnectionHealthMonitor()
+    internal val backgroundScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val adbRaceGeneration = AtomicLong(0)
+    private var codecDetectionJob: Job? = null
+
+    internal fun beginAdbRace(): Long = adbRaceGeneration.incrementAndGet()
+
+    internal fun isCurrentAdbRace(generation: Long): Boolean = adbRaceGeneration.get() == generation
 
     /**
      * 建立连接（从 CurrentSession 获取配置）
      */
     suspend fun connect(): Result<Pair<VideoStream?, AudioStream?>> =
         withContext(Dispatchers.IO) {
+            var codecDetectionStarted = false
+            var ownsConnectionCleanup = false
             try {
                 val session = sessionContext.currentSession() ?: throw IllegalStateException("会话不存在")
-                val options = session.options
-
+                val initialOptions = session.options
+                val previousLocalPort = localPort
+                val previousScid = currentScid
+                val previousConnection =
+                    activeDeviceId?.let(adbConnectionManager::getConnection)
                 // 步骤 1: 建立/验证 ADB 连接并分配端口
-                val connection = setupAdbConnection(options)
+                val connection = setupAdbConnection(initialOptions)
+                val options = session.options
+                val needsCodecDetection = shouldRunRemoteCodecDetectionInBackground(options)
+                codecDetectionStarted = needsCodecDetection
 
-                // 步骤 2: 清理旧资源
-                cleanupOldResources(connection)
+                // 步骤 2: 在创建新 forward 前完成旧资源清理，避免端口复用时误删新映射。
+                ownsConnectionCleanup = true
+                cleanupOldResources(
+                    connection = previousConnection ?: connection,
+                    previousLocalPort = previousLocalPort,
+                    previousScid = previousScid,
+                )
 
                 // 步骤 3: 生成 SCID 并设置 Forward
                 val scid = generateScid()
@@ -114,13 +145,43 @@ class ConnectionLifecycle(
                     connection = connection,
                     socketName = socketName,
                     useAdbForward = options.forceAdb,
+                    onServerAvailable =
+                        if (needsCodecDetection) {
+                            {
+                                startRemoteCodecDetectionInBackground(
+                                    connection = connection,
+                                    expectedSessionId = session.sessionId,
+                                )
+                            }
+                        } else {
+                            null
+                        },
                 )
 
                 // 步骤 3.5: 设置 Socket 管理器的本地端口
                 socketManager.setLocalPort(localPort)
 
+                // 自动选择结果必须在正式启动命令读取会话配置前完成。
+                // 检测本身与端口等本地准备并行，但不能跨过 server 启动边界。
+                if (codecDetectionStarted) {
+                    codecDetectionJob?.join()
+                }
+
                 // 步骤 4: 启动 scrcpy-server
-                startScrcpyServer(connection, scid)
+                val canProbeServerSocketDirectly = !options.forceAdb
+                LogManager.d(
+                    LogTags.SCRCPY_CLIENT,
+                    if (canProbeServerSocketDirectly) {
+                        "Server 启动模式: direct localabstract，跳过日志 settle，探测首条 video socket"
+                    } else {
+                        "Server 启动模式: ADB forward，等待 server ready 后按协议顺序建链"
+                    },
+                )
+                startScrcpyServer(
+                    connection = connection,
+                    scid = scid,
+                    waitForReady = !canProbeServerSocketDirectly,
+                )
 
                 // 步骤 5: 连接 Socket
                 connectSockets(
@@ -129,10 +190,23 @@ class ConnectionLifecycle(
                     socketName = socketName,
                 )
 
-                // 步骤 6: 启动健康监控
+                if (canProbeServerSocketDirectly) {
+                    completeScrcpyServerStartup(scid)
+                }
+
+                // 步骤 6: 先读取媒体头；远端可能用 audio codec id=0 明确关闭音频。
+                val (videoStream, audioStream) =
+                    metadataReader.readMetadataAndCreateStreams(
+                        options.enableAudio,
+                        session.onVideoResolution,
+                    )
+                videoStream?.let { session.rememberNegotiatedVideoCodec(it.codec) }
+                audioStream?.let { session.rememberNegotiatedAudioCodec(it.codec) }
+
+                // 步骤 7: 根据媒体头的最终结果启动健康监控。
                 healthMonitor.startMonitoring(
                     videoSocket = socketManager.videoSocket,
-                    audioSocket = socketManager.audioSocket,
+                    audioSocket = socketManager.audioSocket.takeIf { audioStream != null },
                     controlSocket = socketManager.controlSocket,
                     onConnectionLostCallback = {
                         LogManager.w(LogTags.SCRCPY_CLIENT, "健康监控检测到连接丢失")
@@ -148,32 +222,58 @@ class ConnectionLifecycle(
                     },
                 )
 
-                // 步骤 7: 读取元数据并创建流
-                val (videoStream, audioStream) =
-                    metadataReader.readMetadataAndCreateStreams(
-                        options.enableAudio,
-                        session.onVideoResolution,
-                    )
-
                 // 通知流已就绪
                 onVideoStreamReady(videoStream)
                 onAudioStreamReady(audioStream)
 
                 Result.success(Pair(videoStream, audioStream))
             } catch (e: Exception) {
+                if (codecDetectionStarted) {
+                    codecDetectionJob?.cancelAndJoin()
+                    codecDetectionJob = null
+                }
                 shellMonitor.dumpDiagnostics("connect-failed")
                 LogManager.e(LogTags.SCRCPY_CLIENT, "连接失败: ${e.message}")
+                if (ownsConnectionCleanup) {
+                    disconnect().onFailure { cleanupError ->
+                        LogManager.w(
+                            LogTags.SCRCPY_CLIENT,
+                            "连接失败后的资源清理不完整: ${cleanupError.message}",
+                        )
+                    }
+                }
                 Result.failure(e)
             }
         }
+
+    private suspend fun startRemoteCodecDetectionInBackground(
+        connection: AdbConnection,
+        expectedSessionId: String,
+    ) {
+        codecDetectionJob?.cancelAndJoin()
+        codecDetectionJob =
+            backgroundScope.launch {
+                runCatching {
+                    detectRemoteEncodersAfterPush(connection, expectedSessionId)
+                }.onFailure { error ->
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "后台检测远程编解码器失败: ${error.message}")
+                }
+            }
+    }
+
+    private fun shouldRunRemoteCodecDetectionInBackground(options: ScrcpyOptions): Boolean =
+        shouldDetectVideoCodec(options) || shouldDetectAudioCodec(options)
 
     /**
      * 断开连接
      * 清理顺序：Shell监控 → Socket → Forward → Server → 事件总线
      */
     suspend fun disconnect() =
-        withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
             try {
+                codecDetectionJob?.cancelAndJoin()
+                codecDetectionJob = null
+                healthMonitor.stopMonitoring()
                 val session = sessionContext.currentSession()
                 val options = session?.options
 
@@ -187,7 +287,7 @@ class ConnectionLifecycle(
 
                 // 3. 移除 ADB Forward
                 if (options != null) {
-                    val deviceId = options.getDeviceIdentifier()
+                    val deviceId = activeDeviceId ?: options.getDeviceIdentifier()
                     val connection = adbConnectionManager.getConnection(deviceId)
                     if (connection != null) {
                         if (options.forceAdb) {
@@ -206,7 +306,7 @@ class ConnectionLifecycle(
 
                 // 4. 终止服务器进程
                 if (options != null && currentScid != null) {
-                    val deviceId = options.getDeviceIdentifier()
+                    val deviceId = activeDeviceId ?: options.getDeviceIdentifier()
                     val connection = adbConnectionManager.getConnection(deviceId)
                     if (connection != null) {
                         try {
@@ -231,6 +331,7 @@ class ConnectionLifecycle(
 
                 stateMachine.clearProgress()
                 currentScid = null
+                activeDeviceId = null
 
                 Result.success(true)
             } catch (e: Exception) {

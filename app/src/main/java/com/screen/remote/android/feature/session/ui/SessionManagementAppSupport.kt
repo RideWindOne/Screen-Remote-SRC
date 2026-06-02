@@ -1,14 +1,15 @@
 package com.screen.remote.android.feature.session.ui
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.util.compat.putIfAbsentCompat
-import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import dadb.helper.RemoteAppIconBatchRequest
-import dadb.helper.RemoteAppListItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -16,7 +17,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
 import java.util.Locale
@@ -29,6 +29,14 @@ internal data class AppInventoryEntry(
     val isEnabled: Boolean,
     val versionCode: Long = 0L,
     val lastUpdateTime: Long = 0L,
+    val apkSizeBytes: Long? = null,
+)
+
+internal data class LocalInstalledApp(
+    val label: String,
+    val packageName: String,
+    val apkPaths: List<String>,
+    val isSystemApp: Boolean,
 )
 
 internal data class AppInventorySnapshot(
@@ -51,17 +59,16 @@ internal data class AppInventorySnapshot(
 }
 
 internal enum class AppListFilter(
-    val labelZh: String,
-    val labelEn: String,
+    private val text: com.screen.remote.android.core.i18n.TextPair,
 ) {
-    ShowSystemApps("显示系统应用", "Show system apps"),
-    ShowUserApps("显示第三方应用", "Show user apps"),
-    ShowEnabledApps("显示启用应用", "Show enabled apps"),
-    ShowDisabledApps("显示禁用应用", "Show disabled apps"),
+    ShowSystemApps(ManagementTexts.Apps.SHOW_SYSTEM_APPS),
+    ShowUserApps(ManagementTexts.Apps.SHOW_USER_APPS),
+    ShowEnabledApps(ManagementTexts.Apps.SHOW_ENABLED_APPS),
+    ShowDisabledApps(ManagementTexts.Apps.SHOW_DISABLED_APPS),
     ;
 
     val label: String
-        get() = ManagementTexts.text(labelZh, labelEn)
+        get() = text.get()
 
     companion object {
         val defaultSelection: Set<AppListFilter> =
@@ -73,16 +80,16 @@ internal enum class AppListFilter(
 }
 
 internal enum class AppListSort(
-    val labelZh: String,
-    val labelEn: String,
+    val text: com.screen.remote.android.core.i18n.TextPair,
 ) {
-    Title("按应用名排序", "Sort by app name"),
-    Package("按包名排序", "Sort by package"),
-    EnabledState("按启用状态排序", "Sort by enabled state"),
+    Title(ManagementTexts.Apps.SORT_BY_APP_NAME),
+    Package(ManagementTexts.Apps.SORT_BY_PACKAGE),
+    EnabledState(ManagementTexts.Apps.SORT_BY_ENABLED_STATE),
+    Size(ManagementTexts.Apps.SORT_BY_SIZE),
 }
 
 internal val AppListSort.label: String
-    get() = ManagementTexts.text(labelZh, labelEn)
+    get() = text.get()
 
 @Serializable
 private data class AppIconIndexSnapshot(
@@ -105,7 +112,9 @@ internal fun resolveAppListTitle(
 }
 
 internal object SessionManagementAppCache {
-    private var processPrepared = false
+    private var activeScopeKey: String? = null
+    private var activeStorageScopeName: String? = null
+    private var scopePrepared = false
     private var snapshot: AppInventorySnapshot? = null
     private val detailCache = mutableMapOf<String, AppDetailSnapshot>()
     private val iconCache = mutableMapOf<String, Bitmap?>()
@@ -120,18 +129,50 @@ internal object SessionManagementAppCache {
             prettyPrint = false
         }
 
-    fun prepareForProcess(context: Context) {
+    fun selectScope(scopeKey: String) {
         synchronized(this) {
-            if (processPrepared) return
-            processPrepared = true
-            clearSnapshot()
+            if (activeScopeKey == scopeKey) return
+            activeScopeKey = scopeKey
+            activeStorageScopeName = "session-${sha256(scopeKey.toByteArray(Charsets.UTF_8)).take(16)}"
+            scopePrepared = false
+            snapshot = null
             detailCache.clear()
+            iconCache.clear()
+            iconGenerationCache.clear()
+            iconHashCache.clear()
             titleCache.clear()
             iconHelperUnavailableReason = null
             iconHelperDiagnosticsCaptured = false
-            loadIconIndex(context)
         }
     }
+
+    suspend fun prepareForSession(
+        context: Context,
+        scopeKey: String,
+    ) {
+        selectScope(scopeKey)
+        val shouldLoad =
+            synchronized(this) {
+                activeScopeKey == scopeKey && !scopePrepared
+            }
+        if (!shouldLoad) return
+
+        val indexSnapshot = withContext(Dispatchers.IO) { readIconIndex(context) }
+        synchronized(this) {
+            if (activeScopeKey == scopeKey && !scopePrepared) {
+                indexSnapshot?.let { snapshot ->
+                    iconHashCache.putAll(snapshot.hashes)
+                    titleCache.putAll(snapshot.titles)
+                }
+                scopePrepared = true
+            }
+        }
+    }
+
+    fun storageScopeName(): String =
+        synchronized(this) {
+            checkNotNull(activeStorageScopeName) { "Session management cache scope is not selected" }
+        }
 
     fun snapshot(): AppInventorySnapshot? =
         synchronized(this) {
@@ -150,6 +191,7 @@ internal object SessionManagementAppCache {
     fun clearSnapshot() {
         synchronized(this) {
             snapshot = null
+            detailCache.clear()
         }
     }
 
@@ -264,16 +306,12 @@ internal object SessionManagementAppCache {
         }
     }
 
-    private fun loadIconIndex(context: Context) {
+    private fun readIconIndex(context: Context): AppIconIndexSnapshot? {
         val file = getIconIndexFile(context)
-        if (!file.exists()) return
-        val snapshot =
-            runCatching {
-                json.decodeFromString<AppIconIndexSnapshot>(file.readText())
-            }.getOrNull() ?: return
-        iconHashCache.clear()
-        iconHashCache.putAll(snapshot.hashes)
-        titleCache.putAll(snapshot.titles)
+        if (!file.exists()) return null
+        return runCatching {
+            json.decodeFromString<AppIconIndexSnapshot>(file.readText())
+        }.getOrNull()
     }
 
     private fun writeIconIndex(context: Context) {
@@ -385,11 +423,11 @@ internal suspend fun loadAppInventorySnapshot(
         }
     }
 
-    val connection = AdbBridge.getConnection()
+    val connection = SessionManagementAdbConnection.current()
     if (connection == null) {
         return AppInventorySnapshot.loading().copy(
             isLoading = false,
-            errorMessage = "当前没有可用的 ADB 连接，无法读取应用列表。",
+            errorMessage = ManagementTexts.Apps.NO_CONNECTION_FOR_APP_LIST.get(),
         )
     }
 
@@ -401,8 +439,41 @@ internal suspend fun loadAppInventorySnapshot(
     }.getOrElse { error ->
         AppInventorySnapshot.loading().copy(
             isLoading = false,
-            errorMessage = error.message ?: "读取应用列表失败。",
+            errorMessage = error.message ?: ManagementTexts.Apps.APP_LIST_LOAD_FAILED.get(),
         )
+    }
+}
+
+internal suspend fun loadAppApkSizes(entries: List<AppInventoryEntry>): Map<String, Long> {
+    val connection = SessionManagementAdbConnection.current() ?: return emptyMap()
+    val chunks =
+        entries
+            .asSequence()
+            .filter { it.apkPath.isNotBlank() }
+            .distinctBy { it.packageName }
+            .toList()
+            .chunked(80)
+    val outputs = mutableListOf<String>()
+    for (chunk in chunks) {
+        val command =
+            chunk.joinToString(separator = "; ") { entry ->
+                "size=\$(stat -c %s ${quoteShellArg(entry.apkPath)} 2>/dev/null); " +
+                    "printf '%s\\t%s\\n' ${quoteShellArg(entry.packageName)} \"\${size:-0}\""
+            }
+        connection.executeShell(command, retryOnFailure = false).getOrNull()?.let(outputs::add)
+    }
+    val output = outputs.joinToString(separator = "\n")
+
+    return withContext(Dispatchers.Default) {
+        output
+            .lineSequence()
+            .mapNotNull { line ->
+                val separator = line.indexOf('\t')
+                if (separator <= 0) return@mapNotNull null
+                val packageName = line.substring(0, separator).trim()
+                val size = line.substring(separator + 1).trim().toLongOrNull()
+                if (packageName.isBlank() || size == null || size < 0L) null else packageName to size
+            }.toMap()
     }
 }
 
@@ -418,12 +489,14 @@ private suspend fun loadAppInventorySnapshotWithShell(
                     .getOrThrow()
 
             val apps =
-                output
-                    .lineSequence()
-                    .mapNotNull { parseAppInventoryLine(it, emptySet(), emptySet()) }
-                    .sortedWith(
-                        compareBy<AppInventoryEntry> { it.packageName.lowercase(Locale.getDefault()) },
-                    ).toList()
+                withContext(Dispatchers.Default) {
+                    output
+                        .lineSequence()
+                        .mapNotNull { parseAppInventoryLine(it, emptySet(), emptySet()) }
+                        .sortedWith(
+                            compareBy<AppInventoryEntry> { it.packageName.lowercase(Locale.getDefault()) },
+                        ).toList()
+                }
 
             val snapshot =
                 AppInventorySnapshot(
@@ -445,11 +518,13 @@ private suspend fun loadAppInventorySnapshotWithShell(
                 .getOrNull()
                 .orEmpty()
         val userPackages =
-            userPackagesOutput
-                .lineSequence()
-                .mapNotNull { parseAppInventoryLine(it, emptySet(), emptySet()) }
-                .map { it.packageName }
-                .toSet()
+            withContext(Dispatchers.Default) {
+                userPackagesOutput
+                    .lineSequence()
+                    .mapNotNull { parseAppInventoryLine(it, emptySet(), emptySet()) }
+                    .map { it.packageName }
+                    .toSet()
+            }
 
         val disabledOutput =
             connection
@@ -457,19 +532,23 @@ private suspend fun loadAppInventorySnapshotWithShell(
                 .getOrNull()
                 .orEmpty()
         val disabledPackages =
-            disabledOutput
-                .lineSequence()
-                .map { it.trim().removePrefix("package:").trim() }
-                .filter { it.isNotBlank() }
-                .toSet()
+            withContext(Dispatchers.Default) {
+                disabledOutput
+                    .lineSequence()
+                    .map { it.trim().removePrefix("package:").trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            }
 
         val apps =
-            output
-                .lineSequence()
-                .mapNotNull { parseAppInventoryLine(it, disabledPackages, userPackages) }
-                .sortedWith(
-                    compareBy<AppInventoryEntry> { it.packageName.lowercase(Locale.getDefault()) },
-                ).toList()
+            withContext(Dispatchers.Default) {
+                output
+                    .lineSequence()
+                    .mapNotNull { parseAppInventoryLine(it, disabledPackages, userPackages) }
+                    .sortedWith(
+                        compareBy<AppInventoryEntry> { it.packageName.lowercase(Locale.getDefault()) },
+                    ).toList()
+            }
 
         val fullSnapshot =
             AppInventorySnapshot(
@@ -488,17 +567,6 @@ private suspend fun loadAppInventorySnapshotWithShell(
             )
         }
     }.getOrThrow()
-
-private fun remoteAppListItemToInventoryEntry(item: RemoteAppListItem): AppInventoryEntry =
-    AppInventoryEntry(
-        packageName = item.packageName,
-        appTitle = item.label.ifBlank { guessAppTitle(item.packageName) },
-        isSystemApp = item.systemApp,
-        apkPath = item.sourceDir,
-        isEnabled = item.enabled,
-        versionCode = item.versionCode,
-        lastUpdateTime = item.lastUpdateTime,
-    )
 
 private fun parseAppInventoryLine(
     line: String,
@@ -545,22 +613,22 @@ internal fun guessAppTitle(packageName: String): String {
     val key = normalized.substringAfterLast('.').lowercase(Locale.getDefault())
     val predefined =
         mapOf(
-            "android" to "Android 系统",
-            "settings" to "设置",
-            "systemui" to "系统 UI",
+            "android" to ManagementTexts.Apps.ANDROID_SYSTEM.get(),
+            "settings" to ManagementTexts.Apps.SETTINGS_APP.get(),
+            "systemui" to ManagementTexts.Apps.SYSTEM_UI.get(),
             "vending" to "Google Play Store",
-            "documentsui" to "文档",
-            "packageinstaller" to "安装程序",
-            "launcher" to "桌面",
-            "oneuihome" to "One UI 主屏幕",
-            "permissioncontroller" to "权限控制器",
-            "bluetooth" to "蓝牙",
-            "phone" to "电话",
-            "contacts" to "联系人",
-            "camera" to "相机",
-            "gallery" to "相册",
-            "music" to "音乐",
-            "video" to "视频",
+            "documentsui" to ManagementTexts.Apps.DOCUMENTS.get(),
+            "packageinstaller" to ManagementTexts.Apps.PACKAGE_INSTALLER.get(),
+            "launcher" to ManagementTexts.Apps.LAUNCHER.get(),
+            "oneuihome" to ManagementTexts.Apps.ONE_UI_HOME.get(),
+            "permissioncontroller" to ManagementTexts.Apps.PERMISSION_CONTROLLER.get(),
+            "bluetooth" to ManagementTexts.Apps.BLUETOOTH.get(),
+            "phone" to ManagementTexts.Apps.PHONE.get(),
+            "contacts" to ManagementTexts.Apps.CONTACTS.get(),
+            "camera" to ManagementTexts.Apps.CAMERA.get(),
+            "gallery" to ManagementTexts.Apps.GALLERY.get(),
+            "music" to ManagementTexts.Apps.MUSIC.get(),
+            "video" to ManagementTexts.Apps.VIDEO.get(),
         )
 
     predefined[key]?.let { return it }
@@ -627,8 +695,7 @@ internal data class RemoteAppPresentation(
     val icon: Bitmap?,
 )
 
-private const val APP_ICON_HELPER_ASSET_NAME = "dadb-icon-helper.jar"
-private const val APP_LIST_HELPER_PAGE_SIZE = 200
+private const val DADB_HELPER_ASSET_NAME = "dadb-device-helper.jar"
 private const val APP_ICON_HELPER_BATCH_SIZE = 50
 private const val APP_ICON_HELPER_CONCURRENCY = 3
 
@@ -670,7 +737,7 @@ internal suspend fun loadCachedAppPresentation(
         val iconFile = getAppIconFile(context, entry.packageName)
         val bitmap =
             if (iconFile.exists()) {
-                runCatching { android.graphics.BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull()
+                runCatching { BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull()
             } else {
                 null
             }
@@ -684,6 +751,29 @@ internal suspend fun loadCachedAppPresentation(
         )
     }
 
+internal suspend fun warmCachedAppPresentations(
+    context: Context,
+    entries: List<AppInventoryEntry>,
+    packageNameOnlyMode: Boolean,
+): List<String> =
+    withContext(Dispatchers.IO) {
+        if (packageNameOnlyMode) {
+            return@withContext emptyList()
+        }
+
+        entries
+            .filterNot { SessionManagementAppCache.hasIcon(it.packageName) }
+            .mapNotNull { entry ->
+                val iconFile = getAppIconFile(context, entry.packageName)
+                if (!iconFile.exists()) {
+                    return@mapNotNull null
+                }
+                val bitmap = runCatching { BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull() ?: return@mapNotNull null
+                SessionManagementAppCache.updateIcon(entry.packageName, bitmap)
+                entry.packageName
+            }
+    }
+
 internal suspend fun prefetchAppIconsWithHelper(
     context: Context,
     entries: List<AppInventoryEntry>,
@@ -691,7 +781,7 @@ internal suspend fun prefetchAppIconsWithHelper(
     onChunkApplied: suspend (List<String>) -> Unit = {},
 ): Int =
     withContext(Dispatchers.IO) {
-        val connection = AdbBridge.getConnection() ?: return@withContext 0
+        val helperGateway = AppIconHelperGateway.current(helperJar) ?: return@withContext 0
         val allUpdatedHashes = linkedMapOf<String, String>()
         val allUpdatedTitles = linkedMapOf<String, String>()
         entries
@@ -704,9 +794,8 @@ internal suspend fun prefetchAppIconsWithHelper(
                             async {
                                 prefetchAppIconChunkWithHelper(
                                     context = context,
-                                    connection = connection,
+                                    helperGateway = helperGateway,
                                     chunk = chunk,
-                                    helperJar = helperJar,
                                 )
                             }
                         }.awaitAll()
@@ -735,9 +824,8 @@ internal suspend fun prefetchAppIconsWithHelper(
 
 private suspend fun prefetchAppIconChunkWithHelper(
     context: Context,
-    connection: com.screen.remote.android.infrastructure.adb.connection.AdbConnection,
+    helperGateway: AppIconHelperGateway,
     chunk: List<AppInventoryEntry>,
-    helperJar: File,
 ): AppIconChunkResult {
     val requests =
         chunk.map { entry ->
@@ -751,12 +839,7 @@ private suspend fun prefetchAppIconChunkWithHelper(
             )
         }
 
-    val result =
-        connection
-            .loadAppIconBatchWithHelper(
-                requests = requests,
-                localHelperJar = helperJar,
-            ).getOrThrow()
+    val result = helperGateway.loadIconBatch(requests)
 
     val updatedHashes = linkedMapOf<String, String>()
     val updatedTitles = linkedMapOf<String, String>()
@@ -774,7 +857,7 @@ private suspend fun prefetchAppIconChunkWithHelper(
             iconFile.parentFile?.mkdirs()
             iconFile.writeBytes(imageBytes)
             val bitmap =
-                android.graphics.BitmapFactory.decodeByteArray(
+                BitmapFactory.decodeByteArray(
                     imageBytes,
                     0,
                     imageBytes.size,
@@ -797,80 +880,36 @@ private suspend fun prefetchAppIconChunkWithHelper(
     )
 }
 
-private suspend fun loadRemoteAppPresentation(
-    context: Context,
-    entry: AppInventoryEntry,
-    iconRefreshGeneration: Int,
-): RemoteAppPresentation {
-    val cachedTitle = SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle)
-    val cachedGeneration = SessionManagementAppCache.iconGeneration(entry.packageName)
-    if (SessionManagementAppCache.hasIcon(entry.packageName) && cachedGeneration == iconRefreshGeneration) {
-        return RemoteAppPresentation(
-            title = cachedTitle,
-            icon = SessionManagementAppCache.cachedIcon(entry.packageName),
-        )
-    }
-
-    return withContext(Dispatchers.IO) {
-        val iconFile = getAppIconFile(context, entry.packageName)
-        val shouldRefreshFromDevice =
-            iconRefreshGeneration > 0 && cachedGeneration != iconRefreshGeneration
-        val localHash =
-            SessionManagementAppCache
-                .cachedIconHash(entry.packageName)
-                ?.takeIf { iconFile.exists() }
-        val helperUnavailableReason = SessionManagementAppCache.iconHelperUnavailableReason()
-        val presentation =
-            if ((!shouldRefreshFromDevice || helperUnavailableReason != null) && iconFile.exists()) {
-                RemoteAppPresentation(
-                    title = cachedTitle,
-                    icon = runCatching { android.graphics.BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull(),
-                )
-            } else if (helperUnavailableReason != null) {
-                RemoteAppPresentation(
-                    title = cachedTitle,
-                    icon = null,
-                )
-            } else {
-                fetchAndSaveAppPresentationWithHelper(context, entry, localHash)
-                    ?: RemoteAppPresentation(title = cachedTitle, icon = null)
-            }
-
-        SessionManagementAppCache.updateIcon(
-            packageName = entry.packageName,
-            icon = presentation.icon,
-            generation = iconRefreshGeneration,
-        )
-        SessionManagementAppCache.updateAppTitle(entry.packageName, presentation.title)
-
-        presentation
-    }
-}
-
 private fun getAppIconFile(
     context: Context,
     packageName: String,
-): java.io.File {
+): File {
     val iconDir =
-        java.io.File(
-            context.filesDir,
-            com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR,
+        File(
+            File(
+                context.filesDir,
+                com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR,
+            ),
+            SessionManagementAppCache.storageScopeName(),
         )
     if (!iconDir.exists()) {
         iconDir.mkdirs()
     }
-    return java.io.File(iconDir, "${sanitizeAppIconFileName(packageName)}.webp")
+    return File(iconDir, "${sanitizeAppIconFileName(packageName)}.webp")
 }
 
 private fun getIconIndexFile(context: Context): File =
     File(
-        File(context.filesDir, com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR),
+        File(
+            File(context.filesDir, com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR),
+            SessionManagementAppCache.storageScopeName(),
+        ),
         "index.json",
     )
 
 internal suspend fun copyUriToTempApk(
     context: Context,
-    uri: android.net.Uri,
+    uri: Uri,
 ): File =
     withContext(Dispatchers.IO) {
         val tempDir = File(context.cacheDir, "session-management/install").apply { mkdirs() }
@@ -879,55 +918,101 @@ internal suspend fun copyUriToTempApk(
             tempFile.outputStream().use { output ->
                 input.copyTo(output)
             }
-        } ?: error("无法读取选择的 APK 文件。")
+        } ?: error(ManagementTexts.Apps.APK_READ_FAILED.get())
         tempFile
     }
 
+internal fun loadLocalInstalledApps(context: Context): List<LocalInstalledApp> {
+    val packageManager = context.packageManager
+    return packageManager
+        .getInstalledApplications(0)
+        .asSequence()
+        .mapNotNull { applicationInfo ->
+            val apkPaths =
+                collectInstalledApkPaths(
+                    sourceDir = applicationInfo.sourceDir,
+                    splitSourceDirs = applicationInfo.splitSourceDirs,
+                )
+            if (apkPaths.isEmpty()) {
+                return@mapNotNull null
+            }
+            LocalInstalledApp(
+                label = applicationInfo.loadLabel(packageManager).toString().ifBlank { applicationInfo.packageName },
+                packageName = applicationInfo.packageName,
+                apkPaths = apkPaths,
+                isSystemApp = applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0,
+            )
+        }.sortedWith(
+            compareBy<LocalInstalledApp> { it.label.lowercase(Locale.getDefault()) }
+                .thenBy { it.packageName },
+        ).toList()
+}
+
+internal fun collectInstalledApkPaths(
+    sourceDir: String?,
+    splitSourceDirs: Array<String>?,
+    isFile: (String) -> Boolean = { path -> File(path).isFile },
+): List<String> =
+    (listOfNotNull(sourceDir) + splitSourceDirs.orEmpty())
+        .distinct()
+        .filter(isFile)
+
 private fun sanitizeAppIconFileName(packageName: String): String = packageName.replace(':', '_')
 
-internal fun ensureLocalAppIconHelperJar(context: Context): File {
+internal fun ensureLocalDadbHelperJar(context: Context): File {
     val helperDir = File(context.filesDir, "dadb-helpers").apply { mkdirs() }
-    val helperFile = File(helperDir, APP_ICON_HELPER_ASSET_NAME)
-    context.assets.open(APP_ICON_HELPER_ASSET_NAME).use { input ->
+    val helperFile = File(helperDir, DADB_HELPER_ASSET_NAME)
+    context.assets.open(DADB_HELPER_ASSET_NAME).use { input ->
         helperFile.outputStream().use { output -> input.copyTo(output) }
     }
     return helperFile
 }
 
-private suspend fun fetchAndSaveAppIcon(
-    context: Context,
-    packageName: String,
-    apkPath: String,
-): Bitmap? =
-    fetchAndSaveAppPresentationWithHelper(
-        context = context,
-        entry =
-            AppInventoryEntry(
-                packageName = packageName,
-                appTitle = SessionManagementAppCache.appTitle(packageName, guessAppTitle(packageName)),
-                isSystemApp = false,
-                apkPath = apkPath,
-                isEnabled = true,
-            ),
-        localHash = SessionManagementAppCache.cachedIconHash(packageName),
-    )?.icon
+private class AppIconHelperGateway(
+    private val connection: AdbConnection,
+    private val helperJar: File,
+) {
+    suspend fun loadIconBatch(requests: List<RemoteAppIconBatchRequest>) =
+        connection
+            .loadAppIconBatchWithHelper(
+                requests = requests,
+                localHelperJar = helperJar,
+            ).getOrThrow()
+
+    suspend fun loadIcon(
+        packageName: String,
+        localHash: String?,
+    ) = connection
+        .loadAppIconWithHelper(
+            packageName = packageName,
+            localHash = localHash,
+            localHelperJar = helperJar,
+        ).getOrThrow()
+
+    suspend fun runProbe(
+        command: String,
+        args: List<String>,
+    ) = connection.runAppHelperProbe(command, args, helperJar)
+
+    companion object {
+        fun current(helperJar: File): AppIconHelperGateway? =
+            SessionManagementAdbConnection
+                .current()
+                ?.let { connection -> AppIconHelperGateway(connection, helperJar) }
+
+        fun current(context: Context): AppIconHelperGateway? =
+            current(ensureLocalDadbHelperJar(context))
+    }
+}
 
 private suspend fun fetchAndSaveAppPresentationWithHelper(
     context: Context,
     entry: AppInventoryEntry,
     localHash: String?,
 ): RemoteAppPresentation? {
-    val connection = AdbBridge.getConnection() ?: return null
-
     return runCatching {
-        val helperJar = ensureLocalAppIconHelperJar(context)
-        val helperResult =
-            connection
-                .loadAppIconWithHelper(
-                    packageName = entry.packageName,
-                    localHash = localHash,
-                    localHelperJar = helperJar,
-                ).getOrThrow()
+        val helperGateway = AppIconHelperGateway.current(context) ?: return null
+        val helperResult = helperGateway.loadIcon(entry.packageName, localHash)
 
         val resolvedTitle =
             helperResult.label
@@ -941,13 +1026,13 @@ private suspend fun fetchAndSaveAppPresentationWithHelper(
                 iconFile.parentFile?.mkdirs()
                 iconFile.writeBytes(bytes)
                 SessionManagementAppCache.updateIconHash(context, entry.packageName, helperResult.iconHash)
-                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             } else {
                 if (!iconFile.exists()) {
                     null
                 } else {
                     SessionManagementAppCache.updateIconHash(context, entry.packageName, helperResult.iconHash)
-                    android.graphics.BitmapFactory.decodeFile(iconFile.absolutePath)
+                    BitmapFactory.decodeFile(iconFile.absolutePath)
                 }
             }
 
@@ -984,8 +1069,7 @@ private suspend fun captureAppHelperDiagnostics(
     context: Context,
     packageName: String,
 ) {
-    val connection = AdbBridge.getConnection() ?: return
-    val helperJar = ensureLocalAppIconHelperJar(context)
+    val helperGateway = AppIconHelperGateway.current(context) ?: return
     val probes =
         listOf(
             "ping" to emptyList(),
@@ -997,7 +1081,7 @@ private suspend fun captureAppHelperDiagnostics(
         )
 
     probes.forEach { (command, args) ->
-        val result = connection.runAppHelperProbe(command, args, helperJar)
+        val result = helperGateway.runProbe(command, args)
         result.fold(
             onSuccess = { probe ->
                 com.screen.remote.android.core.common.manager.LogManager.e(
@@ -1020,28 +1104,6 @@ private suspend fun captureAppHelperDiagnostics(
     }
 }
 
-private fun overwriteBitmapFileIfChanged(
-    iconFile: File,
-    bitmap: Bitmap,
-) {
-    iconFile.parentFile?.mkdirs()
-
-    val newBytes =
-        ByteArrayOutputStream().use { output ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
-            output.toByteArray()
-        }
-
-    if (iconFile.exists()) {
-        val oldBytes = runCatching { iconFile.readBytes() }.getOrNull()
-        if (oldBytes != null && sha256(oldBytes) == sha256(newBytes)) {
-            return
-        }
-    }
-
-    iconFile.writeBytes(newBytes)
-}
-
 internal fun sha256(bytes: ByteArray): String =
     MessageDigest
         .getInstance("SHA-256")
@@ -1054,10 +1116,10 @@ internal suspend fun loadAppDetailSnapshot(entry: AppInventoryEntry): AppDetailS
     }
 
     val connection =
-        AdbBridge.getConnection()
+        SessionManagementAdbConnection.current()
             ?: return AppDetailSnapshot.loading(entry).copy(
                 isLoading = false,
-                errorMessage = "当前没有可用的 ADB 连接，无法读取应用详情。",
+                errorMessage = ManagementTexts.Apps.NO_CONNECTION_FOR_APP_DETAILS.get(),
             )
 
     suspend fun shell(command: String): String =
@@ -1078,10 +1140,13 @@ internal suspend fun loadAppDetailSnapshot(entry: AppInventoryEntry): AppDetailS
                 }
 
             val apkPath = pathDeferred.await().removePrefix("package:").trim()
-            val detailMap = parseKeyValueEqualsBlock(detailDeferred.await())
+            val detailMap = parseAppDetailFields(detailDeferred.await())
             val apkSize =
                 if (apkPath.isNotBlank()) {
-                    shell("ls -l \"$apkPath\" | awk '{print \$5}'").toLongOrNull()?.let(::formatBytes).orEmpty()
+                    val sizeBytes =
+                        entry.apkSizeBytes
+                            ?: shell("stat -c %s \"$apkPath\" 2>/dev/null").toLongOrNull()
+                    sizeBytes?.let(::formatAppSize).orEmpty()
                 } else {
                     ""
                 }
@@ -1102,21 +1167,24 @@ internal suspend fun loadAppDetailSnapshot(entry: AppInventoryEntry): AppDetailS
     }.getOrElse { error ->
         AppDetailSnapshot.loading(entry).copy(
             isLoading = false,
-            errorMessage = error.message ?: "应用详情读取失败。",
+            errorMessage = error.message ?: ManagementTexts.Apps.APP_DETAILS_LOAD_FAILED.get(),
         )
     }
 }
 
-private fun parseKeyValueEqualsBlock(text: String): Map<String, String> =
-    text
-        .lineSequence()
-        .map { it.trim() }
-        .mapNotNull { line ->
-            val index = line.indexOf('=')
-            if (index <= 0) null else line.substring(0, index).trim() to line.substring(index + 1).trim()
-        }.toMap()
+internal fun parseAppDetailFields(text: String): Map<String, String> {
+    val supportedKeys = setOf("versionName", "minSdk", "targetSdk", "firstInstallTime", "lastUpdateTime")
+    return Regex("""(?:^|\s)([A-Za-z]+)=([^\s]+)""", setOf(RegexOption.MULTILINE))
+        .findAll(text)
+        .map { match -> match.groupValues[1] to match.groupValues[2] }
+        .filter { (key, _) -> key in supportedKeys }
+        .toMap()
+}
 
-private fun formatBytes(bytes: Long): String {
-    val gb = bytes / 1024.0 / 1024.0 / 1024.0
-    return String.format(Locale.US, "%.2f G", gb)
+internal fun formatAppSize(bytes: Long): String {
+    val mb = bytes / 1024.0 / 1024.0
+    if (mb < 1024.0) {
+        return String.format(Locale.US, "%.2f M", mb)
+    }
+    return String.format(Locale.US, "%.2f G", mb / 1024.0)
 }

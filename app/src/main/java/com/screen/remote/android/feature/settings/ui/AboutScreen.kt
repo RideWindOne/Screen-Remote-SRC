@@ -1,11 +1,16 @@
 package com.screen.remote.android.feature.settings.ui
 
+import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -42,10 +47,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import com.screen.remote.android.R
 import com.screen.remote.android.core.common.AppConstants
@@ -58,6 +66,7 @@ import com.screen.remote.android.core.i18n.SettingsTexts
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var showWechatGroupDialog by remember { mutableStateOf(false) }
+    var showDonateDialog by remember { mutableStateOf(false) }
 
     DialogPage(
         title = SettingsTexts.SETTINGS_ABOUT.get(),
@@ -213,6 +222,36 @@ fun AboutScreen(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                 )
 
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(AppDimens.listItemHeight)
+                            .clickable { showDonateDialog = true }
+                            .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = SettingsTexts.ABOUT_DONATE_BUTTON.get(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                )
+
                 // 链接
                 Row(
                     modifier =
@@ -247,9 +286,129 @@ fun AboutScreen(onBack: () -> Unit) {
                 onDismiss = { showWechatGroupDialog = false },
             )
         }
+
+        if (showDonateDialog) {
+            DonateDialog(
+                onDismiss = { showDonateDialog = false },
+            )
+        }
     }
 }
 
+@Composable
+private fun DonateDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val trc20Address = "TMrGbcfyXT4cf49EULAoBfB5mfYNeAyxLj"
+    val gateInviteCode = "ZKDRFFFF"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        title = {
+            Text(SettingsTexts.ABOUT_DONATE_TITLE.get())
+        },
+        modifier = Modifier.fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO),
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                DonateInfoCard(
+                    label = SettingsTexts.ABOUT_DONATE_USDT_LABEL.get(),
+                    value = trc20Address,
+                    copiedToast = SettingsTexts.ABOUT_DONATE_ADDRESS_COPIED.get(),
+                )
+
+                DonateInfoCard(
+                    label = SettingsTexts.ABOUT_DONATE_GATE_LABEL.get(),
+                    value = gateInviteCode,
+                    copiedToast = SettingsTexts.ABOUT_DONATE_INVITE_COPIED.get(),
+                )
+
+                Text(
+                    text = SettingsTexts.ABOUT_DONATE_GATE_INFO.get(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 22.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(CommonTexts.BUTTON_CLOSE.get())
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+    )
+}
+
+@Composable
+private fun DonateInfoCard(
+    label: String,
+    value: String,
+    copiedToast: String,
+) {
+    val context = LocalContext.current
+    val isLongValue = value.length > 16
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+            ),
+        border =
+            BorderStroke(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Text(
+                    text = SettingsTexts.ABOUT_DONATE_COPY_HINT.get(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            Text(
+                text = value,
+                modifier =
+                    Modifier.clickable {
+                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboardManager.setPrimaryClip(ClipData.newPlainText(label, value))
+                        Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                    },
+                style = MaterialTheme.typography.bodyMedium,
+                fontSize = if (isLongValue) 12.sp else 15.sp,
+                lineHeight = if (isLongValue) 16.sp else 20.sp,
+                fontFamily = if (isLongValue) FontFamily.Monospace else FontFamily.Default,
+                color = MaterialTheme.colorScheme.primary,
+                textDecoration = TextDecoration.Underline,
+            )
+        }
+    }
+}
+
+@SuppressLint("LocalContextResourcesRead")
 @Composable
 private fun WechatGroupDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -260,6 +419,8 @@ private fun WechatGroupDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO),
         title = {
             Text(SettingsTexts.ABOUT_WECHAT_BUTTON.get())
         },

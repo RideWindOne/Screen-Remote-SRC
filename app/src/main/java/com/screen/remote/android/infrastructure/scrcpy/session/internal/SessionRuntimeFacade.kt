@@ -64,6 +64,9 @@ internal class SessionRuntimeFacade(
         runtimeBindings.resetReconnectAttempts()
     }
 
+    fun tryConsumeDecoderRecoveryAttempt(maxAttempts: Int): Boolean =
+        runtimeBindings.tryConsumeDecoderRecoveryAttempt(maxAttempts)
+
     fun invokeReconnectCallback() {
         runtimeBindings.invokeReconnectCallback()
     }

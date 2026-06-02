@@ -1,29 +1,47 @@
 package com.screen.remote.android.feature.session.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.screen.remote.android.app.ScreenRemoteApp
+import com.screen.remote.android.core.common.constants.AppConstants
+import com.screen.remote.android.core.common.constants.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.GroupRepository
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.DeviceGroup
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.domain.model.ScrcpyAction
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
+import com.screen.remote.android.core.data.repository.toData
+import com.screen.remote.android.core.domain.model.markConnectionCandidateSuccess
 import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
-import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import com.screen.remote.android.service.ScrcpyForegroundService
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 
 sealed class ManagementConnectStatus {
     data object Idle : ManagementConnectStatus()
@@ -43,6 +61,23 @@ sealed class ManagementConnectStatus {
     ) : ManagementConnectStatus()
 }
 
+enum class SessionOnboardingState {
+    LOADING,
+    INTRODUCTION,
+    RECENT_UPDATES,
+    HIDDEN,
+}
+
+internal fun resolveSessionOnboardingState(
+    lastSeenVersion: String?,
+    currentVersion: String,
+): SessionOnboardingState =
+    when {
+        lastSeenVersion == null -> SessionOnboardingState.INTRODUCTION
+        lastSeenVersion != currentVersion -> SessionOnboardingState.RECENT_UPDATES
+        else -> SessionOnboardingState.HIDDEN
+    }
+
 /**
  * 主 ViewModel（协调层）
  * 职责：聚合各子 ViewModel、提供统一访问接口、管理共享状态
@@ -57,13 +92,15 @@ sealed class ManagementConnectStatus {
  *
  * MainViewModel 作为协调层，聚合这些专用 ViewModel 的功能
  */
-class MainViewModel : ViewModel() {
-    private val dependencies = MainViewModelDependencies.fromApp(ScreenRemoteApp.instance)
+class MainViewModel(
+    private val dependencies: MainViewModelDependencies,
+) : ViewModel() {
+    private var managementConnectJob: Job? = null
     private val automationState = MainAutomationState()
+    private val managementConnection = ManagementAdbSessionController(dependencies, viewModelScope)
 
     val sessionRepository = dependencies.sessionRepository
     val scrcpyClient = dependencies.scrcpyClient
-    private val adbConnectionManager = dependencies.adbConnectionManager
 
     // ============ 聚合专用 ViewModel ============
 
@@ -78,12 +115,32 @@ class MainViewModel : ViewModel() {
     // 从 GroupViewModel 获取（它内部已经订阅了 sessionRepository）
     val sessionDataList: StateFlow<List<SessionData>> get() = groupViewModel.filteredSessions
 
+    private val currentOnboardingVersion = AppConstants.APP_VERSION
+
+    val sessionOnboardingState: StateFlow<SessionOnboardingState> =
+        dependencies.preferencesManager.lastSeenOnboardingVersionFlow
+            .map { lastSeenVersion ->
+                resolveSessionOnboardingState(
+                    lastSeenVersion = lastSeenVersion,
+                    currentVersion = currentOnboardingVersion,
+                )
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = SessionOnboardingState.LOADING,
+            )
+
     // ============ 分组管理（直接委托） ============
 
     val groups: StateFlow<List<DeviceGroup>> get() = groupViewModel.groups
     val selectedGroupPath: StateFlow<String> get() = groupViewModel.selectedGroupPath
     val selectedAutomationGroupPath: StateFlow<String> get() = groupViewModel.selectedAutomationGroupPath
     val filteredSessions: StateFlow<List<SessionData>> get() = groupViewModel.filteredSessions
+    val mdnsSessionPresence get() = MdnsSessionDiscoveryManager.get().state
+    val usbDevices get() = dependencies.adbConnectionManager.getUsbDevices()
+    val connectedAdbDevices get() = dependencies.adbConnectionManager.connectedDevices
+
+    fun currentRemoteDeviceId(): String? = scrcpyClient.getCurrentDeviceId()
 
     fun selectGroup(groupPath: String) = groupViewModel.selectGroup(groupPath)
 
@@ -108,6 +165,12 @@ class MainViewModel : ViewModel() {
 
     fun showAddSessionDialog() = sessionViewModel.showAddSessionDialog()
 
+    fun completeSessionOnboarding() {
+        viewModelScope.launch {
+            dependencies.preferencesManager.markOnboardingVersionSeen(currentOnboardingVersion)
+        }
+    }
+
     fun showEditSessionDialog(sessionId: String) = sessionViewModel.showEditSessionDialog(sessionId)
 
     fun hideAddSessionDialog() = sessionViewModel.hideAddSessionDialog()
@@ -117,6 +180,35 @@ class MainViewModel : ViewModel() {
     fun removeSession(id: String) = sessionViewModel.removeSession(id)
 
     fun copySession(sessionData: SessionData) = sessionViewModel.copySession(sessionData)
+
+    suspend fun resetSessionConnectionAndDetection(sessionId: String): Result<Unit> =
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val sessionData =
+                    sessionRepository.getSessionData(sessionId)
+                        ?: error("会话不存在")
+                val connectedDeviceIds =
+                    sessionData
+                        .toConnectionCandidates()
+                        .mapTo(linkedSetOf()) { it.deviceIdentifier() }
+
+                managementConnection.disconnectIfSession(sessionId)
+                connectedDeviceIds.forEach { deviceId ->
+                    val connection = dependencies.adbConnectionManager.getConnection(deviceId)
+                    if (connection != null) {
+                        dependencies.adbConnectionManager
+                            .disconnectDevice(deviceId)
+                            .getOrThrow()
+                    }
+                    ScrcpyForegroundService.unprotectDevice(dependencies.appContext, deviceId)
+                    managementConnection.clearDeviceReference(deviceId)
+                }
+
+                sessionRepository.updateSessionFields(sessionId) { current ->
+                    current.clearAutoDetectedCodecState()
+                }
+            }
+        }
 
     // ============ 连接状态管理（直接委托） ============
 
@@ -136,117 +228,29 @@ class MainViewModel : ViewModel() {
 
     // ============ 管理页 ADB 连接（仅 ADB，不启动 scrcpy） ============
 
-    private val _managementConnectStatus = MutableStateFlow<ManagementConnectStatus>(ManagementConnectStatus.Idle)
-    val managementConnectStatus: StateFlow<ManagementConnectStatus> = _managementConnectStatus.asStateFlow()
-
-    private val _managementDeviceId = MutableStateFlow<String?>(null)
-    val managementDeviceId: StateFlow<String?> = _managementDeviceId.asStateFlow()
+    val managementConnectStatus: StateFlow<ManagementConnectStatus> = managementConnection.status
+    val managementDeviceId: StateFlow<String?> = managementConnection.deviceId
 
     fun connectManagementSession(sessionId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val existingStatus = _managementConnectStatus.value
-            val existingDeviceId = _managementDeviceId.value
-            val existingBridgeConnection = AdbBridge.getConnection()
-            var existingConnectionHandled = false
-
-            if (
-                existingStatus is ManagementConnectStatus.Connected &&
-                existingStatus.sessionId == sessionId &&
-                existingDeviceId != null &&
-                existingBridgeConnection?.deviceId == existingDeviceId
-            ) {
-                val existingConn = adbConnectionManager.getConnection(existingDeviceId)
-                // 管理功能需要 delayed_ack，若当前连接已满足则直接复用
-                if (existingConn != null && existingConn.supportsDelayedAck()) {
-                    _managementConnectStatus.value = existingStatus
-                    return@launch
-                }
-                // 无连接或不含 delayed_ack，断开重建
-                runCatching { adbConnectionManager.disconnectDevice(existingDeviceId) }
-                if (AdbBridge.getConnection()?.deviceId == existingDeviceId) {
-                    AdbBridge.clearConnection()
-                }
-                _managementDeviceId.value = null
-                existingConnectionHandled = true
-            }
-
-            _managementConnectStatus.value = ManagementConnectStatus.Connecting(sessionId)
-
-            val sessionData = sessionRepository.getSessionData(sessionId)
-            if (sessionData == null) {
-                _managementConnectStatus.value = ManagementConnectStatus.Failed(sessionId, "会话不存在")
-                return@launch
-            }
-
-            if (!existingConnectionHandled && existingDeviceId != null) {
-                runCatching { adbConnectionManager.disconnectDevice(existingDeviceId) }
-                if (AdbBridge.getConnection()?.deviceId == existingDeviceId) {
-                    AdbBridge.clearConnection()
-                }
-                _managementDeviceId.value = null
-            }
-
-            val result =
-                if (sessionData.isUsbConnection()) {
-                    adbConnectionManager.connectUsbDeviceById(
-                        deviceId = sessionData.getUsbSerialNumber() ?: sessionData.host,
-                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
-                    )
-                } else {
-                    adbConnectionManager.connectDevice(
-                        host = sessionData.host,
-                        port = sessionData.port.toIntOrNull() ?: 5555,
-                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
-                    )
-                }
-
-            val deviceId = result.getOrElse { error ->
-                _managementConnectStatus.value =
-                    ManagementConnectStatus.Failed(
-                        sessionId,
-                        error.message ?: "ADB 连接失败",
-                    )
-                return@launch
-            }
-
-            val connection = adbConnectionManager.getConnection(deviceId)
-            if (connection == null) {
-                _managementConnectStatus.value =
-                    ManagementConnectStatus.Failed(sessionId, "ADB 连接已建立，但未找到连接对象")
-                return@launch
-            }
-
-            AdbBridge.setConnection(connection)
-            ScrcpyForegroundService.protectDevice(
-                context = ScreenRemoteApp.instance,
-                deviceId = deviceId,
-                deviceName = connection.deviceInfo.name,
-                delayedAck = true,
-                host = sessionData.host,
-                port = sessionData.port.toIntOrNull() ?: 0,
-                isUsbConnection = sessionData.isUsbConnection(),
-            )
-            _managementDeviceId.value = deviceId
-            _managementConnectStatus.value = ManagementConnectStatus.Connected(sessionId, deviceId)
+        managementConnectJob?.cancel()
+        managementConnectJob = viewModelScope.launch(Dispatchers.IO) {
+            managementConnection.connect(sessionId)
         }
     }
 
+    fun cancelManagementConnect(sessionId: String) {
+        managementConnectJob?.cancel()
+        managementConnectJob = null
+        managementConnection.cancelConnect(sessionId)
+    }
+
     fun clearManagementConnectStatus() {
-        _managementConnectStatus.value = ManagementConnectStatus.Idle
+        managementConnection.clearStatus()
     }
 
     fun disconnectManagementDevice() {
         viewModelScope.launch(Dispatchers.IO) {
-            val deviceId = _managementDeviceId.value
-            if (deviceId != null) {
-                runCatching { adbConnectionManager.disconnectDevice(deviceId) }
-                runCatching { ScrcpyForegroundService.unprotectDevice(ScreenRemoteApp.instance, deviceId) }
-                if (AdbBridge.getConnection()?.deviceId == deviceId) {
-                    AdbBridge.clearConnection()
-                }
-            }
-            _managementDeviceId.value = null
-            _managementConnectStatus.value = ManagementConnectStatus.Idle
+            managementConnection.disconnect()
         }
     }
 
@@ -306,15 +310,24 @@ class MainViewModel : ViewModel() {
     // ============ Factory ============
 
     companion object {
-        fun provideFactory(): ViewModelProvider.Factory =
+        fun provideFactory(context: Context): ViewModelProvider.Factory {
+            val dependencies = MainViewModelDependencies.fromContext(context.applicationContext)
+            return object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T = MainViewModel(dependencies) as T
+            }
+        }
+
+        fun provideFactory(dependencies: MainViewModelDependencies): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
-                override fun <T : ViewModel> create(modelClass: Class<T>): T = MainViewModel() as T
+                override fun <T : ViewModel> create(modelClass: Class<T>): T = MainViewModel(dependencies) as T
             }
     }
 }
 
-private data class MainViewModelDependencies(
+data class MainViewModelDependencies(
+    val appContext: Context,
     val sessionRepository: SessionRepository,
     val groupRepository: GroupRepository,
     val preferencesManager: PreferencesManager,
@@ -322,14 +335,17 @@ private data class MainViewModelDependencies(
     val scrcpyClient: ScrcpyClient,
 ) {
     companion object {
-        fun fromApp(app: ScreenRemoteApp): MainViewModelDependencies {
-            val sessionRepository = SessionRepository(app)
+        fun fromContext(context: Context): MainViewModelDependencies {
+            val appContext = context.applicationContext
+            val adbConnectionManager = AdbConnectionManager.getInstance(appContext)
+            val sessionRepository = SessionRepository(appContext)
             return MainViewModelDependencies(
+                appContext = appContext,
                 sessionRepository = sessionRepository,
-                groupRepository = GroupRepository(app),
-                preferencesManager = PreferencesManager(app),
-                adbConnectionManager = app.adbConnectionManager,
-                scrcpyClient = ScrcpyClient(app, app.adbConnectionManager),
+                groupRepository = GroupRepository(appContext),
+                preferencesManager = PreferencesManager(appContext),
+                adbConnectionManager = adbConnectionManager,
+                scrcpyClient = ScrcpyClient(appContext, adbConnectionManager),
             )
         }
     }
@@ -357,5 +373,265 @@ private class MainAutomationState {
 
     fun removeAction(id: String) {
         _actions.value = _actions.value.filter { it.id != id }
+    }
+}
+
+private class ManagementAdbSessionController(
+    private val dependencies: MainViewModelDependencies,
+    private val scope: CoroutineScope,
+) {
+    private val adbConnectionManager = dependencies.adbConnectionManager
+    private val sessionRepository = dependencies.sessionRepository
+    private val bridge = ManagementAdbBridge()
+    private val connectGeneration = AtomicLong(0)
+
+    private val _status = MutableStateFlow<ManagementConnectStatus>(ManagementConnectStatus.Idle)
+    val status: StateFlow<ManagementConnectStatus> = _status.asStateFlow()
+
+    private val _deviceId = MutableStateFlow<String?>(null)
+    val deviceId: StateFlow<String?> = _deviceId.asStateFlow()
+
+    suspend fun connect(sessionId: String) {
+        val generation = connectGeneration.incrementAndGet()
+        LogManager.i(LogTags.MANAGEMENT, "开始建立管理连接: sessionId=$sessionId generation=$generation")
+        val existingStatus = _status.value
+        val existingDeviceId = _deviceId.value
+        val existingBridgeConnection = bridge.currentConnection()
+        var existingConnectionHandled = false
+
+        if (
+            existingStatus is ManagementConnectStatus.Connected &&
+            existingStatus.sessionId == sessionId &&
+            existingDeviceId != null &&
+            existingBridgeConnection?.deviceId == existingDeviceId
+        ) {
+            val existingConnection = adbConnectionManager.getConnection(existingDeviceId)
+            if (
+                existingConnection != null &&
+                existingConnection.verifyWithoutSessionEvents().isSuccess
+            ) {
+                if (connectGeneration.get() == generation) {
+                    LogManager.i(LogTags.MANAGEMENT, "复用已验证的管理连接: deviceId=$existingDeviceId")
+                    _status.value = existingStatus
+                }
+                return
+            }
+            if (connectGeneration.get() != generation) return
+            disconnectDevice(existingDeviceId)
+            existingConnectionHandled = true
+        }
+
+        _status.value = ManagementConnectStatus.Connecting(sessionId)
+
+        val sessionData = sessionRepository.getSessionData(sessionId)
+        if (connectGeneration.get() != generation) return
+        if (sessionData == null) {
+            LogManager.e(LogTags.MANAGEMENT, "管理连接失败: sessionId=$sessionId 会话不存在")
+            _status.value = ManagementConnectStatus.Failed(sessionId, "会话不存在")
+            return
+        }
+
+        if (!existingConnectionHandled && existingDeviceId != null) {
+            val candidateDeviceIds =
+                sessionData
+                    .toConnectionCandidates()
+                    .mapTo(linkedSetOf(), ConnectionCandidate::deviceIdentifier)
+            val matchesCandidate = existingDeviceId in candidateDeviceIds
+            val existingConnection = adbConnectionManager.getConnection(existingDeviceId)
+            if (
+                matchesCandidate &&
+                existingConnection != null &&
+                existingConnection.verifyWithoutSessionEvents().isSuccess
+            ) {
+                if (connectGeneration.get() == generation) {
+                    LogManager.i(LogTags.MANAGEMENT, "复用候选中的已有 ADB 连接: deviceId=$existingDeviceId")
+                    activateConnection(sessionData, existingDeviceId, generation)
+                }
+                return
+            }
+            if (connectGeneration.get() != generation) return
+            disconnectDevice(existingDeviceId)
+        }
+
+        val connectedDeviceId =
+            connectAdb(sessionData, generation)
+                .getOrElse { error ->
+                    if (connectGeneration.get() != generation) return
+                    LogManager.e(LogTags.MANAGEMENT, "管理连接失败: sessionId=$sessionId ${error.message}", error)
+                    _status.value =
+                        ManagementConnectStatus.Failed(
+                            sessionId,
+                            error.message ?: "ADB 连接失败",
+                        )
+                    return
+                }
+
+        if (connectGeneration.get() != generation) return
+        activateConnection(sessionData, connectedDeviceId, generation)
+    }
+
+    private suspend fun activateConnection(
+        sessionData: SessionData,
+        connectedDeviceId: String,
+        generation: Long,
+    ) {
+        if (connectGeneration.get() != generation) return
+        val connection = adbConnectionManager.getConnection(connectedDeviceId)
+        if (connection == null) {
+            _status.value = ManagementConnectStatus.Failed(sessionData.id, "ADB 连接已建立，但未找到连接对象")
+            return
+        }
+
+        recordSuccessfulCandidate(sessionData, connectedDeviceId)
+        if (connectGeneration.get() != generation) return
+        bridge.setConnection(connection)
+        ScrcpyForegroundService.protectDevice(
+            context = dependencies.appContext,
+            deviceId = connectedDeviceId,
+            deviceName = connection.deviceInfo.name,
+        )
+        _deviceId.value = connectedDeviceId
+        _status.value = ManagementConnectStatus.Connected(sessionData.id, connectedDeviceId)
+        LogManager.i(LogTags.MANAGEMENT, "管理连接已就绪: sessionId=${sessionData.id} deviceId=$connectedDeviceId")
+    }
+
+    private suspend fun recordSuccessfulCandidate(
+        sessionData: SessionData,
+        connectedDeviceId: String,
+    ) {
+        sessionRepository.updateSessionFields(sessionData.id) { current ->
+            val candidates = current.toConnectionCandidates()
+            val successfulCandidate =
+                candidates.firstOrNull { it.deviceIdentifier() == connectedDeviceId }
+                    ?: return@updateSessionFields current
+            current.copy(
+                connectionCandidates =
+                    markConnectionCandidateSuccess(
+                        candidates = candidates,
+                        successful = successfulCandidate,
+                        nowMillis = System.currentTimeMillis(),
+                    ).map { it.toData() },
+            )
+        }
+    }
+
+    fun clearStatus() {
+        _status.value = ManagementConnectStatus.Idle
+    }
+
+    fun cancelConnect(sessionId: String) {
+        val generation = connectGeneration.incrementAndGet()
+        LogManager.i(LogTags.MANAGEMENT, "取消管理连接: sessionId=$sessionId generation=$generation")
+        val currentStatus = _status.value
+        if (currentStatus is ManagementConnectStatus.Connecting && currentStatus.sessionId == sessionId) {
+            _status.value = ManagementConnectStatus.Idle
+        }
+    }
+
+    suspend fun disconnect() {
+        connectGeneration.incrementAndGet()
+        _deviceId.value?.let { disconnectDevice(it) }
+        _deviceId.value = null
+        _status.value = ManagementConnectStatus.Idle
+    }
+
+    suspend fun disconnectIfSession(sessionId: String) {
+        val belongsToSession =
+            when (val currentStatus = _status.value) {
+                is ManagementConnectStatus.Connected -> currentStatus.sessionId == sessionId
+                is ManagementConnectStatus.Connecting -> currentStatus.sessionId == sessionId
+                is ManagementConnectStatus.Failed -> currentStatus.sessionId == sessionId
+                ManagementConnectStatus.Idle -> false
+            }
+        if (belongsToSession) {
+            disconnect()
+        }
+    }
+
+    fun clearDeviceReference(deviceId: String) {
+        bridge.clearIfCurrentDevice(deviceId)
+        if (_deviceId.value == deviceId) {
+            _deviceId.value = null
+        }
+    }
+
+    private suspend fun connectAdb(
+        sessionData: SessionData,
+        generation: Long,
+    ): Result<String> =
+        try {
+            val selected =
+                raceAdbConnections(
+                    candidates = sessionData.toConnectionCandidates(),
+                    connectionManager = adbConnectionManager,
+                    attemptScope = scope,
+                    cleanupScope = scope,
+                    logTag = LogTags.MANAGEMENT,
+                    logLabel = "管理 ADB",
+                    isCurrentRace = { connectGeneration.get() == generation },
+                ) { candidate ->
+                    connectAdbCandidate(sessionData, candidate)
+                }
+            Result.success(selected.result.getOrThrow().deviceId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Result.failure(error)
+        }
+
+    private suspend fun connectAdbCandidate(
+        sessionData: SessionData,
+        candidate: ConnectionCandidate,
+    ): AdbConnection {
+        val deviceId = candidate.deviceIdentifier()
+        adbConnectionManager.getConnection(deviceId)?.let { existingConnection ->
+            if (existingConnection.verifyWithoutSessionEvents().isSuccess) {
+                return existingConnection
+            }
+            adbConnectionManager.disconnectDeviceIfCurrent(deviceId, existingConnection)
+        }
+
+        val connectedDeviceId =
+            when (candidate.transport) {
+                ConnectionTransport.USB ->
+                    adbConnectionManager.connectUsbDeviceById(
+                        deviceId = candidate.deviceIdentifier(),
+                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
+                    ).getOrThrow()
+                ConnectionTransport.MDNS ->
+                    adbConnectionManager.connectMdnsService(
+                        serviceName = candidate.host,
+                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
+                    ).getOrThrow()
+                ConnectionTransport.TCP ->
+                    adbConnectionManager.connectDevice(
+                        host = candidate.host,
+                        port = candidate.port,
+                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
+                    ).getOrThrow()
+            }
+        return adbConnectionManager.getConnection(connectedDeviceId)
+            ?: throw IllegalStateException("ADB 连接已建立，但未找到连接对象: $connectedDeviceId")
+    }
+
+    private suspend fun disconnectDevice(deviceId: String) {
+        runCatching { adbConnectionManager.disconnectDevice(deviceId) }
+        runCatching { ScrcpyForegroundService.unprotectDevice(dependencies.appContext, deviceId) }
+        bridge.clearIfCurrentDevice(deviceId)
+        _deviceId.value = null
+    }
+}
+
+private class ManagementAdbBridge {
+    fun currentConnection(): AdbConnection? = AdbBridge.getConnection()
+
+    fun setConnection(connection: AdbConnection) {
+        AdbBridge.setConnection(connection)
+    }
+
+    fun clearIfCurrentDevice(deviceId: String) {
+        if (currentConnection()?.deviceId == deviceId) {
+            AdbBridge.clearConnection()
+        }
     }
 }

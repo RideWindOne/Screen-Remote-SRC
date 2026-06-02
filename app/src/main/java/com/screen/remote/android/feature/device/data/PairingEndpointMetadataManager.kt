@@ -6,8 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.common.util.normalizeEndpointHost
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
@@ -25,6 +27,13 @@ data class PairingEndpointMetadata(
     val updatedAtEpochMillis: Long = 0L,
 )
 
+@Serializable
+private data class MdnsPairingRecord(
+    val deviceKey: String,
+    val endpoint: String,
+    val updatedAtEpochMillis: Long,
+)
+
 class PairingEndpointMetadataManager(
     private val context: Context,
 ) {
@@ -36,6 +45,7 @@ class PairingEndpointMetadataManager(
 
     private object Keys {
         val METADATA = stringPreferencesKey("pairing_endpoint_metadata")
+        val MDNS_PAIRINGS = stringPreferencesKey("mdns_pairing_records")
     }
 
     suspend fun getAll(): Map<String, PairingEndpointMetadata> =
@@ -74,23 +84,64 @@ class PairingEndpointMetadataManager(
         }
     }
 
-    suspend fun listRecentSuccessfulPairings(): List<PairingHistoryItem> =
-        getAll()
-            .values
-            .sortedByDescending { it.updatedAtEpochMillis }
-            .map { metadata ->
-                PairingHistoryItem(
-                    hostPort =
-                        if (metadata.lastPairingPort.isNotBlank()) {
-                            formatHostPort(metadata.endpoint, metadata.lastPairingPort)
-                        } else {
-                            metadata.endpoint
-                        },
-                    timestamp =
-                        metadata.updatedAtEpochMillis.takeIf { value -> value > 0 }
-                            ?: System.currentTimeMillis(),
-                )
+    suspend fun saveSuccessfulMdnsPairing(
+        deviceSerial: String,
+        endpoint: String,
+    ) {
+        val deviceKey = DeviceTransportSerial.mdnsDeviceKey(deviceSerial)
+        val normalizedEndpoint = normalizeEndpointHost(endpoint).lowercase()
+        if (DeviceTransportSerial.mdnsDeviceSerial(deviceKey).isBlank() || normalizedEndpoint.isBlank()) {
+            return
+        }
+
+        context.pairingEndpointMetadataDataStore.edit { preferences ->
+            val current = decodeMdnsPairings(preferences[Keys.MDNS_PAIRINGS])
+            val updated =
+                current.filterNot { it.deviceKey == deviceKey } +
+                    MdnsPairingRecord(
+                        deviceKey = deviceKey,
+                        endpoint = normalizedEndpoint,
+                        updatedAtEpochMillis = System.currentTimeMillis(),
+                    )
+            preferences[Keys.MDNS_PAIRINGS] = json.encodeToString(updated)
+        }
+    }
+
+    val pairedMdnsDeviceKeysFlow: Flow<Set<String>> =
+        context.pairingEndpointMetadataDataStore.data
+            .map { preferences ->
+                decodeMdnsPairings(preferences[Keys.MDNS_PAIRINGS])
+                    .mapTo(linkedSetOf()) { it.deviceKey }
             }
+
+    suspend fun getPairedMdnsDeviceKeys(): Set<String> = pairedMdnsDeviceKeysFlow.first()
+
+    suspend fun listRecentSuccessfulPairings(): List<PairingHistoryItem> =
+        context.pairingEndpointMetadataDataStore.data
+            .map { preferences ->
+                val endpointItems =
+                    decode(preferences[Keys.METADATA]).map { metadata ->
+                        PairingHistoryItem(
+                            hostPort =
+                                if (metadata.lastPairingPort.isNotBlank()) {
+                                    formatHostPort(metadata.endpoint, metadata.lastPairingPort)
+                                } else {
+                                    metadata.endpoint
+                                },
+                            timestamp = metadata.updatedAtEpochMillis,
+                        )
+                    }
+                val mdnsItems =
+                    decodeMdnsPairings(preferences[Keys.MDNS_PAIRINGS]).map { record ->
+                        PairingHistoryItem(
+                            hostPort = record.endpoint,
+                            timestamp = record.updatedAtEpochMillis,
+                        )
+                    }
+                (endpointItems + mdnsItems)
+                    .sortedByDescending(PairingHistoryItem::timestamp)
+                    .distinctBy(PairingHistoryItem::hostPort)
+            }.first()
 
     suspend fun removeEndpoint(endpoint: String) {
         val normalizedEndpoint = normalizeEndpointHost(endpoint).lowercase()
@@ -101,17 +152,27 @@ class PairingEndpointMetadataManager(
         context.pairingEndpointMetadataDataStore.edit { preferences ->
             val updated = decode(preferences[Keys.METADATA]).filterNot { it.endpoint == normalizedEndpoint }
             preferences[Keys.METADATA] = json.encodeToString(updated)
+            val updatedMdnsPairings =
+                decodeMdnsPairings(preferences[Keys.MDNS_PAIRINGS])
+                    .filterNot { it.endpoint == normalizedEndpoint }
+            preferences[Keys.MDNS_PAIRINGS] = json.encodeToString(updatedMdnsPairings)
         }
     }
 
     suspend fun clear() {
         context.pairingEndpointMetadataDataStore.edit { preferences ->
             preferences.remove(Keys.METADATA)
+            preferences.remove(Keys.MDNS_PAIRINGS)
         }
     }
 
     private fun decode(raw: String?): List<PairingEndpointMetadata> =
         runCatching {
             json.decodeFromString<List<PairingEndpointMetadata>>(raw ?: "[]")
+        }.getOrDefault(emptyList())
+
+    private fun decodeMdnsPairings(raw: String?): List<MdnsPairingRecord> =
+        runCatching {
+            json.decodeFromString<List<MdnsPairingRecord>>(raw ?: "[]")
         }.getOrDefault(emptyList())
 }

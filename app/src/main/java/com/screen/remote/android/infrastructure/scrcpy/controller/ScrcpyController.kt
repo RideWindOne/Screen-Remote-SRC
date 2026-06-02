@@ -1,8 +1,8 @@
 package com.screen.remote.android.infrastructure.scrcpy.controller
 
 import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.common.manager.ControlDebugLog
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.LogManager.dControl
 import com.screen.remote.android.core.i18n.AdbTexts
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -112,7 +112,7 @@ class ScrcpyController(
                 Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
             )
 
-            ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { "发送文本: '$text'" }
+            dControl(LogTags.SCRCPY_CLIENT) { "发送文本: '$text'" }
 
             try {
                 transport.enqueueText(text)
@@ -129,7 +129,7 @@ class ScrcpyController(
                     Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
                 )
 
-            ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { "通过剪贴板注入文本: '$text'" }
+            dControl(LogTags.SCRCPY_CLIENT) { "通过剪贴板注入文本: '$text'" }
 
             try {
                 val connection =
@@ -153,7 +153,7 @@ class ScrcpyController(
                 delay(100)
                 sendKeyEvent(279)
 
-                ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { "文本注入成功" }
+                dControl(LogTags.SCRCPY_CLIENT) { "文本注入成功" }
                 Result.success(true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "注入文本失败: ${e.message}", e)
@@ -195,14 +195,14 @@ class ScrcpyController(
                 sendTouchEvent(2, 0, 200, 200, screenWidth, screenHeight, 1.0f)
                 delay(10)
                 sendTouchEvent(1, 0, 200, 200, screenWidth, screenHeight, 0f)
-                ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { "已发送滑动事件触发画面刷新" }
+                dControl(LogTags.SCRCPY_CLIENT) { "已发送滑动事件触发画面刷新" }
                 Result.success(true)
             } catch (e: Exception) {
                 try {
                     delay(50)
                     sendKeyEvent(224)
                     delay(50)
-                    ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { RemoteTexts.SCRCPY_SCREEN_WAKE_SIGNAL_SENT.get() }
+                    dControl(LogTags.SCRCPY_CLIENT) { RemoteTexts.SCRCPY_SCREEN_WAKE_SIGNAL_SENT.get() }
                     Result.success(true)
                 } catch (wakeError: Exception) {
                     LogManager.w(
@@ -236,7 +236,7 @@ class ScrcpyController(
 
     private fun ensureControlSocketReady(): Socket? {
         val socket = transport.currentSocket()
-        ControlDebugLog.d(LogTags.SCRCPY_CLIENT) {
+        dControl(LogTags.SCRCPY_CLIENT) {
             "发送按键 socket=${socket != null}, closed=${socket?.isClosed}, connected=${socket?.isConnected}"
         }
         if (socket == null || socket.isClosed || !socket.isConnected) {

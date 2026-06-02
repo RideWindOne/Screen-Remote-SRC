@@ -1,179 +1,237 @@
 package com.screen.remote.android.infrastructure.media.codec
 
-import android.media.MediaFormat
 import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.LocalDecoderCache
-import com.screen.remote.android.infrastructure.media.codec.internal.autoSelectAudioCodec
-import com.screen.remote.android.infrastructure.media.codec.internal.createResultFromUserChoice
-import com.screen.remote.android.infrastructure.media.codec.internal.inferVideoCodecFromName
-import com.screen.remote.android.infrastructure.media.codec.internal.selectAudioDecoderForUserEncoder
-import com.screen.remote.android.infrastructure.media.codec.internal.selectAudioEncoderForUserDecoder
-import com.screen.remote.android.infrastructure.media.codec.internal.selectVideoCodecInternal
-import com.screen.remote.android.infrastructure.media.codec.internal.validateInputs
-import kotlinx.coroutines.runBlocking
+import com.screen.remote.android.core.domain.model.CodecAcceleration
+import com.screen.remote.android.core.domain.model.CodecCatalog
+import com.screen.remote.android.core.domain.model.CodecMediaType
+import com.screen.remote.android.core.domain.model.CodecSpec
+import com.screen.remote.android.core.domain.model.DecoderCapability
+import com.screen.remote.android.core.domain.model.EncoderCapability
 
-/**
- * CodecSelector - 编解码器选择器（主入口）
- *
- * 本文件是编解码器选择模块的公开 API 入口，提供视频和音频编解码器的智能选择功能。
- * 为了提高代码可维护性，内部实现已拆分到 internal/ 目录下的多个文件：
- *
- * 文件结构：
- * - CodecSelector.kt (本文件)
- *   - 公开 API：selectBestVideoCodec(), selectBestAudioCodec()
- *   - 公开工具方法：inferVideoCodecFromName(), inferAudioCodecFromName()
- *   - 常量定义：VIDEO_CODEC_TYPES, AUDIO_CODEC_PRIORITIES
- *   - 数据模型：CodecSelectionResult
- *
- * - internal/VideoCodecSelector.kt
- *   - 视频编解码器选择的内部实现
- *   - 视频解码器优先级策略
- *   - 视频编解码器匹配逻辑
- *
- * - internal/AudioCodecSelector.kt
- *   - 音频编解码器选择的内部实现
- *   - 音频编解码器匹配逻辑
- *   - OPUS 特殊处理逻辑
- *
- * - internal/CodecUtils.kt
- *   - 通用工具方法（验证、查找、转换等）
- *   - MIME 类型转换
- *   - 硬件编解码器判断
- *
- * 设计原则：
- * 1. 保持公开 API 不变，确保向后兼容
- * 2. 使用 internal 修饰符隔离内部实现
- * 3. 通过扩展函数和内部函数实现功能拆分
- * 4. 保持单向依赖：internal 文件依赖公开文件
- */
-
-/**
- * 编解码器选择结果
- */
 data class CodecSelectionResult(
     val encoder: String,
     val decoder: String,
     val codec: String,
+    val mimeType: String = "",
 )
 
 /**
- * 编解码器选择器
- * 参考 Easycontrol 的智能选择策略，优先选择硬件编解码器
- * 同时考虑远程编码器和本地解码器的匹配
+ * 以远端编码器的结构化格式信息和本地 decoder MIME 能力做交集选择。
+ * 实现名称仅在用户手填且没有探测信息时作为最后兜底，自动路径不再猜格式。
  */
 object CodecSelector {
-    // ==================== 常量定义 ====================
-    
-    /**
-     * 视频格式优先级：HEVC (H.265) > AVC (H.264) > AV1 > VP9 > VP8
-     * 格式：(scrcpy 格式名, MIME 类型, 通用名称)
-     */
-    private val VIDEO_CODEC_TYPES =
-        listOf(
-            Triple("hevc", MediaFormat.MIMETYPE_VIDEO_HEVC, "h265"), // H.265 优先（更高压缩率）
-            Triple("avc", MediaFormat.MIMETYPE_VIDEO_AVC, "h264"), // H.264（兼容性最好）
-            Triple("av01", "video/av01", "av1"), // AV1（新一代编码）
-            Triple("vp9", MediaFormat.MIMETYPE_VIDEO_VP9, "vp9"), // VP9
-            Triple("vp8", MediaFormat.MIMETYPE_VIDEO_VP8, "vp8"), // VP8
-        )
-
-    /**
-     * 音频格式优先级：OPUS > AAC > FLAC > RAW
-     * 格式：(scrcpy 格式名, MIME 类型, 通用名称)
-     */
-    private val AUDIO_CODEC_PRIORITIES =
-        listOf(
-            Triple("opus", MediaFormat.MIMETYPE_AUDIO_OPUS, "opus"),
-            Triple("aac", MediaFormat.MIMETYPE_AUDIO_AAC, "aac"),
-            Triple("flac", MediaFormat.MIMETYPE_AUDIO_FLAC, "flac"),
-            Triple("raw", MediaFormat.MIMETYPE_AUDIO_RAW, "raw"),
-        )
-
-    // ==================== 公开 API 方法 ====================
-
-    /**
-     * 选择最佳视频编解码器组合
-     * 参考 Easycontrol 策略：优先硬件编解码器 + low_latency + C2 架构
-     *
-     * @param remoteEncoders 远程设备支持的编码器列表
-     * @param userEncoder 用户手动选择的编码器（优先使用）
-     * @param userDecoder 用户手动选择的解码器（优先使用）
-     * @return CodecSelectionResult，如果失败返回 null
-     */
-    fun selectBestVideoCodec(
-        remoteEncoders: List<String>,
+    suspend fun selectBestVideoCodec(
+        remoteEncoders: List<EncoderCapability>,
         userEncoder: String? = null,
         userDecoder: String? = null,
+        preferredCodec: String? = CodecCatalog.DEFAULT_VIDEO_CODEC,
+        allowHardwareDecoders: Boolean = true,
+    ): CodecSelectionResult? =
+        selectBestCodec(
+            mediaType = CodecMediaType.VIDEO,
+            remoteEncoders = remoteEncoders,
+            localDecoders = LocalDecoderCache.getVideoDecoders(),
+            userEncoder = userEncoder,
+            userDecoder = userDecoder,
+            preferredCodec = preferredCodec,
+            allowHardwareDecoders = allowHardwareDecoders,
+            logTag = LogTags.VIDEO_DECODER,
+        )
+
+    suspend fun selectBestAudioCodec(
+        remoteEncoders: List<EncoderCapability>,
+        userEncoder: String? = null,
+        userDecoder: String? = null,
+        preferredCodec: String? = CodecCatalog.DEFAULT_AUDIO_CODEC,
+        allowHardwareDecoders: Boolean = true,
+    ): CodecSelectionResult? =
+        selectBestCodec(
+            mediaType = CodecMediaType.AUDIO,
+            remoteEncoders = remoteEncoders,
+            localDecoders = LocalDecoderCache.getAudioDecoders(),
+            userEncoder = userEncoder,
+            userDecoder = userDecoder,
+            preferredCodec = preferredCodec,
+            allowHardwareDecoders = allowHardwareDecoders,
+            logTag = LogTags.AUDIO_DECODER,
+        )
+
+    internal fun selectBestCodec(
+        mediaType: CodecMediaType,
+        remoteEncoders: List<EncoderCapability>,
+        localDecoders: List<DecoderCapability>,
+        userEncoder: String?,
+        userDecoder: String?,
+        preferredCodec: String?,
+        logTag: String,
+        allowHardwareDecoders: Boolean = true,
     ): CodecSelectionResult? {
-        val localDecoders = runBlocking { LocalDecoderCache.getVideoDecoders() }
-        if (!validateInputs(remoteEncoders, localDecoders, LogTags.VIDEO_DECODER)) {
+        val preferredSpec = preferredCodec?.let { CodecCatalog.find(mediaType, it) }
+        val requestedEncoder = userEncoder?.trim().orEmpty()
+        val requestedDecoder = userDecoder?.trim().orEmpty()
+        if (mediaType == CodecMediaType.AUDIO && preferredSpec?.name == "raw") {
+            return CodecSelectionResult(
+                encoder = "",
+                decoder = "",
+                codec = preferredSpec.name,
+                mimeType = preferredSpec.mimeType,
+            )
+        }
+
+        val remote = remoteEncoders.filter { it.mediaType == mediaType }
+        val eligibleDecoders =
+            if (allowHardwareDecoders) localDecoders else localDecoders.filter { it.acceleration == CodecAcceleration.SOFTWARE }
+        if (remote.isEmpty() || eligibleDecoders.isEmpty()) {
+            if (mediaType == CodecMediaType.AUDIO && requestedEncoder.isEmpty() && requestedDecoder.isEmpty()) {
+                return rawAudioSelection()
+            }
+            LogManager.w(logTag, "编解码能力不完整: remote=${remote.size}, local=${eligibleDecoders.size}")
             return null
         }
 
-        return selectVideoCodecInternal(
-            remoteEncoders,
-            localDecoders,
-            userEncoder,
-            userDecoder,
-            VIDEO_CODEC_TYPES,
-        )
-    }
-
-    /**
-     * 选择最佳音频编解码器组合
-     * 参考 Easycontrol 策略：OPUS 使用名称匹配，其他格式优先硬件编解码器
-     * @param remoteEncoders 远程设备支持的编码器列表
-     * @param userEncoder 用户手动选择的编码器（优先使用）
-     * @param userDecoder 用户手动选择的解码器（优先使用）
-     * @return CodecSelectionResult，如果失败返回 null
-     */
-    fun selectBestAudioCodec(
-        remoteEncoders: List<String>,
-        userEncoder: String? = null,
-        userDecoder: String? = null,
-    ): CodecSelectionResult? {
-        val localDecoders = runBlocking { LocalDecoderCache.getAudioDecoders() }
-        if (!validateInputs(remoteEncoders, localDecoders, LogTags.AUDIO_DECODER)) {
+        val orderedSpecs = CodecCatalog.orderedSpecs(mediaType, preferredCodec)
+        val fixedDecoder =
+            requestedDecoder.takeIf { it.isNotEmpty() }?.let { name ->
+                eligibleDecoders.firstOrNull { it.name == name }
+            }
+        if (requestedDecoder.isNotEmpty() && fixedDecoder == null) {
+            LogManager.w(logTag, "用户指定的解码器不存在: $requestedDecoder")
             return null
         }
 
-        // 如果用户指定了编码器和解码器，直接返回
-        if (!userEncoder.isNullOrBlank() && !userDecoder.isNullOrBlank()) {
-            return createResultFromUserChoice(userEncoder, userDecoder, ::inferAudioCodecFromName, LogTags.AUDIO_DECODER)
+        val fixedEncoderCapabilities =
+            if (requestedEncoder.isEmpty()) {
+                emptyList()
+            } else {
+                remote.filter { it.name == requestedEncoder }
+            }
+
+        val encoderFallbackSpec =
+            if (requestedEncoder.isNotEmpty() && fixedEncoderCapabilities.isEmpty()) {
+                CodecCatalog.inferFromImplementationName(mediaType, requestedEncoder)
+            } else {
+                null
+            }
+
+        for (spec in orderedSpecs) {
+            if (spec.name == "raw" && mediaType == CodecMediaType.AUDIO) {
+                if (requestedEncoder.isEmpty() && requestedDecoder.isEmpty()) {
+                    return rawAudioSelection()
+                }
+                continue
+            }
+            if (fixedDecoder != null && !fixedDecoder.supports(spec.mimeType)) continue
+
+            val encoder =
+                when {
+                    requestedEncoder.isEmpty() -> bestEncoder(remote, spec)
+                    fixedEncoderCapabilities.isNotEmpty() -> bestEncoder(fixedEncoderCapabilities, spec)
+                    encoderFallbackSpec?.name == spec.name ->
+                        EncoderCapability(
+                            name = requestedEncoder,
+                            codec = spec.name,
+                            mimeType = spec.mimeType,
+                            mediaType = mediaType,
+                        )
+                    else -> null
+                } ?: continue
+
+            val decoder = fixedDecoder ?: bestDecoder(eligibleDecoders, spec) ?: continue
+            val result =
+                CodecSelectionResult(
+                    encoder = encoder.name,
+                    decoder = decoder.name,
+                    codec = spec.name,
+                    mimeType = spec.mimeType,
+                )
+            LogManager.i(
+                logTag,
+                "选择 ${spec.name}: encoder=${result.encoder}(${encoder.acceleration}), " +
+                    "decoder=${result.decoder}(${decoder.acceleration})",
+            )
+            return result
         }
 
-        // 如果用户只指定了编码器，找匹配的解码器
-        if (!userEncoder.isNullOrBlank()) {
-            return selectAudioDecoderForUserEncoder(userEncoder, localDecoders, ::inferAudioCodecFromName)
-        }
-
-        // 如果用户只指定了解码器，找匹配的编码器
-        if (!userDecoder.isNullOrBlank()) {
-            return selectAudioEncoderForUserDecoder(userDecoder, remoteEncoders, ::inferAudioCodecFromName)
-        }
-
-        // 用户都没指定，执行自动选择逻辑
-        return autoSelectAudioCodec(remoteEncoders, localDecoders)
+        LogManager.w(
+            logTag,
+            "未找到匹配组合: preferred=$preferredCodec encoder=${requestedEncoder.ifBlank { "auto" }} " +
+                "decoder=${requestedDecoder.ifBlank { "auto" }}",
+        )
+        return null
     }
 
-    // ==================== 公开工具方法 ====================
+    private fun rawAudioSelection(): CodecSelectionResult {
+        val raw = requireNotNull(CodecCatalog.find(CodecMediaType.AUDIO, "raw"))
+        return CodecSelectionResult(
+            encoder = "",
+            decoder = "",
+            codec = raw.name,
+            mimeType = raw.mimeType,
+        )
+    }
 
-    /**
-     * 从视频编解码器名称推断格式（公开方法，供外部使用）
-     */
-    fun inferVideoCodecFromName(codecName: String): String =
-        com.screen.remote.android.infrastructure.media.codec.internal.inferVideoCodecFromName(codecName)
+    fun inferVideoCodecFromName(value: String): String = inferCodec(CodecMediaType.VIDEO, value)
 
-    /**
-     * 从音频编解码器名称推断格式（公开方法，供外部使用）
-     */
-    fun inferAudioCodecFromName(codecName: String): String =
-        when {
-            codecName.contains("opus", ignoreCase = true) -> "opus"
-            codecName.contains("aac", ignoreCase = true) -> "aac"
-            codecName.contains("flac", ignoreCase = true) -> "flac"
-            codecName.contains("raw", ignoreCase = true) -> "raw"
-            else -> "" // 无法推断
-        }
+    fun inferAudioCodecFromName(value: String): String = inferCodec(CodecMediaType.AUDIO, value)
+
+    private fun inferCodec(
+        mediaType: CodecMediaType,
+        value: String,
+    ): String =
+        CodecCatalog.find(mediaType, value)?.name
+            ?: CodecCatalog.inferFromImplementationName(mediaType, value)?.name
+            .orEmpty()
+
+    private fun bestEncoder(
+        encoders: List<EncoderCapability>,
+        spec: CodecSpec,
+    ): EncoderCapability? =
+        encoders
+            .asSequence()
+            .filter { it.codec == spec.name && it.mimeType.equals(spec.mimeType, ignoreCase = true) }
+            .minWithOrNull(compareBy(::encoderRank, { it.name }))
+
+    private fun bestDecoder(
+        decoders: List<DecoderCapability>,
+        spec: CodecSpec,
+    ): DecoderCapability? =
+        decoders
+            .asSequence()
+            .filter { it.supports(spec.mimeType) }
+            .minWithOrNull(compareBy({ decoderRank(it, spec) }, { it.name }))
+
+    private fun encoderRank(capability: EncoderCapability): Int =
+        aliasPenalty(capability.isAlias) +
+            when (capability.acceleration) {
+                CodecAcceleration.HARDWARE -> 0
+                CodecAcceleration.HYBRID -> 20
+                CodecAcceleration.UNKNOWN -> 40
+                CodecAcceleration.SOFTWARE -> 60
+            }
+
+    private fun decoderRank(
+        capability: DecoderCapability,
+        spec: CodecSpec,
+    ): Int {
+        val accelerationRank =
+            when (capability.acceleration) {
+                CodecAcceleration.HARDWARE -> 0
+                CodecAcceleration.HYBRID -> 20
+                CodecAcceleration.UNKNOWN -> 40
+                CodecAcceleration.SOFTWARE -> 60
+            }
+        val lowLatencyBonus =
+            if (spec.mediaType == CodecMediaType.VIDEO && capability.supportsLowLatency(spec.mimeType)) -10 else 0
+        val softwareStabilityRank =
+            when {
+                capability.name.startsWith("OMX.google", ignoreCase = true) -> 0
+                capability.name.startsWith("c2.android", ignoreCase = true) -> 4
+                else -> 2
+            }
+        return aliasPenalty(capability.isAlias) + accelerationRank + lowLatencyBonus + softwareStabilityRank
+    }
+
+    private fun aliasPenalty(isAlias: Boolean): Int = if (isAlias) 100 else 0
 }
-

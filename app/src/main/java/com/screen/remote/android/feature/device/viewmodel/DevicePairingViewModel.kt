@@ -11,8 +11,15 @@ import com.screen.remote.android.feature.device.data.PairingEndpointMetadataMana
 import com.screen.remote.android.feature.device.data.PairingHistoryItem
 import com.screen.remote.android.feature.device.data.PairingResult
 import com.screen.remote.android.feature.device.data.PairingStatus
+import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import com.screen.remote.android.infrastructure.adb.pairing.AdbPairingManager
+import dadb.android.runtime.ExperimentalDadbAndroidApi
+import dadb.android.wireless.AdbMdnsConfig
+import dadb.android.wireless.AdbMdnsMonitor
+import dadb.android.wireless.AdbMdnsServiceType
+import dadb.android.wireless.AdbMdnsState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,13 +41,22 @@ class DevicePairingViewModel : ViewModel() {
     private val _pairingHistory = MutableStateFlow<List<PairingHistoryItem>>(emptyList())
     val pairingHistory: StateFlow<List<PairingHistoryItem>> = _pairingHistory.asStateFlow()
 
+    private val _pairedMdnsDeviceKeys = MutableStateFlow<Set<String>>(emptySet())
+    val pairedMdnsDeviceKeys: StateFlow<Set<String>> = _pairedMdnsDeviceKeys.asStateFlow()
+
+    private val _mdnsState = MutableStateFlow(AdbMdnsState())
+    val mdnsState: StateFlow<AdbMdnsState> = _mdnsState.asStateFlow()
+
+    private var mdnsMonitor: AdbMdnsMonitor? = null
+    private var mdnsJob: Job? = null
+
     /**
      * 加载配对历史
      */
     fun loadPairingHistory(context: Context) {
         viewModelScope.launch {
             try {
-                _pairingHistory.value = readPairingHistory(context)
+                refreshPairingMetadata(context)
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_PAIRING, "Failed to load pairing history: ${e.message}", e)
             }
@@ -60,7 +76,7 @@ class DevicePairingViewModel : ViewModel() {
                 withContext(Dispatchers.IO) {
                     PairingEndpointMetadataManager(context).removeEndpoint(endpoint)
                 }
-                _pairingHistory.value = readPairingHistory(context)
+                refreshPairingMetadata(context)
                 LogManager.d(LogTags.ADB_PAIRING, "Pairing history item deleted: $hostPort")
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_PAIRING, "Failed to delete pairing history item: ${e.message}", e)
@@ -78,6 +94,7 @@ class DevicePairingViewModel : ViewModel() {
                     PairingEndpointMetadataManager(context).clear()
                 }
                 _pairingHistory.value = emptyList()
+                _pairedMdnsDeviceKeys.value = emptySet()
                 LogManager.d(LogTags.ADB_PAIRING, "Pairing history cleared")
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_PAIRING, "Failed to clear pairing history: ${e.message}", e)
@@ -93,6 +110,7 @@ class DevicePairingViewModel : ViewModel() {
         ipAddress: String,
         port: String,
         pairingCode: String,
+        mdnsDeviceSerial: String? = null,
     ) {
         viewModelScope.launch {
             try {
@@ -125,14 +143,21 @@ class DevicePairingViewModel : ViewModel() {
                         )
 
                     withContext(Dispatchers.IO) {
-                        PairingEndpointMetadataManager(context).saveSuccessfulPairing(
-                            endpoint = ipAddress,
-                            port = port,
-                            deviceName = "Android Device",
-                        )
+                        if (mdnsDeviceSerial == null) {
+                            PairingEndpointMetadataManager(context).saveSuccessfulPairing(
+                                endpoint = ipAddress,
+                                port = port,
+                                deviceName = "Android Device",
+                            )
+                        } else {
+                            PairingEndpointMetadataManager(context).saveSuccessfulMdnsPairing(
+                                deviceSerial = mdnsDeviceSerial,
+                                endpoint = ipAddress,
+                            )
+                        }
                     }
 
-                    _pairingHistory.value = readPairingHistory(context)
+                    refreshPairingMetadata(context)
 
                     LogManager.d(LogTags.ADB_PAIRING, "Pairing successful")
                 } else {
@@ -151,6 +176,44 @@ class DevicePairingViewModel : ViewModel() {
         }
     }
 
+    @OptIn(ExperimentalDadbAndroidApi::class)
+    fun startMdnsPairingDiscovery() {
+        if (mdnsMonitor != null) return
+
+        val monitor =
+            AdbRuntimeProvider
+                .get()
+                .createMdnsMonitor(
+                    AdbMdnsConfig(
+                        serviceTypes =
+                            setOf(
+                                AdbMdnsServiceType.TLS_PAIRING,
+                                AdbMdnsServiceType.TLS_CONNECT,
+                            ),
+                    ),
+                )
+        mdnsMonitor = monitor
+        mdnsJob =
+            viewModelScope.launch {
+                monitor.state.collect { state ->
+                    _mdnsState.value = state
+                }
+            }
+
+        runCatching { monitor.start() }
+            .onFailure { error ->
+                LogManager.e(LogTags.ADB_PAIRING, "Failed to start mDNS pairing discovery: ${error.message}", error)
+            }
+    }
+
+    fun stopMdnsPairingDiscovery() {
+        mdnsJob?.cancel()
+        mdnsJob = null
+        mdnsMonitor?.close()
+        mdnsMonitor = null
+        _mdnsState.value = AdbMdnsState()
+    }
+
     /**
      * 重置配对状态
      */
@@ -159,8 +222,16 @@ class DevicePairingViewModel : ViewModel() {
         _pairingResult.value = null
     }
 
-    private suspend fun readPairingHistory(context: Context): List<PairingHistoryItem> =
+    private suspend fun refreshPairingMetadata(context: Context) {
         withContext(Dispatchers.IO) {
-            PairingEndpointMetadataManager(context).listRecentSuccessfulPairings()
+            val manager = PairingEndpointMetadataManager(context)
+            _pairingHistory.value = manager.listRecentSuccessfulPairings()
+            _pairedMdnsDeviceKeys.value = manager.getPairedMdnsDeviceKeys()
         }
+    }
+
+    override fun onCleared() {
+        stopMdnsPairingDiscovery()
+        super.onCleared()
+    }
 }

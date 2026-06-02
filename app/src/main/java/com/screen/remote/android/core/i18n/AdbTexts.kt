@@ -193,6 +193,14 @@ object AdbTexts {
     val PAIRING_HISTORY_CLEAR_BUTTON = TextPair("清除", "Clear")
     val PAIRING_HISTORY_CLEARED = TextPair("配对历史已清除", "Pairing history cleared")
 
+    // mDNS 服务发现
+    val PAIRING_DISCOVERY_TITLE = TextPair("附近无线调试设备", "Nearby Wireless Debugging Devices")
+    val PAIRING_DISCOVERY_SCANNING = TextPair("正在扫描无线调试设备...", "Scanning for Wireless Debugging devices...")
+    val PAIRING_DISCOVERY_EMPTY = TextPair("暂无发现，仍可手动输入", "No devices found yet. You can still enter details manually.")
+    val PAIRING_DISCOVERY_PAIRABLE = TextPair("可配对", "Available to pair")
+    val PAIRING_DISCOVERY_RECORDED = TextPair("曾配对", "Previously paired")
+    val PAIRING_DISCOVERY_DISCOVERED = TextPair("已发现", "Discovered")
+
     // 配对信息标签
     val PAIRING_INFO_TITLE = TextPair("配对信息", "Pairing Information")
     val PAIRING_HOST_PORT_LABEL = TextPair("IP地址和端口", "IP address & Port")
@@ -306,7 +314,7 @@ object AdbTexts {
     val CONNECTION_TYPE = TextPair("连接类型", "Connection Type")
     val CONNECTION_TYPE_TCP = TextPair("TCP/IP", "TCP/IP")
     val CONNECTION_TYPE_USB = TextPair("USB", "USB")
-    val USB_SELECT_DEVICE = TextPair("选择 USB 设备", "Select USB Device")
+    val USB_SELECT_DEVICE = TextPair("选择设备", "Select Device")
     val USB_DEVICE_SELECTED = TextPair("已选择设备", "Device Selected")
     val USB_NO_DEVICE_SELECTED = TextPair("未选择设备", "No Device Selected")
 

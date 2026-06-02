@@ -9,10 +9,12 @@ import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.infrastructure.media.audio.AudioDebugLog
+import com.screen.remote.android.infrastructure.media.audio.AudioFrameInfo
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.media.video.VideoDebugLog
 import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoFrameInfo
+import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoSessionInfo
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import dadb.AdbShellPacket
 import java.io.IOException
@@ -25,8 +27,9 @@ import java.net.Socket
  * 协议格式（大端序）：
  * - codec ID: 4 bytes (big-endian)
  * - 每个包: 12 bytes header (PTS 8 bytes + size 4 bytes, big-endian) + payload
- * - PTS 最高位 (bit 63): config packet flag
- * - PTS 次高位 (bit 62): key frame flag
+ * - bit 63: session metadata flag（仅视频）
+ * - bit 62: config packet flag
+ * - bit 61: key frame flag
  *
  * 集成事件系统：
  * - 推送 DeviceDisconnected 事件（流结束）
@@ -34,52 +37,22 @@ import java.net.Socket
 class ScrcpyAudioStream(
     private val socket: Socket,
     inputStream: InputStream = socket.inputStream,
+    override val codec: String,
 ) : AudioStream {
     private val dataInputStream = java.io.DataInputStream(inputStream)
 
-    override val codec: String
     override val sampleRate: Int = 48000 // scrcpy 固定 48000
     override val channelCount: Int = 2 // scrcpy 固定 2
 
     init {
         socket.soTimeout = 10000 // 10 秒超时
 
-        // 1️⃣ 读 AudioHeader (4 bytes, big-endian)
-        val codecId = dataInputStream.readInt() // uint32 codec (big-endian)
-
-        codec =
-            when (codecId) {
-                0x6f707573 -> {
-                    "opus"
-                }
-
-                // "opus" 的 ASCII
-                0x00616163 -> {
-                    "aac"
-                }
-
-                // "aac" 的 ASCII
-                0x666c6163 -> {
-                    "flac"
-                }
-
-                // "flac" 的 ASCII
-                0x00726177 -> {
-                    "raw"
-                }
-
-                // "raw" 的 ASCII
-                else -> {
-                    LogManager.w("ScrcpyAudioStream", "未知 codec ID: 0x${codecId.toString(16)}, 使用 opus")
-                    "opus"
-                }
-            }
-
         AudioDebugLog.d("ScrcpyAudioStream") { "音频配置: codec=$codec, rate=$sampleRate, channels=$channelCount" }
-        AudioDebugLog.d(LogTags.SCRCPY_PACKET) { "audio codec header: codecId=0x${codecId.toString(16).padStart(8, '0')} codec=$codec" }
     }
 
     private var packetCount = 0
+    private var opusSilencePacketCount = 0
+    private var frameInfo: AudioFrameInfo? = null
 
     @Throws(IOException::class)
     override fun read(): AdbShellPacket {
@@ -103,9 +76,20 @@ class ScrcpyAudioStream(
             val isConfig = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_CONFIG) != 0L
             val isKeyFrame = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_KEY_FRAME) != 0L
             val actualPts = ptsAndFlags and ScrcpyProtocol.PACKET_PTS_MASK
+            frameInfo = AudioFrameInfo(pts = actualPts, isConfig = isConfig, isKeyFrame = isKeyFrame)
+            val isOpusSilence = isOpusSilencePacket(codec, packet)
+
+            if (isOpusSilence) {
+                opusSilencePacketCount++
+                if (opusSilencePacketCount == 1 || opusSilencePacketCount % 250 == 0) {
+                    AudioDebugLog.d("AudioDecoder") {
+                        "Opus 静音/DTX 短帧: count=$opusSilencePacketCount, pts=$actualPts"
+                    }
+                }
+            }
 
             // 打印数据包信息（前10个包和每50个包打印一次）
-            if (packetCount <= 10 || packetCount % 50 == 0) {
+            if (!isOpusSilence && (packetCount <= 10 || packetCount % 50 == 0)) {
                 val flags =
                     buildString {
                         if (isConfig) append("CONFIG ")
@@ -121,11 +105,11 @@ class ScrcpyAudioStream(
                     "音频包 #$packetCount: size=$packetSize, pts=$actualPts, flags=[$flags], data=$hexPreview..."
                 }
 
-                // 如果是小包，打印完整数据
+                // 未识别的短包仍保留诊断；Opus 静音短帧已在上方低频统计。
                 if (packetSize <= 10) {
                     LogManager.w(
                         "AudioDecoder",
-                        "异常小包 #$packetCount: 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}",
+                        "未识别的短音频包 #$packetCount: codec=$codec, 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}",
                     )
                 }
             }
@@ -138,8 +122,10 @@ class ScrcpyAudioStream(
 
             return AdbShellPacket.StdOut(packet)
         } catch (_: java.net.SocketTimeoutException) {
+            frameInfo = null
             return AdbShellPacket.StdOut(byteArrayOf())
         } catch (_: java.io.EOFException) {
+            frameInfo = null
             AudioDebugLog.d("AudioDecoder") { "音频流结束，共接收 $packetCount 个包" }
             SessionIssueTracker.record("audio.eof", "Audio stream closed by peer")
             // 推送设备断开事件
@@ -158,6 +144,8 @@ class ScrcpyAudioStream(
         }
     }
 
+    override fun currentFrameInfo(): AudioFrameInfo? = frameInfo
+
     override fun close() {
         try {
             socket.close()
@@ -166,6 +154,16 @@ class ScrcpyAudioStream(
         }
     }
 }
+
+internal fun isOpusSilencePacket(
+    codec: String,
+    packet: ByteArray,
+): Boolean =
+    codec == "opus" &&
+        packet.size == 3 &&
+        (packet[0].toInt() and 0xF8) == 0xF8 &&
+        (packet[1].toInt() and 0xFF) == 0xFF &&
+        (packet[2].toInt() and 0xFF) == 0xFE
 
 /**
  * Scrcpy Socket Stream 包装类
@@ -186,12 +184,14 @@ class ScrcpyAudioStream(
 class ScrcpySocketStream(
     private val socket: Socket,
     inputStream: InputStream = socket.inputStream,
+    override val codec: String,
     private val onError: (String) -> Unit,
     private val onVideoResolution: (Int, Int) -> Unit = { _, _ -> },
 ) : VideoStream {
     private val dataInputStream = java.io.DataInputStream(inputStream)
     private var packetCount = 0
     private var frameInfo: VideoFrameInfo? = null
+    private var pendingSessionInfo: VideoSessionInfo? = null
 
     init {
         socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
@@ -217,6 +217,7 @@ class ScrcpySocketStream(
                     }
 
                     onVideoResolution(width, height)
+                    pendingSessionInfo = VideoSessionInfo(width, height)
                     frameInfo = null
                     VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
                         "video session meta: size=${width}x$height flags=0x${(ptsAndFlags ushr 32).toString(16)}"
@@ -224,8 +225,8 @@ class ScrcpySocketStream(
                     continue
                 }
 
-                // 检查包大小是否合理（最大4MB）
-                if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
+                // 高分辨率关键帧可能显著大于 4 MiB；仍保留硬上限防止恶意分配。
+                if (packetSize <= 0 || packetSize > MAX_VIDEO_PACKET_SIZE) {
                     LogManager.e("ScrcpySocketStream", "数据包大小异常: $packetSize")
                     onError("数据包大小异常")
                     // 推送解复用器错误事件
@@ -279,12 +280,18 @@ class ScrcpySocketStream(
 
     override fun currentFrameInfo(): VideoFrameInfo? = frameInfo
 
+    override fun consumeSessionInfo(): VideoSessionInfo? = pendingSessionInfo.also { pendingSessionInfo = null }
+
     override fun close() {
         try {
             socket.close()
         } catch (e: IOException) {
             LogManager.w("ScrcpySocketStream", "关闭 Socket 失败: ${e.message}")
         }
+    }
+
+    private companion object {
+        const val MAX_VIDEO_PACKET_SIZE = 32 * 1024 * 1024
     }
 }
 

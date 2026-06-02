@@ -12,6 +12,14 @@ internal class VideoDecoderOutputDrainer(
 ) {
     private var renderedFrameCount = 0
 
+    fun hasRenderedOutput(): Boolean = renderedFrameCount > 0
+
+    fun renderedFrameCount(): Int = renderedFrameCount
+
+    fun resetAfterDecoderFallback() {
+        renderedFrameCount = 0
+    }
+
     fun drainOutputBuffers(bufferInfo: MediaCodec.BufferInfo) {
         if (isStopped()) {
             return
@@ -48,12 +56,10 @@ internal class VideoDecoderOutputDrainer(
                 }
                 throw e
             }
-        } catch (e: IllegalStateException) {
-            if (!isStopped()) {
-                LogManager.w(LogTags.VIDEO_DECODER, "输出缓冲区处理异常: ${e.message}")
-            }
-        } catch (_: Exception) {
-            // Ignore non-fatal drain failures during playback.
+        } catch (e: Exception) {
+            if (isStopped()) return
+            LogManager.e(LogTags.VIDEO_DECODER, "输出缓冲区处理异常: ${e.message}", e)
+            throw e
         }
     }
 }

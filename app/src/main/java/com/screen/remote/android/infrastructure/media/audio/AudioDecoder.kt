@@ -22,10 +22,20 @@ import kotlinx.coroutines.withContext
  */
 class AudioDecoder(
     volumeScale: Float = 1.0f,
+    preferredDecoderName: String? = null,
+    allowHardwareDecoders: Boolean = true,
+    decoderSelectionPinned: Boolean = false,
+    initialRejectedDecoderNames: Set<String> = emptySet(),
     private val sessionContext: SessionContext,
 ) {
     private val decoderLock = Any()
-    private val formatHandler = AudioFormatHandler()
+    private val formatHandler =
+        AudioFormatHandler(
+            preferredDecoderName,
+            allowHardwareDecoders,
+            decoderSelectionPinned,
+            initialRejectedDecoderNames,
+        )
     private val trackManager = AudioTrackManager(volumeScale)
     private val playback =
         AudioDecoderPlayback(
@@ -36,6 +46,7 @@ class AudioDecoder(
             setDecoder = { decoder = it },
             isRunning = { isRunning },
             isStopped = { isStopped },
+            onPlaybackReady = ::reportStarted,
         )
 
     @Volatile private var decoder: MediaCodec? = null
@@ -44,6 +55,16 @@ class AudioDecoder(
     @Volatile private var lifecycleReportedStarted = false
 
     var onConnectionLost: (() -> Unit)? = null
+    var onDecoderSelected: ((String) -> Unit)?
+        get() = formatHandler.onDecoderSelected
+        set(value) {
+            formatHandler.onDecoderSelected = value
+        }
+    var onDecoderRejected: ((String) -> Unit)?
+        get() = formatHandler.onDecoderRejected
+        set(value) {
+            formatHandler.onDecoderRejected = value
+        }
 
     suspend fun start(audioStream: AudioStream) =
         withContext(Dispatchers.IO) {
@@ -54,7 +75,9 @@ class AudioDecoder(
 
                 AudioDebugLog.d(LogTags.AUDIO_DECODER) { "开始音频解码: codec=$codec, rate=$sampleRate, channels=$channelCount" }
 
-                markStarted()
+                runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO) }
+
+                prepareRunning()
 
                 if (codec.lowercase() == "raw") {
                     playback.playRawAudio(
@@ -100,9 +123,13 @@ class AudioDecoder(
         }
     }
 
-    private fun markStarted() {
+    private fun prepareRunning() {
         isStopped = false
         isRunning = true
+    }
+
+    private fun reportStarted() {
+        if (lifecycleReportedStarted) return
         sessionContext.emit(SessionEvent.DecoderStarted(DecoderType.Audio))
         lifecycleReportedStarted = true
     }

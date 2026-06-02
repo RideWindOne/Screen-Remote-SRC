@@ -1,7 +1,6 @@
 package com.screen.remote.android.feature.remote.widget.video
 
 import android.annotation.SuppressLint
-import android.graphics.SurfaceTexture
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.View
@@ -194,11 +193,12 @@ fun VideoDisplayArea(
                 ),
         ) {
             if (useFullScreen) {
-                var surfaceTexture by remember { mutableStateOf<SurfaceTexture?>(null) }
                 var renderSurface by remember { mutableStateOf<Surface?>(null) }
 
                 DisposableEffect(Unit) {
                     onDispose {
+                        // MediaCodec 必须先切回 dummy Surface，再释放 TextureView 的包装 Surface。
+                        videoDecoderManager.videoDecoder?.setSurface(null)
                         renderSurface?.release()
                         renderSurface = null
                         onRenderSurfaceChanged(null)
@@ -207,7 +207,6 @@ fun VideoDisplayArea(
 
                 VideoTextureView(
                     onSurfaceTextureAvailable = { texture ->
-                        surfaceTexture = texture
                         val surface =
                             renderSurface?.takeIf { it.isValid }
                                 ?: Surface(texture).also { renderSurface = it }
@@ -215,7 +214,10 @@ fun VideoDisplayArea(
                         videoDecoderManager.setSurfaceImmediate(surface)
                     },
                     onSurfaceTextureDestroyed = {
-                        surfaceTexture = null
+                        videoDecoderManager.videoDecoder?.setSurface(null)
+                        renderSurface?.release()
+                        renderSurface = null
+                        onRenderSurfaceChanged(null)
                     },
                     onTouch = handleTouch,
                     modifier = Modifier.fillMaxSize(),

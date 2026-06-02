@@ -30,7 +30,7 @@ object ScrcpyConstants {
     const val DEFAULT_MAX_SIZE_STR = "1080"
 
     /** 默认码率（整数，单位：bps） */
-    const val DEFAULT_VIDEO_BITRATE_INT = 8000000 // 8Mbps
+    const val DEFAULT_VIDEO_BITRATE_INT = 4_000_000 // 4Mbps
 
     /** 默认码率（字符串） */
     const val DEFAULT_VIDEO_BITRATE = "4M"
@@ -47,7 +47,7 @@ object ScrcpyConstants {
     // 音频编码
 
     /** 默认音频编码格式 */
-    const val DEFAULT_AUDIO_CODEC = "aac"
+    const val DEFAULT_AUDIO_CODEC = "opus"
 
     /** 支持的音频编码格式 */
     val AUDIO_CODECS = listOf("opus", "aac", "flac", "raw")

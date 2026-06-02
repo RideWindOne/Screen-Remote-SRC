@@ -7,6 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import com.screen.remote.android.app.ScreenRemoteApp
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.adb.usb.UsbDadb
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
@@ -192,8 +195,13 @@ internal object DebugUsbAdbCommands {
                         val options =
                             ScrcpyOptions(
                                 sessionId = "debug-usb-${UUID.randomUUID()}",
-                                host = deviceId,
-                                port = 0,
+                                connectionCandidates =
+                                    listOf(
+                                        ConnectionCandidate(
+                                            transport = ConnectionTransport.USB,
+                                            host = DeviceTransportSerial.stripUsbPrefix(deviceId),
+                                        ),
+                                    ),
                                 maxSize = 1920,
                                 videoBitRate = 8_000_000,
                                 maxFps = 60,

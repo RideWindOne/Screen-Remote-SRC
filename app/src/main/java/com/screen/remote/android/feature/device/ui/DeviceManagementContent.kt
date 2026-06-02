@@ -30,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.feature.device.viewmodel.DeviceViewModel
@@ -71,7 +70,7 @@ internal fun DeviceManagementAddAction(onClick: () -> Unit) {
         Icon(
             imageVector = Icons.Default.Add,
             contentDescription = "添加设备",
-            tint = Color(0xFF007AFF),
+            tint = MaterialTheme.colorScheme.primary,
         )
     }
 }
@@ -119,7 +118,7 @@ fun DeviceCard(
             CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface,
             ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
         Row(
             modifier =

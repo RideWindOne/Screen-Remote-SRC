@@ -5,7 +5,7 @@ import android.hardware.usb.UsbDevice
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.util.ApiCompatHelper
-import com.screen.remote.android.core.common.util.formatHostPort
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.common.util.normalizeEndpointHost
 import com.screen.remote.android.core.domain.model.ConnectionType
 import com.screen.remote.android.core.i18n.AdbTexts
@@ -16,8 +16,8 @@ import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import com.screen.remote.android.infrastructure.adb.usb.UsbAdbManager
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import dadb.Dadb
-import dadb.android.runtime.ExperimentalDadbAndroidApi
 import dadb.android.runtime.AdbRuntime
+import dadb.android.runtime.ExperimentalDadbAndroidApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,14 +35,14 @@ internal class AdbConnectionConnector(
     suspend fun connectTcp(
         host: String,
         port: Int,
+        transportDeviceId: String? = null,
         deviceName: String?,
         forceReconnect: Boolean,
         sessionContext: SessionContext?,
-        withDelayedAck: Boolean = true,
     ): Result<String> =
         withContext(Dispatchers.IO) {
             val normalizedHost = normalizeEndpointHost(host)
-            val deviceId = formatHostPort(normalizedHost, port)
+            val deviceId = transportDeviceId ?: DeviceTransportSerial.tcp(normalizedHost, port)
             try {
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
                     existingConnection.bindSessionContext(sessionContext)
@@ -51,16 +51,6 @@ internal class AdbConnectionConnector(
                         runCatching { existingConnection.close() }
                         connectionRegistry.remove(deviceId)
                     } else {
-                        if (!isDelayedAckCompatible(existingConnection, withDelayedAck)) {
-                            LogManager.d(
-                                LogTags.ADB_CONNECTION,
-                                "Existing TCP connection delayed_ack mismatch for $deviceId, rebuilding: " +
-                                    "existing=${existingConnection.supportsDelayedAck()} requested=$withDelayedAck",
-                            )
-                            runCatching { existingConnection.close() }
-                            connectionRegistry.remove(deviceId)
-                            return@let
-                        }
                         LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.get())
                         val verifyResult = existingConnection.verify()
                         if (verifyResult.isSuccess) {
@@ -71,7 +61,7 @@ internal class AdbConnectionConnector(
                     }
                 }
 
-                val features = Dadb.connectFeatures(withDelayedAck)
+                val features = Dadb.connectFeatures(withDelayedAck = true)
 
                 val dadb =
                     try {
@@ -81,7 +71,11 @@ internal class AdbConnectionConnector(
                         )
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
-                            "Endpoint state before connect: ${AdbRuntimeDiagnostics.endpointSummary(context, normalizedHost, port)}",
+                            "Endpoint state before connect: ${AdbRuntimeDiagnostics.endpointSummary(
+                                context,
+                                normalizedHost,
+                                port,
+                            )}",
                         )
                         adbRuntime.connectNetworkDadb(
                             host = normalizedHost,
@@ -111,7 +105,11 @@ internal class AdbConnectionConnector(
                 val isTlsConnection = dadb.isTlsConnection()
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "Endpoint state after connect: ${AdbRuntimeDiagnostics.endpointSummary(context, normalizedHost, port)} tls=$isTlsConnection",
+                    "Endpoint state after connect: ${AdbRuntimeDiagnostics.endpointSummary(
+                        context,
+                        normalizedHost,
+                        port,
+                    )} tls=$isTlsConnection",
                 )
 
                 val connectionType =
@@ -120,7 +118,7 @@ internal class AdbConnectionConnector(
                     } else {
                         ConnectionType.TCP
                     }
-                val delayedAckEnabled = withDelayedAck && dadb.supportsFeature(Dadb.FEATURE_DELAYED_ACK)
+                val delayedAckEnabled = dadb.supportsFeature(Dadb.FEATURE_DELAYED_ACK)
                 val serialNumber = verifyResult.getOrDefault(deviceId)
                 val connection =
                     AdbConnection(
@@ -158,18 +156,19 @@ internal class AdbConnectionConnector(
         usbDevice: UsbDevice,
         deviceName: String?,
         sessionContext: SessionContext?,
-        withDelayedAck: Boolean = true,
     ): Result<String> =
         withContext(Dispatchers.IO) {
             try {
                 val serialNumber = ApiCompatHelper.getUsbDeviceSerialNumber(usbDevice) ?: usbDevice.deviceName
-                val deviceId = "usb:$serialNumber"
+                val deviceId = DeviceTransportSerial.usb(serialNumber)
 
                 LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.USB_CONNECTING_DEVICE.get()} ==========")
                 LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.USB_SERIAL_NUMBER.get()}: $serialNumber")
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "USB connect request: deviceId=$deviceId delayedAck=$withDelayedAck requestedName=${deviceName ?: "<none>"} ${formatUsbDeviceDebug(usbDevice)}",
+                    "USB connect request: deviceId=$deviceId requestedName=${deviceName ?: "<none>"} ${formatUsbDeviceDebug(
+                        usbDevice,
+                    )}",
                 )
 
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
@@ -180,16 +179,6 @@ internal class AdbConnectionConnector(
                             "connected=${runCatching { existingConnection.isConnected() }.getOrDefault(false)} " +
                             "info=${existingConnection.deviceInfo.name}/${existingConnection.deviceInfo.serialNumber}",
                     )
-                    if (!isDelayedAckCompatible(existingConnection, withDelayedAck)) {
-                        LogManager.d(
-                            LogTags.ADB_CONNECTION,
-                            "Existing USB connection delayed_ack mismatch for $deviceId, rebuilding: " +
-                                "existing=${existingConnection.supportsDelayedAck()} requested=$withDelayedAck",
-                        )
-                        runCatching { existingConnection.close() }
-                        connectionRegistry.remove(deviceId)
-                        return@let
-                    }
                     val verifyResult = existingConnection.verify()
                     if (verifyResult.isSuccess) {
                         LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFIED.get())
@@ -216,7 +205,9 @@ internal class AdbConnectionConnector(
                 var activeUsbDevice = refreshGrantedUsbDevice(usbDevice)
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "USB device refreshed after permission: old=${formatUsbDeviceDebug(usbDevice)}, new=${formatUsbDeviceDebug(activeUsbDevice)}",
+                    "USB device refreshed after permission: old=${formatUsbDeviceDebug(
+                        usbDevice,
+                    )}, new=${formatUsbDeviceDebug(activeUsbDevice)}",
                 )
 
                 val usbManager =
@@ -226,14 +217,16 @@ internal class AdbConnectionConnector(
 
                 var detectedSerial = serialNumber
                 var lastError: Throwable? = null
-                val features = Dadb.connectFeatures(withDelayedAck)
+                val features = Dadb.connectFeatures(withDelayedAck = true)
 
                 repeat(2) { attempt ->
                     val dadb =
                         try {
                             LogManager.d(
                                 LogTags.ADB_CONNECTION,
-                                "Creating USB transport Dadb for $deviceId attempt=${attempt + 1} delayedAck=$withDelayedAck ${formatUsbDeviceDebug(activeUsbDevice)}",
+                                "Creating USB transport Dadb for $deviceId attempt=${attempt + 1} ${formatUsbDeviceDebug(
+                                    activeUsbDevice,
+                                )}",
                             )
                             adbRuntime.createUsbDadb(
                                 usbManager = usbManager,
@@ -254,7 +247,7 @@ internal class AdbConnectionConnector(
                             LogTags.ADB_CONNECTION,
                             "USB Dadb verify success for $deviceId attempt=${attempt + 1} serial=$detectedSerial",
                         )
-                        val delayedAckEnabled = withDelayedAck && dadb.supportsFeature(Dadb.FEATURE_DELAYED_ACK)
+                        val delayedAckEnabled = dadb.supportsFeature(Dadb.FEATURE_DELAYED_ACK)
                         val connection =
                             AdbConnection(
                                 deviceId = deviceId,
@@ -301,7 +294,11 @@ internal class AdbConnectionConnector(
                 }
 
                 if (lastError != null) {
-                    LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.USB_CONNECT_FAILED.get()}: ${lastError.message}", lastError)
+                    LogManager.e(
+                        LogTags.ADB_CONNECTION,
+                        "${AdbTexts.USB_CONNECT_FAILED.get()}: ${lastError.message}",
+                        lastError,
+                    )
                     return@withContext Result.failure(
                         Exception("${AdbTexts.USB_CONNECT_FAILED.get()}: ${lastError.message}", lastError),
                     )
@@ -318,15 +315,15 @@ internal class AdbConnectionConnector(
         deviceId: String,
         deviceName: String?,
         sessionContext: SessionContext?,
-        withDelayedAck: Boolean = true,
     ): Result<String> =
         withContext(Dispatchers.IO) {
             val normalizedId = normalizeUsbDeviceId(deviceId)
-            val serial = normalizedId.removePrefix("usb:")
-            val scannedDevices = usbAdbManager.scanUsbDevices().getOrElse { error ->
-                LogManager.e(LogTags.ADB_CONNECTION, "USB scan failed for $normalizedId: ${error.message}", error)
-                return@withContext Result.failure(error)
-            }
+            val serial = DeviceTransportSerial.stripUsbPrefix(normalizedId)
+            val scannedDevices =
+                usbAdbManager.scanUsbDevices().getOrElse { error ->
+                    LogManager.e(LogTags.ADB_CONNECTION, "USB scan failed for $normalizedId: ${error.message}", error)
+                    return@withContext Result.failure(error)
+                }
             LogManager.d(
                 LogTags.ADB_CONNECTION,
                 "USB connect by id scan result for $normalizedId: ${
@@ -350,7 +347,6 @@ internal class AdbConnectionConnector(
                     usbDevice = matchedDevice.device,
                     deviceName = deviceName,
                     sessionContext = sessionContext,
-                    withDelayedAck = withDelayedAck,
                 )
             }
 
@@ -373,10 +369,15 @@ internal class AdbConnectionConnector(
                     return@withContext Result.failure(Exception(AdbTexts.USB_PERMISSION_DENIED.get()))
                 }
 
-                val refreshedDevices = usbAdbManager.scanUsbDevices().getOrElse { error ->
-                    LogManager.e(LogTags.ADB_CONNECTION, "USB rescan failed after permission for $normalizedId: ${error.message}", error)
-                    return@withContext Result.failure(error)
-                }
+                val refreshedDevices =
+                    usbAdbManager.scanUsbDevices().getOrElse { error ->
+                        LogManager.e(
+                            LogTags.ADB_CONNECTION,
+                            "USB rescan failed after permission for $normalizedId: ${error.message}",
+                            error,
+                        )
+                        return@withContext Result.failure(error)
+                    }
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
                     "USB rescan after permission for $normalizedId: ${
@@ -394,13 +395,14 @@ internal class AdbConnectionConnector(
                 if (refreshedMatch != null) {
                     LogManager.d(
                         LogTags.ADB_CONNECTION,
-                        "USB connect by id matched after permission for $normalizedId: ${formatUsbDeviceInfoDebug(refreshedMatch)}",
+                        "USB connect by id matched after permission for $normalizedId: ${formatUsbDeviceInfoDebug(
+                            refreshedMatch,
+                        )}",
                     )
                     return@withContext connectUsb(
                         usbDevice = refreshedMatch.device,
                         deviceName = deviceName,
                         sessionContext = sessionContext,
-                        withDelayedAck = withDelayedAck,
                     )
                 }
             }
@@ -422,7 +424,9 @@ internal class AdbConnectionConnector(
         if (matched) {
             LogManager.d(
                 LogTags.ADB_CONNECTION,
-                "USB match hit for sessionDeviceId=$deviceId serial=$serial candidate=${formatUsbDeviceInfoDebug(device)}",
+                "USB match hit for sessionDeviceId=$deviceId serial=$serial candidate=${formatUsbDeviceInfoDebug(
+                    device,
+                )}",
             )
         }
         matched
@@ -449,30 +453,17 @@ internal class AdbConnectionConnector(
         }
 
         val matchedByIdentity =
-            grantedDevices.firstOrNull {
-                it.productName == (originalDevice.productName ?: "Unknown") &&
-                    it.manufacturerName == (originalDevice.manufacturerName ?: "Unknown")
-            }?.device
+            grantedDevices
+                .firstOrNull {
+                    it.productName == (originalDevice.productName ?: "Unknown") &&
+                        it.manufacturerName == (originalDevice.manufacturerName ?: "Unknown")
+                }?.device
 
         return matchedByIdentity ?: grantedDevices.first().device
     }
 
     private fun normalizeUsbDeviceId(deviceId: String): String =
-        if (deviceId.startsWith("usb:")) {
-            deviceId
-        } else {
-            "usb:$deviceId"
-        }
-
-    private fun isDelayedAckCompatible(
-        connection: AdbConnection,
-        withDelayedAck: Boolean,
-    ): Boolean =
-        if (withDelayedAck) {
-            connection.supportsDelayedAck()
-        } else {
-            !connection.supportsDelayedAck()
-        }
+        DeviceTransportSerial.usb(deviceId)
 
     private fun enrichDeviceInfo(
         connection: AdbConnection,
@@ -504,9 +495,9 @@ internal class AdbConnectionConnector(
                     LogTags.ADB_CONNECTION,
                     "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED.get()}: ${e.message}",
                 )
-                }
             }
         }
+    }
 }
 
 private fun formatUsbDeviceDebug(device: UsbDevice): String =
@@ -514,5 +505,7 @@ private fun formatUsbDeviceDebug(device: UsbDevice): String =
         "manufacturer=${device.manufacturerName ?: "Unknown"} productName=${device.productName ?: "Unknown"} interfaces=${device.interfaceCount}"
 
 private fun formatUsbDeviceInfoDebug(device: com.screen.remote.android.infrastructure.adb.usb.UsbDeviceInfo): String =
-    "path=${device.device.deviceName} serial=${device.serialNumber.ifBlank { "<none>" }} permission=${device.hasPermission} " +
+    "path=${device.device.deviceName} serial=${device.serialNumber.ifBlank {
+        "<none>"
+    }} permission=${device.hasPermission} " +
         "manufacturer=${device.manufacturerName} product=${device.productName}"

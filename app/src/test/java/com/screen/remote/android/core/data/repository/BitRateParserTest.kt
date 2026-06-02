@@ -29,4 +29,16 @@ class BitRateParserTest {
         assertNull(parseBitRate("fast"))
         assertNull(parseBitRate("8mbps"))
     }
+
+    @Test
+    fun `options round trip preserves the exact bitrate text when its value is unchanged`() {
+        listOf("1M", "1m", "700k", "700K").forEach { text ->
+            assertEquals(text, preserveBitRateText(text, parseBitRate(text)!!))
+        }
+    }
+
+    @Test
+    fun `options round trip replaces bitrate text when its value changes`() {
+        assertEquals("2000000", preserveBitRateText("1M", 2_000_000))
+    }
 }

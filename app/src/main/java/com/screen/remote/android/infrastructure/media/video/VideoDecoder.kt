@@ -26,11 +26,21 @@ class VideoDecoder(
     surface: Surface?,
     private val videoCodec: String = "h264",
     cachedDecoderName: String? = null,
+    allowHardwareDecoders: Boolean = true,
+    decoderSelectionPinned: Boolean = false,
+    initialRejectedDecoderNames: Set<String> = emptySet(),
     private val sessionContext: SessionContext,
 ) {
     private val runtimeState = VideoDecoderRuntimeState()
     private val surfaceController = VideoDecoderSurfaceController(surface)
-    private val codecManager = VideoCodecManager(videoCodec, cachedDecoderName)
+    private val codecManager =
+        VideoCodecManager(
+            videoCodec,
+            cachedDecoderName,
+            allowHardwareDecoders,
+            decoderSelectionPinned,
+            initialRejectedDecoderNames,
+        )
     private val nalParser = VideoNalParser()
     private val formatHandler = VideoFormatHandler(codecManager)
     private val playback =
@@ -64,6 +74,11 @@ class VideoDecoder(
             field = value
             codecManager.onDecoderSelected = value
         }
+    var onDecoderRejected: ((decoderName: String) -> Unit)? = null
+        set(value) {
+            field = value
+            codecManager.onDecoderRejected = value
+        }
     var onConnectionLost: (() -> Unit)? = null
 
     suspend fun start(
@@ -79,12 +94,21 @@ class VideoDecoder(
 
             decoder = codecManager.createDecoder(width, height) ?: run {
                 LogManager.e(LogTags.VIDEO_DECODER, "无法创建解码器")
+                val sizeFailure = codecManager.lastSizeFailure
                 sessionContext.emit(
                     SessionEvent.DecoderError(
                         DecoderIssue(
-                            kind = DecoderIssueKind.CreateFailed,
+                            kind = if (sizeFailure != null) DecoderIssueKind.UnsupportedSize else DecoderIssueKind.CreateFailed,
                             decoderType = DecoderType.Video,
-                            detail = "无法创建解码器",
+                            detail =
+                                if (sizeFailure != null) {
+                                    "本机解码器不支持 ${sizeFailure.width}x${sizeFailure.height} (${sizeFailure.mimeType})"
+                                } else {
+                                    "无法创建解码器"
+                                },
+                            width = sizeFailure?.width,
+                            height = sizeFailure?.height,
+                            suggestedMaxSize = sizeFailure?.suggestedMaxSize,
                         ),
                     ),
                 )
@@ -169,3 +193,9 @@ class VideoDecoder(
         ScrcpyEventBus.pushEvent(ScreenInitSize(width, height))
     }
 }
+
+internal class VideoDecoderRuntimeState(
+    var currentWidth: Int = 0,
+    var currentHeight: Int = 0,
+    var currentRotation: Int = 0,
+)

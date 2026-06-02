@@ -33,6 +33,34 @@ class UsbAdbManager(
     private val _usbDevices = MutableStateFlow<List<UsbDeviceInfo>>(emptyList())
     val usbDevices: StateFlow<List<UsbDeviceInfo>> = _usbDevices.asStateFlow()
 
+    private val deviceStateReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED ||
+                    intent.action == UsbManager.ACTION_USB_DEVICE_DETACHED
+                ) {
+                    scanUsbDevices()
+                }
+            }
+        }
+
+    init {
+        ApiCompatHelper.registerReceiverCompat(
+            context = context,
+            receiver = deviceStateReceiver,
+            filter =
+                IntentFilter().apply {
+                    addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+                    addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+                },
+            exported = false,
+        )
+        scanUsbDevices()
+    }
+
     companion object {
         private const val PERMISSION_POLL_INTERVAL_MS = 250L
         private const val PERMISSION_TIMEOUT_MS = 15_000L

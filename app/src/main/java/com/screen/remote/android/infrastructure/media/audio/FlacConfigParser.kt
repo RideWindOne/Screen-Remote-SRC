@@ -15,32 +15,30 @@ internal object FlacConfigParser {
     private val FLAC_STREAM_MARKER = byteArrayOf(0x66, 0x4C, 0x61, 0x43) // "fLaC"
 
     fun parseStreamInfo(data: ByteArray): FlacStreamInfo? {
-        if (data.size < STREAM_INFO_SIZE) {
-            return null
-        }
+        val streamInfo = extractStreamInfo(data) ?: return null
 
-        val minBlockSize = readUnsignedShort(data, 0)
-        val maxBlockSize = readUnsignedShort(data, 2)
+        val minBlockSize = readUnsignedShort(streamInfo, 0)
+        val maxBlockSize = readUnsignedShort(streamInfo, 2)
 
         val sampleRate =
-            ((data[10].toInt() and 0xFF) shl 12) or
-                ((data[11].toInt() and 0xFF) shl 4) or
-                ((data[12].toInt() and 0xF0) shr 4)
-        val channelCount = ((data[12].toInt() and 0x0E) shr 1) + 1
-        val bitsPerSample = (((data[12].toInt() and 0x01) shl 4) or ((data[13].toInt() and 0xF0) shr 4)) + 1
+            ((streamInfo[10].toInt() and 0xFF) shl 12) or
+                ((streamInfo[11].toInt() and 0xFF) shl 4) or
+                ((streamInfo[12].toInt() and 0xF0) shr 4)
+        val channelCount = ((streamInfo[12].toInt() and 0x0E) shr 1) + 1
+        val bitsPerSample = (((streamInfo[12].toInt() and 0x01) shl 4) or ((streamInfo[13].toInt() and 0xF0) shr 4)) + 1
         val totalSamples =
-            ((data[13].toLong() and 0x0F) shl 32) or
-                ((data[14].toLong() and 0xFF) shl 24) or
-                ((data[15].toLong() and 0xFF) shl 16) or
-                ((data[16].toLong() and 0xFF) shl 8) or
-                (data[17].toLong() and 0xFF)
+            ((streamInfo[13].toLong() and 0x0F) shl 32) or
+                ((streamInfo[14].toLong() and 0xFF) shl 24) or
+                ((streamInfo[15].toLong() and 0xFF) shl 16) or
+                ((streamInfo[16].toLong() and 0xFF) shl 8) or
+                (streamInfo[17].toLong() and 0xFF)
 
         if (sampleRate <= 0 || channelCount <= 0 || bitsPerSample <= 0) {
             return null
         }
 
         return FlacStreamInfo(
-            rawStreamInfo = data.copyOf(),
+            rawStreamInfo = streamInfo,
             minBlockSize = minBlockSize,
             maxBlockSize = maxBlockSize,
             sampleRate = sampleRate,
@@ -50,7 +48,33 @@ internal object FlacConfigParser {
         )
     }
 
+    private fun extractStreamInfo(data: ByteArray): ByteArray? {
+        if (data.size == STREAM_INFO_SIZE) return data.copyOf()
+        if (data.size >= 8 + STREAM_INFO_SIZE && data.copyOfRange(0, 4).contentEquals(FLAC_STREAM_MARKER)) {
+            val blockType = data[4].toInt() and 0x7F
+            val blockLength =
+                ((data[5].toInt() and 0xFF) shl 16) or
+                    ((data[6].toInt() and 0xFF) shl 8) or
+                    (data[7].toInt() and 0xFF)
+            if (blockType == 0 && blockLength == STREAM_INFO_SIZE && data.size >= 8 + blockLength) {
+                return data.copyOfRange(8, 8 + STREAM_INFO_SIZE)
+            }
+        }
+        if (data.size >= 4 + STREAM_INFO_SIZE) {
+            val blockType = data[0].toInt() and 0x7F
+            val blockLength =
+                ((data[1].toInt() and 0xFF) shl 16) or
+                    ((data[2].toInt() and 0xFF) shl 8) or
+                    (data[3].toInt() and 0xFF)
+            if (blockType == 0 && blockLength == STREAM_INFO_SIZE && data.size >= 4 + blockLength) {
+                return data.copyOfRange(4, 4 + STREAM_INFO_SIZE)
+            }
+        }
+        return null
+    }
+
     fun buildInitializationData(data: ByteArray): ByteArray {
+        require(data.size == STREAM_INFO_SIZE) { "FLAC STREAMINFO must be exactly $STREAM_INFO_SIZE bytes" }
         val metadataHeader =
             byteArrayOf(
                 0x80.toByte(), // last-metadata-block = 1, block type = STREAMINFO

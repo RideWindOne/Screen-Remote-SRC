@@ -1,145 +1,24 @@
 package com.screen.remote.android.feature.session.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.data.repository.SessionData
-import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
+import com.screen.remote.android.core.designsystem.component.AppDivider
+import com.screen.remote.android.core.designsystem.component.SectionCard
+import com.screen.remote.android.core.designsystem.component.SectionTitle
+import com.screen.remote.android.core.i18n.ManagementTexts
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.util.Locale
-
-internal data class DeviceDashboardSnapshot(
-    val isLoading: Boolean,
-    val model: String,
-    val manufacturer: String,
-    val socModel: String,
-    val androidVersion: String,
-    val uptime: String,
-    val basebandVersion: String,
-    val productCodeName: String,
-    val securityPatch: String,
-    val serialNumber: String,
-    val connectionTypeLabel: String,
-    val resolution: String,
-    val dpi: String,
-    val ppi: String,
-    val screenSize: String,
-    val refreshRate: String,
-    val storageSummary: String,
-    val memoryTotal: String,
-    val memoryAvailable: String,
-    val batteryLevel: String,
-    val batteryStatus: String,
-    val batteryHealth: String,
-    val voltage: String,
-    val currentNow: String,
-    val temperature: String,
-    val cpuSummary: String,
-    val abi: String,
-    val board: String,
-    val fingerprint: String,
-    val mobileNetworkType: String,
-    val carrierNames: String,
-    val mobileBand: String,
-    val mobilePci: String,
-    val mobileEarfcn: String,
-    val rsrp: String,
-    val rsrq: String,
-    val sinr: String,
-    val wifiSsid: String,
-    val wifiBssid: String,
-    val wifiIpAddress: String,
-    val wifiFrequency: String,
-    val wifiLinkSpeed: String,
-    val supportedRefreshRates: String,
-    val batteryCycleCount: String,
-    val wirelessDebugPort: Int? = null,
-    val errorMessage: String? = null,
-) {
-    val brandModelLabel: String
-        get() =
-            listOf(manufacturer, model)
-                .filter { it.isNotBlank() }
-                .joinToString(" ")
-                .ifBlank { model.ifBlank { "未知设备" } }
-
-    val androidVersionLabel: String
-        get() = androidVersion.ifBlank { "Android" }
-
-    val heroSummary: String
-        get() =
-            when {
-                errorMessage != null -> "设备已连接，但设备信息读取失败。"
-                isLoading -> "设备已连接，正在同步首页参数信息。"
-                else -> "当前设备为 $model，系统 $androidVersion，屏幕 $resolution，数据存储 $storageSummary。"
-            }
-
-    val currentDpiValue: String?
-        get() = dpi.substringAfterLast(": ", dpi).trim().takeIf { it.isNotBlank() }
-
-    val currentDpiLabel: String?
-        get() = currentDpiValue?.let { "$it DPI" }
-
-    val currentResolutionWidth: String?
-        get() =
-            resolution
-                .substringAfterLast(": ", resolution)
-                .substringBefore("x")
-                .trim()
-                .takeIf { it.isNotBlank() }
-
-    val currentResolutionHeight: String?
-        get() = resolution.substringAfterLast("x", "").trim().takeIf { it.isNotBlank() }
-
-    companion object {
-        fun loading(sessionData: SessionData): DeviceDashboardSnapshot =
-            DeviceDashboardSnapshot(
-                isLoading = true,
-                model = sessionData.name.ifBlank { "设备" },
-                manufacturer = "",
-                socModel = "",
-                androidVersion = "Android",
-                uptime = "",
-                basebandVersion = "",
-                productCodeName = "",
-                securityPatch = "",
-                serialNumber = sessionData.getUsbSerialNumber().orEmpty(),
-                connectionTypeLabel = if (sessionData.isUsbConnection()) "USB / OTG" else "WiFi / TCP",
-                resolution = "",
-                dpi = "",
-                ppi = "",
-                screenSize = "",
-                refreshRate = "",
-                storageSummary = "",
-                memoryTotal = "",
-                memoryAvailable = "",
-                batteryLevel = "",
-                batteryStatus = "",
-                batteryHealth = "",
-                voltage = "",
-                currentNow = "",
-                temperature = "",
-                cpuSummary = "",
-                abi = "",
-                board = "",
-                fingerprint = "",
-                mobileNetworkType = "",
-                carrierNames = "",
-                mobileBand = "",
-                mobilePci = "",
-                mobileEarfcn = "",
-                rsrp = "",
-                rsrq = "",
-                sinr = "",
-                wifiSsid = "",
-                wifiBssid = "",
-                wifiIpAddress = "",
-                wifiFrequency = "",
-                wifiLinkSpeed = "",
-                supportedRefreshRates = "",
-                batteryCycleCount = "",
-                wirelessDebugPort = null,
-            )
-    }
-}
 
 private data class SignalMetrics(
     val rsrp: String,
@@ -161,11 +40,11 @@ private data class WifiMetrics(
 )
 
 internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): DeviceDashboardSnapshot {
-    val connection = AdbBridge.getConnection()
+    val connection = SessionManagementAdbConnection.current()
     if (connection == null) {
         return DeviceDashboardSnapshot.loading(sessionData).copy(
             isLoading = false,
-            errorMessage = "当前没有可用的 ADB 连接，无法读取首页参数。",
+            errorMessage = ManagementTexts.DeviceInfo.NO_CONNECTION_FOR_OVERVIEW.get(),
         )
     }
 
@@ -192,7 +71,14 @@ internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): Devi
             val displayMetricsDeferred =
                 async { shell("dumpsys display | grep -E 'xDpi=|yDpi=|density .* dpi' | head -n 4") }
             val displayRefreshDeferred = async { shell("dumpsys display | grep -m 1 'DisplayDeviceInfo{'") }
-            val wifiIpDeferred = async { shell("ip addr show wlan0 | grep -m 1 'inet '") }
+            val networkInterfacesDeferred =
+                async {
+                    shell("ip -o -4 addr show 2>/dev/null; ifconfig 2>/dev/null")
+                }
+            val defaultRouteDeferred =
+                async {
+                    shell("ip -4 route show default 2>/dev/null; cat /proc/net/route 2>/dev/null")
+                }
             val mobileNetworkTypeDeferred = async { shell("getprop gsm.network.type") }
             val carrierNamesDeferred = async { shell("getprop gsm.operator.alpha") }
             val signalStrengthDeferred = async { shell("dumpsys telephony.registry | grep -m 1 'mSignalStrength='") }
@@ -273,7 +159,7 @@ internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): Devi
 
             DeviceDashboardSnapshot(
                 isLoading = false,
-                model = modelDeferred.await().ifBlank { sessionData.name.ifBlank { "未知设备" } },
+                model = modelDeferred.await().ifBlank { sessionData.name.ifBlank { ManagementTexts.General.UNKNOWN_DEVICE.get() } },
                 manufacturer = manufacturerDeferred.await(),
                 socModel = formatSocModel(socModelDeferred.await(), boardDeferred.await()),
                 androidVersion = androidVersionDeferred.await().ifBlank { "Android" },
@@ -318,7 +204,8 @@ internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): Devi
                 sinr = signalMetrics.sinr,
                 wifiSsid = wifiMetrics.ssid,
                 wifiBssid = wifiMetrics.bssid,
-                wifiIpAddress = formatWifiIpAddress(wifiIpDeferred.await()),
+                ipv4Interfaces = parseIpv4Interfaces(networkInterfacesDeferred.await()),
+                defaultGateway = parseDefaultGateway(defaultRouteDeferred.await()),
                 wifiFrequency = wifiMetrics.frequency,
                 wifiLinkSpeed = wifiMetrics.linkSpeed,
                 supportedRefreshRates = formatSupportedRefreshRates(displayRefreshDeferred.await()),
@@ -329,7 +216,7 @@ internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): Devi
     }.getOrElse { error ->
         DeviceDashboardSnapshot.loading(sessionData).copy(
             isLoading = false,
-            errorMessage = error.message ?: "读取设备首页参数失败。",
+            errorMessage = error.message ?: ManagementTexts.DeviceInfo.OVERVIEW_LOAD_FAILED.get(),
         )
     }
 }
@@ -405,7 +292,7 @@ private fun formatScreenSize(
     val widthInches = width / xDpi
     val heightInches = height / yDpi
     val diagonalInches = kotlin.math.sqrt((widthInches * widthInches) + (heightInches * heightInches))
-    return String.format(Locale.US, "%.2f 英寸", diagonalInches)
+    return ManagementTexts.DeviceInfo.SCREEN_INCHES.format(diagonalInches)
 }
 
 private fun formatNetworkPropertyList(raw: String): String =
@@ -687,12 +574,78 @@ private fun formatBasebandVersion(raw: String): String =
         .distinct()
         .joinToString(" / ")
 
-private fun formatWifiIpAddress(raw: String): String =
-    Regex("""inet\s+([0-9.]+)\/""", RegexOption.IGNORE_CASE)
-        .find(raw)
-        ?.groupValues
-        ?.getOrNull(1)
-        .orEmpty()
+internal fun parseIpv4Interfaces(raw: String): List<DeviceIpv4Interface> {
+    val addresses = linkedSetOf<DeviceIpv4Interface>()
+    val ipLinePattern =
+        Regex("""^\d+:\s+([^:@\s]+)(?:@[^:\s]+)?\s+.*\binet\s+([0-9.]+)(?:\/\d+)?\b""")
+    val ifconfigIpv4Pattern =
+        Regex("""\binet(?:\s+addr:|\s+)([0-9.]+)\b""", RegexOption.IGNORE_CASE)
+    var ifconfigInterface = ""
+
+    raw.lineSequence().forEach { sourceLine ->
+        val line = sourceLine.trimEnd()
+        ipLinePattern.find(line.trim())?.let { match ->
+            addresses += DeviceIpv4Interface(match.groupValues[1], match.groupValues[2])
+            return@forEach
+        }
+
+        if (line.isNotBlank() && !sourceLine.first().isWhitespace()) {
+            ifconfigInterface = line.substringBefore(':').substringBefore(' ').trim()
+        }
+        val address = ifconfigIpv4Pattern.find(line)?.groupValues?.getOrNull(1)
+        if (ifconfigInterface.isNotBlank() && address != null) {
+            addresses += DeviceIpv4Interface(ifconfigInterface, address)
+        }
+    }
+
+    return addresses
+        .asSequence()
+        .filterNot { it.name == "lo" || it.address.startsWith("127.") }
+        .sortedWith(
+            compareBy<DeviceIpv4Interface> { networkInterfaceOrder(it.name) }
+                .thenBy(DeviceIpv4Interface::name)
+                .thenBy(DeviceIpv4Interface::address),
+        ).toList()
+}
+
+internal fun parseDefaultGateway(raw: String): String {
+    val route = raw.lineSequence().firstOrNull { it.trimStart().startsWith("default") }.orEmpty()
+    val gateway = Regex("""\bvia\s+(\S+)""").find(route)?.groupValues?.getOrNull(1).orEmpty()
+    val interfaceName = Regex("""\bdev\s+(\S+)""").find(route)?.groupValues?.getOrNull(1).orEmpty()
+    val ipRouteValue =
+        when {
+        gateway.isNotBlank() && interfaceName.isNotBlank() -> "$gateway ($interfaceName)"
+        gateway.isNotBlank() -> gateway
+        interfaceName.isNotBlank() -> interfaceName
+        else -> ""
+    }
+    if (ipRouteValue.isNotBlank()) return ipRouteValue
+
+    val procRoute =
+        raw.lineSequence()
+            .map { it.trim().split(Regex("""\s+""")) }
+            .firstOrNull { columns ->
+                columns.size >= 4 &&
+                    columns[1] == "00000000" &&
+                    (columns[3].toIntOrNull(16)?.and(0x2) ?: 0) != 0
+            } ?: return ""
+    val procGateway = decodeLittleEndianIpv4(procRoute[2])
+    return if (procGateway.isBlank()) procRoute[0] else "$procGateway (${procRoute[0]})"
+}
+
+private fun decodeLittleEndianIpv4(hex: String): String {
+    if (hex.length != 8) return ""
+    val bytes = hex.chunked(2).map { it.toIntOrNull(16) ?: return "" }
+    return bytes.asReversed().joinToString(".")
+}
+
+private fun networkInterfaceOrder(name: String): Int =
+    when {
+        name.matches(Regex("""(?:wlan|wifi)\d+""", RegexOption.IGNORE_CASE)) -> 0
+        name.matches(Regex("""(?:ap|softap|swlan)\d*""", RegexOption.IGNORE_CASE)) -> 1
+        name.matches(Regex("""(?:rndis|usb)\d*""", RegexOption.IGNORE_CASE)) -> 2
+        else -> 3
+    }
 
 private fun formatBatteryCycleCount(raw: String): String = raw.trim().takeIf { it.isNotBlank() && it != "0" } ?: ""
 
@@ -770,9 +723,9 @@ private fun formatUptime(raw: String): String {
     val minutes = (seconds % 3_600) / 60
 
     return when {
-        days > 0 -> "${days}天 ${hours}小时"
-        hours > 0 -> "${hours}小时 ${minutes}分钟"
-        else -> "${minutes}分钟"
+        days > 0 -> ManagementTexts.DeviceInfo.UPTIME_DAYS_HOURS.format(days, hours)
+        hours > 0 -> ManagementTexts.DeviceInfo.UPTIME_HOURS_MINUTES.format(hours, minutes)
+        else -> ManagementTexts.DeviceInfo.UPTIME_MINUTES.format(minutes)
     }
 }
 
@@ -815,20 +768,20 @@ private fun parseDisplayBytes(text: String): Long? {
 
 private fun mapBatteryStatus(raw: String?): String =
     when (raw) {
-        "2" -> "充电中"
-        "3" -> "放电中"
-        "4" -> "未充电"
-        "5" -> "已充满"
+        "2" -> ManagementTexts.DeviceInfo.BATTERY_CHARGING.get()
+        "3" -> ManagementTexts.DeviceInfo.BATTERY_DISCHARGING.get()
+        "4" -> ManagementTexts.DeviceInfo.BATTERY_NOT_CHARGING.get()
+        "5" -> ManagementTexts.DeviceInfo.BATTERY_FULL.get()
         else -> raw.orEmpty()
     }
 
 private fun mapBatteryHealth(raw: String?): String =
     when (raw) {
-        "2" -> "良好"
-        "3" -> "过热"
-        "4" -> "损坏"
-        "5" -> "过压"
-        "7" -> "过冷"
+        "2" -> ManagementTexts.DeviceInfo.BATTERY_GOOD.get()
+        "3" -> ManagementTexts.DeviceInfo.BATTERY_OVERHEAT.get()
+        "4" -> ManagementTexts.DeviceInfo.BATTERY_DEAD.get()
+        "5" -> ManagementTexts.DeviceInfo.BATTERY_OVER_VOLTAGE.get()
+        "7" -> ManagementTexts.DeviceInfo.BATTERY_COLD.get()
         else -> raw.orEmpty()
     }
 
@@ -918,8 +871,221 @@ private fun formatCpuSummary(
             ""
         }
     return when {
-        count != null && freqText.isNotBlank() -> "$count 核 / $freqText"
-        count != null -> "$count 核"
+        count != null && freqText.isNotBlank() -> ManagementTexts.DeviceInfo.CPU_CORES_WITH_FREQUENCY.format(count, freqText)
+        count != null -> ManagementTexts.DeviceInfo.CPU_CORES.format(count)
         else -> freqText
+    }
+}
+
+@Composable
+internal fun SessionManagementHomeSnapshot(snapshot: DeviceDashboardSnapshot) {
+    if (snapshot.errorMessage != null) {
+        SessionManagementNoteCard(
+            title = ManagementTexts.DeviceInfo.COULDN_T_LOAD_DEVICE_INFO.get(),
+            text = snapshot.errorMessage,
+        )
+        return
+    }
+
+    if (snapshot.isLoading) {
+        SessionManagementHomeLoadingSkeleton()
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SessionManagementInfoGroup(
+            title = ManagementTexts.DeviceInfo.SYSTEM_HARDWARE.get(),
+            items =
+                listOf(
+                    ManagementTexts.DeviceInfo.BRAND_MODEL.get() to snapshot.brandModelLabel,
+                    "SOC" to snapshot.socModel,
+                    ManagementTexts.DeviceInfo.ANDROID_VERSION.get() to snapshot.androidVersionLabel,
+                    ManagementTexts.DeviceInfo.UPTIME.get() to snapshot.uptime,
+                    ManagementTexts.DeviceInfo.BASEBAND.get() to snapshot.basebandVersion,
+                    ManagementTexts.DeviceInfo.PRODUCT_CODENAME.get() to snapshot.productCodeName,
+                    ManagementTexts.DeviceInfo.SECURITY_PATCH.get() to snapshot.securityPatch,
+                    ManagementTexts.DeviceInfo.SERIAL_NUMBER.get() to snapshot.serialNumber,
+                    ManagementTexts.DeviceInfo.CPU.get() to snapshot.cpuSummary,
+                    "ABI" to snapshot.abi,
+                    ManagementTexts.DeviceInfo.BOARD.get() to snapshot.board,
+                ),
+        )
+
+        SessionManagementInfoGroup(
+            title = ManagementTexts.DeviceInfo.DISPLAY_POWER.get(),
+            items =
+                listOf(
+                    ManagementTexts.DeviceInfo.DISPLAY.get() to formatDisplaySummary(snapshot.resolution, snapshot.refreshRate),
+                    ManagementTexts.DeviceInfo.SCREEN.get() to formatScreenMetricsSummary(snapshot.dpi, snapshot.ppi, snapshot.screenSize),
+                    ManagementTexts.DeviceInfo.REFRESH_RATES.get() to snapshot.supportedRefreshRates,
+                    ManagementTexts.DeviceInfo.BATTERY.get() to formatBatterySummary(snapshot.batteryHealth, snapshot.voltage, snapshot.currentNow),
+                    ManagementTexts.DeviceInfo.STATUS.get() to
+                        formatBatteryStatusSummary(snapshot.batteryStatus, snapshot.batteryLevel, snapshot.temperature),
+                    ManagementTexts.DeviceInfo.CYCLE_COUNT.get() to snapshot.batteryCycleCount,
+                ),
+        )
+
+        SessionManagementInfoGroup(
+            title = ManagementTexts.DeviceInfo.STORAGE_MEMORY.get(),
+            items =
+                listOf(
+                    ManagementTexts.DeviceInfo.STORAGE.get() to snapshot.storageSummary,
+                    ManagementTexts.DeviceInfo.MEMORY.get() to formatMemorySummary(snapshot.memoryAvailable, snapshot.memoryTotal),
+                ),
+        )
+
+        SessionManagementInfoGroup(
+            title = ManagementTexts.DeviceInfo.NETWORK.get(),
+            items =
+                listOf(
+                    ManagementTexts.DeviceInfo.CELLULAR.get() to formatMobileBandSummary(snapshot.mobileNetworkType, snapshot.mobileBand),
+                    ManagementTexts.DeviceInfo.CARRIER.get() to snapshot.carrierNames,
+                    "PCI" to snapshot.mobilePci,
+                    "EARFCN" to snapshot.mobileEarfcn,
+                    "RSRP" to snapshot.rsrp,
+                    "RSRQ" to snapshot.rsrq,
+                    "SINR" to snapshot.sinr,
+                    ManagementTexts.DeviceInfo.WI_FI_SSID.get() to snapshot.wifiSsid,
+                    ManagementTexts.DeviceInfo.WI_FI_INFO.get() to formatWifiSummary(snapshot.wifiFrequency, snapshot.wifiLinkSpeed),
+                    "BSSID" to snapshot.wifiBssid,
+                ) +
+                    snapshot.ipv4Interfaces.map { networkInterfaceLabel(it.name) to it.address } +
+                    listOf(ManagementTexts.DeviceInfo.DEFAULT_GATEWAY.get() to snapshot.defaultGateway),
+        )
+
+        if (snapshot.fingerprint.isNotBlank()) {
+            SessionManagementInfoGroup(
+                title = ManagementTexts.DeviceInfo.SYSTEM_IDENTITY.get(),
+                items = listOf("Fingerprint" to snapshot.fingerprint),
+            )
+        }
+    }
+}
+
+private fun networkInterfaceLabel(name: String): String =
+    when {
+        name.matches(Regex("""(?:wlan|wifi)\d+""", RegexOption.IGNORE_CASE)) ->
+            ManagementTexts.DeviceInfo.WI_FI_IP.get()
+        name.matches(Regex("""(?:ap|softap|swlan)\d*""", RegexOption.IGNORE_CASE)) ->
+            ManagementTexts.DeviceInfo.HOTSPOT_IP.get()
+        name.matches(Regex("""(?:rndis|usb)\d*""", RegexOption.IGNORE_CASE)) ->
+            ManagementTexts.DeviceInfo.USB_TETHERING_IP.get()
+        else -> ManagementTexts.DeviceInfo.INTERFACE_IP.get()
+    }
+
+@Composable
+private fun SessionManagementHomeLoadingSkeleton() {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SessionManagementInfoLoadingGroup(
+            title = ManagementTexts.DeviceInfo.SYSTEM_HARDWARE.get(),
+            labels =
+                listOf(
+                    ManagementTexts.DeviceInfo.BRAND_MODEL.get(),
+                    "SOC",
+                    ManagementTexts.DeviceInfo.ANDROID_VERSION.get(),
+                    ManagementTexts.DeviceInfo.UPTIME.get(),
+                    ManagementTexts.DeviceInfo.BASEBAND.get(),
+                    ManagementTexts.DeviceInfo.PRODUCT_CODENAME.get(),
+                    ManagementTexts.DeviceInfo.SECURITY_PATCH.get(),
+                    ManagementTexts.DeviceInfo.SERIAL_NUMBER.get(),
+                    ManagementTexts.DeviceInfo.CPU.get(),
+                    "ABI",
+                    ManagementTexts.DeviceInfo.BOARD.get(),
+                ),
+        )
+        SessionManagementInfoLoadingGroup(
+            title = ManagementTexts.DeviceInfo.DISPLAY_POWER.get(),
+            labels = listOf(
+                ManagementTexts.DeviceInfo.DISPLAY.get(),
+                ManagementTexts.DeviceInfo.SCREEN.get(),
+                ManagementTexts.DeviceInfo.REFRESH_RATES.get(),
+                ManagementTexts.DeviceInfo.BATTERY.get(),
+                ManagementTexts.DeviceInfo.STATUS.get(),
+                ManagementTexts.DeviceInfo.CYCLE_COUNT.get(),
+            ),
+        )
+        SessionManagementInfoLoadingGroup(
+            title = ManagementTexts.DeviceInfo.STORAGE_MEMORY.get(),
+            labels = listOf(ManagementTexts.DeviceInfo.STORAGE.get(), ManagementTexts.DeviceInfo.MEMORY.get()),
+        )
+        SessionManagementInfoLoadingGroup(
+            title = ManagementTexts.DeviceInfo.NETWORK.get(),
+            labels =
+                listOf(
+                    ManagementTexts.DeviceInfo.CELLULAR.get(),
+                    ManagementTexts.DeviceInfo.CARRIER.get(),
+                    "PCI",
+                    "EARFCN",
+                    "RSRP",
+                    "RSRQ",
+                    "SINR",
+                    ManagementTexts.DeviceInfo.WI_FI_SSID.get(),
+                    ManagementTexts.DeviceInfo.WIFI_INFO_SECTION.get(),
+                    "BSSID",
+                    ManagementTexts.DeviceInfo.NETWORK_INTERFACE_IP.get(),
+                    ManagementTexts.DeviceInfo.DEFAULT_GATEWAY.get(),
+                ),
+        )
+    }
+}
+
+@Composable
+private fun SessionManagementInfoLoadingGroup(
+    title: String,
+    labels: List<String>,
+) {
+    SectionCard(
+        title = title,
+        elevation = 1.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            labels.forEachIndexed { index, label ->
+                SessionManagementInfoPlaceholderRow(label = label)
+                if (index != labels.lastIndex) {
+                    AppDivider(modifier = Modifier.padding(start = 104.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionManagementInfoGroup(
+    title: String,
+    items: List<Pair<String, String>>,
+) {
+    val visibleItems = items.filter { it.second.isNotBlank() }
+    if (visibleItems.isEmpty()) {
+        return
+    }
+
+    SectionCard(
+        title = title,
+        elevation = 1.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            visibleItems.forEachIndexed { index, (label, value) ->
+                SessionManagementInfoRow(
+                    label = label,
+                    value = value,
+                    valueMaxLines = 1,
+                )
+                if (index != visibleItems.lastIndex) {
+                    AppDivider(modifier = Modifier.padding(start = 104.dp))
+                }
+            }
+        }
     }
 }

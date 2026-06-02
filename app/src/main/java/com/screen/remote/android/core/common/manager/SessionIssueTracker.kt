@@ -34,6 +34,18 @@ object SessionIssueTracker {
     }
 
     @Synchronized
+    fun updateDeviceId(deviceId: String) {
+        if (startedAtMs == 0L || this.deviceId == deviceId) {
+            return
+        }
+        LogManager.d(
+            LogTags.SCRCPY_CLIENT,
+            "DIAG session-device-update session=${sessionId ?: "-"} from=${this.deviceId ?: "-"} to=$deviceId",
+        )
+        this.deviceId = deviceId
+    }
+
+    @Synchronized
     fun clear(reason: String) {
         if (startedAtMs != 0L) {
             LogManager.d(

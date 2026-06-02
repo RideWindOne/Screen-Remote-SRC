@@ -5,16 +5,32 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,18 +40,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
+import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
-import com.screen.remote.android.feature.session.ui.component.LabeledClickableRow
-import com.screen.remote.android.feature.session.ui.component.LabeledInputRow
-import com.screen.remote.android.feature.settings.ui.SettingsCard
-import com.screen.remote.android.feature.settings.ui.SettingsDivider
 
 /**
  * 添加/编辑分组对话框
@@ -97,7 +117,7 @@ fun AddGroupDialog(
         },
         enableScroll = false,
     ) {
-        SettingsCard(title = SessionTexts.GROUP_OPTION.get()) {
+        AddGroupSettingsCard(title = SessionTexts.GROUP_OPTION.get()) {
             Column(
                 modifier =
                     Modifier
@@ -148,16 +168,16 @@ fun AddGroupDialog(
                     )
                 }
             }
-            SettingsDivider()
-            LabeledInputRow(
+            AddGroupSettingsDivider()
+            AddGroupInputRow(
                 label = SessionTexts.GROUP_NAME.get(),
                 value = name,
                 onValueChange = { name = it },
                 placeholder = SessionTexts.GROUP_PLACEHOLDER_NAME.get(),
                 isError = isDuplicate,
             )
-            SettingsDivider()
-            LabeledClickableRow(
+            AddGroupSettingsDivider()
+            AddGroupClickableRow(
                 label = SessionTexts.GROUP_PARENT_PATH.get(),
                 trailingText =
                     if (parentPath == "/") {
@@ -176,7 +196,7 @@ fun AddGroupDialog(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically(),
         ) {
-            SettingsCard(title = SessionTexts.GROUP_PATH_PREVIEW.get()) {
+            AddGroupSettingsCard(title = SessionTexts.GROUP_PATH_PREVIEW.get()) {
                 Row(
                     modifier =
                         Modifier
@@ -206,5 +226,170 @@ fun AddGroupDialog(
             },
             onDismiss = { showPathSelector = false },
         )
+    }
+}
+
+@Composable
+private fun AddGroupSettingsCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SectionTitle(title)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth(), content = content)
+        }
+    }
+}
+
+@Composable
+private fun AddGroupSettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = IosDesignTokens.dividerAlpha),
+    )
+}
+
+@Composable
+private fun AddGroupInputRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    isError: Boolean,
+) {
+    AddGroupLabeledRow(label = label) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            textStyle =
+                TextStyle(
+                    fontSize = 15.sp,
+                    lineHeight = 15.sp,
+                    color = if (isError) Color(0xFFFF3B30) else MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                ),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = IosDesignTokens.fieldContentStartPadding, end = IosDesignTokens.fieldContentEndPadding),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            modifier = Modifier.fillMaxWidth(),
+                            style =
+                                TextStyle(
+                                    fontSize = 15.sp,
+                                    lineHeight = 15.sp,
+                                    color =
+                                        if (isError) {
+                                            Color(0xFFFF3B30).copy(alpha = 0.6f)
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        },
+                                    textAlign = TextAlign.End,
+                                ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddGroupClickableRow(
+    label: String,
+    trailingText: String,
+    onClick: () -> Unit,
+    leadingIcon: ImageVector? = null,
+    leadingIconTint: Color? = null,
+) {
+    AddGroupLabeledRow(label = label) {
+        Row(
+            modifier =
+                Modifier
+                    .width(IosDesignTokens.dialogTrailingActionWidth)
+                    .fillMaxHeight()
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = IosDesignTokens.dialogHeaderHorizontalPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
+            if (leadingIcon != null) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = leadingIconTint ?: MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(IosDesignTokens.externalIconSize),
+                )
+                Spacer(modifier = Modifier.width(IosDesignTokens.compactInlineSpacing))
+            }
+            Text(
+                text = trailingText,
+                modifier = Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFFE5E5EA),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddGroupLabeledRow(
+    label: String,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(AppDimens.listItemHeight)
+                .padding(horizontal = IosDesignTokens.compactHorizontalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.widthIn(max = IosDesignTokens.dialogLabelMaxWidth),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = IosDesignTokens.compactSpacing),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            content()
+        }
     }
 }

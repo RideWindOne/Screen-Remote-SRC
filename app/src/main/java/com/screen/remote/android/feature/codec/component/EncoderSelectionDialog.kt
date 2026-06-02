@@ -14,7 +14,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.common.util.formatHostPort
+import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.CodecMediaType
+import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.SectionTitle
 import com.screen.remote.android.core.i18n.SessionTexts
@@ -27,11 +31,10 @@ import com.screen.remote.android.feature.codec.component.encoder.getAudioEncoder
 import com.screen.remote.android.feature.codec.component.encoder.getVideoEncoderDialogConfig
 import com.screen.remote.android.feature.codec.component.encoder.matchesAudioCodecFilter
 import com.screen.remote.android.feature.codec.component.encoder.matchesVideoCodecFilter
-import com.screen.remote.android.feature.codec.ui.inferAudioTypesFromName
-import com.screen.remote.android.feature.codec.ui.inferVideoTypesFromName
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
-import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
+import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
 import com.screen.remote.android.service.ScrcpyForegroundService
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -49,10 +52,9 @@ import kotlinx.coroutines.launch
  * 通用编码器选择对话框
  *
  * @param encoderType 编码器类型（视频或音频）
- * @param sessionId 会话 ID（可选，用于保存检测结果）
- * @param host 设备主机地址
- * @param port 设备端口
+ * @param connectionCandidates 当前编辑表单中的完整 ADB 连接候选列表
  * @param currentEncoder 当前选中的编码器名称
+ * @param currentCodec 当前编码器对应的 scrcpy 格式
  * @param cachedEncoders 缓存的编码器列表
  * @param onDismiss 关闭对话框回调
  * @param onEncoderSelected 选择编码器回调
@@ -61,18 +63,18 @@ import kotlinx.coroutines.launch
 @Composable
 fun EncoderSelectionDialog(
     encoderType: EncoderType,
-    sessionId: String? = null,
-    host: String,
-    port: String,
+    connectionCandidates: List<ConnectionCandidate>,
     currentEncoder: String = "",
-    cachedEncoders: List<String> = emptyList(),
+    currentCodec: String = "",
+    cachedEncoders: List<EncoderCapability> = emptyList(),
     onDismiss: () -> Unit,
-    onEncoderSelected: (String) -> Unit = {},
-    onEncodersDetected: (List<String>) -> Unit = {},
+    onEncoderSelected: (String, String?) -> Unit = { _, _ -> },
+    onEncodersDetected: (List<EncoderCapability>) -> Unit = {},
 ) {
     var selectedEncoder by remember { mutableStateOf(currentEncoder) }
+    var selectedCodec by remember { mutableStateOf(currentCodec) }
     var customEncoderName by remember { mutableStateOf(currentEncoder) }
-    var detectedEncoders by remember { mutableStateOf<List<EncoderInfo>>(emptyList()) }
+    var detectedEncoders by remember { mutableStateOf<List<EncoderCapability>>(emptyList()) }
     var isDetecting by remember { mutableStateOf(false) }
     var detectError by remember { mutableStateOf<String?>(null) }
     var usedCache by remember { mutableStateOf(false) }
@@ -80,6 +82,12 @@ fun EncoderSelectionDialog(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val adbConnectionManager = remember { AdbConnectionManager.getInstance(context) }
+    val detectionEndpoint =
+        remember(connectionCandidates) {
+            connectionCandidates
+                .sortedBy(ConnectionCandidate::priority)
+                .joinToString(" / ") { it.toAddressEndpoint() }
+        }
 
     // 根据编码器类型获取配置
     val config =
@@ -92,7 +100,7 @@ fun EncoderSelectionDialog(
 
     // 检测编码器的函数
     fun detectEncoders(forceRefresh: Boolean = false) {
-        if (host.isBlank()) {
+        if (connectionCandidates.isEmpty()) {
             detectError = SessionTexts.ENCODER_ERROR_INPUT_HOST.get()
             return
         }
@@ -105,50 +113,48 @@ fun EncoderSelectionDialog(
             try {
                 // 优先使用缓存（除非强制刷新）
                 if (!forceRefresh && cachedEncoders.isNotEmpty()) {
-                    detectedEncoders =
-                        cachedEncoders.map { name ->
-                            when (encoderType) {
-                                EncoderType.VIDEO -> EncoderInfo.Video(name = name, mimeType = inferVideoTypesFromName(name))
-                                EncoderType.AUDIO -> EncoderInfo.Audio(name = name, mimeType = inferAudioTypesFromName(name))
-                            }
-                        }
+                    val mediaType = if (encoderType == EncoderType.VIDEO) CodecMediaType.VIDEO else CodecMediaType.AUDIO
+                    detectedEncoders = cachedEncoders.filter { it.mediaType == mediaType }
                     usedCache = true
                     isDetecting = false
                     return@launch
                 }
 
-                val adbPort = port.toIntOrNull() ?: 5555
-                val deviceId = formatHostPort(host, adbPort)
-                val hadExistingConnection = adbConnectionManager.isDeviceConnected(deviceId)
-                val connectResult = adbConnectionManager.connectDevice(host, adbPort)
+                val existingDeviceIds =
+                    connectionCandidates
+                        .map(ConnectionCandidate::deviceIdentifier)
+                        .filter(adbConnectionManager::isDeviceConnected)
+                        .toSet()
+                val connection =
+                    coroutineScope {
+                        raceAdbConnections(
+                            candidates = connectionCandidates,
+                            connectionManager = adbConnectionManager,
+                            attemptScope = this,
+                            cleanupScope = this,
+                            logTag =
+                                if (encoderType == EncoderType.VIDEO) {
+                                    LogTags.VIDEO_CODEC_SELECTOR
+                                } else {
+                                    LogTags.AUDIO_CODEC_SELECTOR
+                                },
+                            logLabel = "Codec detection ADB",
+                        ) { candidate ->
+                            adbConnectionManager.connectCandidate(candidate).getOrThrow()
+                        }.result.getOrThrow()
+                    }
 
-                if (connectResult.isFailure) {
-                    detectError = "${connectResult.exceptionOrNull()?.message}"
-                    isDetecting = false
-                    return@launch
-                }
-
-                val connection = adbConnectionManager.getConnection(deviceId)
-                if (connection == null) {
-                    detectError = SessionTexts.ERROR_CANNOT_GET_CONNECTION.get()
-                    isDetecting = false
-                    return@launch
-                }
-
-                if (!hadExistingConnection) {
+                if (connection.deviceId !in existingDeviceIds) {
                     ScrcpyForegroundService.protectDevice(
                         context = context,
-                        deviceId = deviceId,
+                        deviceId = connection.deviceId,
                         deviceName = connection.deviceInfo.name,
-                        delayedAck = connection.supportsDelayedAck(),
-                        host = host,
-                        port = adbPort,
-                        isUsbConnection = false,
                     )
                 }
 
                 // 检测编码器
-                val result = connection.detectEncoders(context)
+                // UI owns the result. Never persist through a SessionContext left bound by another session.
+                val result = connection.detectEncoders(context, persistToBoundSession = false)
                 if (result.isSuccess) {
                     val detectionResult = result.getOrNull()
                     if (detectionResult != null) {
@@ -163,7 +169,7 @@ fun EncoderSelectionDialog(
                             detectError = config.noEncodersStatus
                         } else {
                             // 更新缓存
-                            onEncodersDetected(detectedEncoders.map { it.name })
+                            onEncodersDetected(detectedEncoders)
                         }
                     } else {
                         detectError = SessionTexts.ERROR_DETECTION_FAILED.get()
@@ -188,7 +194,8 @@ fun EncoderSelectionDialog(
                 customEncoderName.isNotEmpty() -> customEncoderName
                 else -> ""
             }
-        onEncoderSelected(encoder)
+        val codec = selectedCodec.takeIf { selectedEncoder.isNotEmpty() }
+        onEncoderSelected(encoder, codec)
         onDismiss()
     }
 
@@ -226,11 +233,13 @@ fun EncoderSelectionDialog(
                     customEncoderName = customEncoderName,
                     onDefaultEncoderSelected = {
                         selectedEncoder = ""
+                        selectedCodec = ""
                         customEncoderName = ""
                     },
                     onCustomEncoderNameChange = {
                         customEncoderName = it
                         selectedEncoder = ""
+                        selectedCodec = ""
                     },
                     showCodecTest = config.showCodecTest,
                     onCodecTestClick = { },
@@ -250,8 +259,7 @@ fun EncoderSelectionDialog(
             isDetecting -> {
                 DetectingCard(
                     status = config.detectingStatus,
-                    host = host,
-                    port = port,
+                    endpoint = detectionEndpoint,
                 )
             }
 
@@ -272,8 +280,10 @@ fun EncoderSelectionDialog(
                     onCodecTypeFilterChange = { codecTypeFilter = it },
                     filterOptions = config.filterOptions,
                     selectedEncoder = selectedEncoder,
+                    selectedEncoderCodec = selectedCodec,
                     onEncoderSelected = { encoder ->
                         selectedEncoder = encoder.name
+                        selectedCodec = encoder.codec
                         customEncoderName = encoder.name
                     },
                     encoderType = encoderType,

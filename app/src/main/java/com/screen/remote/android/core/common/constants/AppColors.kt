@@ -30,6 +30,43 @@ object AppColors {
     /** 错误颜色 */
     val error = Color(0xFFFF3B30)
 
+    /** 成功/启用状态 */
+    val success = Color(0xFF34C759)
+
+    /** 警告/提醒状态 */
+    val warning = Color(0xFFFF9F0A)
+
+    /** 危险操作强调色 */
+    val destructive = Color(0xFFFF5252)
+
+    /** 信息/浅蓝强调色 */
+    val info = Color(0xFF5AC8FA)
+
+    /** 中性色强调 */
+    val neutralAccent = Color(0xFF8E8E93)
+
+    /** 管理页固定无线端口强调色 */
+    val managementPortAccent = Color(0xFF2A9D8F)
+
+    /** 管理页分辨率强调色 */
+    val managementResolutionAccent = Color(0xFF30B0C7)
+
+    /** 管理页动画倍率强调色 */
+    val managementAnimationAccent = Color(0xFFFF9500)
+
+    /** 命令预设强调色 */
+    val commandDeviceAccent = Color(0xFF53A7FF)
+    val commandDisplayAccent = Color(0xFFFFA94D)
+    val commandWindowAccent = Color(0xFF7B61FF)
+    val commandAppAccent = Color(0xFF4CB782)
+    val commandNetworkAccent = Color(0xFF12B7A2)
+    val commandLogAccent = Color(0xFF5F6B7A)
+    val commandMemoryAccent = Color(0xFFFF6B9D)
+    val commandCpuAccent = Color(0xFFFF9800)
+    val commandStorageAccent = Color(0xFF9C27B0)
+    val commandProcessAccent = Color(0xFF00BCD4)
+    val commandSystemAccent = Color(0xFF607D8B)
+
     /** 箭头颜色 */
     val arrow = Color(0xFFE5E5EA)
 

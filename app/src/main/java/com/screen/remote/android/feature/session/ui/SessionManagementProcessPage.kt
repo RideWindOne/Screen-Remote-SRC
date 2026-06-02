@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -26,15 +29,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,17 +46,19 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.designsystem.component.AppDivider
-import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 private val ProcessChildListPaddingTop = 2.dp
 private val ProcessChildRowHorizontalPadding = 12.dp
@@ -67,40 +73,119 @@ private val ProcessMemoryLabelWidth = 62.dp
 private val ProcessActionSlotWidth = 76.dp
 private const val ProcessPanelWidthFraction = 0.985f
 
+private data class ProcessMemorySnapshot(
+    val totalBytes: Long?,
+    val availableBytes: Long?,
+)
+
+private fun projectVisibleProcesses(
+    entries: List<ProcessEntry>,
+    normalizedSearchQuery: String,
+): List<ProcessEntry> {
+    if (normalizedSearchQuery.isBlank()) {
+        return entries
+    }
+
+    return entries.filter { entry ->
+        val displayTitle = SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle)
+        matchesProcessSearch(
+            displayTitle = displayTitle,
+            packageName = entry.packageName,
+            childNames = entry.children.map(ProcessChildEntry::name),
+            query = normalizedSearchQuery,
+        )
+    }
+}
+
+internal fun matchesProcessSearch(
+    displayTitle: String,
+    packageName: String,
+    childNames: List<String>,
+    query: String,
+): Boolean {
+    val locale = Locale.getDefault()
+    val normalizedQuery = query.trim().lowercase(locale)
+    if (normalizedQuery.isBlank()) return true
+    return displayTitle.lowercase(locale).contains(normalizedQuery) ||
+        packageName.lowercase(locale).contains(normalizedQuery) ||
+        childNames.any { name -> name.lowercase(locale).contains(normalizedQuery) }
+}
+
 @Composable
 internal fun SessionManagementProcessPage(
     modifier: Modifier = Modifier,
     snapshot: DeviceDashboardSnapshot,
     refreshToken: Int,
+    cacheScopeKey: String,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val helperJar = remember(context) { ensureLocalAppIconHelperJar(context) }
+    var helperJar by remember(context) { mutableStateOf<java.io.File?>(null) }
     val expandedPackages = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     val appPresentationVersions = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
+    var appPresentationGeneration by remember { mutableIntStateOf(0) }
     var actionProgress by remember { mutableStateOf<String?>(null) }
     var actionResult by remember { mutableStateOf<String?>(null) }
     var helperReady by remember { mutableStateOf(false) }
+    var cacheReady by remember(cacheScopeKey) { mutableStateOf(false) }
     var searchQuery by remember(refreshToken) { mutableStateOf("") }
+    var submittedSearchQuery by remember(refreshToken) { mutableStateOf("") }
+    var processSnapshot by remember { mutableStateOf(ProcessListSnapshot.loading()) }
+    var processMemorySnapshot by remember {
+        mutableStateOf(
+            ProcessMemorySnapshot(
+                totalBytes = parseDisplayBytes(snapshot.memoryTotal),
+                availableBytes = parseDisplayBytes(snapshot.memoryAvailable),
+            ),
+        )
+    }
+    var processRefreshing by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
-        SessionManagementAppCache.prepareForProcess(context)
+    LaunchedEffect(context, cacheScopeKey) {
+        SessionManagementAppCache.prepareForSession(context, cacheScopeKey)
+        cacheReady = true
+        helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
     }
 
-    LaunchedEffect(Unit) {
-        val connection = AdbBridge.getConnection()
-        helperReady = connection?.prepareAppIconHelper(helperJar)?.isSuccess == true
+    LaunchedEffect(helperJar) {
+        val readyHelperJar = helperJar ?: return@LaunchedEffect
+        val connection = SessionManagementAdbConnection.current()
+        helperReady = connection?.prepareAppIconHelper(readyHelperJar)?.isSuccess == true
     }
 
-    val processSnapshot by produceState(
-        initialValue = ProcessListSnapshot.loading(),
-        key1 = refreshToken,
-    ) {
-        value = loadProcessListSnapshot()
+    LaunchedEffect(cacheReady, refreshToken) {
+        if (!cacheReady) return@LaunchedEffect
+        val canKeepCurrentContent = processSnapshot.entries.isNotEmpty() && processSnapshot.errorMessage == null
+        processRefreshing = true
+        val (nextSnapshot, nextMemorySnapshot) =
+            coroutineScope {
+                val processDeferred = async { loadProcessListSnapshot() }
+                val memoryDeferred = async { loadProcessMemorySnapshot() }
+                processDeferred.await() to memoryDeferred.await()
+            }
+        processRefreshing = false
+        nextMemorySnapshot?.let { processMemorySnapshot = it }
+        if (nextSnapshot.errorMessage != null && canKeepCurrentContent) {
+            actionResult = nextSnapshot.errorMessage
+        } else {
+            processSnapshot = nextSnapshot
+        }
     }
 
-    val totalMemoryBytes = parseDisplayBytes(snapshot.memoryTotal)
-    val availableMemoryBytes = parseDisplayBytes(snapshot.memoryAvailable)
+    LaunchedEffect(snapshot.memoryTotal, snapshot.memoryAvailable) {
+        val totalBytes = parseDisplayBytes(snapshot.memoryTotal)
+        val availableBytes = parseDisplayBytes(snapshot.memoryAvailable)
+        if (totalBytes != null || availableBytes != null) {
+            processMemorySnapshot =
+                ProcessMemorySnapshot(
+                    totalBytes = totalBytes,
+                    availableBytes = availableBytes,
+                )
+        }
+    }
+
+    val totalMemoryBytes = processMemorySnapshot.totalBytes
+    val availableMemoryBytes = processMemorySnapshot.availableBytes
     val usedMemoryBytes =
         if (totalMemoryBytes != null && availableMemoryBytes != null) {
             (totalMemoryBytes - availableMemoryBytes).coerceAtLeast(0L)
@@ -114,120 +199,202 @@ internal fun SessionManagementProcessPage(
             0f
         }
     val processEntries = processSnapshot.entries
-    val filteredEntries =
-        if (searchQuery.isBlank()) {
-            processEntries
-        } else {
-            val keyword = searchQuery.trim().lowercase(Locale.getDefault())
-            processEntries.filter { entry ->
-                entry.appTitle.lowercase(Locale.getDefault()).contains(keyword) ||
-                    entry.packageName.lowercase(Locale.getDefault()).contains(keyword) ||
-                    entry.children.any { it.name.lowercase(Locale.getDefault()).contains(keyword) }
-            }
+    val processPackageNames by remember {
+        derivedStateOf { processSnapshot.entries.map { it.packageName } }
+    }
+    val processInventoryEntries by remember {
+        derivedStateOf { processSnapshot.entries.map { it.toAppInventoryEntry() } }
+    }
+    val normalizedSearchQuery by remember {
+        derivedStateOf { submittedSearchQuery.trim().lowercase(Locale.getDefault()) }
+    }
+    val visibleEntries =
+        remember(processEntries, normalizedSearchQuery, appPresentationGeneration) {
+            projectVisibleProcesses(
+                entries = processEntries,
+                normalizedSearchQuery = normalizedSearchQuery,
+            )
         }
-    val topMemoryEntry = processEntries.maxByOrNull { it.totalMemoryBytes }
-    val appProcessCount = processEntries.sumOf { 1 + it.children.size }
+    val appProcessCount by remember {
+        derivedStateOf { processSnapshot.entries.sumOf { 1 + it.children.size } }
+    }
 
-    LaunchedEffect(helperReady, processEntries.map { it.packageName }) {
-        if (!helperReady || processEntries.isEmpty()) {
+    LaunchedEffect(helperReady, processPackageNames) {
+        if (processEntries.isEmpty()) {
             return@LaunchedEffect
         }
         runCatching {
+            val warmedPackages = warmCachedAppPresentations(
+                context = context,
+                entries = processInventoryEntries,
+                packageNameOnlyMode = false,
+            )
+            if (warmedPackages.isNotEmpty()) {
+                Snapshot.withMutableSnapshot {
+                    warmedPackages.forEach { packageName ->
+                        appPresentationVersions[packageName] = (appPresentationVersions[packageName] ?: 0) + 1
+                    }
+                    appPresentationGeneration += 1
+                }
+            }
+            val readyHelperJar = helperJar
+            if (!helperReady || readyHelperJar == null) {
+                return@runCatching
+            }
             prefetchAppIconsWithHelper(
                 context = context,
-                entries = processEntries.map { it.toAppInventoryEntry() },
-                helperJar = helperJar,
+                entries = processInventoryEntries,
+                helperJar = readyHelperJar,
             ) { updatedPackages ->
-                updatedPackages.forEach { packageName ->
-                    appPresentationVersions[packageName] = (appPresentationVersions[packageName] ?: 0) + 1
+                if (updatedPackages.isNotEmpty()) {
+                    Snapshot.withMutableSnapshot {
+                        updatedPackages.forEach { packageName ->
+                            appPresentationVersions[packageName] = (appPresentationVersions[packageName] ?: 0) + 1
+                        }
+                        appPresentationGeneration += 1
+                    }
                 }
             }
         }
     }
 
     fun stopProcess(entry: ProcessEntry) {
-        actionProgress = ManagementTexts.text("正在结束 ${entry.appTitle}", "Stopping ${entry.appTitle}")
+        actionProgress = ManagementTexts.Processes.STOPPING.format(entry.appTitle)
         scope.launch {
             val result =
                 runCatching {
-                    val connection = AdbBridge.getConnection() ?: error(ManagementTexts.text("当前没有可用的 ADB 连接。", "No ADB connection is available."))
+                    val connection = SessionManagementAdbConnection.current() ?: error(ManagementTexts.Processes.NO_ADB_CONNECTION_AVAILABLE.get())
                     connection
                         .executeShell("am force-stop ${entry.packageName}", retryOnFailure = false)
                         .getOrThrow()
-                    ManagementTexts.text("已尝试结束 ${entry.packageName} 的运行进程。", "Tried to stop processes for ${entry.packageName}.")
+                    ManagementTexts.Processes.TRIED_STOP_PROCESSES.format(entry.packageName)
                 }
             actionProgress = null
-            actionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.text("结束进程失败。", "Couldn't stop the process."))
+            actionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Processes.COULDN_T_STOP_PROCESS.get())
         }
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            SessionManagementProcessMemoryCard(
-                memoryTotal = snapshot.memoryTotal,
-                usedMemory = usedMemoryBytes?.let(::formatBytes) ?: "--",
-                availableMemory = snapshot.memoryAvailable.ifBlank { "--" },
-                appProcessCount = if (processEntries.isEmpty()) "--" else appProcessCount.toString(),
-                progress = progress,
-            )
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            item {
+                SessionManagementProcessMemoryCard(
+                    memoryTotal = totalMemoryBytes?.let(::formatBytes).orEmpty(),
+                    usedMemory = usedMemoryBytes?.let(::formatBytes) ?: "--",
+                    availableMemory = availableMemoryBytes?.let(::formatBytes) ?: "--",
+                    appProcessCount = if (processEntries.isEmpty()) "--" else appProcessCount.toString(),
+                    progress = progress,
+                )
+            }
+            item {
+                Box(modifier = Modifier.height(14.dp))
+            }
+
+            when {
+                processSnapshot.isLoading -> {
+                    item {
+                        SessionManagementProcessListHeader(
+                            entries = emptyList(),
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            onSearch = { submittedSearchQuery = it.trim() },
+                        )
+                    }
+                    item {
+                        Box(modifier = Modifier.height(14.dp))
+                    }
+                    repeat(6) { index ->
+                        item(key = "process-placeholder-$index") {
+                            SessionManagementVirtualizedPanelRow(
+                                index = index,
+                                totalCount = 6,
+                                widthFraction = ProcessPanelWidthFraction,
+                            ) {
+                                SessionManagementProcessPlaceholderRow()
+                            }
+                        }
+                    }
+                }
+
+                processSnapshot.errorMessage != null -> {
+                    item {
+                        SessionManagementNoteCard(
+                            title = ManagementTexts.Processes.COULDN_T_LOAD_PROCESSES.get(),
+                            text = processSnapshot.errorMessage ?: ManagementTexts.Processes.COULDN_T_LOAD_PROCESS_LIST.get(),
+                        )
+                    }
+                }
+
+                else -> {
+                    item {
+                        SessionManagementProcessListHeader(
+                            entries = visibleEntries,
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            onSearch = { submittedSearchQuery = it.trim() },
+                        )
+                    }
+                    item {
+                        Box(modifier = Modifier.height(14.dp))
+                    }
+                    if (visibleEntries.isEmpty()) {
+                        item {
+                            SessionManagementNoteCard(
+                                title = ManagementTexts.Processes.NO_RESULTS.get(),
+                                text =
+                                    if (processEntries.isEmpty()) {
+                                        ManagementTexts.Processes.THERE_NO_APP_PROCESSES_SHOW.get()
+                                    } else {
+                                        ManagementTexts.Processes.TRY_DIFFERENT_KEYWORD.get()
+                                    },
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = visibleEntries,
+                            key = { _, entry -> entry.packageName },
+                        ) { index, entry ->
+                            val expanded = expandedPackages[entry.packageName] == true
+                            SessionManagementVirtualizedPanelRow(
+                                index = index,
+                                totalCount = visibleEntries.size,
+                                widthFraction = ProcessPanelWidthFraction,
+                            ) {
+                                SessionManagementProcessRow(
+                                    entry = entry,
+                                    rank = index + 1,
+                                    expanded = expanded,
+                                    presentationVersion = appPresentationVersions[entry.packageName] ?: 0,
+                                    onToggleExpanded = {
+                                        expandedPackages[entry.packageName] = !expanded
+                                    },
+                                    onStop = { stopProcess(entry) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
-
-        when {
-            processSnapshot.isLoading -> {
-                item {
-                    SessionManagementNoteCard(
-                        title = ManagementTexts.text("正在读取进程列表", "Loading processes"),
-                        text = ManagementTexts.text("当前通过 ADB 加载正在运行的应用进程和内存占用。", "Loading running app processes and memory usage over ADB."),
-                    )
-                }
-            }
-
-            processSnapshot.errorMessage != null -> {
-                item {
-                    SessionManagementNoteCard(
-                        title = ManagementTexts.text("进程列表读取失败", "Couldn't load processes"),
-                        text = processSnapshot.errorMessage ?: ManagementTexts.text("进程列表读取失败。", "Couldn't load the process list."),
-                    )
-                }
-            }
-
-            else -> {
-                item {
-                    SessionManagementProcessList(
-                        entries = filteredEntries,
-                        allEntries = processEntries,
-                        expandedPackages = expandedPackages,
-                        appPresentationVersions = appPresentationVersions,
-                        searchQuery = searchQuery,
-                        onSearchQueryChange = { searchQuery = it },
-                        onStop = ::stopProcess,
-                    )
-                }
-            }
+        if (processRefreshing) {
+            SessionManagementLoadingBar(modifier = Modifier.align(Alignment.TopCenter))
         }
     }
 
     actionProgress?.let { message ->
         SessionManagementProgressDialog(
-            title = ManagementTexts.text("进程管理", "Processes"),
+            title = ManagementTexts.Processes.PROCESSES.get(),
             message = message,
         )
     }
 
     actionResult?.let { message ->
-        AlertDialog(
-            onDismissRequest = { actionResult = null },
-            title = { Text(ManagementTexts.text("进程管理", "Processes")) },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { actionResult = null }) {
-                    Text(ManagementTexts.text("确定", "OK"))
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
+        SessionManagementMessageDialog(
+            title = ManagementTexts.Processes.PROCESSES.get(),
+            message = message,
+            onDismiss = { actionResult = null },
         )
     }
 }
@@ -243,8 +410,9 @@ private fun SessionManagementProcessMemoryCard(
     Surface(
         modifier = Modifier.fillMaxWidth(ProcessPanelWidthFraction),
         shape = RoundedCornerShape(AppDimens.cardCornerRadius),
-        color = managementPanelColor(),
-        tonalElevation = 0.5.dp,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
     ) {
         Column(
             modifier =
@@ -259,7 +427,7 @@ private fun SessionManagementProcessMemoryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = ManagementTexts.text("设备内存", "Memory"),
+                    text = ManagementTexts.Processes.MEMORY.get(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -285,43 +453,95 @@ private fun SessionManagementProcessMemoryCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 SessionManagementProcessStatTile(
-                    label = ManagementTexts.text("已用", "Used"),
+                    label = ManagementTexts.Processes.USED.get(),
                     value = usedMemory,
-                    accent = Color(0xFFFF9F0A),
                     modifier = Modifier.weight(1f),
                 )
                 SessionManagementProcessStatTile(
-                    label = ManagementTexts.text("可用", "Free"),
+                    label = ManagementTexts.Processes.FREE.get(),
                     value = availableMemory,
-                    accent = Color(0xFF34C759),
                     modifier = Modifier.weight(1f),
                 )
                 SessionManagementProcessStatTile(
-                    label = ManagementTexts.text("应用进程", "App procs"),
+                    label = ManagementTexts.Processes.APP_PROCS.get(),
                     value = appProcessCount,
-                    accent = AppColors.iOSBlue,
                     modifier = Modifier.weight(1f),
                 )
             }
         }
+
     }
 }
 
 @Composable
-private fun SessionManagementProcessList(
+private fun SessionManagementProcessPlaceholderRow() {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ProcessRowHorizontalPadding, vertical = ProcessRowVerticalPadding),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.background),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.58f)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(MaterialTheme.colorScheme.background),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.42f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(MaterialTheme.colorScheme.background),
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .width(ProcessMemoryLabelWidth)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.background),
+        )
+        Box(
+            modifier =
+                Modifier
+                    .size(width = ProcessActionSlotWidth, height = 36.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.background),
+        )
+    }
+}
+
+@Composable
+private fun SessionManagementProcessListHeader(
     entries: List<ProcessEntry>,
-    allEntries: List<ProcessEntry>,
-    expandedPackages: MutableMap<String, Boolean>,
-    appPresentationVersions: Map<String, Int>,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onStop: (ProcessEntry) -> Unit,
+    onSearch: (String) -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(ProcessPanelWidthFraction),
         shape = RoundedCornerShape(AppDimens.cardCornerRadius),
-        color = managementPanelColor(),
-        tonalElevation = 0.5.dp,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
     ) {
         Column(
             modifier =
@@ -336,13 +556,13 @@ private fun SessionManagementProcessList(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = ManagementTexts.text("运行中的应用", "Running apps"),
+                    text = ManagementTexts.Processes.RUNNING_APPS.get(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 SessionManagementUtilityBadge(
-                    text = ManagementTexts.countLabel(entries.size),
-                    accent = AppColors.iOSBlue,
+                    text = ManagementTexts.General.ITEM_COUNT.format(entries.size),
+                    accent = MaterialTheme.colorScheme.primary,
                     available = true,
                 )
             }
@@ -356,59 +576,28 @@ private fun SessionManagementProcessList(
                         .height(48.dp),
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null,
-                    )
-                },
                 trailingIcon = {
-                    if (searchQuery.isNotBlank()) {
-                        IconButton(onClick = { onSearchQueryChange("") }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = ManagementTexts.text("清空", "Clear"),
-                            )
-                        }
+                    IconButton(onClick = { onSearch(searchQuery) }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = ManagementTexts.Processes.SEARCH.get(),
+                        )
                     }
                 },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions =
+                    KeyboardActions(
+                        onSearch = { onSearch(searchQuery) },
+                    ),
                 placeholder = {
                     Text(
-                        text = ManagementTexts.text("搜索应用或包名", "Search apps or packages"),
+                        text = ManagementTexts.Processes.SEARCH_APPS_PACKAGES.get(),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
             )
-
-            if (entries.isEmpty()) {
-                SessionManagementNoteCard(
-                    title = ManagementTexts.text("没有匹配结果", "No results"),
-                    text =
-                        if (allEntries.isEmpty()) {
-                            ManagementTexts.text("当前没有可展示的应用进程。", "There are no app processes to show.")
-                        } else {
-                            ManagementTexts.text("试试别的关键词。", "Try a different keyword.")
-                        },
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                    entries.forEachIndexed { index, entry ->
-                        val expanded = expandedPackages[entry.packageName] == true
-                        SessionManagementProcessRow(
-                            entry = entry,
-                            rank = index + 1,
-                            expanded = expanded,
-                            presentationVersion = appPresentationVersions[entry.packageName] ?: 0,
-                            onToggleExpanded = {
-                                expandedPackages[entry.packageName] = !expanded
-                            },
-                            onStop = { onStop(entry) },
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -417,13 +606,12 @@ private fun SessionManagementProcessList(
 private fun SessionManagementProcessStatTile(
     label: String,
     value: String,
-    accent: Color,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = accent.copy(alpha = 0.1f),
+        color = MaterialTheme.colorScheme.background,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -432,7 +620,7 @@ private fun SessionManagementProcessStatTile(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = accent,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
             Text(
@@ -455,35 +643,22 @@ private fun SessionManagementProcessRow(
     onToggleExpanded: () -> Unit,
     onStop: () -> Unit,
 ) {
-    val context = LocalContext.current
     val hasChildren = entry.children.isNotEmpty()
     val isSystemApp = entry.packageName.startsWith("com.android") || entry.packageName.startsWith("android")
-    val presentation by produceState(
-        initialValue =
-            RemoteAppPresentation(
-                title = entry.appTitle,
-                icon = SessionManagementAppCache.cachedIcon(entry.packageName),
-            ),
-        entry.packageName,
-        entry.appTitle,
-        entry.totalMemoryBytes,
-        presentationVersion,
-    ) {
-        value =
-            loadCachedAppPresentation(
-                context = context,
-                entry = entry.toAppInventoryEntry(),
-                packageNameOnlyMode = false,
-            )
-    }
-    val displayTitle = presentation.title
-    val iconBitmap = presentation.icon
+    val displayTitle =
+        remember(entry.packageName, entry.appTitle, presentationVersion) {
+            SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle)
+        }
+    val iconBitmap =
+        remember(entry.packageName, presentationVersion) {
+            SessionManagementAppCache.cachedIcon(entry.packageName)
+        }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(0.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.5.dp,
+        tonalElevation = 0.dp,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -554,9 +729,9 @@ private fun SessionManagementProcessRow(
                                         },
                                     contentDescription =
                                         if (expanded) {
-                                            ManagementTexts.text("收起子进程", "Collapse child processes")
+                                            ManagementTexts.Processes.COLLAPSE_CHILD_PROCESSES.get()
                                         } else {
-                                            ManagementTexts.text("展开子进程", "Expand child processes")
+                                            ManagementTexts.Processes.EXPAND_CHILD_PROCESSES.get()
                                         },
                                 )
                             }
@@ -568,8 +743,8 @@ private fun SessionManagementProcessRow(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
-                                contentDescription = ManagementTexts.text("结束进程", "Stop process"),
-                                tint = AppColors.iOSBlue,
+                                contentDescription = ManagementTexts.Processes.STOP_PROCESS.get(),
+                                tint = MaterialTheme.colorScheme.error,
                             )
                         }
                     }
@@ -581,7 +756,7 @@ private fun SessionManagementProcessRow(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.035f))
+                            .background(MaterialTheme.colorScheme.background)
                             .padding(top = ProcessChildListPaddingTop, bottom = 2.dp),
                 ) {
                     entry.children.forEachIndexed { index, child ->
@@ -714,12 +889,52 @@ private data class ProcessListSnapshot(
     }
 }
 
+private suspend fun loadProcessMemorySnapshot(): ProcessMemorySnapshot? {
+    val connection = SessionManagementAdbConnection.current() ?: return null
+    val output =
+        connection
+            .executeShell(
+                "cat /proc/meminfo | grep -E '^MemTotal:|^MemAvailable:'",
+                retryOnFailure = false,
+            ).getOrNull()
+            .orEmpty()
+
+    return withContext(Dispatchers.Default) {
+        val values =
+            output
+                .lineSequence()
+                .mapNotNull { line ->
+                    val separator = line.indexOf(':')
+                    if (separator <= 0) return@mapNotNull null
+                    val key = line.substring(0, separator).trim()
+                    val kilobytes =
+                        line
+                            .substring(separator + 1)
+                            .trim()
+                            .substringBefore(' ')
+                            .toLongOrNull()
+                            ?: return@mapNotNull null
+                    key to kilobytes * 1024L
+                }.toMap()
+        val totalBytes = values["MemTotal"]
+        val availableBytes = values["MemAvailable"]
+        if (totalBytes == null && availableBytes == null) {
+            null
+        } else {
+            ProcessMemorySnapshot(
+                totalBytes = totalBytes,
+                availableBytes = availableBytes,
+            )
+        }
+    }
+}
+
 private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
     val connection =
-        AdbBridge.getConnection()
+        SessionManagementAdbConnection.current()
             ?: return ProcessListSnapshot.loading().copy(
                 isLoading = false,
-                errorMessage = ManagementTexts.text("当前没有可用的 ADB 连接，无法读取进程列表。", "No ADB connection is available, so the process list can't be loaded."),
+                errorMessage = ManagementTexts.Processes.NO_ADB_CONNECTION_AVAILABLE_SO_PROCESS_LIST_CAN.get(),
             )
 
     return runCatching {
@@ -731,47 +946,49 @@ private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
                 ).getOrThrow()
 
         val entries =
-            output
-                .lineSequence()
-                .mapNotNull(::parseProcessLine)
-                .filter { it.name.isAppProcessName() }
-                .groupBy { it.name.substringBefore(':') }
-                .map { (packageName, processes) ->
-                    val sortedProcesses = processes.sortedByDescending { it.memoryBytes }
-                    val children =
-                        sortedProcesses.map { process ->
-                            ProcessChildEntry(
-                                name = process.name,
-                                pid = process.pid,
-                                memoryBytes = process.memoryBytes,
-                                memory = formatProcessMemory(process.memoryBytes),
-                            )
-                        }
-                    val totalMemoryBytes = processes.sumOf { it.memoryBytes }
+            withContext(Dispatchers.Default) {
+                output
+                    .lineSequence()
+                    .mapNotNull(::parseProcessLine)
+                    .filter { it.name.isAppProcessName() }
+                    .groupBy { it.name.substringBefore(':') }
+                    .map { (packageName, processes) ->
+                        val sortedProcesses = processes.sortedByDescending { it.memoryBytes }
+                        val children =
+                            sortedProcesses.map { process ->
+                                ProcessChildEntry(
+                                    name = process.name,
+                                    pid = process.pid,
+                                    memoryBytes = process.memoryBytes,
+                                    memory = formatProcessMemory(process.memoryBytes),
+                                )
+                            }
+                        val totalMemoryBytes = processes.sumOf { it.memoryBytes }
 
-                    ProcessEntry(
-                        packageName = packageName,
-                        appTitle = SessionManagementAppCache.appTitle(packageName, guessAppTitle(packageName)),
-                        pid =
-                            sortedProcesses
-                                .firstOrNull { it.name == packageName }
-                                ?.pid
-                                ?: sortedProcesses.firstOrNull()?.pid.orEmpty(),
-                        totalMemoryBytes = totalMemoryBytes,
-                        memory = formatProcessMemory(totalMemoryBytes),
-                        children = if (children.size > 1) children else emptyList(),
-                    )
-                }.sortedByDescending { it.totalMemoryBytes }
+                        ProcessEntry(
+                            packageName = packageName,
+                            appTitle = SessionManagementAppCache.appTitle(packageName, guessAppTitle(packageName)),
+                            pid =
+                                sortedProcesses
+                                    .firstOrNull { it.name == packageName }
+                                    ?.pid
+                                    ?: sortedProcesses.firstOrNull()?.pid.orEmpty(),
+                            totalMemoryBytes = totalMemoryBytes,
+                            memory = formatProcessMemory(totalMemoryBytes),
+                            children = if (children.size > 1) children else emptyList(),
+                        )
+                    }.sortedByDescending { it.totalMemoryBytes }
+            }
 
         ProcessListSnapshot(
             isLoading = false,
             entries = entries,
-            errorMessage = if (entries.isEmpty()) ManagementTexts.text("未读取到正在运行的应用进程。", "No running app processes were found.") else null,
+            errorMessage = if (entries.isEmpty()) ManagementTexts.Processes.NO_RUNNING_APP_PROCESSES_WERE_FOUND.get() else null,
         )
     }.getOrElse { error ->
         ProcessListSnapshot.loading().copy(
             isLoading = false,
-            errorMessage = error.message ?: ManagementTexts.text("进程列表读取失败。", "Couldn't load the process list."),
+            errorMessage = error.message ?: ManagementTexts.Processes.COULDN_T_LOAD_PROCESS_LIST.get(),
         )
     }
 }

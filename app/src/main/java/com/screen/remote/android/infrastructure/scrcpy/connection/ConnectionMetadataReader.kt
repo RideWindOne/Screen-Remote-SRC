@@ -4,6 +4,8 @@ import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
+import com.screen.remote.android.infrastructure.media.audio.AudioStreamHeader
+import com.screen.remote.android.infrastructure.media.audio.parseAudioStreamHeader
 import com.screen.remote.android.infrastructure.media.video.VideoDebugLog
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import com.screen.remote.android.infrastructure.scrcpy.stream.ScrcpyAudioStream
@@ -41,7 +43,8 @@ class ConnectionMetadataReader(
                 val videoInput = videoSocket.getInputStream().buffered()
 
                 val videoMetadata = readVideoMetadata(videoInput)
-                val (width, height) = videoMetadata
+                val width = videoMetadata.width
+                val height = videoMetadata.height
 
                 onVideoResolution(width, height)
 
@@ -50,6 +53,7 @@ class ConnectionMetadataReader(
                     ScrcpySocketStream(
                         videoSocket,
                         videoInput,
+                        videoMetadata.codec,
                         { error ->
                             if (error.contains("流关闭") || error.contains("视频流已关闭")) {
                                 VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Video stream closed -> $error" }
@@ -60,13 +64,28 @@ class ConnectionMetadataReader(
                         onVideoResolution,
                     )
 
-                // 音频 header 由 ScrcpyAudioStream 自己消费，避免双重读取导致流错位
                 if (enableAudio) {
                     val audioSocket = socketManager.audioSocket
                     if (audioSocket != null) {
                         val audioInput = audioSocket.getInputStream().buffered()
-                        audioStream = ScrcpyAudioStream(audioSocket, audioInput)
-                        LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_AUDIO_METADATA_READ.get())
+                        val codecId = DataInputStream(audioInput).readInt()
+                        when (val header = parseAudioStreamHeader(codecId)) {
+                            AudioStreamHeader.Disabled -> {
+                                LogManager.w(LogTags.SCRCPY_CLIENT, "远端设备已禁用音频，继续视频会话")
+                                audioSocket.close()
+                            }
+                            AudioStreamHeader.ConfigurationError ->
+                                throw IOException("远端音频编码器配置失败")
+                            is AudioStreamHeader.Unsupported ->
+                                throw IOException("不支持的音频 codec ID: 0x${header.codecId.toString(16)}")
+                            is AudioStreamHeader.Codec -> {
+                                audioStream = ScrcpyAudioStream(audioSocket, audioInput, header.codec)
+                                LogManager.d(
+                                    LogTags.SCRCPY_CLIENT,
+                                    "${RemoteTexts.SCRCPY_AUDIO_METADATA_READ.get()}: codec=${header.codec}",
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -74,15 +93,16 @@ class ConnectionMetadataReader(
             } catch (e: Exception) {
                 videoStream?.close()
                 audioStream?.close()
+                socketManager.closeAllSockets()
                 throw IOException("${RemoteTexts.SCRCPY_METADATA_READ_FAILED.get()}: ${e.message}", e)
             }
         }
 
     /**
      * 读取视频元数据
-     * 返回 (width, height)
+     * 返回 socket header 中的实际 codec 与初始尺寸。
      */
-    private fun readVideoMetadata(inputStream: InputStream): Pair<Int, Int> {
+    private fun readVideoMetadata(inputStream: InputStream): VideoMetadata {
         val dis = DataInputStream(inputStream)
 
         try {
@@ -121,11 +141,12 @@ class ConnectionMetadataReader(
                 throw IOException("无效的 session meta flags: 0x${sessionFlags.toString(16)}")
             }
 
-            if (codecId !in KNOWN_VIDEO_CODECS) {
+            val codec = videoCodecFromId(codecId)
+            if (codec == null) {
                 throw IOException("无效的 Codec ID: 0x${codecId.toString(16)} (数据未就绪，请重试)")
             }
 
-            return Pair(width, height)
+            return VideoMetadata(codec = codec, width = width, height = height)
         } catch (e: Exception) {
             LogManager.e(LogTags.SCRCPY_CLIENT, "读取视频元数据失败: ${e.message}", e)
             throw IOException("${RemoteTexts.SCRCPY_METADATA_READ_FAILED.get()}: ${e.message}", e)
@@ -178,9 +199,21 @@ class ConnectionMetadataReader(
     private companion object {
         const val DEVICE_NAME_FIELD_LENGTH = 64
         const val SESSION_META_FLAG = 0x80000000.toInt()
-        const val VIDEO_CODEC_H264 = 0x68323634
-        const val VIDEO_CODEC_H265 = 0x68323635
-        const val VIDEO_CODEC_AV1 = 0x00617631
-        val KNOWN_VIDEO_CODECS = setOf(VIDEO_CODEC_H264, VIDEO_CODEC_H265, VIDEO_CODEC_AV1)
     }
 }
+
+internal fun videoCodecFromId(codecId: Int): String? =
+    when (codecId) {
+        0x68323634 -> "h264"
+        0x68323635 -> "h265"
+        0x00617631 -> "av1"
+        0x00767038 -> "vp8"
+        0x00767039 -> "vp9"
+        else -> null
+    }
+
+private data class VideoMetadata(
+    val codec: String,
+    val width: Int,
+    val height: Int,
+)

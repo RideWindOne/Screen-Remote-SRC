@@ -62,7 +62,7 @@ internal class ScrcpyServiceNotificationController(
                 PendingIntentApiCompat.getPendingIntentFlags(mutable = false),
             )
 
-        val protectedDeviceNames = protectedDevices.map { it.deviceName }
+        val protectedDeviceNames = protectedDevices.map { notificationDeviceName(it.deviceName) }
         val deviceCount = protectedDeviceNames.size
         val contentText =
             when {
@@ -83,3 +83,8 @@ internal class ScrcpyServiceNotificationController(
             .build()
     }
 }
+
+internal fun notificationDeviceName(deviceName: String): String =
+    DEVICE_TRANSPORT_PREFIX.replace(deviceName, "")
+
+private val DEVICE_TRANSPORT_PREFIX = Regex("^(?:mdns|tcp|usb):", RegexOption.IGNORE_CASE)

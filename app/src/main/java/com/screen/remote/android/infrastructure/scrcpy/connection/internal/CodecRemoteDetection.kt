@@ -4,6 +4,7 @@ import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.EncoderDetectionResult
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
@@ -11,9 +12,11 @@ import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLife
 internal suspend fun ConnectionLifecycle.fetchRemoteEncoders(
     connection: AdbConnection,
     options: ScrcpyOptions,
-): Pair<List<String>, List<String>>? {
-    if (options.remoteVideoEncoders.isNotEmpty() || options.remoteAudioEncoders.isNotEmpty()) {
-        LogManager.d(LogTags.SCRCPY_CLIENT, "远程编码器列表已存在，跳过检测")
+    needVideo: Boolean,
+    needAudio: Boolean,
+): Pair<List<EncoderCapability>, List<EncoderCapability>>? {
+    if (hasRequiredRemoteEncoderCache(options, needVideo, needAudio)) {
+        LogManager.d(LogTags.SCRCPY_CLIENT, "本次所需的远程编码器列表已存在，跳过检测")
         return Pair(options.remoteVideoEncoders, options.remoteAudioEncoders)
     }
 
@@ -24,16 +27,19 @@ internal suspend fun ConnectionLifecycle.fetchRemoteEncoders(
     }
 
     val detectionResult = detectEncodersFromRemote(connection) ?: return null
-    return Pair(
-        detectionResult.videoEncoders.map { it.name },
-        detectionResult.audioEncoders.map { it.name },
-    )
+    return Pair(detectionResult.videoEncoders, detectionResult.audioEncoders)
 }
 
 internal suspend fun ConnectionLifecycle.copyServerForDetection(connection: AdbConnection): Boolean =
     try {
-        connection.executeShell("cp ${AppConstants.SCRCPY_SERVER_PATH} ${AppConstants.SCRCPY_SERVER_2_PATH}")
-        true
+        connection
+            .executeShell(
+                "if cp -f ${AppConstants.SCRCPY_SERVER_PATH} ${AppConstants.SCRCPY_SERVER_2_PATH}; then " +
+                    "if [ -s ${AppConstants.SCRCPY_SERVER_2_PATH} ]; then echo 1; else echo 0; fi; " +
+                    "else echo 0; fi",
+                retryOnFailure = false,
+            ).getOrNull()
+            ?.trim() == "1"
     } catch (e: Exception) {
         LogManager.w(LogTags.SCRCPY_CLIENT, "复制 server 失败: ${e.message}")
         false
@@ -42,7 +48,11 @@ internal suspend fun ConnectionLifecycle.copyServerForDetection(connection: AdbC
 internal suspend fun ConnectionLifecycle.detectEncodersFromRemote(connection: AdbConnection): EncoderDetectionResult? {
     val result =
         try {
-            connection.detectEncoders(context, skipPush = true)
+            connection.detectEncoders(
+                context = context,
+                skipPush = true,
+                persistToBoundSession = false,
+            )
         } catch (e: Exception) {
             LogManager.w(LogTags.SCRCPY_CLIENT, "获取编码器异常: ${e.message}")
             return null
@@ -56,90 +66,10 @@ internal suspend fun ConnectionLifecycle.detectEncodersFromRemote(connection: Ad
     return result.getOrThrow()
 }
 
-internal fun ConnectionLifecycle.readEncoderDetectionOutput(shellStream: dadb.AdbShellStream): String {
-    val output = StringBuilder()
-    var lineCount = 0
-    val maxLines = 200
-
-    try {
-        while (lineCount < maxLines) {
-            val packet =
-                try {
-                    shellStream.read()
-                } catch (_: java.io.EOFException) {
-                    break
-                }
-
-            when (packet) {
-                is dadb.AdbShellPacket.StdOut -> {
-                    val text = String(packet.payload, Charsets.UTF_8)
-                    output.append(text)
-                    lineCount++
-
-                    if (text.contains("List of audio encoders:")) {
-                        break
-                    }
-                }
-
-                is dadb.AdbShellPacket.Exit -> break
-                else -> Unit
-            }
-        }
-    } finally {
-        try {
-            shellStream.close()
-        } catch (_: Exception) {
-            // Ignore stream close failures after detection.
-        }
-    }
-
-    return output.toString()
-}
-
-internal fun ConnectionLifecycle.parseVideoEncoderNames(output: String): List<String> {
-    val encoders = mutableListOf<String>()
-    val videoSection =
-        if (output.contains("List of video encoders:")) {
-            val start = output.indexOf("List of video encoders:")
-            val end =
-                if (output.contains("List of audio encoders:")) {
-                    output.indexOf("List of audio encoders:")
-                } else {
-                    output.length
-                }
-            output.substring(start, end)
-        } else {
-            return encoders
-        }
-
-    val lines = videoSection.lines()
-    for (line in lines) {
-        val encoderMatch = Regex("--video-encoder='?([^'\\s]+)'?").find(line.trim())
-        if (encoderMatch != null) {
-            encoders.add(encoderMatch.groupValues[1].trim('\''))
-        }
-    }
-
-    return encoders
-}
-
-internal fun ConnectionLifecycle.parseAudioEncoderNames(output: String): List<String> {
-    val encoders = mutableListOf<String>()
-    val audioSection =
-        if (output.contains("List of audio encoders:")) {
-            val start = output.indexOf("List of audio encoders:")
-            output.substring(start)
-        } else {
-            return encoders
-        }
-
-    val lines = audioSection.lines()
-    for (line in lines) {
-        val encoderMatch = Regex("--audio-encoder='?([^'\\s]+)'?").find(line.trim())
-        if (encoderMatch != null) {
-            encoders.add(encoderMatch.groupValues[1].trim('\''))
-        }
-    }
-
-    return encoders
-}
+internal fun hasRequiredRemoteEncoderCache(
+    options: ScrcpyOptions,
+    needVideo: Boolean,
+    needAudio: Boolean,
+): Boolean =
+    (!needVideo || options.remoteVideoEncoders.isNotEmpty()) &&
+        (!needAudio || options.remoteAudioEncoders.isNotEmpty())

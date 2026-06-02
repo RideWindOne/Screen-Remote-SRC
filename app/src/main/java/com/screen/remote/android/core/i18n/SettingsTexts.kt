@@ -13,13 +13,11 @@ object SettingsTexts {
     val SETTINGS_APPEARANCE = TextPair("外观", "Appearance")
     val SETTINGS_LANGUAGE = TextPair("语言 / Language", "Language / 语言")
     val SETTINGS_ABOUT = TextPair("关于 Screen Remote", "About Screen Remote")
-    val SETTINGS_KEEP_ALIVE = TextPair("后台保持活跃", "Keep Alive in Background")
-    val SETTINGS_SHOW_ON_LOCK_SCREEN = TextPair("在灵动岛显示实况", "Show on Dynamic Island")
     val SETTINGS_FLOATING_HAPTIC = TextPair("悬浮球触感反馈", "Floating Ball Haptic Feedback")
     val SETTINGS_MANAGE_ADB_KEYS = TextPair("管理 ADB 密钥", "Manage ADB Keys")
     val SETTINGS_DEVICE_PAIRING = TextPair("使用配对码进行 ADB 配对", "ADB Pairing with Pairing Code")
-    val SETTINGS_FILE_TRANSFER_PATH = TextPair("文件发送默认路径", "Default File Transfer Path")
     val SETTINGS_ENABLE_LOG = TextPair("启用日志记录", "Enable Logging")
+    val SETTINGS_DEBUG_MODE = TextPair("调试模式", "Debug Mode")
 
     val SETTINGS_EVENT_STREAM_LOG = TextPair("事件流日志", "Event Stream Logs")
     val SETTINGS_AUDIO_STREAM_LOG = TextPair("音频流日志", "Audio Stream Logs")
@@ -37,6 +35,8 @@ object SettingsTexts {
     val BACKUP_DATA = TextPair("导出数据", "Export Data")
     val RESTORE_DATA = TextPair("导入数据", "Import Data")
     val BACKUP_INFO = TextPair("数据管理", "Data Management")
+    val FILE_PICKER_UNAVAILABLE =
+        TextPair("没有可用的系统文件选择器", "No system file picker is available")
 
     // 语言设置
     val LANGUAGE_TITLE = TextPair("语言", "Language")
@@ -51,19 +51,6 @@ object SettingsTexts {
     val THEME_SYSTEM = TextPair("跟随系统", "Follow System")
     val THEME_DARK = TextPair("深色模式", "Dark Mode")
     val THEME_LIGHT = TextPair("浅色模式", "Light Mode")
-
-    // 文件路径对话框
-    val DIALOG_FILE_PATH_TITLE = TextPair("文件发送路径", "File Transfer Path")
-    val DIALOG_FILE_PATH_DEFAULT = TextPair("默认路径", "Default Path")
-    val DIALOG_FILE_PATH_SELECT_FOLDER = TextPair("选择文件夹", "Select Folder")
-    val DIALOG_FILE_PATH_QUICK_SELECT = TextPair("快速选择", "Quick Select")
-    val DIALOG_FILE_PATH_INFO = TextPair("信息", "Info")
-    val DIALOG_FILE_PATH_INFO_TEXT =
-        TextPair(
-            "通过「发送文件」操作发送的文件将被推送到 Android 设备上的此路径。\n\n路径必须以 /sdcard/ 或类似可访问且开放的绝对路径。",
-            "Files sent via 'Send File' will be pushed to this path on the Android device.\n\nThe path must be an accessible absolute path starting with /sdcard/ or similar.",
-        )
-    val DIALOG_FILE_PATH_RESET = TextPair("重置为默认", "Reset to Default")
 
     // 关于页面
     val ABOUT_BASED_ON = TextPair("基于 Scrcpy", "Based on Scrcpy")
@@ -90,6 +77,18 @@ object SettingsTexts {
     val ABOUT_WECHAT_SAVE_F = TextPair("保存二维码失败", "Failed to save QR code")
     val ABOUT_TELEGRAM_BUTTON = TextPair("Telegram 频道", "Telegram Channel")
     val ABOUT_PORTING_BUTTON = TextPair("Github：XRsec", "Github：XRSec")
+    val ABOUT_DONATE_BUTTON = TextPair("打赏支持", "Donate")
+    val ABOUT_DONATE_TITLE = TextPair("打赏支持", "Donate")
+    val ABOUT_DONATE_USDT_LABEL = TextPair("USDT TRC20", "USDT TRC20")
+    val ABOUT_DONATE_GATE_LABEL = TextPair("Gate 邀请码", "Gate invitation code")
+    val ABOUT_DONATE_COPY_HINT = TextPair("点击复制", "Tap to copy")
+    val ABOUT_DONATE_ADDRESS_COPIED = TextPair("TRC20 地址已复制", "TRC20 address copied")
+    val ABOUT_DONATE_INVITE_COPIED = TextPair("Gate 邀请码已复制", "Gate invitation code copied")
+    val ABOUT_DONATE_GATE_INFO =
+        TextPair(
+            "享受 88% 高额手续费返佣\n基础返佣 78% 送 VIP10\n包含 10% 返佣\n\n如果这个工具帮到了你，欢迎随手支持一下。\uD83E\uDEF6",
+            "Enjoy 88% high-fee rebate\nBase rebate 78% with VIP10\nIncludes 10% rebate\n\nIf this tool has helped you, your support is always appreciated.\uD83E\uDEF6",
+        )
 
     // 帮助说明文本
     val HELP_GROUP_MANAGE =
@@ -97,20 +96,10 @@ object SettingsTexts {
             "创建和管理会话分组，将相关的会话组织在一起。可以创建多级分组结构，方便快速查找和管理大量会话。",
             "Create and manage session groups to organize related sessions together. You can create multi-level group structures for easy search and management of large numbers of sessions.",
         )
-    val HELP_KEEP_ALIVE =
-        TextPair(
-            "设置应用在后台运行时保持活跃的时长。选择「始终」可以让应用在后台持续运行不被系统杀死，但会增加电量消耗。较短的时长可以节省电量，但可能导致后台连接中断。",
-            "Set how long the app stays active when running in the background. Selecting 'Always' keeps the app running continuously in the background without being killed by the system, but increases battery consumption. Shorter durations save battery but may cause background connections to be interrupted.",
-        )
     val HELP_FLOATING_HAPTIC =
         TextPair(
             "启用后，点击悬浮球按钮时会产生触感反馈（震动）。触感反馈可以提供更好的操作体验，但会略微增加电量消耗。",
             "When enabled, tapping floating ball buttons will produce haptic feedback (vibration). Haptic feedback provides better user experience but slightly increases battery consumption.",
-        )
-    val HELP_SHOW_ON_LOCK_SCREEN =
-        TextPair(
-            "在 iPhone 的灵动岛或锁屏界面显示 Scrcpy 连接状态的实况活动。可以快速查看连接状态和控制会话，无需解锁手机。（此功能暂未实现）",
-            "Display Scrcpy connection status as Live Activity on iPhone's Dynamic Island or lock screen. Allows quick viewing of connection status and session control without unlocking the phone. (This feature is not yet implemented)",
         )
     val HELP_MANAGE_ADB_KEYS =
         TextPair(
@@ -122,15 +111,15 @@ object SettingsTexts {
             "通过输入配对码的方式配对 Android 设备。在被控设备的「开发者选项」中启用「无线调试」，点击「使用配对码配对设备」，然后在此输入显示的 IP、端口和配对码即可建立连接。",
             "Pair with Android devices by entering pairing code. Enable 'Wireless debugging' in the target device's 'Developer options', tap 'Pair device with pairing code', then enter the displayed IP, port and pairing code here to establish a connection.",
         )
-    val HELP_FILE_TRANSFER_PATH =
-        TextPair(
-            "设置通过「发送文件」功能传输文件到远程设备时的默认保存路径。路径必须是设备上可访问的绝对路径，通常以 /sdcard/ 开头。例如：/sdcard/Download",
-            "Set the default save path when transferring files to remote devices via the 'Send File' feature. The path must be an accessible absolute path on the device, usually starting with /sdcard/. Example: /sdcard/Download",
-        )
     val HELP_ENABLE_LOG =
         TextPair(
             "启用应用活动日志记录。日志会记录应用的关键操作和错误信息，用于问题排查和调试。日志文件存储在应用私有目录中，不会占用大量空间。",
             "Enable application activity logging. Logs record key operations and error messages for troubleshooting and debugging. Log files are stored in the app's private directory and won't take up much space.",
+        )
+    val HELP_DEBUG_MODE =
+        TextPair(
+            "在应用所有页面的右下角显示实时日志按钮。日志窗口支持背景透明度调节和按级别着色。",
+            "Show a live log button at the bottom-right of every app screen. The log window supports adjustable background opacity and level colors.",
         )
     val HELP_AUDIO_STREAM_LOG =
         TextPair(

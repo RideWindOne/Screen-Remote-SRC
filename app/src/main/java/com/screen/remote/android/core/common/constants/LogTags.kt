@@ -41,6 +41,7 @@ object LogTags {
     const val SESSION_DIALOG = "SDLG"
     const val MAIN_SCREEN = "MAIN"
     const val MAIN_VIEW_MODEL = "MVM"
+    const val MANAGEMENT = "MGMT"
 
     // ViewModels
     const val SESSION_VM = "SVM"
@@ -49,6 +50,7 @@ object LogTags {
     const val CONTROL_VM = "CTVM"
     const val ADB_KEYS_VM = "AKVM"
     const val SETTINGS_VM = "STVM"
+    const val BACKUP_RESTORE = "BKUP"
 
     // 输入处理
     const val TOUCH_HANDLER = "TOCH"

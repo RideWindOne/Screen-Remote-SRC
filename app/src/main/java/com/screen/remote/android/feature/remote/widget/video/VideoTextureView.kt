@@ -6,7 +6,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.TextureView
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -81,8 +80,7 @@ fun VideoTextureView(
                                 "TextureView ${RemoteTexts.REMOTE_SURFACE_DESTROYED.get()}",
                             )
                             onSurfaceTextureDestroyed()
-                            // 返回 false 表示不自动释放 SurfaceTexture（我们手动管理）
-                            return false
+                            return true
                         }
 
                         override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
@@ -114,11 +112,4 @@ fun VideoTextureView(
         modifier = modifier,
     )
 
-    // 清理资源
-    DisposableEffect(Unit) {
-        onDispose {
-            // TextureView 销毁时释放 SurfaceTexture
-            textureView.surfaceTexture?.release()
-        }
-    }
 }

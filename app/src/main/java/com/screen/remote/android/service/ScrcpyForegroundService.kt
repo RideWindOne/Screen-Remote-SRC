@@ -3,7 +3,9 @@ package com.screen.remote.android.service
 import android.app.Service
 import android.content.Intent
 import android.os.Binder
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
@@ -19,7 +21,10 @@ class ScrcpyForegroundService : Service() {
     private val binder = LocalBinder()
     private var wakeLock: PowerManager.WakeLock? = null
     private var isRunning = false
+    private var isDestroyed = false
+    private var lastStartId = 0
     private val protectedDevices = ConcurrentHashMap<String, ProtectedAdbDevice>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val notificationController by lazy {
         ScrcpyServiceNotificationController(service = this)
@@ -29,46 +34,34 @@ class ScrcpyForegroundService : Service() {
             applicationContext = applicationContext,
             protectedDevices = protectedDevices,
             onDevicesChanged = {
-                if (protectedDevices.isEmpty()) {
-                    stopForegroundService()
-                } else {
-                    updateNotification()
+                // 心跳运行在 Dispatchers.IO；Service 生命周期与前台状态只能在主线程串行处理。
+                mainHandler.post {
+                    if (!isDestroyed) {
+                        reconcileProtectedDevices()
+                    }
                 }
             },
         )
     }
 
     companion object {
-        const val ACTION_START = "com.screen.remote.android.START_SERVICE"
         const val ACTION_ADD_DEVICE = "com.screen.remote.android.ADD_DEVICE"
         const val ACTION_REMOVE_DEVICE = "com.screen.remote.android.REMOVE_DEVICE"
         const val ACTION_STOP = "com.screen.remote.android.STOP_SERVICE"
 
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_DEVICE_NAME = "device_name"
-        const val EXTRA_DELAYED_ACK = "delayed_ack"
-        const val EXTRA_HOST = "host"
-        const val EXTRA_PORT = "port"
-        const val EXTRA_USB_CONNECTION = "usb_connection"
-
         fun protectDevice(
             context: android.content.Context,
             deviceId: String,
             deviceName: String,
-            delayedAck: Boolean,
-            host: String? = null,
-            port: Int = 0,
-            isUsbConnection: Boolean = false,
         ) {
+            require(deviceId.isNotBlank()) { "保护设备必须包含精确的 ADB 连接标识" }
             val intent =
                 Intent(context, ScrcpyForegroundService::class.java).apply {
                     action = ACTION_ADD_DEVICE
                     putExtra(EXTRA_DEVICE_ID, deviceId)
                     putExtra(EXTRA_DEVICE_NAME, deviceName)
-                    putExtra(EXTRA_DELAYED_ACK, delayedAck)
-                    putExtra(EXTRA_HOST, host)
-                    putExtra(EXTRA_PORT, port)
-                    putExtra(EXTRA_USB_CONNECTION, isUsbConnection)
                 }
             ServiceApiCompat.startForegroundServiceCompat(context, intent)
         }
@@ -92,6 +85,7 @@ class ScrcpyForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isDestroyed = false
         notificationController.createNotificationChannel()
         acquireWakeLock()
     }
@@ -101,113 +95,132 @@ class ScrcpyForegroundService : Service() {
         flags: Int,
         startId: Int,
     ): Int {
+        lastStartId = maxOf(lastStartId, startId)
+
         when (intent?.action) {
-            ACTION_START, ACTION_ADD_DEVICE -> {
+            ACTION_ADD_DEVICE -> {
+                // 每一次 startForegroundService(ACTION_ADD_DEVICE) 都有独立的前台化时限。
+                // 即使旧 Service 正处于 stopSelf() 窗口，也必须无条件重新调用 startForeground()。
+                if (!promoteToForeground(startId)) {
+                    return START_NOT_STICKY
+                }
+
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
                 val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "未知设备"
-                val delayedAck = intent.getBooleanExtra(EXTRA_DELAYED_ACK, false)
-                val host = intent.getStringExtra(EXTRA_HOST)
-                val port = intent.getIntExtra(EXTRA_PORT, 0)
-                val isUsbConnection = intent.getBooleanExtra(EXTRA_USB_CONNECTION, false)
-                if (deviceId != null) {
+                if (!deviceId.isNullOrBlank()) {
                     addDevice(
                         deviceId = deviceId,
                         deviceName = deviceName,
-                        delayedAck = delayedAck,
-                        host = host,
-                        port = port,
-                        isUsbConnection = isUsbConnection,
                     )
+                } else {
+                    LogManager.e(LogTags.SCRCPY_SERVICE, "忽略无效的设备保护请求: deviceId=$deviceId")
+                    reconcileProtectedDevices()
                 }
             }
 
             ACTION_REMOVE_DEVICE -> {
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
                 if (deviceId != null) {
-                    removeDevice(deviceId)
+                    removeDevice(deviceId, startId)
+                } else {
+                    reconcileProtectedDevices()
                 }
             }
 
             ACTION_STOP -> {
-                stopForegroundService()
+                protectedDevices.clear()
+                stopForegroundService(startId)
             }
+
+            else -> stopForegroundService(startId)
         }
 
-        return START_STICKY
+        // 保护列表仅存在于当前进程；null intent 的粘性重启无法恢复设备，也可能再次漏掉前台化。
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
         super.onDestroy()
+        isDestroyed = true
+        mainHandler.removeCallbacksAndMessages(null)
         LogManager.d(LogTags.SCRCPY_SERVICE, "服务销毁")
-        heartbeatMonitor.stop()
+        heartbeatMonitor.destroy()
         releaseWakeLock()
         protectedDevices.clear()
         isRunning = false
+        lastStartId = 0
     }
 
     private fun addDevice(
         deviceId: String,
         deviceName: String,
-        delayedAck: Boolean,
-        host: String?,
-        port: Int,
-        isUsbConnection: Boolean,
     ) {
         protectedDevices[deviceId] =
             ProtectedAdbDevice(
                 deviceName = deviceName,
-                delayedAck = delayedAck,
-                host = host,
-                port = port,
-                isUsbConnection = isUsbConnection,
             )
         LogManager.d(
             LogTags.SCRCPY_SERVICE,
-            "添加保护设备: $deviceName ($deviceId) delayedAck=$delayedAck host=${host ?: "-"} port=$port usb=$isUsbConnection",
+            "添加保护设备: $deviceName ($deviceId)",
         )
 
-        if (!isRunning) {
-            try {
-                startForegroundService()
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_SERVICE, "启动前台服务失败: ${e.message}", e)
-            }
-        } else {
-            updateNotification()
-        }
+        updateNotification()
     }
 
-    private fun removeDevice(deviceId: String) {
+    private fun removeDevice(
+        deviceId: String,
+        startId: Int,
+    ) {
         val device = protectedDevices.remove(deviceId)
         LogManager.d(LogTags.SCRCPY_SERVICE, "移除保护设备: ${device?.deviceName} ($deviceId)")
 
         if (protectedDevices.isEmpty()) {
             LogManager.d(LogTags.SCRCPY_SERVICE, "无设备需要保护，停止服务")
-            stopForegroundService()
+            stopForegroundService(startId)
         } else {
             updateNotification()
         }
     }
 
-    private fun startForegroundService() {
-        if (isRunning) {
+    private fun promoteToForeground(startId: Int): Boolean {
+        val wasRunning = isRunning
+        try {
+            notificationController.startForeground(protectedDevices.values.toList())
+        } catch (error: Exception) {
+            isRunning = false
+            heartbeatMonitor.stop()
+            stopSelfResult(startId)
+            LogManager.e(LogTags.SCRCPY_SERVICE, "启动前台服务失败: ${error.message}", error)
+            return false
+        }
+
+        isRunning = true
+        if (!wasRunning) {
+            heartbeatMonitor.start()
+        }
+
+        LogManager.d(LogTags.SCRCPY_SERVICE, "前台服务已启动，保护 ${protectedDevices.size} 个设备")
+        return true
+    }
+
+    private fun stopForegroundService(startId: Int = lastStartId) {
+        val stopped = if (startId > 0) stopSelfResult(startId) else run {
+            stopSelf()
+            true
+        }
+        if (!stopped) {
+            // 已存在更新的 start 请求；它仍依赖当前前台状态，不能被旧请求提前降级。
+            LogManager.d(LogTags.SCRCPY_SERVICE, "忽略过期的停止请求: startId=$startId latest=$lastStartId")
             return
         }
 
-        notificationController.startForeground(protectedDevices.values.toList())
-        isRunning = true
-        heartbeatMonitor.start()
-
-        LogManager.d(LogTags.SCRCPY_SERVICE, "前台服务已启动，保护 ${protectedDevices.size} 个设备")
-    }
-
-    private fun stopForegroundService() {
+        // stopSelfResult 已确认没有更新的 start 请求，立即清状态，避免后续 ADD 看到旧值。
+        isRunning = false
         heartbeatMonitor.stop()
         notificationController.stopForeground()
-        stopSelf()
-        LogManager.d(LogTags.SCRCPY_SERVICE, "前台服务已停止")
+        LogManager.d(LogTags.SCRCPY_SERVICE, "前台服务已停止: startId=$startId stopped=$stopped")
     }
 
     private fun updateNotification() {
@@ -215,6 +228,18 @@ class ScrcpyForegroundService : Service() {
             return
         }
         notificationController.updateNotification(protectedDevices.values.toList())
+    }
+
+    private fun reconcileProtectedDevices() {
+        if (protectedDevices.isEmpty()) {
+            stopForegroundService(lastStartId)
+        } else if (isRunning) {
+            updateNotification()
+        } else {
+            if (promoteToForeground(lastStartId)) {
+                updateNotification()
+            }
+        }
     }
 
     private fun acquireWakeLock() {
@@ -249,10 +274,7 @@ class ScrcpyForegroundService : Service() {
     }
 }
 
-internal data class ProtectedAdbDevice(
+// 使用引用身份区分每一次保护请求，防止旧心跳结果删除刚刚以相同参数重新添加的设备。
+internal class ProtectedAdbDevice(
     val deviceName: String,
-    val delayedAck: Boolean,
-    val host: String?,
-    val port: Int,
-    val isUsbConnection: Boolean,
 )

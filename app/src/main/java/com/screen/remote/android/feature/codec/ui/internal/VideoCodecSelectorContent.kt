@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
+import com.screen.remote.android.core.domain.model.CodecAcceleration
 import com.screen.remote.android.core.designsystem.component.SectionTitle
 import com.screen.remote.android.core.i18n.CodecTexts
 import com.screen.remote.android.core.i18n.CommonTexts
@@ -142,8 +143,6 @@ private fun extractVideoCodecTypeOptions(codecs: List<com.screen.remote.android.
             codec.type.contains("av01", ignoreCase = true) || codec.type.contains("av1", ignoreCase = true) -> types.add("AV1")
             codec.type.contains("vp8", ignoreCase = true) -> types.add("VP8")
             codec.type.contains("vp9", ignoreCase = true) -> types.add("VP9")
-            codec.type.contains("mpeg4", ignoreCase = true) -> types.add("MPEG4")
-            codec.type.contains("h263", ignoreCase = true) || codec.type.contains("3gpp", ignoreCase = true) -> types.add("H.263")
         }
     }
     return types.sorted()
@@ -169,25 +168,39 @@ private fun filterVideoCodecs(
                 "AV1" -> codec.type.contains("av01", ignoreCase = true) || codec.type.contains("av1", ignoreCase = true)
                 "VP8" -> codec.type.contains("vp8", ignoreCase = true)
                 "VP9" -> codec.type.contains("vp9", ignoreCase = true)
-                "MPEG4" -> codec.type.contains("mpeg4", ignoreCase = true)
-                "H.263" -> codec.type.contains("h263", ignoreCase = true) || codec.type.contains("3gpp", ignoreCase = true)
                 else -> true
             }
 
-        val isHardware = !codec.name.startsWith("OMX.google") && !codec.name.startsWith("c2.android")
         val matchesHardware =
             when (hardwareFilter) {
-                "hardware" -> isHardware
-                "software" -> !isHardware
+                "hardware" -> codec.acceleration == CodecAcceleration.HARDWARE
+                "software" -> codec.acceleration == CodecAcceleration.SOFTWARE
                 else -> true
             }
 
         val matchesFeature =
             when (featureFilter) {
-                "low_latency" -> codec.name.contains("low_latency", ignoreCase = true)
-                "c2" -> codec.name.contains("c2.", ignoreCase = true)
+                "low_latency" -> {
+                    val selectedMime = videoFilterMimeType(codecTypeFilter)
+                    if (selectedMime == null) {
+                        codec.lowLatencyMimeTypes.isNotEmpty()
+                    } else {
+                        codec.lowLatencyMimeTypes.any { it.equals(selectedMime, ignoreCase = true) }
+                    }
+                }
+                "c2" -> codec.name.startsWith("c2.", ignoreCase = true)
                 else -> true
             }
 
         matchesSearch && matchesCodecType && matchesHardware && matchesFeature
+    }
+
+private fun videoFilterMimeType(filter: String): String? =
+    when (filter) {
+        "H.264" -> "video/avc"
+        "H.265" -> "video/hevc"
+        "AV1" -> "video/av01"
+        "VP8" -> "video/x-vnd.on2.vp8"
+        "VP9" -> "video/x-vnd.on2.vp9"
+        else -> null
     }

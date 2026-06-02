@@ -9,9 +9,8 @@ import com.screen.remote.android.core.data.datastore.LocalDecoderCache
 import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.key.core.adb.AdbKeyManager
-import com.screen.remote.android.infrastructure.adb.security.AdbTlsIdentityChangeNotificationController
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import dadb.android.runtime.ExperimentalDadbAndroidApi
-import dadb.android.runtime.AdbRuntimeOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,19 +42,14 @@ class ScreenRemoteApp : Application() {
         LocalDecoderCache.init(this)
 
         // app 显式提供 runtime root，dadb-android 只负责在该目录下工作
-        val tlsIdentityChangeNotificationController =
-            AdbTlsIdentityChangeNotificationController(this)
-        tlsIdentityChangeNotificationController.createNotificationChannel()
         AdbRuntimeProvider.init(
+            context = this,
             rootDir = AdbKeyManager.defaultStorageRoot(this),
-            options =
-                AdbRuntimeOptions(
-                    onServerTlsPeerObserved = tlsIdentityChangeNotificationController::handleObservedIdentity,
-                ),
         )
 
         // 初始化全局 ADB 连接管理器
         adbConnectionManager = AdbConnectionManager.getInstance(this)
+        MdnsSessionDiscoveryManager.initialize(this)
 
         LogManager.i(LogTags.SCREEN_REMOTE_APP, "开始连接")
     }

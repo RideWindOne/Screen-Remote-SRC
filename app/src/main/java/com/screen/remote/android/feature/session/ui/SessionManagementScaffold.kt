@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,12 +35,14 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
@@ -49,20 +53,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
-import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AppDivider
+import com.screen.remote.android.core.designsystem.component.StatusBadge
 
 private val ManagementFabInset = 20.dp
 private val ManagementFabIconSize = 18.dp
-private val ManagementFabAccent = AppColors.iOSBlue
 private val ManagementTopBarHeight = 52.dp
 private val ManagementTopBarSideWidth = 52.dp
 private val ManagementTopBarActionSize = 40.dp
@@ -77,6 +81,183 @@ private val ManagementDrawerItemSpacing = 6.dp
 private val ManagementSurfaceElevation = 1.dp
 
 @Composable
+internal fun SessionManagementLoadingBar(modifier: Modifier = Modifier) {
+    LinearProgressIndicator(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .zIndex(2f),
+    )
+}
+
+@Composable
+internal fun SessionManagementInfoPlaceholderRow(
+    label: String,
+    labelWidth: Dp = 88.dp,
+    rowMinHeight: Dp = 18.dp,
+) {
+    SessionManagementInfoRowLayout(
+        label = label,
+        labelWidth = labelWidth,
+        rowHeight = rowMinHeight,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun SessionManagementInfoRow(
+    label: String,
+    value: String,
+    labelWidth: Dp = 88.dp,
+    rowMinHeight: Dp = 0.dp,
+    valueTextStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+    valueMaxLines: Int = 2,
+    valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    SessionManagementInfoRowLayout(
+        label = label,
+        labelWidth = labelWidth,
+        rowHeight = rowMinHeight,
+    ) {
+        Text(
+            text = value,
+            style = valueTextStyle,
+            color = valueColor,
+            modifier = Modifier.weight(1f),
+            maxLines = valueMaxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun SessionManagementInfoRowLayout(
+    label: String,
+    labelWidth: Dp,
+    rowHeight: Dp,
+    valueContent: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (rowHeight > 0.dp) {
+                        Modifier.height(rowHeight)
+                    } else {
+                        Modifier
+                    },
+                ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(labelWidth),
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        valueContent()
+    }
+}
+
+@Composable
+internal fun SessionManagementVirtualizedPanelRow(
+    index: Int,
+    totalCount: Int,
+    modifier: Modifier = Modifier,
+    widthFraction: Float = 1f,
+    dividerInsetStart: Dp = 0.dp,
+    dividerInsetEnd: Dp = 0.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(widthFraction),
+        shape = managementVirtualizedPanelShape(index = index, totalCount = totalCount),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            content()
+            if (index != totalCount - 1) {
+                AppDivider(
+                    modifier =
+                        Modifier.padding(
+                            start = dividerInsetStart,
+                            end = dividerInsetEnd,
+                        ),
+                )
+            }
+        }
+    }
+}
+
+private fun managementVirtualizedPanelShape(
+    index: Int,
+    totalCount: Int,
+): RoundedCornerShape {
+    val radius = AppDimens.cardCornerRadius
+    val topRadius = if (index == 0) radius else 0.dp
+    val bottomRadius = if (index == totalCount - 1) radius else 0.dp
+    return RoundedCornerShape(
+        topStart = topRadius,
+        topEnd = topRadius,
+        bottomStart = bottomRadius,
+        bottomEnd = bottomRadius,
+    )
+}
+
+@Composable
+internal fun SessionManagementNoteCard(
+    title: String,
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 internal fun SessionManagementAddFab(
     modifier: Modifier = Modifier,
     contentDescription: String,
@@ -88,8 +269,8 @@ internal fun SessionManagementAddFab(
             modifier
                 .navigationBarsPadding()
                 .padding(end = ManagementFabInset, bottom = ManagementFabInset),
-        containerColor = ManagementFabAccent,
-        contentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
     ) {
         Icon(
             imageVector = Icons.Default.Add,
@@ -105,14 +286,14 @@ internal fun SessionManagementTopRow(
     onOpenMenu: () -> Unit,
     onRefresh: (() -> Unit)?,
     actionIcon: ImageVector = Icons.Default.Refresh,
-    actionContentDescription: String = ManagementTexts.text("刷新", "Refresh"),
+    actionContentDescription: String = ManagementTexts.Scaffold.REFRESH.get(),
 ) {
     Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .zIndex(1f),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.98f),
+        color = MaterialTheme.colorScheme.background,
         tonalElevation = ManagementSurfaceElevation,
     ) {
         Column(modifier = Modifier.statusBarsPadding()) {
@@ -137,7 +318,7 @@ internal fun SessionManagementTopRow(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Menu,
-                            contentDescription = ManagementTexts.text("打开菜单", "Open menu"),
+                            contentDescription = ManagementTexts.Scaffold.OPEN_MENU.get(),
                         )
                     }
                 }
@@ -189,7 +370,7 @@ internal fun SessionManagementDrawer(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.22f)),
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.22f)),
     ) {
         Box(
             modifier =
@@ -212,7 +393,7 @@ internal fun SessionManagementDrawer(
                     topEnd = ManagementDrawerEdgeCornerRadius,
                     bottomEnd = ManagementDrawerEdgeCornerRadius,
                 ),
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.background,
             tonalElevation = 0.dp,
             shadowElevation = 8.dp,
         ) {
@@ -222,14 +403,15 @@ internal fun SessionManagementDrawer(
                         .fillMaxSize()
                         .statusBarsPadding()
                         .padding(
-                            horizontal = ManagementDrawerPadding,
-                            vertical = ManagementDrawerPadding,
-                        ),
+                    horizontal = ManagementDrawerPadding,
+                    vertical = ManagementDrawerPadding,
+                ),
             ) {
                 Surface(
                     shape = RoundedCornerShape(ManagementCardCornerRadius),
                     color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.5.dp,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 1.dp,
                 ) {
                     Column(
                         modifier =
@@ -242,23 +424,18 @@ internal fun SessionManagementDrawer(
                         verticalArrangement = Arrangement.spacedBy(ManagementDrawerSectionSpacing),
                     ) {
                         Text(
-                            text = ManagementTexts.text("当前设备", "Current device"),
+                            text = ManagementTexts.Scaffold.CURRENT_DEVICE.get(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = sessionData.name.ifBlank { sessionData.host },
+                            text = sessionData.name.ifBlank { sessionData.primaryConnectionEndpointForDisplay() },
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text =
-                                if (sessionData.isUsbConnection()) {
-                                    sessionData.getUsbSerialNumber().orEmpty().ifBlank { sessionData.host }
-                                } else {
-                                    formatHostPort(sessionData.host, sessionData.port)
-                                },
+                            text = sessionData.primaryConnectionEndpointForDisplay(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -287,7 +464,7 @@ internal fun SessionManagementDrawer(
                 ) {
                     SessionManagementDrawerActionItem(
                         icon = Icons.AutoMirrored.Filled.ExitToApp,
-                        title = ManagementTexts.text("退出", "Exit"),
+                        title = ManagementTexts.Scaffold.EXIT.get(),
                         onClick = onExit,
                     )
                 }
@@ -298,19 +475,35 @@ internal fun SessionManagementDrawer(
 
 @Composable
 internal fun SessionManagementUtilityList(
-    sessionData: SessionData,
     snapshot: DeviceDashboardSnapshot,
     onAction: (UtilityAction) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val items =
         utilityItems(
-            isTcpipMode = !sessionData.isUsbConnection(),
             snapshot = snapshot,
-        ).forEach { item ->
-            SessionManagementUtilityCard(
-                item = item,
-                onClick = { onAction(item.action) },
-            )
+            accent = MaterialTheme.colorScheme.primary,
+        )
+    Surface(
+        shape = RoundedCornerShape(ManagementCardCornerRadius),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            items.forEachIndexed { index, item ->
+                SessionManagementUtilityCard(
+                    item = item,
+                    onClick = { onAction(item.action) },
+                )
+                if (index != items.lastIndex) {
+                    AppDivider(modifier = Modifier.padding(start = 64.dp))
+                }
+            }
         }
     }
 }
@@ -327,23 +520,22 @@ internal fun SessionManagementUtilityBadge(
         } else {
             accent
         }
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color =
-                if (available) {
-                    resolvedAccent
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-    }
+    StatusBadge(
+        text = text,
+        contentColor =
+            if (available) {
+                resolvedAccent
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        containerColor =
+            if (available) {
+                resolvedAccent.copy(alpha = 0.1f)
+            } else {
+                MaterialTheme.colorScheme.background
+            },
+        tonalElevation = 0.dp,
+    )
 }
 
 @Composable
@@ -351,79 +543,75 @@ private fun SessionManagementUtilityCard(
     item: UtilityCardItem,
     onClick: () -> Unit,
 ) {
-    val iconTintBackground =
+    val iconTint =
         if (item.available) {
-            item.accent.copy(alpha = 0.16f)
+            item.accent.copy(alpha = 0.86f)
         } else {
-            item.accent.copy(alpha = 0.08f)
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.46f)
         }
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = managementPanelColor(),
-        tonalElevation = 0.5.dp,
-        shadowElevation = 0.5.dp,
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = item.available, onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Box(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = item.available, onClick = onClick)
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                    .size(42.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.background,
+                        shape = RoundedCornerShape(12.dp),
+                    ),
+            contentAlignment = Alignment.Center,
         ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = iconTintBackground,
-            ) {
-                Icon(
-                    imageVector = item.icon,
-                    contentDescription = null,
-                    tint = if (item.available) item.accent else item.accent.copy(alpha = 0.48f),
-                    modifier =
-                        Modifier
-                            .padding(10.dp)
-                            .size(22.dp),
+            Icon(
+                imageVector = item.icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color =
+                    if (item.available) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+            )
+            Text(
+                text = item.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (item.available) 1f else 0.72f),
+            )
+        }
+
+        when {
+            item.statusChecked != null -> {
+                SessionManagementUtilityCheckBadge(
+                    checked = item.statusChecked,
+                    accent = item.accent,
                 )
             }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color =
-                        if (item.available) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
+            item.statusText != null -> {
+                SessionManagementUtilityBadge(
+                    text = item.statusText,
+                    accent = item.accent,
+                    available = item.available,
                 )
-                Text(
-                    text = item.subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (item.available) 1f else 0.72f),
-                )
-            }
-
-            when {
-                item.statusChecked != null -> {
-                    SessionManagementUtilityCheckBadge(
-                        checked = item.statusChecked,
-                        accent = item.accent,
-                    )
-                }
-
-                item.statusText != null -> {
-                    SessionManagementUtilityBadge(
-                        text = item.statusText,
-                        accent = item.accent,
-                        available = item.available,
-                    )
-                }
             }
         }
     }
@@ -436,12 +624,12 @@ private fun SessionManagementUtilityCheckBadge(
 ) {
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
     ) {
         Icon(
             imageVector = if (checked) Icons.Default.Check else Icons.Default.Close,
-            contentDescription = if (checked) ManagementTexts.text("已开启", "On") else ManagementTexts.text("未开启", "Off"),
+            contentDescription = if (checked) ManagementTexts.Scaffold.ON.get() else ManagementTexts.Scaffold.OFF.get(),
             tint = if (checked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier =
                 Modifier
@@ -459,13 +647,13 @@ private fun SessionManagementDrawerItem(
 ) {
     val containerColor =
         if (selected) {
-            AppColors.iOSBlue.copy(alpha = 0.1f)
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
         } else {
             Color.Transparent
         }
     val contentColor =
         if (selected) {
-            AppColors.iOSBlue
+            MaterialTheme.colorScheme.primary
         } else {
             MaterialTheme.colorScheme.onSurface
         }
@@ -535,21 +723,21 @@ private fun SessionManagementDrawerActionItem(
 }
 
 internal enum class SessionManagementSection(
-    val titleZh: String,
-    val titleEn: String,
+    private val text: com.screen.remote.android.core.i18n.TextPair,
     val icon: ImageVector,
     val supportsRefresh: Boolean = false,
 ) {
-    DeviceInfo("设备信息", "Device Info", Icons.Default.Info, supportsRefresh = true),
-    Utility("实用工具", "Utilities", Icons.Default.Build, supportsRefresh = true),
-    Files("文件管理", "Files", Icons.Default.Folder, supportsRefresh = true),
-    Apps("应用管理", "Apps", Icons.Default.Apps, supportsRefresh = true),
-    Process("进程管理", "Processes", Icons.Default.Usb, supportsRefresh = true),
-    Command("运行命令", "Commands", Icons.Default.Code),
+    DeviceInfo(ManagementTexts.General.DEVICE_INFO_SECTION, Icons.Default.Info, supportsRefresh = true),
+    Utility(ManagementTexts.General.UTILITIES_SECTION, Icons.Default.Build, supportsRefresh = true),
+    Files(ManagementTexts.General.FILES_SECTION, Icons.Default.Folder, supportsRefresh = true),
+    Apps(ManagementTexts.General.APPS_SECTION, Icons.Default.Apps, supportsRefresh = true),
+    Process(ManagementTexts.General.PROCESSES_SECTION, Icons.Default.Usb, supportsRefresh = true),
+    PortForward(ManagementTexts.General.PORT_FORWARD_SECTION, Icons.Default.SwapHoriz, supportsRefresh = true),
+    Command(ManagementTexts.General.COMMANDS_SECTION, Icons.Default.Code),
     ;
 
     val title: String
-        get() = ManagementTexts.text(titleZh, titleEn)
+        get() = text.get()
 }
 
 internal enum class UtilityAction {
@@ -561,7 +749,6 @@ internal enum class UtilityAction {
     ModifyResolution,
     AnimationScale,
     SleepStandby,
-    TombstoneMode,
 }
 
 private data class UtilityCardItem(
@@ -576,76 +763,68 @@ private data class UtilityCardItem(
 )
 
 private fun utilityItems(
-    isTcpipMode: Boolean,
     snapshot: DeviceDashboardSnapshot,
-): List<UtilityCardItem> =
-    listOf(
+    accent: Color,
+): List<UtilityCardItem> {
+    return listOf(
         UtilityCardItem(
             action = UtilityAction.FixedPort,
-            title = ManagementTexts.text("固定无线调试端口", "Fixed wireless debugging port"),
-            subtitle = ManagementTexts.text("设置 ADB TCP 端口号，设备将重启 ADB 服务", "Set the ADB TCP port. The device will restart ADB."),
+            title = ManagementTexts.Scaffold.FIXED_WIRELESS_DEBUGGING_PORT.get(),
+            subtitle = ManagementTexts.Scaffold.SET_ADB_TCP_PORT_DEVICE_WILL_RESTART_ADB.get(),
             icon = Icons.Default.Wifi,
-            accent = Color(0xFF2A9D8F),
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.Screenshot,
-            title = ManagementTexts.text("屏幕截图", "Screenshot"),
-            subtitle = ManagementTexts.text("截图到控制端本机缓存，可打开预览或保存到相册", "Save a screenshot to local cache, then preview or save it."),
+            title = ManagementTexts.Scaffold.SCREENSHOT.get(),
+            subtitle = ManagementTexts.Scaffold.SAVE_SCREENSHOT_LOCAL_CACHE_THEN_PREVIEW_SAVE_IT.get(),
             icon = Icons.Default.PhotoCamera,
-            accent = AppColors.iOSBlue,
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.AdvancedReboot,
-            title = ManagementTexts.text("高级重启", "Advanced reboot"),
-            subtitle = ManagementTexts.text("正常重启、Recovery、FastBoot", "Restart, Recovery, or Fastboot"),
+            title = ManagementTexts.Scaffold.ADVANCED_REBOOT.get(),
+            subtitle = ManagementTexts.Scaffold.RESTART_POWER_OFF_RECOVERY_FASTBOOT.get(),
             icon = Icons.Default.RestartAlt,
-            accent = Color(0xFF34C759),
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.ActivateApp,
-            title = ManagementTexts.text("激活应用", "Activate app"),
-            subtitle = ManagementTexts.text("点击后加载可激活应用列表", "Load the list of supported activation apps"),
+            title = ManagementTexts.Scaffold.ACTIVATE_APP.get(),
+            subtitle = ManagementTexts.Scaffold.LOAD_LIST_SUPPORTED_ACTIVATION_APPS.get(),
             icon = Icons.Default.VerifiedUser,
-            accent = Color(0xFF5AC8FA),
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.ModifyDpi,
-            title = ManagementTexts.text("修改DPI", "Change DPI"),
+            title = ManagementTexts.Scaffold.CHANGE_DPI.get(),
             subtitle =
                 snapshot.currentDpiLabel?.let {
-                    ManagementTexts.text("当前 $it，点击输入新数值", "Current $it. Tap to enter a new value")
-                } ?: ManagementTexts.text("输入新的屏幕密度", "Enter a new screen density"),
+                    ManagementTexts.Scaffold.CURRENT_TAP_ENTER_NEW_VALUE.format(it)
+                } ?: ManagementTexts.Scaffold.ENTER_NEW_SCREEN_DENSITY.get(),
             icon = Icons.Default.CropFree,
-            accent = Color(0xFFFF9F0A),
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.ModifyResolution,
-            title = ManagementTexts.text("修改分辨率", "Change resolution"),
-            subtitle = snapshot.resolution.ifBlank { ManagementTexts.text("调整屏幕分辨率大小", "Adjust the screen resolution") },
+            title = ManagementTexts.Scaffold.CHANGE_RESOLUTION.get(),
+            subtitle = snapshot.resolution.ifBlank { ManagementTexts.Scaffold.ADJUST_SCREEN_RESOLUTION.get() },
             icon = Icons.Default.CropFree,
-            accent = Color(0xFF30B0C7),
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.AnimationScale,
-            title = ManagementTexts.text("动画调整", "Animation scale"),
-            subtitle = ManagementTexts.text("统一设置窗口、过渡和时长动画倍率", "Set window, transition, and duration scales together"),
+            title = ManagementTexts.Scaffold.ANIMATION_SCALE.get(),
+            subtitle = ManagementTexts.Scaffold.SET_WINDOW_TRANSITION_DURATION_SCALES_TOGETHER.get(),
             icon = Icons.Default.Tune,
-            accent = Color(0xFFFF9500),
+            accent = accent,
         ),
         UtilityCardItem(
             action = UtilityAction.SleepStandby,
-            title = ManagementTexts.text("熄屏待机", "Screen standby"),
-            subtitle = ManagementTexts.text("提供息屏、亮屏两个操作", "Provide sleep and wake actions"),
+            title = ManagementTexts.Scaffold.SCREEN_STANDBY.get(),
+            subtitle = ManagementTexts.Scaffold.PROVIDE_SLEEP_WAKE_ACTIONS.get(),
             icon = Icons.Default.Lightbulb,
-            accent = Color(0xFF8E8E93),
-        ),
-        UtilityCardItem(
-            action = UtilityAction.TombstoneMode,
-            title = ManagementTexts.text("墓碑模式", "Tombstone mode"),
-            subtitle = ManagementTexts.text("暂未实现，当前保持禁用", "Not available yet"),
-            icon = Icons.Default.Refresh,
-            accent = Color(0xFF5856D6),
-            available = false,
-            statusText = ManagementTexts.text("禁用", "Disabled"),
+            accent = accent,
         ),
     )
+}

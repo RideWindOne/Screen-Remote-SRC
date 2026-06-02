@@ -10,6 +10,8 @@ import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedAudioDecoder
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedVideoDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,20 +27,20 @@ sealed class ConnectStatus {
 
     data class Connecting(
         val sessionId: String,
-        val message: String, // TODO
+        val message: String,
     ) : ConnectStatus()
 
     data class Connected(
-        val sessionId: String, // TODO
+        val sessionId: String,
     ) : ConnectStatus()
 
     data class Failed(
-        val sessionId: String, // TODO
-        val error: String, // TODO
+        val sessionId: String,
+        val error: String,
     ) : ConnectStatus()
 
     data class Unauthorized(
-        val sessionId: String, // TODO
+        val sessionId: String,
     ) : ConnectStatus()
 }
 
@@ -103,7 +105,7 @@ class ConnectionViewModel(
                 }
 
                 try {
-                    val options = sessionData.toScrcpyOptions() // 包含 sessionId
+                    val options = sessionData.toScrcpyOptions()
                     val result =
                         scrcpyClient.connect(
                             sessionId = sessionId,
@@ -254,6 +256,34 @@ class ConnectionViewModel(
     fun getCurrentSessionOptions(): ScrcpyOptions? = scrcpyClient.getCurrentSessionOptions()
 
     fun createSessionContext(): SessionContext = scrcpyClient.createSessionContext()
+
+    fun rememberResolvedVideoDecoder(
+        decoderName: String,
+        expectedDeviceSerial: String,
+        expectedCodec: String,
+    ) {
+        createSessionContext().currentSession()
+            ?.rememberResolvedVideoDecoder(decoderName, expectedDeviceSerial, expectedCodec)
+    }
+
+    fun rememberResolvedAudioDecoder(
+        decoderName: String,
+        expectedDeviceSerial: String,
+        expectedCodec: String,
+    ) {
+        createSessionContext().currentSession()
+            ?.rememberResolvedAudioDecoder(decoderName, expectedDeviceSerial, expectedCodec)
+    }
+
+    fun runtimeRejectedDecoders(key: String): Set<String> =
+        createSessionContext().currentSession()?.runtimeRejectedDecoders(key).orEmpty()
+
+    fun rememberRuntimeRejectedDecoder(
+        key: String,
+        decoderName: String,
+    ) {
+        createSessionContext().currentSession()?.rememberRuntimeRejectedDecoder(key, decoderName)
+    }
 
     suspend fun wakeUpScreen() = scrcpyClient.wakeUpScreen()
 

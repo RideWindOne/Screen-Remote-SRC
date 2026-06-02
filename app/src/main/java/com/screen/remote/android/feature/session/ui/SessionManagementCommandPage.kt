@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -26,38 +29,33 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.core.designsystem.component.AppDivider
-import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
-import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager
-import dadb.AdbShellPacket
-import dadb.AdbShellStream
-import dadb.ID_CLOSE_STDIN
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -77,6 +75,19 @@ private const val SESSION_MANAGEMENT_SHELL_MAX_RECONNECT_ATTEMPTS = 3
 private val SESSION_MANAGEMENT_ANSI_PATTERN =
     Regex("""\u001B(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\)|[PX^_].*?\u001B\\|[@-Z\\-_])""")
 
+private val SessionManagementCommandTextColor
+    @Composable
+    get() = sessionManagementTerminalPalette().text
+private val SessionManagementCommandHintColor
+    @Composable
+    get() = sessionManagementTerminalPalette().hint
+private val SessionManagementCommandPromptColor
+    @Composable
+    get() = sessionManagementTerminalPalette().accent
+private val SessionManagementCommandErrorColor
+    @Composable
+    get() = sessionManagementTerminalPalette().error
+
 data class ManagementCommandRecord(
     val command: String,
     val output: String,
@@ -90,7 +101,6 @@ private data class ManagementCommandPreset(
     val description: String,
     val command: String,
     val icon: ImageVector,
-    val accent: Color,
 )
 
 @Composable
@@ -106,6 +116,21 @@ internal fun SessionManagementCommandPage(
     showPresetDialog: Boolean,
     onShowPresetDialogChange: (Boolean) -> Unit,
 ) {
+    var enteredCommands by remember(terminalSession) { mutableStateOf<List<String>>(emptyList()) }
+    var historyCursor by remember(terminalSession) { mutableStateOf<Int?>(null) }
+    var inputBeforeHistory by remember(terminalSession) { mutableStateOf("") }
+    val availableHistory = remember(enteredCommands, history) { (enteredCommands + history.map { it.command }).distinct() }
+
+    fun sendCommand(command: String) {
+        val normalized = command.trim()
+        if (normalized.isBlank()) return
+        terminalSession.sendLine(normalized)
+        enteredCommands = (listOf(normalized) + enteredCommands).take(SESSION_MANAGEMENT_COMMAND_HISTORY_MAX_SIZE)
+        historyCursor = null
+        inputBeforeHistory = ""
+        onCommandInputChange("")
+    }
+
     LaunchedEffect(terminalSession) {
         terminalSession.start()
     }
@@ -119,10 +144,30 @@ internal fun SessionManagementCommandPage(
         isConnected = terminalSession.isConnected,
         commandInput = commandInput,
         inputEnabled = terminalSession.canWrite,
-        onCommandInputChange = onCommandInputChange,
-        onExecuteCommand = { command ->
-            terminalSession.sendLine(command)
-            onCommandInputChange("")
+        onCommandInputChange = { value ->
+            historyCursor = null
+            inputBeforeHistory = value
+            onCommandInputChange(value)
+        },
+        onExecuteCommand = ::sendCommand,
+        historyPreviousEnabled = availableHistory.isNotEmpty() && (historyCursor == null || historyCursor!! < availableHistory.lastIndex),
+        historyNextEnabled = historyCursor != null,
+        onHistoryPrevious = {
+            if (historyCursor == null) inputBeforeHistory = commandInput
+            val nextIndex = ((historyCursor ?: -1) + 1).coerceAtMost(availableHistory.lastIndex)
+            historyCursor = nextIndex
+            onCommandInputChange(availableHistory[nextIndex])
+        },
+        onHistoryNext = {
+            val currentIndex = historyCursor ?: return@SessionManagementTerminalDisplay
+            if (currentIndex == 0) {
+                historyCursor = null
+                onCommandInputChange(inputBeforeHistory)
+            } else {
+                val nextIndex = currentIndex - 1
+                historyCursor = nextIndex
+                onCommandInputChange(availableHistory[nextIndex])
+            }
         },
         onClear = terminalSession::clear,
     )
@@ -132,8 +177,7 @@ internal fun SessionManagementCommandPage(
         SessionManagementCommandPresetDialog(
             isExecuting = isExecuting,
             onExecuteCommand = { command ->
-                terminalSession.sendLine(command)
-                onCommandInputChange("")
+                sendCommand(command)
                 onShowPresetDialogChange(false)
             },
             onDismiss = { onShowPresetDialogChange(false) },
@@ -150,22 +194,28 @@ private fun SessionManagementTerminalDisplay(
     inputEnabled: Boolean,
     onCommandInputChange: (String) -> Unit,
     onExecuteCommand: (String) -> Unit,
+    historyPreviousEnabled: Boolean,
+    historyNextEnabled: Boolean,
+    onHistoryPrevious: () -> Unit,
+    onHistoryNext: () -> Unit,
     onClear: () -> Unit,
 ) {
+    val terminalPalette = sessionManagementTerminalPalette()
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = managementPanelColor(),
+        color = MaterialTheme.colorScheme.surface,
         modifier = modifier,
-        tonalElevation = 0.5.dp,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFF1E1E1E),
+            color = terminalPalette.background,
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .fillMaxHeight()
-                    .padding(8.dp),
+                    .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
         ) {
             Column(
                 modifier =
@@ -180,7 +230,17 @@ private fun SessionManagementTerminalDisplay(
                     onClear = onClear,
                 )
 
-                AppDivider()
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = terminalPalette.separator,
+                )
+
+                SessionManagementTerminalHistoryActions(
+                    previousEnabled = historyPreviousEnabled,
+                    nextEnabled = historyNextEnabled,
+                    onPrevious = onHistoryPrevious,
+                    onNext = onHistoryNext,
+                )
 
                 SessionManagementTerminalInputLine(
                     commandInput = commandInput,
@@ -194,47 +254,92 @@ private fun SessionManagementTerminalDisplay(
 }
 
 @Composable
+private fun SessionManagementTerminalHistoryActions(
+    previousEnabled: Boolean,
+    nextEnabled: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(
+            onClick = onPrevious,
+            enabled = previousEnabled,
+            modifier = Modifier.size(30.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = ManagementTexts.Commands.PREVIOUS_COMMAND.get(),
+                tint = if (previousEnabled) SessionManagementCommandPromptColor else SessionManagementCommandHintColor.copy(alpha = 0.32f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        IconButton(
+            onClick = onNext,
+            enabled = nextEnabled,
+            modifier = Modifier.size(30.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = ManagementTexts.Commands.NEXT_COMMAND.get(),
+                tint = if (nextEnabled) SessionManagementCommandPromptColor else SessionManagementCommandHintColor.copy(alpha = 0.32f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+@Composable
 private fun SessionManagementTerminalContent(
     modifier: Modifier = Modifier,
     output: String,
     isConnected: Boolean,
     onClear: () -> Unit,
 ) {
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
+    val displayLines =
+        rememberTerminalOutputLines(
+            output = output,
+            isConnected = isConnected,
+        )
 
-    LaunchedEffect(output.length, isConnected) {
-        scrollState.animateScrollTo(scrollState.maxValue)
+    LaunchedEffect(displayLines.size, output.length, isConnected) {
+        if (displayLines.isNotEmpty()) {
+            listState.animateScrollToItem(displayLines.lastIndex)
+        }
     }
 
     Box(
         modifier = modifier.fillMaxWidth(),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .heightIn(min = 150.dp)
-                    .verticalScroll(scrollState)
-                    .padding(14.dp),
-        ) {
-            SelectionContainer {
-                Text(
-                    text =
-                        output.ifBlank {
-                            if (isConnected) {
-                                ManagementTexts.text("# 已连接交互式 shell。", "# Interactive shell connected.")
-                            } else {
-                                ManagementTexts.text("# 正在打开交互式 shell...", "# Opening interactive shell...")
-                            }
-                        },
-                    style =
-                        MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 19.sp,
-                        ),
-                    color = Color(0xFFCCCCCC),
-                )
+        SelectionContainer {
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .heightIn(min = 150.dp)
+                        .padding(14.dp),
+            ) {
+                itemsIndexed(
+                    items = displayLines,
+                    key = { index, _ -> index },
+                ) { _, line ->
+                    Text(
+                        text = line,
+                        style =
+                            MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = SessionManagementTerminalTextTokens.monospace,
+                                fontSize = SessionManagementTerminalTextTokens.outputFontSize,
+                                lineHeight = SessionManagementTerminalTextTokens.outputLineHeight,
+                            ),
+                        color = SessionManagementCommandTextColor,
+                    )
+                }
             }
         }
 
@@ -249,14 +354,31 @@ private fun SessionManagementTerminalContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = ManagementTexts.text("清空", "Clear"),
-                    tint = Color(0xFFFF5252),
+                    contentDescription = ManagementTexts.Commands.CLEAR.get(),
+                    tint = SessionManagementCommandErrorColor,
                     modifier = Modifier.size(16.dp),
                 )
             }
         }
     }
 }
+
+@Composable
+private fun rememberTerminalOutputLines(
+    output: String,
+    isConnected: Boolean,
+): List<String> =
+    androidx.compose.runtime.remember(output, isConnected) {
+        val displayOutput =
+            output.ifBlank {
+                if (isConnected) {
+                    ManagementTexts.Commands.INTERACTIVE_SHELL_CONNECTED.get()
+                } else {
+                    ManagementTexts.Commands.OPENING_INTERACTIVE_SHELL.get()
+                }
+            }
+        displayOutput.lineSequence().toList()
+    }
 
 @Composable
 private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
@@ -271,18 +393,18 @@ private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
                 text = "$",
                 style =
                     MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = SessionManagementTerminalTextTokens.monospace,
                         fontWeight = FontWeight.Bold,
                     ),
-                color = Color(0xFF4EC9B0), // 青色提示符
+                color = SessionManagementCommandPromptColor,
             )
             Text(
                 text = record.command,
                 style =
                     MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = SessionManagementTerminalTextTokens.monospace,
                     ),
-                color = Color(0xFFD4D4D4), // 浅灰色命令
+                color = SessionManagementCommandTextColor,
             )
         }
 
@@ -292,13 +414,13 @@ private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
                 text = record.output,
                 style =
                     MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = SessionManagementTerminalTextTokens.monospace,
                     ),
                 color =
                     if (record.isSuccess) {
-                        Color(0xFFCCCCCC) // 成功输出：浅灰
+                        SessionManagementCommandTextColor
                     } else {
-                        Color(0xFFF48771) // 错误输出：红色
+                        SessionManagementCommandErrorColor
                     },
             )
         }
@@ -312,9 +434,9 @@ private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
             })",
             style =
                 MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = SessionManagementTerminalTextTokens.monospace,
                 ),
-            color = Color(0xFF6A9955), // 绿色注释
+            color = SessionManagementCommandHintColor,
         )
     }
 }
@@ -340,10 +462,10 @@ private fun SessionManagementTerminalInputLine(
             text = "$",
             style =
                 MaterialTheme.typography.bodyLarge.copy(
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = SessionManagementTerminalTextTokens.monospace,
                     fontWeight = FontWeight.Bold,
                 ),
-            color = Color(0xFF4EC9B0),
+            color = SessionManagementCommandPromptColor,
             modifier =
                 Modifier
                     .padding(top = 9.dp, end = 8.dp),
@@ -361,12 +483,12 @@ private fun SessionManagementTerminalInputLine(
                     .padding(top = 8.dp, bottom = 8.dp),
             textStyle =
                 TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    color = Color(0xFFD4D4D4),
+                    fontFamily = SessionManagementTerminalTextTokens.monospace,
+                    fontSize = SessionManagementTerminalTextTokens.inputFontSize,
+                    lineHeight = SessionManagementTerminalTextTokens.inputLineHeight,
+                    color = SessionManagementCommandTextColor,
                 ),
-            cursorBrush = SolidColor(Color(0xFF4EC9B0)),
+            cursorBrush = SolidColor(SessionManagementCommandPromptColor),
             keyboardOptions =
                 KeyboardOptions(
                     imeAction = ImeAction.Send,
@@ -388,16 +510,17 @@ private fun SessionManagementTerminalInputLine(
                         Text(
                             text =
                                 if (inputEnabled) {
-                                    ManagementTexts.text("输入 Shell 命令", "Enter a shell command")
+                                    ManagementTexts.Commands.ENTER_SHELL_COMMAND.get()
                                 } else {
-                                    ManagementTexts.text("正在连接 shell...", "Connecting to shell...")
+                                    ManagementTexts.Commands.CONNECTING_SHELL.get()
                                 },
                             style =
                                 MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    lineHeight = 22.sp,
+                                    fontFamily = SessionManagementTerminalTextTokens.monospace,
+                                    fontSize = SessionManagementTerminalTextTokens.outputFontSize,
+                                    lineHeight = SessionManagementTerminalTextTokens.inputLineHeight,
                                 ),
-                            color = Color(0xFFCCCCCC).copy(alpha = 0.46f),
+                            color = SessionManagementCommandHintColor,
                         )
                     }
                     innerTextField()
@@ -412,13 +535,13 @@ private fun SessionManagementTerminalInputLine(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = ManagementTexts.text("执行命令", "Run command"),
+                contentDescription = ManagementTexts.Commands.RUN_COMMAND.get(),
                 tint =
                     if (normalizedCommand.isNotBlank() && inputEnabled) {
-                        Color(0xFF4EC9B0)
-                    } else {
-                        Color(0xFFCCCCCC).copy(alpha = 0.32f)
-                    },
+                    SessionManagementCommandPromptColor
+                } else {
+                    SessionManagementCommandHintColor.copy(alpha = 0.32f)
+                },
             )
         }
     }
@@ -430,54 +553,31 @@ private fun SessionManagementCommandPresetDialog(
     onExecuteCommand: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
+    val presets = remember { managementCommandPresets() }
+
+    SessionManagementCenteredDialog(
+        title = ManagementTexts.Commands.QUICK_COMMANDS.get(),
+        onDismiss = onDismiss,
+        widthRatio = 0.92f,
+        maxHeightRatio = 0.72f,
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
+        LazyColumn(
             modifier =
                 Modifier
-                    .fillMaxWidth(0.98f)
-                    .fillMaxHeight(0.65f),
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                // 标题栏
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
-                ) {
-                    Text(
-                        text = ManagementTexts.text("快捷命令", "Quick commands"),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-
-                AppDivider()
-
-                // 命令列表
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    managementCommandPresets().forEach { preset ->
-                        SessionManagementCommandPresetCard(
-                            preset = preset,
-                            isExecuting = isExecuting,
-                            onExecuteCommand = onExecuteCommand,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
+            itemsIndexed(
+                items = presets,
+                key = { _, preset -> preset.command },
+            ) { _, preset ->
+                SessionManagementCommandPresetCard(
+                    preset = preset,
+                    isExecuting = isExecuting,
+                    onExecuteCommand = onExecuteCommand,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
@@ -492,8 +592,9 @@ private fun SessionManagementCommandPresetCard(
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = managementPanelColor(),
-        tonalElevation = 0.5.dp,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
         modifier = modifier,
     ) {
         Column(
@@ -511,12 +612,12 @@ private fun SessionManagementCommandPresetCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = preset.accent.copy(alpha = 0.14f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                 ) {
                     Icon(
                         imageVector = preset.icon,
                         contentDescription = null,
-                        tint = preset.accent,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier =
                             Modifier
                                 .padding(8.dp)
@@ -539,7 +640,7 @@ private fun SessionManagementCommandPresetCard(
 
             Text(
                 text = preset.command,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = SessionManagementTerminalTextTokens.monospace),
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -556,7 +657,7 @@ internal class ManagementTerminalSession(
     var isConnected by mutableStateOf(false)
         private set
 
-    private var shellStream: AdbShellStream? = null
+    private var shellStream: ManagementShellStream? = null
     private var readJob: Job? = null
     private var keepAliveJob: Job? = null
     private var closeRequested = false
@@ -574,17 +675,11 @@ internal class ManagementTerminalSession(
 
         closeRequested = false
         if (!hasEverConnected) {
-            append("# 正在连接交互式 shell...\n")
+            append(ManagementTexts.Commands.SHELL_CONNECTING.get())
         }
         readJob =
             scope.launch {
-                val connection = AdbBridge.getConnection()
-                if (connection == null) {
-                    appendConnectionFailed()
-                    return@launch
-                }
-
-                val stream = connection.openShellStream("")
+                val stream = openManagementShellStream()
                 if (stream == null) {
                     appendConnectionFailed()
                     return@launch
@@ -593,7 +688,7 @@ internal class ManagementTerminalSession(
                 shellStream = stream
                 isConnected = true
                 if (!hasEverConnected) {
-                    append("# 已连接。\n")
+                    append(ManagementTexts.Commands.SHELL_CONNECTED.get())
                 }
                 hasEverConnected = true
                 reconnectAttempts = 0
@@ -603,16 +698,12 @@ internal class ManagementTerminalSession(
                     try {
                         while (true) {
                             when (val packet = stream.read()) {
-                                is AdbShellPacket.StdOut -> {
-                                    appendTerminalTextOnMain(String(packet.payload))
+                                is ManagementShellPacket.Output -> {
+                                    appendTerminalTextOnMain(packet.text)
                                 }
 
-                                is AdbShellPacket.StdError -> {
-                                    appendTerminalTextOnMain(String(packet.payload))
-                                }
-
-                                is AdbShellPacket.Exit -> {
-                                    appendOnMain("\n# shell 已退出，exit=${packet.payload.firstOrNull()?.toInt() ?: 0}\n")
+                                is ManagementShellPacket.Exit -> {
+                                    appendOnMain(ManagementTexts.Commands.SHELL_EXITED.format(packet.code))
                                     break
                                 }
                             }
@@ -656,7 +747,7 @@ internal class ManagementTerminalSession(
 
         val stream =
             shellStream ?: run {
-                append("# shell 尚未连接。\n")
+                append(ManagementTexts.Commands.SHELL_NOT_CONNECTED.get())
                 return
             }
 
@@ -671,7 +762,7 @@ internal class ManagementTerminalSession(
                 stream.write("$line\n")
             } catch (error: Exception) {
                 withContext(Dispatchers.Main) {
-                    append("\n# 写入失败: ${error.message.orEmpty()}\n")
+                    append(ManagementTexts.Commands.SHELL_WRITE_FAILED.format(error.message.orEmpty()))
                     close()
                 }
             }
@@ -690,13 +781,13 @@ internal class ManagementTerminalSession(
         readJob = null
         isConnected = false
         shellStream?.let { stream ->
-            runCatching { stream.write(ID_CLOSE_STDIN) }
+            runCatching { stream.closeInput() }
             runCatching { stream.close() }
         }
         shellStream = null
     }
 
-    private fun startKeepAlive(stream: AdbShellStream) {
+    private fun startKeepAlive(stream: ManagementShellStream) {
         keepAliveJob?.cancel()
         keepAliveJob =
             scope.launch(Dispatchers.IO) {
@@ -717,29 +808,31 @@ internal class ManagementTerminalSession(
 
     private fun appendConnectionFailed() {
         output = output.trimEnd()
-        append("\n# 已断开。\n")
+        append(ManagementTexts.Commands.SHELL_DISCONNECTED.get())
     }
 
     private fun appendTerminalText(text: String) {
+        var nextOutput = output
         SESSION_MANAGEMENT_ANSI_PATTERN
             .replace(text, "")
             .forEach { char ->
-                output =
+                nextOutput =
                     when (char) {
                         '\r' -> {
-                            val lineStart = output.lastIndexOf('\n') + 1
-                            output.take(lineStart)
+                            val lineStart = nextOutput.lastIndexOf('\n') + 1
+                            nextOutput.take(lineStart)
                         }
 
                         '\b' -> {
-                            output.dropLast(1)
+                            nextOutput.dropLast(1)
                         }
 
                         else -> {
-                            output + char
+                            nextOutput + char
                         }
-                    }.takeLast(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT)
+                    }
             }
+        output = nextOutput.takeLast(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT)
     }
 
     private suspend fun appendOnMain(text: String) {
@@ -758,24 +851,7 @@ internal class ManagementTerminalSession(
 internal suspend fun executeManagementShellCommand(command: String): ManagementCommandRecord {
     val normalizedCommand = command.trim()
     val executedAtMillis = System.currentTimeMillis()
-    val connection = AdbBridge.getConnection()
-
-    if (connection == null) {
-        return ManagementCommandRecord(
-            command = normalizedCommand,
-            output = "当前没有可用的 ADB 连接。",
-            isSuccess = false,
-            executedAtMillis = executedAtMillis,
-            durationMs = 0L,
-        )
-    }
-
-    val result =
-        AdbShellManager.execute(
-            connection = connection,
-            command = normalizedCommand,
-            retryOnFailure = false,
-        )
+    val result = executeManagementShell(normalizedCommand)
     val durationMs = (System.currentTimeMillis() - executedAtMillis).coerceAtLeast(0L)
 
     return result.fold(
@@ -809,9 +885,9 @@ private fun normalizeManagementCommandOutput(
             .trim()
             .ifBlank {
                 if (success) {
-                    "命令执行完成，无输出。"
+                    ManagementTexts.Commands.COMMAND_COMPLETED_NO_OUTPUT.get()
                 } else {
-                    "命令执行失败。"
+                    ManagementTexts.Commands.COMMAND_FAILED.get()
                 }
             }
 
@@ -822,9 +898,7 @@ private fun normalizeManagementCommandOutput(
     return buildString {
         append(normalized.take(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT))
         append("\n\n")
-        append("...输出已截断，原始内容超过 ")
-        append(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT)
-        append(" 个字符。")
+        append(ManagementTexts.Commands.OUTPUT_TRUNCATED.format(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT))
     }
 }
 
@@ -840,105 +914,86 @@ private fun ManagementCommandRecord.executedAtLabel(): String =
 private fun managementCommandPresets(): List<ManagementCommandPreset> =
     listOf(
         ManagementCommandPreset(
-            title = ManagementTexts.text("设备概览", "Device overview"),
-            description = ManagementTexts.text("快速确认品牌、型号和系统版本。", "Quick check of brand, model, and Android version."),
+            title = ManagementTexts.Commands.DEVICE_OVERVIEW.get(),
+            description = ManagementTexts.Commands.QUICK_CHECK_BRAND_MODEL_ANDROID_VERSION.get(),
             command =
                 "echo Manufacturer: \$(getprop ro.product.manufacturer) && " +
                     "echo Model: \$(getprop ro.product.model) && " +
                     "echo Android: \$(getprop ro.build.version.release)",
             icon = Icons.Default.Android,
-            accent = Color(0xFF53A7FF),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("屏幕参数", "Display metrics"),
-            description = ManagementTexts.text("读取当前分辨率和 DPI 状态。", "Read the current resolution and DPI."),
+            title = ManagementTexts.Commands.DISPLAY_METRICS.get(),
+            description = ManagementTexts.Commands.READ_CURRENT_RESOLUTION_DPI.get(),
             command = "wm size && wm density",
             icon = Icons.Default.CropFree,
-            accent = Color(0xFFFFA94D),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("前台页面", "Foreground window"),
-            description = ManagementTexts.text("定位当前焦点窗口和前台 Activity。", "Locate the focused window and foreground activity."),
+            title = ManagementTexts.Commands.FOREGROUND_WINDOW.get(),
+            description = ManagementTexts.Commands.LOCATE_FOCUSED_WINDOW_FOREGROUND_ACTIVITY.get(),
             command = "dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'",
             icon = Icons.Default.Search,
-            accent = Color(0xFF7B61FF),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("第三方应用", "User apps"),
+            title = ManagementTexts.Commands.USER_APPS.get(),
             description =
-                ManagementTexts.text(
-                    "列出用户安装应用，便于排障或核对包名。",
-                    "List installed user apps for debugging and package checks.",
-                ),
+                ManagementTexts.Commands.LIST_USER_APPS_DESCRIPTION.get(),
             command = "pm list packages -3 | head -n 80",
             icon = Icons.Default.Apps,
-            accent = Color(0xFF4CB782),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("网络状态", "Network status"),
-            description = ManagementTexts.text("查看 WLAN 地址和当前无线调试端口。", "Show WLAN address and wireless debugging port."),
+            title = ManagementTexts.Commands.NETWORK_STATUS.get(),
+            description = ManagementTexts.Commands.SHOW_WLAN_ADDRESS_WIRELESS_DEBUGGING_PORT.get(),
             command = "ip addr show wlan0 | grep -m 1 'inet ' && getprop service.adb.tcp.port",
             icon = Icons.Default.Wifi,
-            accent = Color(0xFF12B7A2),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("Logcat 快照", "Logcat snapshot"),
+            title = ManagementTexts.Commands.LOGCAT_SNAPSHOT.get(),
             description =
-                ManagementTexts.text(
-                    "抓取最近 120 行日志，适合先做一次快照排查。",
-                    "Capture the latest 120 log lines for a quick check.",
-                ),
+                ManagementTexts.Commands.LOGCAT_SNAPSHOT_DESCRIPTION.get(),
             command = "logcat -d -t 120",
             icon = Icons.Default.Code,
-            accent = Color(0xFF5F6B7A),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("内存使用", "Memory usage"),
-            description = ManagementTexts.text("查看系统内存使用情况和可用内存。", "Show total used and available memory."),
+            title = ManagementTexts.Commands.MEMORY_USAGE.get(),
+            description = ManagementTexts.Commands.SHOW_TOTAL_USED_AVAILABLE_MEMORY.get(),
             command = "dumpsys meminfo | grep -E 'Total RAM|Free RAM|Used RAM'",
             icon = Icons.Default.Android,
-            accent = Color(0xFFFF6B9D),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("电池信息", "Battery info"),
-            description = ManagementTexts.text("查看电池电量、温度和充电状态。", "Show battery level, temperature, and charging state."),
+            title = ManagementTexts.Commands.BATTERY_INFO.get(),
+            description = ManagementTexts.Commands.SHOW_BATTERY_LEVEL_TEMPERATURE_CHARGING_STATE.get(),
             command = "dumpsys battery | grep -E 'level|temperature|status'",
             icon = Icons.Default.Android,
-            accent = Color(0xFF4CAF50),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("CPU 信息", "CPU info"),
-            description = ManagementTexts.text("查看 CPU 架构和核心数量。", "Show CPU architecture and core count."),
+            title = ManagementTexts.Commands.CPU_INFO.get(),
+            description = ManagementTexts.Commands.SHOW_CPU_ARCHITECTURE_CORE_COUNT.get(),
             command = "cat /proc/cpuinfo | grep -E 'processor|Hardware|model name' | head -n 10",
             icon = Icons.Default.Android,
-            accent = Color(0xFFFF9800),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("存储空间", "Storage"),
-            description = ManagementTexts.text("查看内部存储和 SD 卡的使用情况。", "Show internal storage and SD card usage."),
+            title = ManagementTexts.Commands.STORAGE.get(),
+            description = ManagementTexts.Commands.SHOW_INTERNAL_STORAGE_SD_CARD_USAGE.get(),
             command = "df -h | grep -E '/data|/storage'",
             icon = Icons.Default.Android,
-            accent = Color(0xFF9C27B0),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("正在运行的进程", "Running processes"),
-            description = ManagementTexts.text("列出当前正在运行的应用进程。", "List running app processes."),
+            title = ManagementTexts.Commands.RUNNING_PROCESSES.get(),
+            description = ManagementTexts.Commands.LIST_RUNNING_APP_PROCESSES.get(),
             command = "ps -A | grep -v '\\[' | head -n 30",
             icon = Icons.Default.Apps,
-            accent = Color(0xFF00BCD4),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("清理后台应用", "Kill background apps"),
-            description = ManagementTexts.text("强制停止所有后台应用释放内存。", "Force-stop background apps to free memory."),
+            title = ManagementTexts.Commands.KILL_BACKGROUND_APPS.get(),
+            description = ManagementTexts.Commands.FORCE_STOP_BACKGROUND_APPS_FREE_MEMORY.get(),
             command = "am kill-all",
             icon = Icons.Default.DeleteOutline,
-            accent = Color(0xFFFF5252),
         ),
         ManagementCommandPreset(
-            title = ManagementTexts.text("系统属性", "System properties"),
-            description = ManagementTexts.text("查看关键系统属性信息。", "Inspect key system properties."),
+            title = ManagementTexts.Commands.SYSTEM_PROPERTIES.get(),
+            description = ManagementTexts.Commands.INSPECT_KEY_SYSTEM_PROPERTIES.get(),
             command = "getprop | grep -E 'ro.build|ro.product|ro.hardware'",
             icon = Icons.Default.Info,
-            accent = Color(0xFF607D8B),
         ),
     )

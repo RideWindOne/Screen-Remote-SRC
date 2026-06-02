@@ -2,8 +2,8 @@ package com.screen.remote.android.feature.device.viewmodel
 
 import android.hardware.usb.UsbDevice
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.screen.remote.android.app.ScreenRemoteApp
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.connection.DeviceInfo
 import com.screen.remote.android.infrastructure.adb.usb.UsbDeviceInfo
@@ -12,10 +12,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class DeviceViewModel : ViewModel() {
-    private val adbConnectionManager: AdbConnectionManager =
-        ScreenRemoteApp.instance.adbConnectionManager
-
+class DeviceViewModel(
+    private val adbConnectionManager: AdbConnectionManager,
+) : ViewModel() {
     // 已连接设备列表
     val connectedDevices: StateFlow<List<DeviceInfo>> =
         adbConnectionManager.connectedDevices
@@ -115,11 +114,23 @@ class DeviceViewModel : ViewModel() {
         object Connecting : ConnectionState()
 
         data class Success(
-            val deviceId: String, // TODO
+            val deviceId: String,
         ) : ConnectionState()
 
         data class Error(
             val message: String,
         ) : ConnectionState()
+    }
+
+    class Factory(
+        private val adbConnectionManager: AdbConnectionManager,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(DeviceViewModel::class.java)) {
+                return DeviceViewModel(adbConnectionManager) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
     }
 }

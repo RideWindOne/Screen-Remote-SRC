@@ -46,14 +46,12 @@ fun SettingsScreen(
         onNavigateToBackupRestore = onNavigateToBackupRestore,
         onUpdateSettings = viewModel::updateSettings,
         onOpenIssueTracker = { launchExternalLink(context, AppConstants.GITHUB_ISSUES) },
-        onOpenUserGuide = { launchExternalLink(context, AppConstants.GITHUB_REPO) },
+        onOpenUserGuide = { launchExternalLink(context, AppConstants.GITHUB_USER_GUIDE) },
     )
 
     SettingsScreenDialogs(
         routeState = routeState,
-        settings = settings,
         texts = texts,
-        onUpdateSettings = viewModel::updateSettings,
     )
 }
 

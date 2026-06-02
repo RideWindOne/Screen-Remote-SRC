@@ -2,13 +2,14 @@ package com.screen.remote.android.core.data.datastore
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.screen.remote.android.core.domain.model.DecoderCapability
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -22,18 +23,18 @@ private val Context.localDecoderDataStore: DataStore<Preferences> by preferences
  */
 @Serializable
 data class LocalDecoderData(
-    val deviceId: String = "", // 本地设备 ANDROID_ID
-    val videoDecoders: List<String> = emptyList(), // 视频解码器列表
-    val audioDecoders: List<String> = emptyList(), // 音频解码器列表
+    val runtimeSignature: String = "",
+    val videoDecoders: List<DecoderCapability> = emptyList(),
+    val audioDecoders: List<DecoderCapability> = emptyList(),
 ) {
     /**
      * 判断数据是否有效
      * @param currentDeviceId 当前设备 ID
      * @return 数据是否有效
      */
-    fun isValid(currentDeviceId: String): Boolean {
-        if (deviceId.isBlank() || currentDeviceId.isBlank()) return false
-        return deviceId == currentDeviceId
+    fun isValid(currentRuntimeSignature: String): Boolean {
+        if (runtimeSignature.isBlank() || currentRuntimeSignature.isBlank()) return false
+        return runtimeSignature == currentRuntimeSignature
     }
 }
 
@@ -52,20 +53,23 @@ class LocalDecoderManager(
         }
 
     private object Keys {
-        val DEVICE_ID = stringPreferencesKey("device_id")
-        val VIDEO_DECODERS = stringPreferencesKey("video_decoders")
-        val AUDIO_DECODERS = stringPreferencesKey("audio_decoders")
+        val RUNTIME_SIGNATURE = stringPreferencesKey("codec_runtime_signature_v3")
+        val VIDEO_DECODERS = stringPreferencesKey("video_decoder_capabilities_v3")
+        val AUDIO_DECODERS = stringPreferencesKey("audio_decoder_capabilities_v3")
     }
 
     /**
      * 获取本地设备 ID（ANDROID_ID）
      */
     @SuppressLint("HardwareIds")
-    fun getLocalDeviceId(): String =
-        Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ANDROID_ID,
-        ) ?: ""
+    fun getLocalRuntimeSignature(): String {
+        val androidId =
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID,
+            ).orEmpty()
+        return listOf(androidId, Build.FINGERPRINT, Build.VERSION.SDK_INT, Build.VERSION.SECURITY_PATCH).joinToString("|")
+    }
 
     /**
      * 数据流
@@ -73,18 +77,18 @@ class LocalDecoderManager(
     val dataFlow: Flow<LocalDecoderData> =
         context.localDecoderDataStore.data.map { preferences ->
             LocalDecoderData(
-                deviceId = preferences[Keys.DEVICE_ID] ?: "",
+                runtimeSignature = preferences[Keys.RUNTIME_SIGNATURE] ?: "",
                 videoDecoders =
                     try {
                         val json = preferences[Keys.VIDEO_DECODERS] ?: "[]"
-                        this.json.decodeFromString<List<String>>(json)
+                        this.json.decodeFromString<List<DecoderCapability>>(json)
                     } catch (e: Exception) {
                         emptyList()
                     },
                 audioDecoders =
                     try {
                         val json = preferences[Keys.AUDIO_DECODERS] ?: "[]"
-                        this.json.decodeFromString<List<String>>(json)
+                        this.json.decodeFromString<List<DecoderCapability>>(json)
                     } catch (e: Exception) {
                         emptyList()
                     },
@@ -99,10 +103,11 @@ class LocalDecoderManager(
     /**
      * 保存视频解码器列表
      */
-    suspend fun saveVideoDecoders(decoders: List<String>) {
-        val deviceId = getLocalDeviceId()
+    suspend fun saveVideoDecoders(decoders: List<DecoderCapability>) {
+        val runtimeSignature = getLocalRuntimeSignature()
         context.localDecoderDataStore.edit { preferences ->
-            preferences[Keys.DEVICE_ID] = deviceId
+            invalidateCapabilitiesForNewRuntime(preferences, runtimeSignature)
+            preferences[Keys.RUNTIME_SIGNATURE] = runtimeSignature
             preferences[Keys.VIDEO_DECODERS] = json.encodeToString(decoders)
         }
     }
@@ -110,10 +115,11 @@ class LocalDecoderManager(
     /**
      * 保存音频解码器列表
      */
-    suspend fun saveAudioDecoders(decoders: List<String>) {
-        val deviceId = getLocalDeviceId()
+    suspend fun saveAudioDecoders(decoders: List<DecoderCapability>) {
+        val runtimeSignature = getLocalRuntimeSignature()
         context.localDecoderDataStore.edit { preferences ->
-            preferences[Keys.DEVICE_ID] = deviceId
+            invalidateCapabilitiesForNewRuntime(preferences, runtimeSignature)
+            preferences[Keys.RUNTIME_SIGNATURE] = runtimeSignature
             preferences[Keys.AUDIO_DECODERS] = json.encodeToString(decoders)
         }
     }
@@ -123,7 +129,7 @@ class LocalDecoderManager(
      */
     suspend fun saveData(data: LocalDecoderData) {
         context.localDecoderDataStore.edit { preferences ->
-            preferences[Keys.DEVICE_ID] = data.deviceId
+            preferences[Keys.RUNTIME_SIGNATURE] = data.runtimeSignature
             preferences[Keys.VIDEO_DECODERS] = json.encodeToString(data.videoDecoders)
             preferences[Keys.AUDIO_DECODERS] = json.encodeToString(data.audioDecoders)
         }
@@ -136,5 +142,18 @@ class LocalDecoderManager(
         context.localDecoderDataStore.edit { preferences ->
             preferences.clear()
         }
+    }
+
+    /**
+     * 运行环境变化时，音频和视频能力必须作为同一快照一起失效。
+     * 否则先刷新的媒体类型会写入新指纹，使另一媒体类型的旧列表被误判为有效。
+     */
+    private fun invalidateCapabilitiesForNewRuntime(
+        preferences: androidx.datastore.preferences.core.MutablePreferences,
+        runtimeSignature: String,
+    ) {
+        if (preferences[Keys.RUNTIME_SIGNATURE] == runtimeSignature) return
+        preferences.remove(Keys.VIDEO_DECODERS)
+        preferences.remove(Keys.AUDIO_DECODERS)
     }
 }

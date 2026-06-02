@@ -2,8 +2,8 @@ package com.screen.remote.android.infrastructure.scrcpy.controller
 
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.ScrcpyConstants
-import com.screen.remote.android.core.common.manager.ControlDebugLog
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.LogManager.dControl
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
@@ -111,7 +111,7 @@ internal class ScrcpyControllerTransport(
 
     fun start(deviceId: String) {
         if (senderJob?.isActive == true) {
-            ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { "控制消息发送线程已在运行: $deviceId" }
+            dControl(LogTags.SCRCPY_CLIENT) { "控制消息发送线程已在运行: $deviceId" }
             return
         }
 
@@ -120,7 +120,7 @@ internal class ScrcpyControllerTransport(
 
         senderJob =
             controlScope.launch {
-                ControlDebugLog.d(LogTags.SDL) { "控制消息发送线程已启动" }
+                dControl(LogTags.SDL) { "控制消息发送线程已启动" }
                 while (isActive) {
                     try {
                         val signalReceived =
@@ -140,7 +140,7 @@ internal class ScrcpyControllerTransport(
                         }
                     }
                 }
-                ControlDebugLog.d(LogTags.SDL) { "控制消息发送线程已停止: $deviceId" }
+                dControl(LogTags.SDL) { "控制消息发送线程已停止: $deviceId" }
             }
     }
 
@@ -159,7 +159,7 @@ internal class ScrcpyControllerTransport(
         outputSocket = null
         lastControlActivityAtMs = 0L
         keepaliveSentCount = 0
-        ControlDebugLog.d(LogTags.SDL) { "控制消息发送线程已取消" }
+        dControl(LogTags.SDL) { "控制消息发送线程已取消" }
     }
 
     fun destroy() {
@@ -298,7 +298,7 @@ internal class ScrcpyControllerTransport(
             if (isKeepalive) {
                 keepaliveSentCount++
                 if (keepaliveSentCount == 1 || keepaliveSentCount % 10 == 0) {
-                    ControlDebugLog.d(LogTags.SCRCPY_CLIENT) { "控制流保活已发送: count=$keepaliveSentCount, port=$localPort" }
+                    dControl(LogTags.SCRCPY_CLIENT) { "控制流保活已发送: count=$keepaliveSentCount, port=$localPort" }
                 }
             }
         } catch (e: Exception) {

@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
+import com.screen.remote.android.core.domain.model.CodecAcceleration
 import com.screen.remote.android.core.designsystem.component.SectionTitle
 import com.screen.remote.android.core.i18n.CodecTexts
 import com.screen.remote.android.core.i18n.CommonTexts
@@ -135,9 +136,6 @@ private fun extractAudioCodecTypeOptions(codecs: List<CodecInfo>): List<String> 
             codec.type.contains("opus", ignoreCase = true) -> types.add("OPUS")
             codec.type.contains("aac", ignoreCase = true) || codec.type.contains("mp4a", ignoreCase = true) -> types.add("AAC")
             codec.type.contains("flac", ignoreCase = true) -> types.add("FLAC")
-            codec.type.contains("vorbis", ignoreCase = true) -> types.add("Vorbis")
-            codec.type.contains("amr", ignoreCase = true) || codec.type.contains("3gpp", ignoreCase = true) -> types.add("AMR")
-            codec.type.contains("raw", ignoreCase = true) -> types.add("RAW")
         }
     }
     return types.sorted()
@@ -160,17 +158,13 @@ private fun filterAudioCodecs(
                 "OPUS" -> codec.type.contains("opus", ignoreCase = true)
                 "AAC" -> codec.type.contains("aac", ignoreCase = true) || codec.type.contains("mp4a", ignoreCase = true)
                 "FLAC" -> codec.type.contains("flac", ignoreCase = true)
-                "Vorbis" -> codec.type.contains("vorbis", ignoreCase = true)
-                "AMR" -> codec.type.contains("amr", ignoreCase = true) || codec.type.contains("3gpp", ignoreCase = true)
-                "RAW" -> codec.type.contains("raw", ignoreCase = true)
                 else -> true
             }
 
-        val isHardware = !codec.name.startsWith("OMX.google") && !codec.name.startsWith("c2.android")
         val matchesHardware =
             when (hardwareFilter) {
-                "hardware" -> isHardware
-                "software" -> !isHardware
+                "hardware" -> codec.acceleration == CodecAcceleration.HARDWARE
+                "software" -> codec.acceleration == CodecAcceleration.SOFTWARE
                 else -> true
             }
 

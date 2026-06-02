@@ -1,8 +1,14 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Bitmap
+import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +40,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,9 +60,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.designsystem.component.AppDivider
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 private val AppsPanelCornerRadius = 16.dp
 private val AppsRowSpacing = 10.dp
@@ -67,10 +70,6 @@ private val AppsBadgeSpacing = 6.dp
 private val AppsAvatarSize = 40.dp
 private val AppsAvatarImageSize = 26.dp
 private val AppsAvatarFallbackIconSize = 20.dp
-private val AppsDisabledBadgeAccent = Color(0xFFFF9F0A)
-private val AppsSystemBadgeAccent = AppColors.iOSBlue
-private val AppsSystemAvatarAccent = AppColors.iOSBlue
-private val AppsUserAvatarAccent = Color(0xFF34C759)
 private val AppsInfoCardHorizontalPadding = 14.dp
 private val AppsInfoCardVerticalPadding = 16.dp
 private val AppsOptionsMenuWidth = 264.dp
@@ -83,6 +82,76 @@ private val AppsSectionTitleVerticalPadding = 8.dp
 private val AppsDetailLabelWidth = 92.dp
 private val AppsDetailRowMinHeight = 38.dp
 private val AppsDetailDividerInset = 110.dp
+private val AppsDetailContentHeight = 344.dp
+private val AppsSystemBadgeAccent
+    @Composable
+    get() = MaterialTheme.colorScheme.primary
+private val AppsSystemAvatarAccent
+    @Composable
+    get() = MaterialTheme.colorScheme.primary
+private val AppsDisabledBadgeAccent
+    @Composable
+    get() = MaterialTheme.colorScheme.error
+private val AppsUserAvatarAccent
+    @Composable
+    get() = MaterialTheme.colorScheme.primary
+
+@Composable
+internal fun SessionManagementAppPlaceholderRow() {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = AppsRowVerticalPadding),
+        horizontalArrangement = Arrangement.spacedBy(AppsRowSpacing),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(AppsAvatarSize)
+                    .background(
+                        color = MaterialTheme.colorScheme.background,
+                        shape = RoundedCornerShape(999.dp),
+                    ),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.56f)
+                        .height(18.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.background,
+                            shape = RoundedCornerShape(999.dp),
+                        ),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(14.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.background,
+                            shape = RoundedCornerShape(999.dp),
+                        ),
+            )
+        }
+        Box(
+            modifier =
+                Modifier
+                    .width(46.dp)
+                    .height(18.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.background,
+                        shape = RoundedCornerShape(999.dp),
+                    ),
+        )
+    }
+}
 
 @Composable
 internal fun SessionManagementAppRow(
@@ -91,22 +160,14 @@ internal fun SessionManagementAppRow(
     presentationVersion: Int,
     onClick: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val presentation by produceState(
-        initialValue =
-            RemoteAppPresentation(
-                title = entry.appTitle,
-                icon = SessionManagementAppCache.cachedIcon(entry.packageName),
-            ),
-        entry.packageName,
-        entry.apkPath,
-        presentationVersion,
-        packageNameOnlyMode,
-    ) {
-        value = loadCachedAppPresentation(context, entry, packageNameOnlyMode)
-    }
-    val appTitle = presentation.title
-    val iconBitmap = presentation.icon
+    val appTitle =
+        remember(entry.packageName, entry.appTitle, packageNameOnlyMode, presentationVersion) {
+            resolveAppListTitle(entry, packageNameOnlyMode)
+        }
+    val iconBitmap =
+        remember(entry.packageName, presentationVersion) {
+            SessionManagementAppCache.cachedIcon(entry.packageName)
+        }
 
     Row(
         modifier =
@@ -150,13 +211,13 @@ internal fun SessionManagementAppRow(
         ) {
             if (!entry.isEnabled) {
                 SessionManagementUtilityBadge(
-                    text = ManagementTexts.text("已禁用", "Disabled"),
+                    text = ManagementTexts.Apps.DISABLED.get(),
                     accent = AppsDisabledBadgeAccent,
                 )
             }
             if (entry.isSystemApp) {
                 SessionManagementUtilityBadge(
-                    text = ManagementTexts.text("系统", "System"),
+                    text = ManagementTexts.Apps.SYSTEM.get(),
                     accent = AppsSystemBadgeAccent,
                 )
             }
@@ -225,48 +286,40 @@ internal fun SessionManagementAppActionDialog(
     onClearData: () -> Unit,
     onDownloadApk: () -> Unit,
 ) {
-    val actionLabel = if (entry.isEnabled) ManagementTexts.text("停用", "Disable") else ManagementTexts.text("启用", "Enable")
+    val actionLabel = if (entry.isEnabled) ManagementTexts.Apps.DISABLE.get() else ManagementTexts.Apps.ENABLE.get()
     val iconBitmap = SessionManagementAppCache.cachedIcon(entry.packageName)
     val appTitle = SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    SessionManagementCenteredDialog(
+        title = appTitle,
+        onDismiss = onDismiss,
         widthRatio = 0.9f,
-        title = {
-            SessionManagementAppDialogHeader(
-                appTitle = appTitle,
-                packageName = entry.packageName,
-                isSystemApp = entry.isSystemApp,
-                isEnabled = entry.isEnabled,
-                iconBitmap = iconBitmap,
-            )
-        },
-        text = {
-            SessionManagementDialogCard {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    SessionManagementActionRow(icon = Icons.Default.Info, label = ManagementTexts.text("应用详情", "App details"), onClick = onDetails)
-                    SessionManagementActionRow(icon = Icons.Default.PlayArrow, label = ManagementTexts.text("在设备上启动", "Launch on device"), onClick = onLaunch)
-                    SessionManagementActionRow(icon = Icons.Default.VerifiedUser, label = actionLabel, onClick = onToggleEnabled)
-                    SessionManagementActionRow(icon = Icons.Default.DeleteOutline, label = ManagementTexts.text("卸载", "Uninstall"), onClick = onUninstall)
-                    SessionManagementActionRow(icon = Icons.Default.Build, label = ManagementTexts.text("清除数据", "Clear data"), onClick = onClearData)
-                    SessionManagementActionRow(icon = Icons.Default.Download, label = ManagementTexts.text("下载安装包", "Export APK"), onClick = onDownloadApk)
-                }
+        leftButtonText = ManagementTexts.Apps.CANCEL.get(),
+    ) {
+        SessionManagementAppDialogHeader(
+            appTitle = appTitle,
+            packageName = entry.packageName,
+            isSystemApp = entry.isSystemApp,
+            isEnabled = entry.isEnabled,
+            iconBitmap = iconBitmap,
+        )
+        SessionManagementDialogCard {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                SessionManagementActionRow(icon = Icons.Default.Info, label = ManagementTexts.Apps.APP_DETAILS.get(), onClick = onDetails)
+                SessionManagementActionRow(icon = Icons.Default.PlayArrow, label = ManagementTexts.Apps.LAUNCH_DEVICE.get(), onClick = onLaunch)
+                SessionManagementActionRow(icon = Icons.Default.VerifiedUser, label = actionLabel, onClick = onToggleEnabled)
+                SessionManagementActionRow(icon = Icons.Default.DeleteOutline, label = ManagementTexts.Apps.UNINSTALL.get(), onClick = onUninstall)
+                SessionManagementActionRow(icon = Icons.Default.Build, label = ManagementTexts.Apps.CLEAR_DATA.get(), onClick = onClearData)
+                SessionManagementActionRow(icon = Icons.Default.Download, label = ManagementTexts.Apps.EXPORT_APK.get(), onClick = onDownloadApk)
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(ManagementTexts.text("取消", "Cancel"))
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-    )
+        }
+    }
 }
 
 @Composable
@@ -289,12 +342,12 @@ internal fun SessionManagementAppOptionsMenu(
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         DropdownMenuItem(
-            text = { Text(ManagementTexts.text("刷新应用列表", "Refresh apps")) },
+            text = { Text(ManagementTexts.Apps.REFRESH_APPS.get()) },
             leadingIcon = { Icon(imageVector = Icons.Default.Refresh, contentDescription = null) },
             onClick = onRefreshList,
         )
         HorizontalDivider()
-        SessionManagementAppOptionsSectionTitle(ManagementTexts.text("排序方式", "Sort"))
+        SessionManagementAppOptionsSectionTitle(ManagementTexts.Apps.SORT.get())
         AppListSort.entries.forEach { option ->
             DropdownMenuItem(
                 text = { Text(option.label) },
@@ -308,13 +361,13 @@ internal fun SessionManagementAppOptionsMenu(
             )
         }
         HorizontalDivider()
-        SessionManagementAppOptionsSectionTitle(ManagementTexts.text("加载方式", "Loading"))
+        SessionManagementAppOptionsSectionTitle(ManagementTexts.Apps.LOADING.get())
         DropdownMenuItem(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(ManagementTexts.text("只加载包名", "Package names only"))
+                    Text(ManagementTexts.Apps.PACKAGE_NAMES_ONLY.get())
                     Text(
-                        text = ManagementTexts.text("停止远程解析应用名和图标，仅使用已有缓存。", "Skip remote names and icons, use cache only."),
+                        text = ManagementTexts.Apps.SKIP_REMOTE_NAMES_ICONS_USE_CACHE_ONLY.get(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -325,7 +378,7 @@ internal fun SessionManagementAppOptionsMenu(
             onClick = { onPackageNameOnlyModeChanged(!packageNameOnlyMode) },
         )
         HorizontalDivider()
-        SessionManagementAppOptionsSectionTitle(ManagementTexts.text("显示筛选", "Filters"))
+        SessionManagementAppOptionsSectionTitle(ManagementTexts.Apps.FILTERS.get())
         AppListFilter.entries.forEach { option ->
             DropdownMenuItem(
                 text = { Text(option.label) },
@@ -350,27 +403,28 @@ internal fun SessionManagementAppDetailDialog(
     }
     val iconBitmap = SessionManagementAppCache.cachedIcon(entry.packageName)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    SessionManagementCenteredDialog(
+        title = ManagementTexts.Apps.APP_DETAILS.get(),
+        onDismiss = onDismiss,
         widthRatio = 0.92f,
-        title = {
-            SessionManagementAppDialogHeader(
-                appTitle = detail.appTitle,
-                packageName = detail.packageName,
-                isSystemApp = detail.isSystemApp,
-                isEnabled = entry.isEnabled,
-                iconBitmap = iconBitmap,
-                packageNameMaxLines = 1,
-            )
-        },
-        text = { SessionManagementAppDetailContent(detail) },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(ManagementTexts.text("确定", "OK"))
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-    )
+    ) {
+        SessionManagementAppDialogHeader(
+            appTitle = detail.appTitle,
+            packageName = detail.packageName,
+            isSystemApp = detail.isSystemApp,
+            isEnabled = entry.isEnabled,
+            iconBitmap = iconBitmap,
+            showPackageName = false,
+        )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(AppsDetailContentHeight),
+        ) {
+            SessionManagementAppDetailContent(detail)
+        }
+    }
 }
 
 @Composable
@@ -396,41 +450,35 @@ internal fun SessionManagementAppUninstallDialog(
     }
     var keepData by remember(packageName) { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (detail.isSystemApp) ManagementTexts.text("该应用为系统应用，请谨慎卸载", "This is a system app. Uninstall carefully.") else ManagementTexts.text("确认卸载 $packageName", "Uninstall $packageName")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { keepData = !keepData }
-                            .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SessionManagementUtilityBadge(
-                        text = if (keepData) ManagementTexts.text("保留", "Keep data") else ManagementTexts.text("不保留", "Remove data"),
-                        accent = Color(0xFF7BA7FF),
-                        available = keepData,
-                    )
-                    Text(ManagementTexts.text("尝试保留应用数据", "Try to keep app data"))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(keepData) }) {
-                Text(ManagementTexts.text("卸载", "Uninstall"))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(ManagementTexts.text("取消", "Cancel"))
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-    )
+    SessionManagementCenteredDialog(
+        title =
+            if (detail.isSystemApp) {
+                ManagementTexts.Apps.SYSTEM_APP_UNINSTALL_CAREFULLY.get()
+            } else {
+                ManagementTexts.Apps.CONFIRM_UNINSTALL_PACKAGE.format(packageName)
+            },
+        onDismiss = onDismiss,
+        leftButtonText = ManagementTexts.Apps.CANCEL.get(),
+        rightButtonText = ManagementTexts.Apps.UNINSTALL.get(),
+        onRightButtonClick = { onConfirm(keepData) },
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { keepData = !keepData }
+                    .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SessionManagementUtilityBadge(
+                text = if (keepData) ManagementTexts.Apps.KEEP_DATA.get() else ManagementTexts.Apps.REMOVE_DATA.get(),
+                accent = MaterialTheme.colorScheme.primary,
+                available = keepData,
+            )
+            Text(ManagementTexts.Apps.TRY_KEEP_APP_DATA.get())
+        }
+    }
 }
 
 @Composable
@@ -455,13 +503,23 @@ internal fun SessionManagementActionRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline,
+            tint =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                },
             modifier = Modifier.size(20.dp),
         )
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+            color =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                },
         )
     }
 }
@@ -474,6 +532,7 @@ private fun SessionManagementAppDialogHeader(
     isEnabled: Boolean,
     iconBitmap: Bitmap?,
     packageNameMaxLines: Int = 2,
+    showPackageName: Boolean = true,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -496,26 +555,28 @@ private fun SessionManagementAppDialogHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = packageName,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = packageNameMaxLines,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (showPackageName) {
+                Text(
+                    text = packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = packageNameMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(AppsBadgeSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (!isEnabled) {
                     SessionManagementUtilityBadge(
-                        text = ManagementTexts.text("已禁用", "Disabled"),
+                        text = ManagementTexts.Apps.DISABLED.get(),
                         accent = AppsDisabledBadgeAccent,
                     )
                 }
                 if (isSystemApp) {
                     SessionManagementUtilityBadge(
-                        text = ManagementTexts.text("系统", "System"),
+                        text = ManagementTexts.Apps.SYSTEM.get(),
                         accent = AppsSystemBadgeAccent,
                     )
                 }
@@ -553,26 +614,27 @@ private fun SessionManagementInfoLoadingCard(labels: List<String>) {
 
 @Composable
 private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
+    val context = LocalContext.current
     when {
         detail.isLoading -> {
             SessionManagementInfoLoadingCard(
                 labels =
                     listOf(
-                        ManagementTexts.text("包名", "Package"),
-                        ManagementTexts.text("安装包大小", "APK size"),
-                        ManagementTexts.text("版本名", "Version"),
-                        ManagementTexts.text("系统应用", "System app"),
-                        ManagementTexts.text("兼容SDK版本", "Min SDK"),
-                        ManagementTexts.text("目标SDK版本", "Target SDK"),
-                        ManagementTexts.text("首次安装时间", "First installed"),
-                        ManagementTexts.text("上次更新时间", "Last updated"),
+                        ManagementTexts.Apps.PACKAGE.get(),
+                        ManagementTexts.Apps.APK_SIZE.get(),
+                        ManagementTexts.Apps.VERSION.get(),
+                        ManagementTexts.Apps.SYSTEM_APP.get(),
+                        ManagementTexts.Apps.MIN_SDK.get(),
+                        ManagementTexts.Apps.TARGET_SDK.get(),
+                        ManagementTexts.Apps.FIRST_INSTALLED.get(),
+                        ManagementTexts.Apps.LAST_UPDATED.get(),
                     ),
             )
         }
 
         detail.errorMessage != null -> {
             SessionManagementNoteCard(
-                title = ManagementTexts.text("应用详情读取失败", "Couldn't load app details"),
+                title = ManagementTexts.Apps.COULDN_T_LOAD_APP_DETAILS.get(),
                 text = detail.errorMessage,
             )
         }
@@ -580,14 +642,14 @@ private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
         else -> {
             val detailItems =
                 listOf(
-                    AppDetailItem(ManagementTexts.text("包名", "Package"), detail.packageName, useSmallText = true),
-                    AppDetailItem(ManagementTexts.text("安装包大小", "APK size"), detail.apkSize),
-                    AppDetailItem(ManagementTexts.text("版本名", "Version"), detail.versionName),
-                    AppDetailItem(ManagementTexts.text("系统应用", "System app"), if (detail.isSystemApp) ManagementTexts.text("是", "Yes") else ManagementTexts.text("否", "No")),
-                    AppDetailItem(ManagementTexts.text("兼容SDK版本", "Min SDK"), detail.minSdk),
-                    AppDetailItem(ManagementTexts.text("目标SDK版本", "Target SDK"), detail.targetSdk),
-                    AppDetailItem(ManagementTexts.text("首次安装时间", "First installed"), detail.firstInstallTime, useSmallText = true),
-                    AppDetailItem(ManagementTexts.text("上次更新时间", "Last updated"), detail.lastUpdateTime, useSmallText = true),
+                    AppDetailItem(ManagementTexts.Apps.PACKAGE.get(), detail.packageName, useSmallText = true),
+                    AppDetailItem(ManagementTexts.Apps.APK_SIZE.get(), detail.apkSize),
+                    AppDetailItem(ManagementTexts.Apps.VERSION.get(), detail.versionName),
+                    AppDetailItem(ManagementTexts.Apps.SYSTEM_APP.get(), if (detail.isSystemApp) ManagementTexts.Apps.YES.get() else ManagementTexts.Apps.NO.get()),
+                    AppDetailItem(ManagementTexts.Apps.MIN_SDK.get(), detail.minSdk),
+                    AppDetailItem(ManagementTexts.Apps.TARGET_SDK.get(), detail.targetSdk),
+                    AppDetailItem(ManagementTexts.Apps.FIRST_INSTALLED.get(), detail.firstInstallTime, useSmallText = true),
+                    AppDetailItem(ManagementTexts.Apps.LAST_UPDATED.get(), detail.lastUpdateTime, useSmallText = true),
                 )
             SessionManagementDialogCard {
                 Column(
@@ -601,19 +663,51 @@ private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
                     verticalArrangement = Arrangement.Top,
                 ) {
                     detailItems.forEachIndexed { index, item ->
-                        SessionManagementInfoRow(
-                            label = item.label,
-                            value = item.value,
-                            labelWidth = AppsDetailLabelWidth,
-                            rowMinHeight = AppsDetailRowMinHeight,
-                            valueTextStyle =
-                                if (item.useSmallText) {
-                                    MaterialTheme.typography.bodySmall
-                                } else {
-                                    MaterialTheme.typography.bodyMedium
-                                },
-                            valueMaxLines = 1,
-                        )
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (index == 0) {
+                                            Modifier.combinedClickable(
+                                                onClick = {},
+                                                onLongClickLabel = ManagementTexts.Apps.COPY_PACKAGE_NAME.get(),
+                                                onLongClick = {
+                                                    val clipboard =
+                                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                    clipboard.setPrimaryClip(
+                                                        ClipData.newPlainText(
+                                                            ManagementTexts.Apps.APP_PACKAGE_NAME.get(),
+                                                            detail.packageName,
+                                                        ),
+                                                    )
+                                                    Toast
+                                                        .makeText(
+                                                            context,
+                                                            ManagementTexts.Apps.PACKAGE_NAME_COPIED.get(),
+                                                            Toast.LENGTH_SHORT,
+                                                        ).show()
+                                                },
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                        ) {
+                            SessionManagementInfoRow(
+                                label = item.label,
+                                value = item.value,
+                                labelWidth = AppsDetailLabelWidth,
+                                rowMinHeight = AppsDetailRowMinHeight,
+                                valueTextStyle =
+                                    if (item.useSmallText) {
+                                        MaterialTheme.typography.bodySmall
+                                    } else {
+                                        MaterialTheme.typography.bodyMedium
+                                    },
+                                valueMaxLines = 1,
+                            )
+                        }
                         if (index != detailItems.lastIndex) {
                             AppDivider(modifier = Modifier.padding(start = AppsDetailDividerInset))
                         }

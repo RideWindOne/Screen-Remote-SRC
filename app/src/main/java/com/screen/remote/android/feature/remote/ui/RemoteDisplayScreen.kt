@@ -39,7 +39,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.screen.remote.android.app.ScreenRemoteApp
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
@@ -70,6 +69,7 @@ import com.screen.remote.android.feature.remote.widget.touch.KeyboardInputHandle
 import com.screen.remote.android.feature.remote.widget.video.VideoDisplayArea
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
@@ -126,7 +126,8 @@ fun RemoteDisplayScreen(
     val scope = rememberCoroutineScope()
 
     val sessionRepository = remember { SessionRepository(context) }
-    val adbConnectionManager = remember { ScreenRemoteApp.instance.adbConnectionManager }
+    val appContext = context.applicationContext
+    val adbConnectionManager = remember(appContext) { AdbConnectionManager.getInstance(appContext) }
     val preferencesManager = remember { PreferencesManager(context) }
 
     val scrcpyClient = mainViewModel.scrcpyClient
@@ -386,6 +387,15 @@ private fun RemoteDisplayScreenEffects(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(routeState.connectionState) {
+        if (
+            routeState.connectionState is ConnectionState.Connecting ||
+            routeState.connectionState is ConnectionState.Reconnecting
+        ) {
+            routeState.messageListState.clear()
+        }
+    }
 
     DisposableEffect(Unit) {
         val activity = context as? ComponentActivity

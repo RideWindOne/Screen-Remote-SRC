@@ -3,7 +3,7 @@ package com.screen.remote.android.feature.codec.component.encoder
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.EncoderDialogConfig
-import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
+import com.screen.remote.android.core.domain.model.EncoderCapability
 
 /**
  * 音频编码器配置
@@ -15,7 +15,7 @@ import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
 /**
  * 获取音频编码器对话框配置
  */
-fun getAudioEncoderDialogConfig(detectedEncoders: List<EncoderInfo>): EncoderDialogConfig {
+fun getAudioEncoderDialogConfig(detectedEncoders: List<EncoderCapability>): EncoderDialogConfig {
     // 动态提取音频编码器类型
     val types = mutableSetOf<String>()
     detectedEncoders.forEach { encoder ->
@@ -26,11 +26,6 @@ fun getAudioEncoderDialogConfig(detectedEncoders: List<EncoderInfo>): EncoderDia
                 encoder.mimeType.contains("mp4a", ignoreCase = true) -> types.add("AAC")
 
             encoder.mimeType.contains("flac", ignoreCase = true) -> types.add("FLAC")
-
-            encoder.mimeType.contains("vorbis", ignoreCase = true) -> types.add("Vorbis")
-
-            encoder.mimeType.contains("amr", ignoreCase = true) ||
-                encoder.mimeType.contains("3gpp", ignoreCase = true) -> types.add("AMR")
 
             encoder.mimeType.contains("raw", ignoreCase = true) -> types.add("RAW")
         }
@@ -60,8 +55,6 @@ fun matchesAudioCodecFilter(
         "AAC" -> mimeType.contains("aac", ignoreCase = true) || mimeType.contains("mp4a-latm", ignoreCase = true)
         "OPUS" -> mimeType.contains("opus", ignoreCase = true)
         "FLAC" -> mimeType.contains("flac", ignoreCase = true)
-        "Vorbis" -> mimeType.contains("vorbis", ignoreCase = true)
-        "AMR" -> mimeType.contains("amr", ignoreCase = true) || mimeType.contains("3gpp", ignoreCase = true)
         "RAW" -> mimeType.contains("raw", ignoreCase = true)
         else -> mimeType.contains(filter, ignoreCase = true)
     }

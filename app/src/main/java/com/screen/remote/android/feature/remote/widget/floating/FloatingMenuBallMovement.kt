@@ -62,8 +62,8 @@ internal class FloatingMenuBallMovement(
         val newAY = (clampedACenterY - ballARadius).toInt()
 
         // B球中心与A球中心对齐
-        val newBX = (clampedACenterX - ballBRadius).toInt() // TODO
-        val newBY = (clampedACenterY - ballBRadius).toInt() // TODO
+        val newBX = (clampedACenterX - ballBRadius).toInt()
+        val newBY = (clampedACenterY - ballBRadius).toInt()
 
         // 计算实际移动距离
         val finalDeltaX = newAX - paramsA.x

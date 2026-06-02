@@ -27,6 +27,7 @@ internal suspend fun ConnectionLifecycle.connectSockets(
         socketName = socketName,
         enableAudio = options.enableAudio,
         useAdbForward = options.forceAdb,
+        shouldAbortDirectProbe = shellMonitor::hasStartupFailed,
     )
 }
 

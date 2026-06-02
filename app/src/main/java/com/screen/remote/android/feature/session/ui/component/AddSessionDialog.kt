@@ -3,47 +3,87 @@ package com.screen.remote.android.feature.session.ui.component
 import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.screen.remote.android.core.common.AppDimens
+import com.screen.remote.android.core.common.AppColors
+import com.screen.remote.android.core.common.AppTextSizes
 import com.screen.remote.android.core.common.PlaceholderTexts
+import com.screen.remote.android.core.common.constants.NetworkConstants
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AppDivider
+import com.screen.remote.android.core.designsystem.component.DialogContainer
+import com.screen.remote.android.core.designsystem.component.DialogHeader
+import com.screen.remote.android.core.designsystem.component.DialogHeaderSpacer
 import com.screen.remote.android.core.designsystem.component.DialogBottomSpacer
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.GroupSelectorDialog
 import com.screen.remote.android.core.designsystem.component.HelpIcon
+import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
+import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.screen.remote.android.core.designsystem.component.SectionTitle
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.DeviceGroup
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.CodecCatalog
+import com.screen.remote.android.core.domain.model.CodecMediaType
+import com.screen.remote.android.core.domain.model.CodecSpec
+import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
+import com.screen.remote.android.core.domain.model.parseTcpHostPort
+import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import com.screen.remote.android.core.i18n.AdbTexts
 import com.screen.remote.android.core.i18n.CodecTexts
+import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.EncoderSelectionDialog
 import com.screen.remote.android.feature.codec.component.EncoderType
@@ -51,6 +91,9 @@ import com.screen.remote.android.feature.codec.ui.AudioCodecSelectorScreen
 import com.screen.remote.android.feature.codec.ui.VideoCodecSelectorScreen
 import com.screen.remote.android.feature.codec.util.CodecUtils
 import com.screen.remote.android.feature.device.ui.component.UsbDeviceSelectionDialog
+import com.screen.remote.android.feature.session.ui.ConnectionLatencyTestPage
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 
 private val SessionDialogSectionShape = RoundedCornerShape(8.dp)
 private val AudioVolumeRowHorizontalPadding = 10.dp
@@ -64,6 +107,150 @@ private val AudioVolumeSliderTrackHeight = 4.dp
 private val AudioVolumeSliderThumbSize = 14.dp
 private val AudioVolumeSliderThumbHaloSize = 22.dp
 
+private class EditableSessionAddress(
+    type: SessionDeviceType = SessionDeviceType.TCP,
+    host: String = "",
+    port: String = "5555",
+) {
+    var type by mutableStateOf(type)
+    var host by mutableStateOf(host)
+    var port by mutableStateOf(port)
+    var showTypeMenu by mutableStateOf(false)
+
+    fun selectType(nextType: SessionDeviceType) {
+        type = nextType
+        when (nextType) {
+            SessionDeviceType.USB -> port = "0"
+            SessionDeviceType.MDNS -> port = "0"
+            SessionDeviceType.TCP -> if (port.isBlank() || port == "0") port = "5555"
+        }
+    }
+
+    fun toEndpoint(): String? {
+        val normalizedHost =
+            when (type) {
+                SessionDeviceType.USB -> DeviceTransportSerial.stripUsbPrefix(host)
+                SessionDeviceType.MDNS -> DeviceTransportSerial.mdnsDeviceSerial(host)
+                SessionDeviceType.TCP -> parseTcpHostPort(host.trim())?.host ?: DeviceTransportSerial.stripTcpPrefix(host)
+            }
+        if (normalizedHost.isBlank()) {
+            return null
+        }
+
+        return when (type) {
+            SessionDeviceType.USB -> ConnectionCandidate(ConnectionTransport.USB, normalizedHost, port = 0).toAddressEndpoint()
+            SessionDeviceType.MDNS -> ConnectionCandidate(ConnectionTransport.MDNS, normalizedHost, 0).toAddressEndpoint()
+            SessionDeviceType.TCP -> {
+                val parsed = parseTcpHostPort(host.trim())
+                val fallbackPort =
+                    parsed?.port
+                        ?: port.trim().toIntOrNull()
+                        ?: NetworkConstants.DEFAULT_ADB_PORT_INT
+                ConnectionCandidate(ConnectionTransport.TCP, normalizedHost, fallbackPort).toAddressEndpoint()
+            }
+        }
+    }
+
+    companion object {
+        fun from(endpoint: String): EditableSessionAddress {
+            val value = endpoint.trim()
+            val candidate = parseSessionAddressCandidate(value)
+            return when {
+                candidate != null ->
+                    EditableSessionAddress(
+                        type =
+                            when (candidate.transport) {
+                                ConnectionTransport.USB -> SessionDeviceType.USB
+                                ConnectionTransport.MDNS -> SessionDeviceType.MDNS
+                                ConnectionTransport.TCP -> SessionDeviceType.TCP
+                            },
+                        host = candidate.host,
+                        port = candidate.port.coerceAtLeast(0).toString(),
+                    )
+                else -> {
+                    val parsed = parseTcpHostPort(value)
+                    EditableSessionAddress(
+                        type = SessionDeviceType.TCP,
+                        host = parsed?.host ?: DeviceTransportSerial.stripTcpPrefix(value),
+                        port = parsed?.port?.toString() ?: "5555",
+                    )
+                }
+            }
+        }
+    }
+}
+
+private class SessionAddressDialogState(
+    source: SessionDialogState,
+) {
+    var deviceType by mutableStateOf(source.deviceType)
+    var host by mutableStateOf(source.host)
+    var port by mutableStateOf(source.port)
+    var usbSerialNumber by mutableStateOf(source.usbSerialNumber)
+    var backupAddresses by mutableStateOf(source.backupEndpoints.map { EditableSessionAddress.from(it) })
+    var showDeviceTypeMenu by mutableStateOf(false)
+    var showUsbDeviceDialog by mutableStateOf(false)
+    var showMdnsServiceDialog by mutableStateOf(false)
+    var selectedBackupUsbAddressIndex by mutableStateOf<Int?>(null)
+    var selectedBackupMdnsAddressIndex by mutableStateOf<Int?>(null)
+
+    fun selectDeviceType(type: SessionDeviceType) {
+        deviceType = type
+        when (type) {
+            SessionDeviceType.USB -> port = "0"
+            SessionDeviceType.MDNS -> port = "0"
+            SessionDeviceType.TCP -> {
+                if (port.isBlank() || port == "0") {
+                    port = "5555"
+                }
+            }
+        }
+    }
+
+    fun addBackupEndpoint() {
+        backupAddresses = backupAddresses + EditableSessionAddress()
+    }
+
+    fun removeBackupEndpoint(index: Int) {
+        backupAddresses = backupAddresses.filterIndexed { itemIndex, _ -> itemIndex != index }
+        selectedBackupUsbAddressIndex = selectedBackupUsbAddressIndex.adjustAfterRemoving(index)
+        selectedBackupMdnsAddressIndex = selectedBackupMdnsAddressIndex.adjustAfterRemoving(index)
+    }
+
+    fun applyTo(target: SessionDialogState) {
+        target.deviceType = deviceType
+        target.host = host
+        target.port = port
+        target.updateUsbSerialNumber(usbSerialNumber)
+        if (deviceType == SessionDeviceType.MDNS) {
+            target.updateMdnsServiceName(host)
+        }
+        target.backupEndpoints =
+            backupAddresses
+                .mapNotNull { it.toEndpoint() }
+    }
+}
+
+private fun Int?.adjustAfterRemoving(removedIndex: Int): Int? =
+    when {
+        this == null -> null
+        this == removedIndex -> null
+        this > removedIndex -> this - 1
+        else -> this
+    }
+
+@Composable
+private fun rememberMdnsSessionDiscoveryManager(): MdnsSessionDiscoveryManager {
+    val manager = remember { MdnsSessionDiscoveryManager.get() }
+    DisposableEffect(manager) {
+        val lease = manager.acquireInteractiveDiscovery()
+        onDispose {
+            lease.close()
+        }
+    }
+    return manager
+}
+
 @Composable
 fun AddSessionDialog(
     sessionData: SessionData? = null,
@@ -72,12 +259,17 @@ fun AddSessionDialog(
     onConfirm: (SessionData) -> Unit,
 ) {
     val state = remember(sessionData) { SessionDialogState(sessionData) }
+    val mdnsManager = rememberMdnsSessionDiscoveryManager()
+    val mdnsState by mdnsManager.state.collectAsState()
 
     AddSessionDialogContent(
         state = state,
         isEditMode = sessionData != null,
         availableGroups = availableGroups,
+        mdnsConnectServices = mdnsState.connectServices,
+        mdnsConnectLoading = mdnsState.loading,
         onDismiss = onDismiss,
+        onConnectionLatencyTest = { state.showConnectionLatencyTest = true },
         onConfirm = {
             onConfirm(state.toSessionData(sessionData?.id))
             onDismiss()
@@ -88,7 +280,16 @@ fun AddSessionDialog(
         state = state,
         sessionId = sessionData?.id,
         availableGroups = availableGroups,
+        mdnsConnectServices = mdnsState.connectServices,
+        mdnsConnectLoading = mdnsState.loading,
     )
+
+    if (state.showConnectionLatencyTest && sessionData != null) {
+        ConnectionLatencyTestPage(
+            sessionData = state.toSessionData(sessionData.id),
+            onBack = { state.showConnectionLatencyTest = false },
+        )
+    }
 }
 
 @Composable
@@ -96,9 +297,14 @@ private fun AddSessionDialogContent(
     state: SessionDialogState,
     isEditMode: Boolean,
     availableGroups: List<DeviceGroup>,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
     onDismiss: () -> Unit,
+    onConnectionLatencyTest: () -> Unit,
     onConfirm: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     DialogPage(
         title =
             if (isEditMode) {
@@ -111,7 +317,11 @@ private fun AddSessionDialogContent(
         rightButtonText = SessionTexts.SESSION_SAVE.get(),
         onRightButtonClick = {
             if (state.validate()) {
-                onConfirm()
+                if (isVideoCodecSelectionCompatible(state) && isAudioCodecSelectionCompatible(state)) {
+                    onConfirm()
+                } else {
+                    showCodecProtocolMismatch(context)
+                }
             }
         },
         enableScroll = true,
@@ -120,8 +330,12 @@ private fun AddSessionDialogContent(
         RemoteDeviceSection(
             state = state,
             availableGroups = availableGroups,
+            mdnsConnectServices = mdnsConnectServices,
+            mdnsConnectLoading = mdnsConnectLoading,
             onUsbDeviceClick = { state.showUsbDeviceDialog = true },
             onGroupSelectorClick = { state.showGroupSelector = true },
+            onConnectionLatencyTest = onConnectionLatencyTest,
+            showConnectionLatencyTest = isEditMode,
         )
         ConnectionOptionsSection(state)
         VideoConfigSection(state)
@@ -136,31 +350,33 @@ private fun AddSessionDialogOverlays(
     state: SessionDialogState,
     sessionId: String?,
     availableGroups: List<DeviceGroup>,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
 ) {
-    val context = LocalContext.current
-
     VideoEncoderSelectionOverlay(
         state = state,
         sessionId = sessionId,
-        context = context,
     )
-    VideoDecoderSelectionOverlay(
-        state = state,
-        context = context,
-    )
+    VideoDecoderSelectionOverlay(state = state)
     AudioEncoderSelectionOverlay(
         state = state,
         sessionId = sessionId,
-        context = context,
     )
-    AudioDecoderSelectionOverlay(
-        state = state,
-        context = context,
-    )
+    AudioDecoderSelectionOverlay(state = state)
     UsbDeviceSelectionOverlay(state)
+    MdnsServiceSelectionOverlay(
+        state = state,
+        services = mdnsConnectServices,
+        loading = mdnsConnectLoading,
+    )
     GroupSelectionOverlay(
         state = state,
         availableGroups = availableGroups,
+    )
+    SessionAddressOverlay(
+        state = state,
+        mdnsConnectServices = mdnsConnectServices,
+        mdnsConnectLoading = mdnsConnectLoading,
     )
 }
 
@@ -185,8 +401,12 @@ private fun SessionDialogSection(
 private fun RemoteDeviceSection(
     state: SessionDialogState,
     availableGroups: List<DeviceGroup>,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
     onUsbDeviceClick: () -> Unit,
     onGroupSelectorClick: () -> Unit,
+    onConnectionLatencyTest: () -> Unit,
+    showConnectionLatencyTest: Boolean,
 ) {
     SessionDialogSection(title = SessionTexts.SECTION_REMOTE_DEVICE.get()) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -200,7 +420,301 @@ private fun RemoteDeviceSection(
 
             AppDivider()
 
-            if (state.isUsbMode) {
+            CompactClickableRow(
+                text = SessionTexts.LABEL_SESSION_ADDRESS.get(),
+                trailingText = state.sessionAddressPreview(),
+                onClick = { state.showSessionAddressDialog = true },
+                helpText = SessionTexts.HELP_CONNECTION_ENDPOINTS.get(),
+                showArrow = true,
+            )
+
+            AppDivider()
+
+            CompactClickableRow(
+                text = SessionTexts.GROUP_SELECT.get(),
+                trailingText = formatGroupDisplay(state.selectedGroupIds, availableGroups),
+                onClick = onGroupSelectorClick,
+                helpText = SessionTexts.HELP_SELECT_GROUP.get(),
+                showArrow = true,
+            )
+
+            if (showConnectionLatencyTest) {
+                AppDivider()
+
+                CompactClickableRow(
+                    text = SessionTexts.LATENCY_TEST_ENTRY.get(),
+                    trailingText = "10 × 10",
+                    onClick = onConnectionLatencyTest,
+                    helpText = SessionTexts.LATENCY_TEST_HELP.get(),
+                    showArrow = true,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceTypeDropdownRow(state: SessionDialogState) {
+    LabeledDropdownRow(
+        label = SessionTexts.LABEL_DEVICE_TYPE.get(),
+        trailingText = state.deviceType.displayText(),
+        onClick = { state.showDeviceTypeMenu = true },
+        helpText = SessionTexts.HELP_DEVICE_TYPE.get(),
+    ) {
+        IOSStyledDropdownMenu(
+            expanded = state.showDeviceTypeMenu,
+            onDismissRequest = { state.showDeviceTypeMenu = false },
+            alignment = Alignment.TopEnd,
+        ) {
+            SessionDeviceType.values().forEach { type ->
+                IOSStyledDropdownMenuItem(
+                    text = type.displayText(),
+                    onClick = {
+                        state.showDeviceTypeMenu = false
+                        state.selectDeviceType(type)
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun SessionDeviceType.displayText(): String =
+    when (this) {
+        SessionDeviceType.TCP -> SessionTexts.DEVICE_TYPE_TCP.get()
+        SessionDeviceType.USB -> SessionTexts.DEVICE_TYPE_USB.get()
+        SessionDeviceType.MDNS -> SessionTexts.DEVICE_TYPE_MDNS.get()
+    }
+
+@Composable
+private fun SessionAddressOverlay(
+    state: SessionDialogState,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
+) {
+    if (!state.showSessionAddressDialog) {
+        return
+    }
+
+    val editorState = remember(state.showSessionAddressDialog) { SessionAddressDialogState(state) }
+
+    DialogPage(
+        title = SessionTexts.DIALOG_SESSION_ADDRESS_TITLE.get(),
+        onDismiss = { state.showSessionAddressDialog = false },
+        leftButtonText = CommonTexts.BUTTON_CANCEL.get(),
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = {
+                        editorState.applyTo(state)
+                        state.showSessionAddressDialog = false
+                    },
+                ) {
+                    Text(
+                        text = CommonTexts.BUTTON_SAVE.get(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                IconButton(onClick = editorState::addBackupEndpoint) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = SessionTexts.ACTION_ADD_BACKUP_ENDPOINT.get(),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        },
+        enableScroll = true,
+        verticalSpacing = 8.dp,
+    ) {
+        PrimarySessionAddressCard(
+            state = editorState,
+            mdnsConnectServices = mdnsConnectServices,
+            mdnsConnectLoading = mdnsConnectLoading,
+            onUsbDeviceClick = { editorState.showUsbDeviceDialog = true },
+        )
+
+        BackupEndpointsEditor(
+            state = editorState,
+            mdnsConnectServices = mdnsConnectServices,
+            mdnsConnectLoading = mdnsConnectLoading,
+        )
+
+        SessionAddressUsbDeviceSelectionOverlay(editorState)
+        SessionAddressMdnsServiceSelectionOverlay(
+            state = editorState,
+            services = mdnsConnectServices,
+            loading = mdnsConnectLoading,
+        )
+        BackupAddressUsbDeviceSelectionOverlay(editorState)
+        BackupAddressMdnsServiceSelectionOverlay(
+            state = editorState,
+            services = mdnsConnectServices,
+            loading = mdnsConnectLoading,
+        )
+    }
+}
+
+@Composable
+private fun PrimarySessionAddressCard(
+    state: SessionAddressDialogState,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
+    onUsbDeviceClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SessionDialogSectionShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        SessionAddressCardHeader(title = SessionTexts.LABEL_PRIMARY_ENDPOINT.get())
+
+        AppDivider()
+
+        PrimarySessionAddressEditor(
+            state = state,
+            mdnsConnectServices = mdnsConnectServices,
+            mdnsConnectLoading = mdnsConnectLoading,
+            onUsbDeviceClick = onUsbDeviceClick,
+        )
+    }
+}
+
+@Composable
+private fun SessionAddressDeviceTypeDropdownRow(state: SessionAddressDialogState) {
+    LabeledDropdownRow(
+        label = SessionTexts.LABEL_DEVICE_TYPE.get(),
+        trailingText = state.deviceType.displayText(),
+        onClick = { state.showDeviceTypeMenu = true },
+        helpText = SessionTexts.HELP_DEVICE_TYPE.get(),
+    ) {
+        IOSStyledDropdownMenu(
+            expanded = state.showDeviceTypeMenu,
+            onDismissRequest = { state.showDeviceTypeMenu = false },
+            alignment = Alignment.TopEnd,
+        ) {
+            SessionDeviceType.values().forEach { type ->
+                IOSStyledDropdownMenuItem(
+                    text = type.displayText(),
+                    onClick = {
+                        state.showDeviceTypeMenu = false
+                        state.selectDeviceType(type)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionAddressUsbDeviceSelectionOverlay(state: SessionAddressDialogState) {
+    if (!state.showUsbDeviceDialog) {
+        return
+    }
+
+    UsbDeviceSelectionDialog(
+        currentSerialNumber = state.usbSerialNumber,
+        onDeviceSelected = { serialNumber, _ ->
+            state.usbSerialNumber = normalizeUsbAddress(serialNumber)
+            state.selectDeviceType(SessionDeviceType.USB)
+            state.host = ""
+            state.showUsbDeviceDialog = false
+        },
+        onDismiss = {
+            state.showUsbDeviceDialog = false
+        },
+    )
+}
+
+@Composable
+private fun BackupAddressUsbDeviceSelectionOverlay(state: SessionAddressDialogState) {
+    val selectedIndex = state.selectedBackupUsbAddressIndex ?: return
+    val address = state.backupAddresses.getOrNull(selectedIndex) ?: return
+
+    UsbDeviceSelectionDialog(
+        currentSerialNumber = address.host,
+        onDeviceSelected = { serialNumber, _ ->
+            address.selectType(SessionDeviceType.USB)
+            address.host = normalizeUsbAddress(serialNumber)
+            state.selectedBackupUsbAddressIndex = null
+        },
+        onDismiss = {
+            state.selectedBackupUsbAddressIndex = null
+        },
+    )
+}
+
+@Composable
+private fun SessionAddressMdnsServiceSelectionOverlay(
+    state: SessionAddressDialogState,
+    services: List<MdnsDiscoveredConnectService>,
+    loading: Boolean,
+) {
+    if (!state.showMdnsServiceDialog) {
+        return
+    }
+
+    MdnsDeviceSelectionDialog(
+        services = services,
+        loading = loading,
+        selectedDeviceSerial = state.host,
+        onSelected = { service ->
+            state.deviceType = SessionDeviceType.MDNS
+            state.host = service.deviceSerial
+            state.port = "0"
+            state.showMdnsServiceDialog = false
+        },
+        onDismiss = { state.showMdnsServiceDialog = false },
+    )
+}
+
+@Composable
+private fun BackupAddressMdnsServiceSelectionOverlay(
+    state: SessionAddressDialogState,
+    services: List<MdnsDiscoveredConnectService>,
+    loading: Boolean,
+) {
+    val selectedIndex = state.selectedBackupMdnsAddressIndex ?: return
+    val address = state.backupAddresses.getOrNull(selectedIndex) ?: return
+
+    MdnsDeviceSelectionDialog(
+        services = services,
+        loading = loading,
+        selectedDeviceSerial = address.host,
+        onSelected = { service ->
+            address.selectType(SessionDeviceType.MDNS)
+            address.host = service.deviceSerial
+            state.selectedBackupMdnsAddressIndex = null
+        },
+        onDismiss = { state.selectedBackupMdnsAddressIndex = null },
+    )
+}
+
+@Composable
+private fun PrimarySessionAddressEditor(
+    state: SessionAddressDialogState,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
+    onUsbDeviceClick: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SessionAddressDeviceTypeDropdownRow(state)
+
+        AppDivider()
+
+        when (state.deviceType) {
+            SessionDeviceType.USB -> {
+                LabeledTextField(
+                    label = AdbTexts.USB_SERIAL_NUMBER.get(),
+                    value = state.usbSerialNumber,
+                    onValueChange = { state.usbSerialNumber = normalizeUsbAddress(it) },
+                    placeholder = "10AEAG2YZS0020P",
+                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                )
+
+                AppDivider()
+
                 CompactClickableRow(
                     text = AdbTexts.USB_SELECT_DEVICE.get(),
                     trailingText =
@@ -209,17 +723,41 @@ private fun RemoteDeviceSection(
                         },
                     onClick = onUsbDeviceClick,
                     showArrow = true,
+                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
                 )
-            } else {
+            }
+            SessionDeviceType.MDNS -> {
+                LabeledTextField(
+                    label = SessionTexts.LABEL_MDNS_SERVICE.get(),
+                    value = state.host,
+                    onValueChange = {
+                        state.host = normalizeMdnsAddress(it)
+                        state.port = "0"
+                    },
+                    placeholder = "R5CW730QLKB",
+                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                )
+
+                AppDivider()
+
+                CompactClickableRow(
+                    text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
+                    trailingText =
+                        when {
+                            mdnsConnectServices.isNotEmpty() -> "${mdnsConnectServices.size}"
+                            mdnsConnectLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                        },
+                    onClick = { state.showMdnsServiceDialog = true },
+                    showArrow = true,
+                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                )
+            }
+            SessionDeviceType.TCP -> {
                 LabeledTextField(
                     label = SessionTexts.LABEL_HOST.get(),
                     value = state.host,
-                    onValueChange = { newValue ->
-                        state.host = newValue
-                        if (newValue.equals("usb", ignoreCase = true)) {
-                            onUsbDeviceClick()
-                        }
-                    },
+                    onValueChange = { state.host = it },
                     placeholder = PlaceholderTexts.HOST,
                     helpText = SessionTexts.HELP_HOST.get(),
                 )
@@ -235,16 +773,410 @@ private fun RemoteDeviceSection(
                     helpText = SessionTexts.HELP_PORT.get(),
                 )
             }
+        }
+    }
+}
 
-            AppDivider()
+@Composable
+private fun BackupEndpointsEditor(
+    state: SessionAddressDialogState,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
+) {
+    if (state.backupAddresses.isEmpty()) {
+        Text(
+            text = SessionTexts.HELP_CONNECTION_ENDPOINTS.get(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+        )
+        return
+    }
 
-            CompactClickableRow(
-                text = SessionTexts.GROUP_SELECT.get(),
-                trailingText = formatGroupDisplay(state.selectedGroupIds, availableGroups),
-                onClick = onGroupSelectorClick,
-                helpText = SessionTexts.HELP_SELECT_GROUP.get(),
-                showArrow = true,
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        state.backupAddresses.forEachIndexed { index, address ->
+            SessionAddressItemEditor(
+                address = address,
+                mdnsConnectServices = mdnsConnectServices,
+                mdnsConnectLoading = mdnsConnectLoading,
+                onRemove = { state.removeBackupEndpoint(index) },
+                onUsbDeviceClick = { state.selectedBackupUsbAddressIndex = index },
+                onMdnsServicesClick = { state.selectedBackupMdnsAddressIndex = index },
             )
+        }
+    }
+}
+
+@Composable
+private fun SessionAddressItemEditor(
+    address: EditableSessionAddress,
+    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsConnectLoading: Boolean,
+    onRemove: () -> Unit,
+    onUsbDeviceClick: () -> Unit,
+    onMdnsServicesClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SessionDialogSectionShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        SessionAddressCardHeader(title = SessionTexts.LABEL_BACKUP_ENDPOINT.get()) {
+            IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = SessionTexts.ACTION_REMOVE_ENDPOINT.get(),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
+        AppDivider()
+
+        EditableAddressTypeDropdownRow(address)
+
+        AppDivider()
+
+        when (address.type) {
+            SessionDeviceType.TCP -> {
+                LabeledTextField(
+                    label = SessionTexts.LABEL_HOST.get(),
+                    value = address.host,
+                    onValueChange = { address.host = it },
+                    placeholder = PlaceholderTexts.HOST,
+                    helpText = SessionTexts.HELP_HOST.get(),
+                )
+
+                AppDivider()
+
+                LabeledTextField(
+                    label = SessionTexts.LABEL_PORT.get(),
+                    value = address.port,
+                    onValueChange = { address.port = it },
+                    placeholder = PlaceholderTexts.PORT,
+                    keyboardType = KeyboardType.Number,
+                    helpText = SessionTexts.HELP_PORT.get(),
+                )
+            }
+            SessionDeviceType.USB -> {
+                LabeledTextField(
+                    label = AdbTexts.USB_SERIAL_NUMBER.get(),
+                    value = address.host,
+                    onValueChange = { address.host = normalizeUsbAddress(it) },
+                    placeholder = "10AEAG2YZS0020P",
+                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                )
+
+                AppDivider()
+
+                CompactClickableRow(
+                    text = AdbTexts.USB_SELECT_DEVICE.get(),
+                    trailingText =
+                        address.host.ifBlank {
+                            AdbTexts.USB_NO_DEVICE_SELECTED.get()
+                        },
+                    onClick = onUsbDeviceClick,
+                    showArrow = true,
+                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                )
+            }
+            SessionDeviceType.MDNS -> {
+                LabeledTextField(
+                    label = SessionTexts.LABEL_MDNS_SERVICE.get(),
+                    value = address.host,
+                    onValueChange = { address.host = normalizeMdnsAddress(it) },
+                    placeholder = "R5CW730QLKB",
+                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                )
+
+                AppDivider()
+
+                CompactClickableRow(
+                    text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
+                    trailingText =
+                        when {
+                            mdnsConnectServices.isNotEmpty() -> "${mdnsConnectServices.size}"
+                            mdnsConnectLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                        },
+                    onClick = onMdnsServicesClick,
+                    showArrow = true,
+                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionAddressCardHeader(
+    title: String,
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(AppDimens.listItemHeight)
+                .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (trailingContent != null) {
+            trailingContent()
+        }
+    }
+}
+
+@Composable
+private fun EditableAddressTypeDropdownRow(address: EditableSessionAddress) {
+    LabeledDropdownRow(
+        label = SessionTexts.LABEL_DEVICE_TYPE.get(),
+        trailingText = address.type.displayText(),
+        onClick = { address.showTypeMenu = true },
+        helpText = SessionTexts.HELP_DEVICE_TYPE.get(),
+    ) {
+        IOSStyledDropdownMenu(
+            expanded = address.showTypeMenu,
+            onDismissRequest = { address.showTypeMenu = false },
+            alignment = Alignment.TopEnd,
+        ) {
+            SessionDeviceType.values().forEach { type ->
+                IOSStyledDropdownMenuItem(
+                    text = type.displayText(),
+                    onClick = {
+                        address.showTypeMenu = false
+                        address.selectType(type)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MdnsServiceSelectionOverlay(
+    state: SessionDialogState,
+    services: List<MdnsDiscoveredConnectService>,
+    loading: Boolean,
+) {
+    if (!state.showMdnsServiceDialog) {
+        return
+    }
+
+    MdnsDeviceSelectionDialog(
+        services = services,
+        loading = loading,
+        selectedDeviceSerial = state.host,
+        onSelected = { service ->
+            state.selectMdnsService(
+                serviceName = service.deviceSerial,
+                displayName = service.name,
+            )
+            state.showMdnsServiceDialog = false
+        },
+        onDismiss = { state.showMdnsServiceDialog = false },
+    )
+}
+
+@Composable
+private fun MdnsDeviceSelectionDialog(
+    services: List<MdnsDiscoveredConnectService>,
+    loading: Boolean,
+    selectedDeviceSerial: String,
+    onSelected: (MdnsDiscoveredConnectService) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties =
+            DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+            ),
+    ) {
+        DialogContainer {
+            DialogHeader(
+                title = SessionTexts.MDNS_CONNECT_SERVICES.get(),
+                onDismiss = onDismiss,
+                showBackButton = false,
+                leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
+                centerTitleInWindow = true,
+            )
+
+            DialogHeaderSpacer()
+
+            MdnsServiceListContent(
+                services = services,
+                loading = loading,
+                selectedDeviceSerial = selectedDeviceSerial,
+                onSelected = { service ->
+                    onSelected(service)
+                    Toast
+                        .makeText(
+                            context,
+                            SessionTexts.MDNS_PAIRING_REQUIRED.get(),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MdnsServiceListContent(
+    services: List<MdnsDiscoveredConnectService>,
+    loading: Boolean,
+    selectedDeviceSerial: String,
+    onSelected: (MdnsDiscoveredConnectService) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = AppDimens.paddingStandard,
+                    end = AppDimens.paddingStandard,
+                    bottom = AppDimens.paddingStandard,
+                ),
+    ) {
+        if (services.isEmpty()) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (loading) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = SessionTexts.MDNS_CONNECT_SCANNING.get(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = AppTextSizes.body,
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
+                    }
+                } else {
+                    Text(
+                        text = SessionTexts.MDNS_CONNECT_EMPTY.get(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = AppTextSizes.body,
+                    )
+                }
+            }
+        } else {
+            val selectedServiceIndex =
+                selectedMdnsServiceIndex(
+                    services = services,
+                    selectedDeviceSerial = selectedDeviceSerial,
+                )
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                services.forEachIndexed { index, service ->
+                    MdnsServiceItem(
+                        service = service,
+                        isSelected = index == selectedServiceIndex,
+                        onClick = { onSelected(service) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal fun selectedMdnsServiceIndex(
+    services: List<MdnsDiscoveredConnectService>,
+    selectedDeviceSerial: String,
+): Int {
+    val normalizedSerial = normalizeMdnsAddress(selectedDeviceSerial)
+    if (normalizedSerial.isBlank()) {
+        return -1
+    }
+    val matchingIndexes =
+        services.indices.filter { index ->
+            services[index].deviceSerial.equals(normalizedSerial, ignoreCase = true)
+        }
+    return matchingIndexes.firstOrNull { index -> !services[index].requiresPairing }
+        ?: matchingIndexes.firstOrNull()
+        ?: -1
+}
+
+@Composable
+private fun MdnsServiceItem(
+    service: MdnsDiscoveredConnectService,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
+                .clickable { onClick() },
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.5.dp,
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = service.name,
+                fontSize = AppTextSizes.body,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 4.dp, end = 12.dp),
+            )
+
+            Text(
+                text =
+                    if (service.previouslyPaired && !service.requiresPairing) {
+                        AdbTexts.PAIRING_DISCOVERY_RECORDED.get()
+                    } else {
+                        SessionTexts.MDNS_DEVICE_UNPAIRED.get()
+                    },
+                style = MaterialTheme.typography.bodySmall,
+                color =
+                    if (service.previouslyPaired && !service.requiresPairing) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                modifier = Modifier.padding(end = 8.dp),
+            )
+
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = AppColors.iOSBlue,
+                )
+            }
         }
     }
 }
@@ -279,7 +1211,7 @@ private fun VideoConfigSection(state: SessionDialogState) {
             label = SessionTexts.LABEL_VIDEO_BITRATE.get(),
             value = state.videoBitrate,
             onValueChange = { state.videoBitrate = it },
-            placeholder = "500k、4m、8M",
+            placeholder = SessionTexts.PLACEHOLDER_VIDEO_BITRATE.get(),
             helpText = SessionTexts.HELP_VIDEO_BITRATE.get(),
         )
 
@@ -292,6 +1224,18 @@ private fun VideoConfigSection(state: SessionDialogState) {
             placeholder = "15、30、60",
             keyboardType = KeyboardType.Number,
             helpText = SessionTexts.HELP_MAX_FPS.get(),
+        )
+
+        AppDivider()
+
+        CodecFormatDropdownRow(
+            label = SessionTexts.LABEL_VIDEO_CODEC.get(),
+            selectedCodec = state.preferredVideoCodec,
+            specs = CodecCatalog.videoSpecs,
+            expanded = state.showVideoCodecMenu,
+            onExpandedChange = { state.showVideoCodecMenu = it },
+            helpText = SessionTexts.HELP_VIDEO_CODEC.get(),
+            onSelected = { codec -> applyVideoCodecPreference(state, codec) },
         )
 
         AppDivider()
@@ -355,6 +1299,18 @@ private fun AudioConfigSection(state: SessionDialogState) {
                 onValueChange = { state.audioBitrate = it },
                 placeholder = "128k、192k、256k",
                 helpText = SessionTexts.HELP_AUDIO_BITRATE.get(),
+            )
+
+            AppDivider()
+
+            CodecFormatDropdownRow(
+                label = SessionTexts.LABEL_AUDIO_CODEC.get(),
+                selectedCodec = state.preferredAudioCodec,
+                specs = CodecCatalog.audioSpecs,
+                expanded = state.showAudioCodecMenu,
+                onExpandedChange = { state.showAudioCodecMenu = it },
+                helpText = SessionTexts.HELP_AUDIO_CODEC.get(),
+                onSelected = { codec -> applyAudioCodecPreference(state, codec) },
             )
 
             AppDivider()
@@ -473,6 +1429,95 @@ private fun AudioConfigSection(state: SessionDialogState) {
 }
 
 @Composable
+private fun CodecFormatDropdownRow(
+    label: String,
+    selectedCodec: String,
+    specs: List<CodecSpec>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    helpText: String,
+    onSelected: (String) -> Unit,
+) {
+    val selected = specs.firstOrNull { it.name.equals(selectedCodec, ignoreCase = true) } ?: specs.first()
+    LabeledDropdownRow(
+        label = label,
+        trailingText = selected.name.uppercase(),
+        onClick = { onExpandedChange(true) },
+        helpText = helpText,
+    ) {
+        IOSStyledDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+            alignment = Alignment.TopEnd,
+        ) {
+            specs.forEach { spec ->
+                IOSStyledDropdownMenuItem(
+                    text = spec.name.uppercase(),
+                    onClick = {
+                        onExpandedChange(false)
+                        onSelected(spec.name)
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun applyVideoCodecPreference(
+    state: SessionDialogState,
+    codec: String,
+) {
+    val spec = CodecCatalog.videoSpecs.first { it.name == codec }
+    state.preferredVideoCodec = spec.name
+    state.selectedVideoCodec = ""
+    state.selectedVideoEncoder = ""
+    state.selectedVideoDecoder = ""
+}
+
+internal fun isVideoCodecSelectionCompatible(state: SessionDialogState): Boolean {
+    val preferredSpec = CodecCatalog.find(CodecMediaType.VIDEO, state.preferredVideoCodec)
+        ?: return false
+    val namedEncoders = state.remoteVideoEncoders.filter { it.name == state.userVideoEncoder }
+    if (state.userVideoEncoder.isNotBlank() &&
+        namedEncoders.isNotEmpty() &&
+        namedEncoders.none { it.codec == preferredSpec.name && it.mimeType.equals(preferredSpec.mimeType, ignoreCase = true) }
+    ) {
+        return false
+    }
+    return CodecUtils.isDecoderCompatible(state.userVideoDecoder, preferredSpec.mimeType)
+}
+
+private fun applyAudioCodecPreference(
+    state: SessionDialogState,
+    codec: String,
+) {
+    val spec = CodecCatalog.audioSpecs.first { it.name == codec }
+    state.preferredAudioCodec = spec.name
+    state.selectedAudioCodec = ""
+    state.selectedAudioEncoder = ""
+    state.selectedAudioDecoder = ""
+    if (spec.name == "raw") {
+        state.userAudioEncoder = ""
+        state.userAudioDecoder = ""
+    }
+}
+
+internal fun isAudioCodecSelectionCompatible(state: SessionDialogState): Boolean {
+    if (!state.enableAudio) return true
+    val preferredSpec = CodecCatalog.find(CodecMediaType.AUDIO, state.preferredAudioCodec)
+        ?: return false
+    if (preferredSpec.name == "raw") return true
+    val namedEncoders = state.remoteAudioEncoders.filter { it.name == state.userAudioEncoder }
+    if (state.userAudioEncoder.isNotBlank() &&
+        namedEncoders.isNotEmpty() &&
+        namedEncoders.none { it.codec == preferredSpec.name && it.mimeType.equals(preferredSpec.mimeType, ignoreCase = true) }
+    ) {
+        return false
+    }
+    return CodecUtils.isDecoderCompatible(state.userAudioDecoder, preferredSpec.mimeType)
+}
+
+@Composable
 private fun OtherOptionsSection(state: SessionDialogState) {
     val context = LocalContext.current
 
@@ -522,6 +1567,14 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             checked = state.enableHardwareDecoding,
             onCheckedChange = { state.enableHardwareDecoding = it },
             helpText = SessionTexts.HELP_ENABLE_HARDWARE_DECODING.get(),
+        )
+        AppDivider()
+
+        CompactSwitchRow(
+            text = SessionTexts.SWITCH_IGNORE_VIDEO_ENCODER_CONSTRAINTS.get(),
+            checked = state.ignoreVideoEncoderConstraints,
+            onCheckedChange = { state.ignoreVideoEncoderConstraints = it },
+            helpText = SessionTexts.HELP_IGNORE_VIDEO_ENCODER_CONSTRAINTS.get(),
         )
         AppDivider()
 
@@ -600,7 +1653,6 @@ private fun OtherOptionsSection(state: SessionDialogState) {
 private fun VideoEncoderSelectionOverlay(
     state: SessionDialogState,
     sessionId: String?,
-    context: Context,
 ) {
     if (!state.showEncoderOptionsDialog) {
         return
@@ -608,18 +1660,14 @@ private fun VideoEncoderSelectionOverlay(
 
     EncoderSelectionDialog(
         encoderType = EncoderType.VIDEO,
-        sessionId = sessionId,
-        host = state.connectionTargetHost(),
-        port = state.port,
+        connectionCandidates = state.codecDetectionCandidates(sessionId),
         currentEncoder = state.userVideoEncoder,
+        currentCodec = state.preferredVideoCodec,
         cachedEncoders = state.remoteVideoEncoders,
         onDismiss = { state.showEncoderOptionsDialog = false },
-        onEncoderSelected = { encoder ->
-            if (CodecUtils.isCodecProtocolMatch(encoder, state.userVideoDecoder, CodecUtils.CodecType.VIDEO)) {
-                state.userVideoEncoder = encoder
-            } else {
-                showCodecProtocolMismatch(context)
-            }
+        onEncoderSelected = { encoder, codec ->
+            state.userVideoEncoder = encoder
+            codec?.let { state.preferredVideoCodec = it }
             state.showEncoderOptionsDialog = false
         },
         onEncodersDetected = { encoders ->
@@ -631,7 +1679,6 @@ private fun VideoEncoderSelectionOverlay(
 @Composable
 private fun VideoDecoderSelectionOverlay(
     state: SessionDialogState,
-    context: Context,
 ) {
     if (!state.showVideoDecoderSelector) {
         return
@@ -640,11 +1687,7 @@ private fun VideoDecoderSelectionOverlay(
     VideoCodecSelectorScreen(
         currentCodecName = state.userVideoDecoder.ifBlank { null },
         onCodecSelected = { decoder ->
-            if (CodecUtils.isCodecProtocolMatch(state.userVideoEncoder, decoder, CodecUtils.CodecType.VIDEO)) {
-                state.userVideoDecoder = decoder
-            } else {
-                showCodecProtocolMismatch(context)
-            }
+            state.userVideoDecoder = decoder
             state.showVideoDecoderSelector = false
         },
         onBack = {
@@ -657,7 +1700,6 @@ private fun VideoDecoderSelectionOverlay(
 private fun AudioEncoderSelectionOverlay(
     state: SessionDialogState,
     sessionId: String?,
-    context: Context,
 ) {
     if (!state.showAudioEncoderDialog) {
         return
@@ -665,18 +1707,14 @@ private fun AudioEncoderSelectionOverlay(
 
     EncoderSelectionDialog(
         encoderType = EncoderType.AUDIO,
-        sessionId = sessionId,
-        host = state.connectionTargetHost(),
-        port = state.port,
+        connectionCandidates = state.codecDetectionCandidates(sessionId),
         currentEncoder = state.userAudioEncoder,
+        currentCodec = state.preferredAudioCodec,
         cachedEncoders = state.remoteAudioEncoders,
         onDismiss = { state.showAudioEncoderDialog = false },
-        onEncoderSelected = { encoder ->
-            if (CodecUtils.isCodecProtocolMatch(encoder, state.userAudioDecoder, CodecUtils.CodecType.AUDIO)) {
-                state.userAudioEncoder = encoder
-            } else {
-                showCodecProtocolMismatch(context)
-            }
+        onEncoderSelected = { encoder, codec ->
+            state.userAudioEncoder = encoder
+            codec?.let { state.preferredAudioCodec = it }
             state.showAudioEncoderDialog = false
         },
         onEncodersDetected = { encoders ->
@@ -688,7 +1726,6 @@ private fun AudioEncoderSelectionOverlay(
 @Composable
 private fun AudioDecoderSelectionOverlay(
     state: SessionDialogState,
-    context: Context,
 ) {
     if (!state.showAudioDecoderSelector) {
         return
@@ -697,11 +1734,7 @@ private fun AudioDecoderSelectionOverlay(
     AudioCodecSelectorScreen(
         currentCodecName = state.userAudioDecoder.ifBlank { null },
         onCodecSelected = { decoder ->
-            if (CodecUtils.isCodecProtocolMatch(state.userAudioEncoder, decoder, CodecUtils.CodecType.AUDIO)) {
-                state.userAudioDecoder = decoder
-            } else {
-                showCodecProtocolMismatch(context)
-            }
+            state.userAudioDecoder = decoder
             state.showAudioDecoderSelector = false
         },
         onBack = {
@@ -719,8 +1752,8 @@ private fun UsbDeviceSelectionOverlay(state: SessionDialogState) {
     UsbDeviceSelectionDialog(
         currentSerialNumber = state.usbSerialNumber,
         onDeviceSelected = { serialNumber, deviceName ->
-            state.usbSerialNumber = serialNumber
-            state.isUsbMode = true
+            state.updateUsbSerialNumber(serialNumber)
+            state.selectDeviceType(SessionDeviceType.USB)
             state.host = ""
             state.showUsbDeviceDialog = false
 
@@ -732,7 +1765,7 @@ private fun UsbDeviceSelectionOverlay(state: SessionDialogState) {
             state.showUsbDeviceDialog = false
             if (state.usbSerialNumber.isBlank()) {
                 state.host = ""
-                state.isUsbMode = false
+                state.selectDeviceType(SessionDeviceType.TCP)
             }
         },
     )
@@ -779,12 +1812,14 @@ private fun formatGroupDisplay(
     }
 }
 
-private fun SessionDialogState.connectionTargetHost(): String =
-    if (isUsbMode) {
-        usbSerialNumber
-    } else {
-        host
-    }
+private fun normalizeUsbAddress(raw: String): String =
+    DeviceTransportSerial.stripUsbPrefix(raw)
+
+internal fun SessionDialogState.codecDetectionCandidates(sessionId: String?): List<ConnectionCandidate> =
+    toSessionData(sessionId ?: "codec-detection").toConnectionCandidates()
+
+private fun normalizeMdnsAddress(raw: String): String =
+    DeviceTransportSerial.mdnsDeviceSerial(raw)
 
 private fun showCodecProtocolMismatch(context: Context) {
     Toast

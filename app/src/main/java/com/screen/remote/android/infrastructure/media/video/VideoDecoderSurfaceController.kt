@@ -57,21 +57,33 @@ internal class VideoDecoderSurfaceController(
         }
     }
 
+    fun resizeDummySurface(
+        width: Int,
+        height: Int,
+    ) {
+        synchronized(surfaceLock) {
+            runCatching { dummySurfaceTexture?.setDefaultBufferSize(width, height) }
+                .onFailure { error ->
+                    LogManager.w(LogTags.VIDEO_DECODER, "调整 dummy Surface 尺寸失败: ${error.message}")
+                }
+        }
+    }
+
     fun switchOutputSurface(
         decoder: MediaCodec?,
         isStopped: Boolean,
         newSurface: Surface?,
     ) {
         synchronized(surfaceLock) {
+            surface = newSurface
+            val targetSurface = newSurface ?: dummySurface
+            pendingSurface = targetSurface
             try {
                 val codec = decoder
                 if (codec == null || isStopped) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "解码器未运行，跳过 Surface 切换")
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器未运行，已保存待应用 Surface" }
                     return
                 }
-
-                surface = newSurface
-                val targetSurface = newSurface ?: dummySurface
 
                 if (targetSurface != null) {
                     codec.setOutputSurface(targetSurface)
@@ -89,7 +101,6 @@ internal class VideoDecoderSurfaceController(
                 if (e.message?.contains("during start()") == true ||
                     e.message?.contains("not configured for an output surface") == true
                 ) {
-                    pendingSurface = newSurface ?: dummySurface
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器尚未完成 Surface 配置，稍后会自动使用新 Surface" }
                 } else {
                     LogManager.w(LogTags.VIDEO_DECODER, "切换 Surface 失败（状态异常）: ${e.message}")

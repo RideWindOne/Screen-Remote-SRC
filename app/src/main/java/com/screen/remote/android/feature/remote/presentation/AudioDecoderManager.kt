@@ -35,17 +35,39 @@ class AudioDecoderManager(
         stream: AudioStream,
         scope: kotlinx.coroutines.CoroutineScope,
     ) {
-        if (isAudioDecoderStarting) return
+        if (isAudioDecoderStarting || audioDecoder != null) return
 
         try {
+            isAudioDecoderStarting = true
             val codec = stream.codec.lowercase()
+            val options = connectionViewModel.getCurrentSessionOptions()
+            val expectedDeviceSerial = options?.deviceSerial.orEmpty()
+            val rejectionKey = "$expectedDeviceSerial|audio:$codec"
             LogManager.d(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_START_AUDIO_DECODER.get()}: codec=$codec")
 
             val decoder =
                 AudioDecoder(
                     volumeScale = audioVolume,
+                    preferredDecoderName =
+                        options?.getFinalAudioDecoder()
+                            ?.ifBlank { null },
+                    allowHardwareDecoders =
+                        options?.enableHardwareDecoding != false,
+                    decoderSelectionPinned =
+                        options?.userAudioDecoder?.isNotBlank() == true,
+                    initialRejectedDecoderNames = connectionViewModel.runtimeRejectedDecoders(rejectionKey),
                     sessionContext = connectionViewModel.createSessionContext(),
                 ).apply {
+                    onDecoderSelected = { decoder ->
+                        connectionViewModel.rememberResolvedAudioDecoder(
+                            decoderName = decoder,
+                            expectedDeviceSerial = expectedDeviceSerial,
+                            expectedCodec = codec,
+                        )
+                    }
+                    onDecoderRejected = { decoder ->
+                        connectionViewModel.rememberRuntimeRejectedDecoder(rejectionKey, decoder)
+                    }
                     onConnectionLost = {
                         LogManager.w(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.get())
                         scope.launch(Dispatchers.Main) {
@@ -55,8 +77,7 @@ class AudioDecoderManager(
                 }
             audioDecoder = decoder
 
-            @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            scope.launch(Dispatchers.IO) {
                 try {
                     decoder.start(stream)
                 } catch (_: kotlinx.coroutines.CancellationException) {
@@ -69,6 +90,8 @@ class AudioDecoderManager(
                         e,
                     )
                     stopDecoder(decoder)
+                } finally {
+                    isAudioDecoderStarting = false
                 }
             }
 
@@ -80,6 +103,7 @@ class AudioDecoderManager(
                 e,
             )
             audioDecoder = null
+            isAudioDecoderStarting = false
         }
     }
 
@@ -133,16 +157,14 @@ fun rememberAudioDecoderManager(
 
     DisposableEffect(audioStream) {
         onDispose {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    manager.stopCurrentDecoder()
-                } catch (e: Exception) {
-                    LogManager.e(
-                        LogTags.AUDIO_DECODER,
-                        "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
-                        e,
-                    )
-                }
+            try {
+                manager.stopCurrentDecoder()
+            } catch (e: Exception) {
+                LogManager.e(
+                    LogTags.AUDIO_DECODER,
+                    "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
+                    e,
+                )
             }
         }
     }

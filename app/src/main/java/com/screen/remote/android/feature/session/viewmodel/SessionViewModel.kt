@@ -2,6 +2,7 @@ package com.screen.remote.android.feature.session.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.screen.remote.android.core.domain.model.EncoderCapability
 import androidx.lifecycle.viewModelScope
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
@@ -177,8 +178,8 @@ class SessionViewModel(
      */
     suspend fun updateRemoteEncoders(
         sessionId: String,
-        videoEncoders: List<String>,
-        audioEncoders: List<String>,
+        videoEncoders: List<EncoderCapability>,
+        audioEncoders: List<EncoderCapability>,
     ) {
         val currentData = sessionRepository.getSessionData(sessionId) ?: return
 

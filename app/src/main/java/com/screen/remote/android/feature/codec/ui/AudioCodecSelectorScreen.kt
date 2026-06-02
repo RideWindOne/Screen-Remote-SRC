@@ -32,6 +32,7 @@ fun AudioCodecSelectorScreen(
     val scope = rememberCoroutineScope()
     val state = rememberAudioCodecSelectorState(currentCodecName)
     val txtTestSuccess = rememberText(CodecTexts.CODEC_TEST_SUCCESS)
+    val txtTestFailed = rememberText(CodecTexts.CODEC_TEST_FAILED)
 
     fun loadDecoders() {
         scope.launch {
@@ -84,9 +85,9 @@ fun AudioCodecSelectorScreen(
             onTestCodec = { codec ->
                 scope.launch {
                     state.startTesting(codec.name)
-                    testAudioDecoderDirect(codec.name, TTSManager.getInstance())
+                    val success = testAudioDecoderDirect(codec.name, TTSManager.getInstance())
                     state.finishTesting()
-                    Toast.makeText(context, txtTestSuccess, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (success) txtTestSuccess else txtTestFailed, Toast.LENGTH_SHORT).show()
                 }
             },
         )

@@ -87,3 +87,13 @@ internal object DeviceInfoProvider {
             }
         }
 }
+
+data class DeviceInfo(
+    val deviceId: String,
+    val name: String,
+    val model: String = "",
+    val manufacturer: String = "",
+    val androidVersion: String = "",
+    val serialNumber: String,
+    val connectionType: ConnectionType = ConnectionType.TCP,
+)

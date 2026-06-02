@@ -4,7 +4,7 @@ import com.screen.remote.android.feature.codec.component.encoder.getAudioEncoder
 import com.screen.remote.android.feature.codec.component.encoder.getVideoEncoderDialogConfig
 import com.screen.remote.android.feature.codec.component.encoder.matchesAudioCodecFilter
 import com.screen.remote.android.feature.codec.component.encoder.matchesVideoCodecFilter
-import com.screen.remote.android.infrastructure.adb.connection.EncoderInfo
+import com.screen.remote.android.core.domain.model.EncoderCapability
 
 /**
  * 编码器相关数据模型
@@ -39,7 +39,7 @@ data class EncoderDialogConfig(
  */
 fun getEncoderDialogConfig(
     encoderType: EncoderType,
-    detectedEncoders: List<EncoderInfo>,
+    detectedEncoders: List<EncoderCapability>,
 ): EncoderDialogConfig =
     when (encoderType) {
         EncoderType.VIDEO -> getVideoEncoderDialogConfig(detectedEncoders)
@@ -56,4 +56,3 @@ fun matchesCodecFilter(
 ): Boolean =
     matchesVideoCodecFilter(mimeType, filter, allFilterOption) ||
         matchesAudioCodecFilter(mimeType, filter, allFilterOption)
-

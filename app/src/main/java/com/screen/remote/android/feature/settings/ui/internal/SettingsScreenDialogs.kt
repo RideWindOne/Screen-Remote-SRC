@@ -6,16 +6,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
-import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.feature.device.ui.component.AdbPairingCodeDialog
-import com.screen.remote.android.feature.settings.ui.FilePathDialog
 
 @Composable
 internal fun SettingsScreenDialogs(
     routeState: SettingsScreenRouteState,
-    settings: AppSettings,
     texts: SettingsScreenTexts,
-    onUpdateSettings: (AppSettings) -> Unit,
 ) {
     if (routeState.showDevicePairingDialog) {
         AdbPairingCodeDialog(
@@ -47,14 +43,4 @@ internal fun SettingsScreenDialogs(
         )
     }
 
-    if (routeState.showFilePathDialog) {
-        FilePathDialog(
-            currentPath = settings.fileTransferPath,
-            onDismiss = routeState::closeFilePathDialog,
-            onConfirm = { path ->
-                onUpdateSettings(settings.copy(fileTransferPath = path))
-                routeState.closeFilePathDialog()
-            },
-        )
-    }
 }
