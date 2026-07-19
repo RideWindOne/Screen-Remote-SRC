@@ -62,23 +62,8 @@ class SessionViewModel(
     fun getSessionData(sessionId: String) = sessionRepository.getSessionDataFlow(sessionId)
 
     fun saveSessionData(sessionData: SessionData) {
-        if (_editingSessionId.value != null) {
-            updateSessionData(sessionData)
-        } else {
-            addSessionData(sessionData)
-        }
-    }
-
-    private fun addSessionData(sessionData: SessionData) {
         viewModelScope.launch {
-            sessionRepository.addSession(sessionData)
-            hideAddSessionDialog()
-        }
-    }
-
-    private fun updateSessionData(sessionData: SessionData) {
-        viewModelScope.launch {
-            sessionRepository.updateSession(sessionData)
+            sessionRepository.upsertSession(sessionData)
             hideAddSessionDialog()
         }
     }
@@ -161,10 +146,11 @@ class SessionViewModel(
 
         val updatedData =
             currentData.copy(
-                selectedVideoDecoder =
-                    videoDecoder ?: currentData.selectedVideoDecoder,
-                selectedAudioDecoder =
-                    audioDecoder ?: currentData.selectedAudioDecoder,
+                capabilityCache =
+                    currentData.capabilityCache.copy(
+                        selectedVideoDecoder = videoDecoder ?: currentData.capabilityCache.selectedVideoDecoder,
+                        selectedAudioDecoder = audioDecoder ?: currentData.capabilityCache.selectedAudioDecoder,
+                    ),
             )
 
         sessionRepository.updateSession(updatedData)
@@ -185,8 +171,11 @@ class SessionViewModel(
 
         val updatedData =
             currentData.copy(
-                remoteVideoEncoders = videoEncoders,
-                remoteAudioEncoders = audioEncoders,
+                capabilityCache =
+                    currentData.capabilityCache.copy(
+                        remoteVideoEncoders = videoEncoders,
+                        remoteAudioEncoders = audioEncoders,
+                    ),
             )
 
         sessionRepository.updateSession(updatedData)

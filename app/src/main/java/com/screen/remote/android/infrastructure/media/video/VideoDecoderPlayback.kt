@@ -6,6 +6,7 @@ import com.screen.remote.android.core.common.event.DemuxerError
 import com.screen.remote.android.core.common.event.DeviceDisconnected
 import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.infrastructure.scrcpy.connection.isExpectedConnectionClosure
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import java.nio.ByteBuffer
 
@@ -20,6 +21,8 @@ internal class VideoDecoderPlayback(
     private val isRunning: () -> Boolean,
     private val isStopped: () -> Boolean,
     private val shouldReportConnectionLost: () -> Boolean,
+    private val performanceCounters: VideoPerformanceCounters,
+    gameMode: Boolean,
     onVideoStateChanged: (width: Int, height: Int, rotation: Int) -> Unit,
     private val onConnectionLost: () -> Unit,
 ) {
@@ -46,6 +49,8 @@ internal class VideoDecoderPlayback(
             formatHandler = formatHandler,
             getDecoder = getDecoder,
             isStopped = isStopped,
+            onOutputFrame = performanceCounters::recordDecodedFrame,
+            gameMode = gameMode,
         )
 
     fun decodeLoop(videoStream: VideoStream) {
@@ -73,6 +78,7 @@ internal class VideoDecoderPlayback(
                 val queuedFramesBeforePacket = packetProcessor.queuedFrameCount()
                 when (val packet = videoStream.read()) {
                     is dadb.AdbShellPacket.StdOut -> {
+                        performanceCounters.recordPacket(packet.payload.size)
                         videoStream.consumeSessionInfo()?.let { sessionInfo ->
                             configured =
                                 packetProcessor.handleSessionInfo(
@@ -145,23 +151,13 @@ internal class VideoDecoderPlayback(
 
     private fun handleDecodeError(error: Exception) {
         when {
-            error.message?.contains("Stream closed") == true -> {
+            error.isExpectedConnectionClosure() -> {
                 if (shouldReportConnectionLost()) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "视频流已关闭，触发连接丢失处理")
+                    LogManager.w(LogTags.VIDEO_DECODER, "视频连接已断开，触发重连: ${error.message}")
                     onConnectionLost()
                     ScrcpyEventBus.pushEvent(DeviceDisconnected)
                 } else {
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "视频流在清理过程中关闭，忽略连接丢失回调" }
-                }
-            }
-
-            error.message?.contains("Socket closed") == true -> {
-                if (shouldReportConnectionLost()) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "Socket 已关闭，触发连接丢失处理")
-                    onConnectionLost()
-                    ScrcpyEventBus.pushEvent(DeviceDisconnected)
-                } else {
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "视频 Socket 在清理过程中关闭，忽略连接丢失回调" }
                 }
             }
 

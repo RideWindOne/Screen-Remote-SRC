@@ -1,15 +1,5 @@
 package com.screen.remote.android.infrastructure.scrcpy.session.model
 
-fun CleanupContext.summary(): String = "trigger=${trigger.logLabel()}, preserveAdb=$preserveAdbConnection"
-
-fun CleanupTrigger.logLabel(): String =
-    when (this) {
-        CleanupTrigger.UserDisconnect -> "user_disconnect"
-        CleanupTrigger.CancelConnect -> "cancel_connect"
-        CleanupTrigger.RuntimeReset -> "runtime_reset"
-        CleanupTrigger.Unknown -> "unknown"
-    }
-
 fun ServerPushContext.startedSummary(): String = "target=$targetPath"
 
 fun ServerPushContext.completedSummary(): String = "target=$targetPath, durationMs=${durationMs ?: -1}"

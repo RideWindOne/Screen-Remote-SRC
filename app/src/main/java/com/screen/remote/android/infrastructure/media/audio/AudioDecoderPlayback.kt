@@ -3,6 +3,7 @@ package com.screen.remote.android.infrastructure.media.audio
 import android.media.MediaCodec
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.infrastructure.scrcpy.connection.isExpectedConnectionClosure
 
 internal class AudioDecoderPlayback(
     private val formatHandler: AudioFormatHandler,
@@ -51,10 +52,6 @@ internal class AudioDecoderPlayback(
 
                         if (written < 0) {
                             LogManager.e(LogTags.AUDIO_DECODER, "AudioTrack 写入失败: $written")
-                        } else if (packetCount <= 10 || packetCount % 100 == 0) {
-                            AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                                "RAW 音频包 #$packetCount: size=${packet.payload.size}, written=$written"
-                            }
                         }
                     }
 
@@ -207,10 +204,6 @@ internal class AudioDecoderPlayback(
                         frameCount++
                         val frameInfo = audioStream.currentFrameInfo()
                         val packetPts = frameInfo?.pts ?: lastPts
-                        if (frameCount <= INPUT_LOG_SAMPLES || frameCount % INPUT_LOG_INTERVAL == 0) {
-                            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "音频帧 #$frameCount, size=${packet.payload.size}" }
-                        }
-
                         val flags = if (frameInfo?.isConfig == true) MediaCodec.BUFFER_FLAG_CODEC_CONFIG else 0
                         var result: QueuePacketResult
                         do {
@@ -259,8 +252,7 @@ internal class AudioDecoderPlayback(
                 throw e
             } catch (e: Exception) {
                 if (!isRunning() || isStopped()) break
-                if (e.isExpectedShutdown()) LogManager.w(LogTags.AUDIO_DECODER, "解码结束: ${e.message}")
-                else LogManager.e(LogTags.AUDIO_DECODER, "解码错误: ${e.message}", e)
+                if (!e.isExpectedShutdown()) LogManager.e(LogTags.AUDIO_DECODER, "解码错误: ${e.message}", e)
                 throw e
             }
         }
@@ -318,12 +310,6 @@ internal class AudioDecoderPlayback(
                     inputBuffer.put(payload)
                     currentDecoder.queueInputBuffer(inputIndex, 0, payload.size, pts, flags)
 
-                    val nextInputCount = inputCount + 1
-                    if (nextInputCount <= INPUT_LOG_SAMPLES || nextInputCount % INPUT_LOG_INTERVAL == 0) {
-                        AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                            "帧 #$frameCount 已送入解码器 (total=$nextInputCount, pts=${pts / 1000}ms, flags=$flags)"
-                        }
-                    }
                     result = QueuePacketResult.Queued
                 }
             }
@@ -338,13 +324,10 @@ internal class AudioDecoderPlayback(
     }
 
     private fun Exception.isExpectedShutdown(): Boolean =
-        message?.contains("Socket closed") == true ||
-            message?.contains("Stream closed") == true ||
+        isExpectedConnectionClosure() ||
             message?.contains("Pending dequeue output buffer request cancelled") == true
 
     private companion object {
-        const val INPUT_LOG_SAMPLES = 3
-        const val INPUT_LOG_INTERVAL = 500
         const val MAX_INPUTS_WITHOUT_OUTPUT = 150
     }
 }

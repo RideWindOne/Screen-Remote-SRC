@@ -10,6 +10,10 @@ import java.util.Locale
 internal class LogManagerState {
     var context: Context? = null
     var isEnabled = true
+    @Volatile
+    var runtimeLoggingSuppressed = false
+    @Volatile
+    var liveLogRequested = false
     var enableAudioStreamLog = false
     var enableVideoStreamLog = false
     var enableControlStreamLog = false

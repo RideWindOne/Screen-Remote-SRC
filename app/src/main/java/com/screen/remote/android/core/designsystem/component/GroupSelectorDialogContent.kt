@@ -22,8 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.lazy.LazyColumn
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.designsystem.component.tree.TreeNodeItemForSelector
@@ -73,17 +73,15 @@ private fun GroupSelectorTreeSection(
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
     ) {
-        LazyColumn {
-            item {
-                TreeRootItemForSelector(
-                    hasChildren = treeNodes.isNotEmpty(),
-                    isExpanded = "/" in state.expandedPaths,
-                    onToggleExpand = { state.toggleExpanded("/") },
-                )
-            }
+        Column {
+            TreeRootItemForSelector(
+                hasChildren = treeNodes.isNotEmpty(),
+                isExpanded = "/" in state.expandedPaths,
+                onToggleExpand = { state.toggleExpanded("/") },
+            )
 
             if ("/" in state.expandedPaths) {
-                items(treeNodes.size) { index ->
+                treeNodes.forEach { node ->
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                         thickness = 0.5.dp,
@@ -91,12 +89,12 @@ private fun GroupSelectorTreeSection(
                     )
 
                     TreeNodeItemForSelector(
-                        node = treeNodes[index],
+                        node = node,
                         currentSelectedId = state.currentSelectedGroupId,
                         alreadyAddedIds = state.alreadyAddedIds,
                         expandedPaths = state.expandedPaths,
                         onToggleExpand = state::toggleExpanded,
-                        onSelect = state::toggleCurrentSelection,
+                        onSelect = state::selectGroup,
                     )
                 }
             }
@@ -173,9 +171,12 @@ private fun GroupSelectorSelectedGroupRow(
                 tint = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = group.name,
+                text = group.path,
+                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
 

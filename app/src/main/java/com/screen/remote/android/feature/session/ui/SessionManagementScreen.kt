@@ -91,7 +91,11 @@ fun SessionManagementScreen(
             snapshot = DeviceDashboardSnapshot.loading(sessionData)
         }
         snapshotRefreshing = true
-        val nextSnapshot = loadDeviceDashboardSnapshot(sessionData)
+        val nextSnapshot =
+            loadDeviceDashboardSnapshot(
+                sessionData = sessionData,
+                preferCachedConnectionInfo = !snapshotLoaded,
+            )
         snapshotRefreshing = false
         if (nextSnapshot.errorMessage != null && hasPreviousSnapshot) {
             resultDialog =

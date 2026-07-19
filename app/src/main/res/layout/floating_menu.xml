@@ -14,31 +14,51 @@
         android:id="@+id/layout_more_actions"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="1dp"
+        android:layout_marginBottom="-4dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
 
         <ImageButton
             android:id="@+id/btn_upload"
-            android:layout_width="40.dp"
-            android:layout_height="40.dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:background="@android:color/transparent"
             android:contentDescription="Upload"
-            android:padding="7dp"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_action_send_files_or_photos" />
+            android:src="@drawable/ic_toolbar_share" />
 
         <ImageButton
             android:id="@+id/btn_layout_inspector"
-            android:layout_width="40.dp"
-            android:layout_height="40.dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
             android:contentDescription="Layout Inspector"
-            android:padding="7dp"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_action_dump_ui_layouts" />
+            android:src="@drawable/ic_toolbar_ui" />
+
+        <ImageButton
+            android:id="@+id/btn_adapt_resolution"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Adapt device resolution"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_resolution" />
     </LinearLayout>
 
     <LinearLayout
@@ -108,10 +128,10 @@
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_toolbar_close"
-            android:scaleType="centerInside"
+            android:contentDescription="Disconnect"
             android:padding="7dp"
-            android:contentDescription="Disconnect" />
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_close" />
     </LinearLayout>
 
 </LinearLayout>

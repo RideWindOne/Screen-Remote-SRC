@@ -1,66 +1,78 @@
 package com.screen.remote.android.core.domain.model
 
 import com.screen.remote.android.core.common.ScrcpyConstants
+import kotlinx.serialization.Serializable
 
-/**
- * Scrcpy 配置选项 - 唯一配置载体
- *
- * 包含两类字段：
- * 1. 用户配置字段：有明确默认值，由 UI 负责更新
- * 2. 设备能力字段：默认空值，由连接过程检测并填充
- *
- * 特性：
- * - data class，通过 copy() 更新任意字段
- * - sessionId 作为唯一标识
- * - deviceSerial 作为设备身份标识
- * - 设备序列号变化时重新检测设备能力
- */
-data class ScrcpyOptions(
-    // ========== 标识字段 ==========
-    val sessionId: String, // 会话 UUID，作为全局唯一标识
-    val profileId: String = "",
-    // ========== 连接信息 ==========
-    val connectionCandidates: List<ConnectionCandidate>,
-    // ========== 用户配置字段 ==========
-    val forceAdb: Boolean = false,
-    val maxSize: Int = 1920,
+@Serializable
+enum class ScrcpyTunnelMode {
+    DIRECT_ADB,
+    ADB_FORWARD,
+}
+
+/** 用户可编辑、可持久化的 scrcpy 配置。 */
+@Serializable
+data class ScrcpyConfig(
+    val gameMode: Boolean = false,
+    val useFullScreen: Boolean = false,
+    val showFloatingBall: Boolean = true,
+    val enableHardwareDecoding: Boolean = true,
+    val followRemoteOrientation: Boolean = true,
+    val tunnelMode: ScrcpyTunnelMode = ScrcpyTunnelMode.DIRECT_ADB,
+    val maxSize: Int = 0,
     val videoBitRate: Int = ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
     val maxFps: Int = 60,
-    val displayId: Int = 0,
-    val newDisplayEnabled: Boolean = false,
-    val newDisplay: String = "",
-    val showTouches: Boolean = false,
-    val enableClipboardSync: Boolean = true,
-    val stayAwake: Boolean = true,
-    val codecOptions: String = "",
-    val powerOffOnClose: Boolean = false,
-    val cleanupOnDisconnect: Boolean = true,
-    val ignoreVideoEncoderConstraints: Boolean = false,
+    val userVideoEncoder: String = "",
+    val userVideoDecoder: String = "",
     val enableAudio: Boolean = false,
     val audioBitRate: Int = 128000,
-    val turnScreenOff: Boolean = false,
+    val userAudioEncoder: String = "",
+    val userAudioDecoder: String = "",
+    val clipboardSync: Boolean = true,
+    val turnScreenOff: Boolean = true,
+    val powerOffOnClose: Boolean = false,
+    val cleanupOnDisconnect: Boolean = false,
     val keepDeviceAwake: Boolean = false,
-    val enableHardwareDecoding: Boolean = true,
-    val followRemoteOrientation: Boolean = false,
-    // ========== 编解码器辅助字段（UI 编辑 + 自动检测） ==========
-    val preferredVideoCodec: String = CodecCatalog.DEFAULT_VIDEO_CODEC,
-    val preferredAudioCodec: String = CodecCatalog.DEFAULT_AUDIO_CODEC,
-    // ========== 用户手动选择的编解码器 ==========
-    val userVideoEncoder: String = "", // 用户手动选择的视频编码器（优先级最高）
-    val userAudioEncoder: String = "", // 用户手动选择的音频编码器（优先级最高）
-    val userVideoDecoder: String = "", // 用户手动选择的视频解码器（优先级最高）
-    val userAudioDecoder: String = "", // 用户手动选择的音频解码器（优先级最高）
-    // ========== 设备能力字段（自动检测填充） ==========
-    // 编解码器能力签名：ro.serialno|ro.build.fingerprint|scrcpyVersion|cacheVersion
+    val stayAwake: Boolean = false,
+    val ignoreVideoEncoderConstraints: Boolean = false,
+    val newDisplayEnabled: Boolean = false,
+    val virtualDisplaySystemDecorations: Boolean = true,
+    val preserveVirtualDisplayContent: Boolean = false,
+    val startApp: String = "",
+    val newDisplay: String = "",
+    val displayId: Int = 0,
+    val showTouches: Boolean = false,
+    val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
+)
+
+/** 连接过程自动生成的设备能力缓存，不属于用户配置。 */
+@Serializable
+data class DeviceCapabilityCache(
     val deviceSerial: String = "",
     val remoteVideoEncoders: List<EncoderCapability> = emptyList(),
+    val selectedVideoCodec: String = "",
+    val selectedVideoEncoder: String = "",
+    val selectedVideoDecoder: String = "",
     val remoteAudioEncoders: List<EncoderCapability> = emptyList(),
-    val selectedVideoCodec: String = "", // 自动匹配后实际启动的视频格式（不覆盖用户偏好）
-    val selectedAudioCodec: String = "", // 自动匹配后实际启动的音频格式（不覆盖用户偏好）
-    val selectedVideoEncoder: String = "", // 系统自动选择的最佳视频编码器
-    val selectedAudioEncoder: String = "", // 系统自动选择的最佳音频编码器
-    val selectedVideoDecoder: String = "", // 系统自动选择的最佳视频解码器
-    val selectedAudioDecoder: String = "", // 系统自动选择的最佳音频解码器
+    val selectedAudioCodec: String = "",
+    val selectedAudioEncoder: String = "",
+    val selectedAudioDecoder: String = "",
+)
+
+fun DeviceCapabilityCache.resetForDevice(deviceSerial: String): DeviceCapabilityCache =
+    DeviceCapabilityCache(deviceSerial = deviceSerial)
+
+/**
+ * 运行时会话选项。
+ *
+ * 会话身份、连接候选、用户配置和自动能力缓存各自只有一个所有者。持久化层直接
+ * 复用 [ScrcpyConfig] 与 [DeviceCapabilityCache]，不再逐字段复制整套配置。
+ */
+data class ScrcpyOptions(
+    val sessionId: String,
+    val profileId: String = "",
+    val connectionCandidates: List<ConnectionCandidate>,
+    val config: ScrcpyConfig = ScrcpyConfig(),
+    val capabilityCache: DeviceCapabilityCache = DeviceCapabilityCache(),
 ) {
     init {
         require(connectionCandidates.isNotEmpty()) { "ScrcpyOptions 必须至少包含一个 connectionCandidate" }
@@ -69,45 +81,13 @@ data class ScrcpyOptions(
     private fun primaryConnectionCandidate(): ConnectionCandidate =
         connectionCandidates.minBy(ConnectionCandidate::priority)
 
-    /**
-     * 判断编解码器是否匹配当前设备
-     */
-    fun isEncoderListValid(deviceSerial: String): Boolean {
-        if (this.deviceSerial.isBlank() || deviceSerial.isBlank()) return false
-        if (this.deviceSerial != deviceSerial) return false
-        if (remoteVideoEncoders.isEmpty() && remoteAudioEncoders.isEmpty()) return false
-        return true
-    }
-
-    /**
-     * 判断是否为 USB 连接
-     */
-    fun isUsbConnection(): Boolean = primaryConnectionCandidate().transport == ConnectionTransport.USB
-
-    fun isMdnsConnection(): Boolean = primaryConnectionCandidate().transport == ConnectionTransport.MDNS
-
-    /**
-     * 获取设备标识（用于日志和显示）
-     */
     fun getDeviceIdentifier(): String = primaryConnectionCandidate().deviceIdentifier()
 
-    /**
-     * 获取最终使用的视频编码器（用户选择 > 系统自动选择）
-     */
-    fun getFinalVideoEncoder(): String = userVideoEncoder.ifBlank { selectedVideoEncoder }
+    fun getFinalVideoEncoder(): String = config.userVideoEncoder.ifBlank { capabilityCache.selectedVideoEncoder }
 
-    /**
-     * 获取最终使用的音频编码器（用户选择 > 系统自动选择）
-     */
-    fun getFinalAudioEncoder(): String = userAudioEncoder.ifBlank { selectedAudioEncoder }
+    fun getFinalAudioEncoder(): String = config.userAudioEncoder.ifBlank { capabilityCache.selectedAudioEncoder }
 
-    /**
-     * 获取最终使用的视频解码器（用户选择 > 系统自动选择）
-     */
-    fun getFinalVideoDecoder(): String = userVideoDecoder.ifBlank { selectedVideoDecoder }
+    fun getFinalVideoDecoder(): String = config.userVideoDecoder.ifBlank { capabilityCache.selectedVideoDecoder }
 
-    /**
-     * 获取最终使用的音频解码器（用户选择 > 系统自动选择）
-     */
-    fun getFinalAudioDecoder(): String = userAudioDecoder.ifBlank { selectedAudioDecoder }
+    fun getFinalAudioDecoder(): String = config.userAudioDecoder.ifBlank { capabilityCache.selectedAudioDecoder }
 }

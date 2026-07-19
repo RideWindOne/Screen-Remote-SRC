@@ -14,13 +14,15 @@ class ServerCodecResolutionTest {
         val encoderName = "vendor.multi.encoder"
         val options =
             options().copy(
-                preferredVideoCodec = "h265",
-                selectedVideoCodec = "h264",
-                selectedVideoEncoder = encoderName,
-                remoteVideoEncoders =
-                    listOf(
-                        encoder(encoderName, "h265", "video/hevc", CodecMediaType.VIDEO),
-                        encoder(encoderName, "h264", "video/avc", CodecMediaType.VIDEO),
+                capabilityCache =
+                    options().capabilityCache.copy(
+                        selectedVideoCodec = "h264",
+                        selectedVideoEncoder = encoderName,
+                        remoteVideoEncoders =
+                            listOf(
+                                encoder(encoderName, "h265", "video/hevc", CodecMediaType.VIDEO),
+                                encoder(encoderName, "h264", "video/avc", CodecMediaType.VIDEO),
+                            ),
                     ),
             )
 
@@ -32,13 +34,15 @@ class ServerCodecResolutionTest {
         val encoderName = "vendor.multi.audio.encoder"
         val options =
             options().copy(
-                preferredAudioCodec = "opus",
-                selectedAudioCodec = "aac",
-                selectedAudioEncoder = encoderName,
-                remoteAudioEncoders =
-                    listOf(
-                        encoder(encoderName, "opus", "audio/opus", CodecMediaType.AUDIO),
-                        encoder(encoderName, "aac", "audio/mp4a-latm", CodecMediaType.AUDIO),
+                capabilityCache =
+                    options().capabilityCache.copy(
+                        selectedAudioCodec = "aac",
+                        selectedAudioEncoder = encoderName,
+                        remoteAudioEncoders =
+                            listOf(
+                                encoder(encoderName, "opus", "audio/opus", CodecMediaType.AUDIO),
+                                encoder(encoderName, "aac", "audio/mp4a-latm", CodecMediaType.AUDIO),
+                            ),
                     ),
             )
 
@@ -47,7 +51,8 @@ class ServerCodecResolutionTest {
 
     @Test
     fun `resolved raw audio needs neither encoder nor decoder`() {
-        val options = options().copy(preferredAudioCodec = "opus", selectedAudioCodec = "raw")
+        val original = options()
+        val options = original.copy(capabilityCache = original.capabilityCache.copy(selectedAudioCodec = "raw"))
 
         assertEquals("raw", resolveAudioCodec(options, ""))
     }

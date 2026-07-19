@@ -2,6 +2,7 @@ package com.screen.remote.android.infrastructure.scrcpy.connection
 
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.media.audio.AudioStreamHeader
@@ -23,6 +24,7 @@ import java.io.InputStream
  */
 class ConnectionMetadataReader(
     private val socketManager: ConnectionSocketManager,
+    private val issueTracker: SessionIssueTracker,
 ) {
     /**
      * 读取元数据并创建流
@@ -62,6 +64,7 @@ class ConnectionMetadataReader(
                             }
                         },
                         onVideoResolution,
+                        issueTracker,
                     )
 
                 if (enableAudio) {
@@ -79,7 +82,7 @@ class ConnectionMetadataReader(
                             is AudioStreamHeader.Unsupported ->
                                 throw IOException("不支持的音频 codec ID: 0x${header.codecId.toString(16)}")
                             is AudioStreamHeader.Codec -> {
-                                audioStream = ScrcpyAudioStream(audioSocket, audioInput, header.codec)
+                                audioStream = ScrcpyAudioStream(audioSocket, audioInput, header.codec, issueTracker)
                                 LogManager.d(
                                     LogTags.SCRCPY_CLIENT,
                                     "${RemoteTexts.SCRCPY_AUDIO_METADATA_READ.get()}: codec=${header.codec}",

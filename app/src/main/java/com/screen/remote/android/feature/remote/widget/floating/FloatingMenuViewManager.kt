@@ -1,11 +1,12 @@
 package com.screen.remote.android.feature.remote.widget.floating
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Vibrator
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
-import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
@@ -14,6 +15,7 @@ import com.screen.remote.android.R
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.i18n.RemoteTexts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -25,6 +27,7 @@ internal class FloatingMenuViewManager(
     private val context: Context,
     private val windowManager: WindowManager,
     paramsA: WindowManager.LayoutParams,
+    paramsB: WindowManager.LayoutParams,
     ballA: View,
     ballB: View,
     actions: FloatingMenuActions,
@@ -37,7 +40,9 @@ internal class FloatingMenuViewManager(
         FloatingMenuMenuPositionController(
             context = context,
             paramsA = paramsA,
+            paramsB = paramsB,
             ballA = ballA,
+            ballB = ballB,
             state = state,
             overlayState = overlayState,
         )
@@ -54,7 +59,7 @@ internal class FloatingMenuViewManager(
 
     fun showMenu() {
         val menu = createMenuView(context)
-        val params = positionController.createInitialLayoutParams(menu)
+        val params = positionController.createInitialLayoutParams(menu, windowManager)
         windowManager.addView(menu, params)
 
         overlayState.menuView = menu
@@ -83,48 +88,17 @@ internal class FloatingMenuViewManager(
         val params = overlayState.menuParams ?: return
         val moreActionsRow = menu.findViewById<View>(R.id.layout_more_actions) ?: return
 
-        val oldHeight = measureMenuHeight(menu)
         val newVisible = !overlayState.isMoreActionsVisible
         moreActionsRow.visibility = if (newVisible) View.VISIBLE else View.GONE
-        val newHeight = measureMenuHeight(menu)
-        val heightDelta = newHeight - oldHeight
-
-        params.y = (params.y - heightDelta).coerceAtLeast(0)
+        measureMenuHeight(menu)
         overlayState.isMoreActionsVisible = newVisible
-
-        runCatching { windowManager.updateViewLayout(menu, params) }
+        positionController.repositionForCurrentMenuSize(windowManager, params)
     }
 
-    fun updateMenuPosition(
-        deltaX: Int,
-        deltaY: Int,
-    ) {
-        positionController.updateMenuPosition(
-            windowManager = windowManager,
-            deltaX = deltaX,
-            deltaY = deltaY,
-        )
-    }
+    fun syncMenuToBall() = positionController.syncMenuToBall(windowManager)
 
     fun centerMenuHorizontally() {
         positionController.centerMenuHorizontally(windowManager)
-    }
-
-    fun animateMenuWithSnap(
-        startMenuX: Int,
-        startMenuY: Int,
-        deltaX: Int,
-        deltaY: Int,
-        fraction: Float,
-    ) {
-        positionController.animateMenuWithSnap(
-            windowManager = windowManager,
-            startMenuX = startMenuX,
-            startMenuY = startMenuY,
-            deltaX = deltaX,
-            deltaY = deltaY,
-            fraction = fraction,
-        )
     }
 
     fun constrainMovementWithMenu(
@@ -132,10 +106,6 @@ internal class FloatingMenuViewManager(
         paramsA: WindowManager.LayoutParams,
         ballA: View,
     ): Int = positionController.constrainMovementWithMenu(deltaY, paramsA, ballA)
-
-    fun getMenuX(): Int = overlayState.menuParams?.x ?: 0
-
-    fun getMenuY(): Int = overlayState.menuParams?.y ?: 0
 
     fun cleanup() {
         hideMenu()
@@ -171,18 +141,30 @@ internal fun createFloatingMenuLayoutParams(
     WindowManager.LayoutParams().apply {
         type = WindowManager.LayoutParams.TYPE_APPLICATION
         format = PixelFormat.TRANSLUCENT
-        flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        flags =
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         width = WindowManager.LayoutParams.WRAP_CONTENT
         height = WindowManager.LayoutParams.WRAP_CONTENT
         gravity = Gravity.TOP or Gravity.START
         this.x = x
         this.y = y
+        useWholeWindowCoordinateSpace()
     }
+
+internal fun WindowManager.LayoutParams.useWholeWindowCoordinateSpace() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        setFitInsetsTypes(0)
+    }
+}
 
 internal class FloatingMenuMenuPositionController(
     context: Context,
     private val paramsA: WindowManager.LayoutParams,
+    private val paramsB: WindowManager.LayoutParams,
     private val ballA: View,
+    private val ballB: View,
     private val state: FloatingMenuGestureState,
     private val overlayState: FloatingMenuOverlayState,
 ) {
@@ -191,53 +173,88 @@ internal class FloatingMenuMenuPositionController(
     }
 
     private val density = context.resources.displayMetrics.density
-    private val displayMetrics = context.resources.displayMetrics
+    private val windowBoundsProvider = FloatingMenuWindowBoundsProvider(context)
 
-    fun createInitialLayoutParams(menu: View): WindowManager.LayoutParams {
+    fun createInitialLayoutParams(
+        menu: View,
+        windowManager: WindowManager,
+    ): WindowManager.LayoutParams {
+        val windowBounds = windowBoundsProvider.current()
         val menuWidth = currentMenuWidth(menu)
         val menuHeight = currentMenuHeight(menu)
-        val x = (displayMetrics.widthPixels - menuWidth) / 2
-        val y = (paramsA.y - menuHeight - MENU_GAP_DP * density).toInt().coerceAtLeast(0)
+        val menuTop = currentMenuTop(windowBounds)
+        makeRoomAboveBall(menuHeight, menuTop, windowBounds, windowManager)
+        val x = windowBounds.left + (windowBounds.width - menuWidth) / 2
+        val y =
+            calculateFloatingMenuWindowY(
+                ballY = paramsA.y,
+                menuHeight = menuHeight,
+                gap = (MENU_GAP_DP * density).toInt(),
+                boundsTop = menuTop,
+            )
         return createFloatingMenuLayoutParams(x = x, y = y)
     }
 
-    fun updateMenuPosition(
+    private fun makeRoomAboveBall(
+        menuHeight: Int,
+        menuTop: Int,
+        windowBounds: FloatingMenuWindowBounds,
         windowManager: WindowManager,
-        deltaX: Int,
-        deltaY: Int,
     ) {
+        val gapPx = (MENU_GAP_DP * density).toInt()
+        val placement =
+            calculateFloatingMenuVerticalPlacement(
+                currentBallY = paramsA.y,
+                ballHeight = ballA.height,
+                menuHeight = menuHeight,
+                gap = gapPx,
+                boundsTop = menuTop,
+                boundsBottom = windowBounds.bottom,
+            )
+        val movement = placement.ballY - paramsA.y
+        if (movement == 0) return
+
+        paramsA.y += movement
+        paramsB.y += movement
+        windowManager.updateViewLayout(ballA, paramsA)
+        windowManager.updateViewLayout(ballB, paramsB)
+        state.ballBCenterX = paramsB.x + ballB.width / 2f
+        state.ballBCenterY = paramsB.y + ballB.height / 2f
+    }
+
+    fun repositionForCurrentMenuSize(
+        windowManager: WindowManager,
+        menuParams: WindowManager.LayoutParams,
+    ) {
+        val windowBounds = windowBoundsProvider.current()
+        val menuHeight = currentMenuHeight()
+        val menuTop = currentMenuTop(windowBounds)
+        makeRoomAboveBall(menuHeight, menuTop, windowBounds, windowManager)
+        menuParams.x = windowBounds.left + (windowBounds.width - currentMenuWidth()) / 2
+        menuParams.y = calculateMenuWindowY(menuTop, menuHeight)
+        updateLayout(windowManager, menuParams)
+    }
+
+    fun syncMenuToBall(windowManager: WindowManager) {
         if (!isMenuVisible()) return
+        val windowBounds = windowBoundsProvider.current()
+        val menuHeight = currentMenuHeight()
+        val gapPx = (MENU_GAP_DP * density).toInt()
+        val menuTop = currentMenuTop(windowBounds)
 
         overlayState.menuParams?.let { params ->
-            params.y += deltaY
-            params.x = (displayMetrics.widthPixels - currentMenuWidth()) / 2
+            params.x = windowBounds.left + (windowBounds.width - currentMenuWidth()) / 2
+            params.y = calculateMenuWindowY(menuTop, menuHeight, gapPx)
             updateLayout(windowManager, params)
         }
     }
 
     fun centerMenuHorizontally(windowManager: WindowManager) {
         if (!isMenuVisible()) return
+        val windowBounds = windowBoundsProvider.current()
 
         overlayState.menuParams?.let { params ->
-            params.x = (displayMetrics.widthPixels - currentMenuWidth()) / 2
-            updateLayout(windowManager, params)
-            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "📍 菜单居中对齐")
-        }
-    }
-
-    fun animateMenuWithSnap(
-        windowManager: WindowManager,
-        startMenuX: Int,
-        startMenuY: Int,
-        deltaX: Int,
-        deltaY: Int,
-        fraction: Float,
-    ) {
-        if (!isMenuVisible()) return
-
-        overlayState.menuParams?.let { params ->
-            params.x = (startMenuX + deltaX * fraction).toInt()
-            params.y = (startMenuY + deltaY * fraction).toInt()
+            params.x = windowBounds.left + (windowBounds.width - currentMenuWidth()) / 2
             updateLayout(windowManager, params)
         }
     }
@@ -251,50 +268,58 @@ internal class FloatingMenuMenuPositionController(
             return deltaY
         }
 
-        val menuParams = overlayState.menuParams ?: return deltaY
+        val windowBounds = windowBoundsProvider.current()
+        overlayState.menuParams ?: return deltaY
         val menuHeight = currentMenuHeight()
-        val menuAtTop = menuParams.y <= 0
-        val ballAtBottomEdge = paramsA.y + ballA.height >= displayMetrics.heightPixels
-        val menuBottom = menuParams.y + menuHeight
-        val menuAtBottom = menuBottom >= displayMetrics.heightPixels
-
-        var finalDeltaY = deltaY
-        var yMovementLocked = false
-
-        if (menuAtTop && deltaY < 0) {
-            finalDeltaY = 0
-            yMovementLocked = true
-        }
-
-        if ((ballAtBottomEdge || menuAtBottom) && deltaY > 0) {
-            finalDeltaY = 0
-            yMovementLocked = true
-        }
-
-        if (!yMovementLocked) {
-            val newMenuY = menuParams.y + deltaY
-            if (newMenuY < 0) {
-                finalDeltaY = -menuParams.y
-            } else if (newMenuY + menuHeight > displayMetrics.heightPixels) {
-                finalDeltaY = displayMetrics.heightPixels - menuHeight - menuParams.y
-            }
-        }
-
-        return finalDeltaY
+        val gapPx = (MENU_GAP_DP * density).toInt()
+        val menuTop = currentMenuTop(windowBounds)
+        val placement =
+            calculateFloatingMenuVerticalPlacement(
+                currentBallY = paramsA.y + deltaY,
+                ballHeight = ballA.height,
+                menuHeight = menuHeight,
+                gap = gapPx,
+                boundsTop = menuTop,
+                boundsBottom = windowBounds.bottom,
+            )
+        return placement.ballY - paramsA.y
     }
 
     private fun isMenuVisible(): Boolean =
         state.isMenuShown && overlayState.menuView != null && overlayState.menuParams != null
 
     private fun currentMenuWidth(menu: View? = overlayState.menuView): Int {
+        val laidOutWidth = menu?.width ?: 0
+        if (laidOutWidth > 0 && menu?.isLayoutRequested == false) return laidOutWidth
         val measuredWidth = menu?.measuredWidth ?: 0
         return if (measuredWidth > 0) measuredWidth else (240 * density).toInt()
     }
 
     private fun currentMenuHeight(menu: View? = overlayState.menuView): Int {
+        val laidOutHeight = menu?.height ?: 0
+        if (laidOutHeight > 0 && menu?.isLayoutRequested == false) return laidOutHeight
         val measuredHeight = menu?.measuredHeight ?: 0
         return if (measuredHeight > 0) measuredHeight else (48 * density).toInt()
     }
+
+    private fun calculateMenuWindowY(
+        menuTop: Int,
+        menuHeight: Int,
+        gapPx: Int = (MENU_GAP_DP * density).toInt(),
+    ): Int {
+        return calculateFloatingMenuWindowY(
+            ballY = paramsA.y,
+            menuHeight = menuHeight,
+            gap = gapPx,
+            boundsTop = menuTop,
+        )
+    }
+
+    private fun currentMenuTop(windowBounds: FloatingMenuWindowBounds): Int =
+        calculateFloatingMenuTop(
+            windowBounds = windowBounds,
+            applicationWindowTop = windowBoundsProvider.currentApplicationWindowTop(),
+        )
 
     private fun updateLayout(
         windowManager: WindowManager,
@@ -308,6 +333,43 @@ internal class FloatingMenuMenuPositionController(
         }
     }
 }
+
+internal data class FloatingMenuVerticalPlacement(
+    val ballY: Int,
+    val menuY: Int,
+)
+
+internal fun calculateFloatingMenuVerticalPlacement(
+    currentBallY: Int,
+    ballHeight: Int,
+    menuHeight: Int,
+    gap: Int,
+    boundsTop: Int,
+    boundsBottom: Int,
+): FloatingMenuVerticalPlacement {
+    val minimumBallY = boundsTop + menuHeight + gap
+    val maximumBallY = (boundsBottom - ballHeight).coerceAtLeast(boundsTop)
+    val ballY = currentBallY.coerceAtLeast(minimumBallY).coerceAtMost(maximumBallY)
+    val menuY = calculateFloatingMenuWindowY(ballY, menuHeight, gap, boundsTop)
+    return FloatingMenuVerticalPlacement(ballY = ballY, menuY = menuY)
+}
+
+internal fun calculateFloatingMenuWindowY(
+    ballY: Int,
+    menuHeight: Int,
+    gap: Int,
+    boundsTop: Int,
+): Int = (ballY - menuHeight - gap).coerceAtLeast(boundsTop)
+
+internal fun calculateFloatingMenuTop(
+    windowBounds: FloatingMenuWindowBounds,
+    applicationWindowTop: Int,
+): Int =
+    if (windowBounds.width > windowBounds.height) {
+        windowBounds.top
+    } else {
+        applicationWindowTop.coerceIn(windowBounds.top, windowBounds.bottom)
+    }
 
 internal class FloatingMenuMenuInteractionBinder(
     private val windowManager: WindowManager,
@@ -323,56 +385,57 @@ internal class FloatingMenuMenuInteractionBinder(
         onHideMenu: () -> Unit,
     ) {
         bindButtons(menu, onHideMenu)
-        bindBackKey(menu)
-    }
-
-    private fun bindBackKey(menu: View) {
-        menu.isFocusable = true
-        menu.isFocusableInTouchMode = true
-        menu.requestFocus()
-        menu.setOnKeyListener { _, keyCode, event ->
-            if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-                scope.launch {
-                    val result = actions.controlViewModel.sendKeyEvent(4)
-                    if (result.isFailure) {
-                        LogManager.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
-                    } else {
-                        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
-                    }
-                }
-                true
-            } else {
-                false
-            }
-        }
     }
 
     private fun bindButtons(
         menu: View,
         onHideMenu: () -> Unit,
     ) {
-        bindActionButton(menu, R.id.btn_back, "⬅️ 返回按钮", 4, "发送返回键失败", onHideMenu)
-        bindActionButton(menu, R.id.btn_home, "🏠 主页按钮", 3, "发送主页键失败", onHideMenu)
-        bindActionButton(menu, R.id.btn_recent, "📋 最近任务按钮", 187, "发送最近任务键失败", onHideMenu)
+        bindActionButton(menu, R.id.btn_back, 4, "发送返回键失败", onHideMenu)
+        bindActionButton(menu, R.id.btn_home, 3, "发送主页键失败", onHideMenu)
+        bindActionButton(menu, R.id.btn_recent, 187, "发送最近任务键失败", onHideMenu)
 
         menu.findViewById<ImageButton>(R.id.btn_keyboard)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "⌨️ 键盘按钮")
                 actions.showKeyboardInput()
             }
         }
 
         menu.findViewById<ImageButton>(R.id.btn_upload)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "📤 上传按钮")
                 actions.requestUploadFilePicker()
             }
         }
 
         menu.findViewById<ImageButton>(R.id.btn_layout_inspector)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🧩 布局分析按钮")
                 actions.requestLayoutInspectorRender()
+            }
+        }
+
+        menu.findViewById<ImageButton>(R.id.btn_adapt_resolution)?.let { button ->
+            val isAdapted = actions.isDeviceResolutionAdapted()
+            button.contentDescription =
+                if (isAdapted) {
+                    RemoteTexts.REMOTE_RESTORE_DEVICE_RESOLUTION.get()
+                } else {
+                    RemoteTexts.REMOTE_ADAPT_DEVICE_RESOLUTION.get()
+                }
+            button.imageTintList =
+                ColorStateList.valueOf(
+                    if (isAdapted) ADAPTED_RESOLUTION_TINT else DEFAULT_MENU_ICON_TINT,
+                )
+            bindSimpleButton(button, onHideMenu) {
+                scope.launch {
+                    actions.toggleDeviceResolutionAdaptation()
+                        .onFailure { error ->
+                            LogManager.e(
+                                LogTags.FLOATING_CONTROLLER_MSG,
+                                "切换目标设备分辨率失败: ${error.message}",
+                                error,
+                            )
+                        }
+                }
             }
         }
 
@@ -381,7 +444,6 @@ internal class FloatingMenuMenuInteractionBinder(
                 if (hapticEnabled) {
                     performHapticFeedbackCompat(HapticFeedbackConstants.KEYBOARD_TAP)
                 }
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "📱 更多菜单按钮")
                 onToggleMoreActionsRow()
             }
         }
@@ -390,8 +452,6 @@ internal class FloatingMenuMenuInteractionBinder(
             if (hapticEnabled) {
                 performHapticFeedbackCompat(ApiCompatHelper.getHapticFeedbackConstant("reject"))
             }
-            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "❌ 断开连接")
-
             scope.launch {
                 onHideMenu()
                 removeBallViews()
@@ -403,14 +463,12 @@ internal class FloatingMenuMenuInteractionBinder(
     private fun bindActionButton(
         menu: View,
         buttonId: Int,
-        logMessage: String,
         keyCode: Int,
         failureLog: String,
         onHideMenu: () -> Unit,
     ) {
         menu.findViewById<ImageButton>(buttonId)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, logMessage)
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(keyCode)
                     if (result.isFailure) {
@@ -447,6 +505,11 @@ internal class FloatingMenuMenuInteractionBinder(
             LogManager.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
         }
     }
+
+    private companion object {
+        const val ADAPTED_RESOLUTION_TINT = 0xFF0A84FF.toInt()
+        const val DEFAULT_MENU_ICON_TINT = 0xFFFFFFFF.toInt()
+    }
 }
 
 internal object HapticHelper {
@@ -455,11 +518,6 @@ internal object HapticHelper {
     fun init(context: Context) {
         vibrator = ApiCompatHelper.getVibratorCompat(context)
 
-        if (vibrator?.hasVibrator() == true) {
-            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "Vibrator 初始化成功")
-        } else {
-            LogManager.w(LogTags.FLOATING_CONTROLLER, "设备不支持触感")
-        }
     }
 
     fun vibrate(type: String = "tick") {

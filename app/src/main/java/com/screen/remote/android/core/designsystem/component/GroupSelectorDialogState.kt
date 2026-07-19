@@ -8,6 +8,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.screen.remote.android.core.domain.model.DeviceGroup
 
+internal fun sanitizeSelectedGroupIds(
+    selectedGroupIds: List<String>,
+    availableGroupIds: Set<String>,
+): List<String> = selectedGroupIds.filter { it in availableGroupIds }.distinct()
+
 @Composable
 internal fun rememberGroupSelectorDialogState(selectedGroupIds: List<String>): GroupSelectorDialogState =
     remember(selectedGroupIds) {
@@ -23,17 +28,6 @@ internal class GroupSelectorDialogState(
     var editingGroupId by mutableStateOf<String?>(null)
     var expandedPaths by mutableStateOf(setOf<String>())
 
-    val isEditMode: Boolean
-        get() = editingGroupId != null
-
-    val hasPendingSelection: Boolean
-        get() =
-            if (isEditMode) {
-                currentSelectedGroupId != null
-            } else {
-                currentSelectedGroupId != null && currentSelectedGroupId !in tempSelectedIds
-            }
-
     val alreadyAddedIds: List<String>
         get() =
             if (editingGroupId != null) {
@@ -42,8 +36,14 @@ internal class GroupSelectorDialogState(
                 tempSelectedIds
             }
 
-    fun applySelection() {
-        val selectedGroupId = currentSelectedGroupId ?: return
+    fun selectGroup(groupId: String) {
+        if (groupId in alreadyAddedIds) return
+
+        currentSelectedGroupId = groupId
+        applySelection(groupId)
+    }
+
+    private fun applySelection(selectedGroupId: String) {
         val groupIdBeingEdited = editingGroupId
 
         tempSelectedIds =
@@ -67,15 +67,6 @@ internal class GroupSelectorDialogState(
                 expandedPaths - path
             } else {
                 expandedPaths + path
-            }
-    }
-
-    fun toggleCurrentSelection(groupId: String) {
-        currentSelectedGroupId =
-            if (currentSelectedGroupId == groupId) {
-                null
-            } else {
-                groupId
             }
     }
 

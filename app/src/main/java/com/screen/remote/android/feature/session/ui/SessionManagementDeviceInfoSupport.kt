@@ -39,7 +39,10 @@ private data class WifiMetrics(
     val linkSpeed: String,
 )
 
-internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): DeviceDashboardSnapshot {
+internal suspend fun loadDeviceDashboardSnapshot(
+    sessionData: SessionData,
+    preferCachedConnectionInfo: Boolean = false,
+): DeviceDashboardSnapshot {
     val connection = SessionManagementAdbConnection.current()
     if (connection == null) {
         return DeviceDashboardSnapshot.loading(sessionData).copy(
@@ -55,19 +58,37 @@ internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): Devi
             ?.trim()
             .orEmpty()
 
+    val cachedDeviceInfo = connection.deviceInfo
+    val cachedPreflight = connection.getCachedCandidatePreflight().takeIf { preferCachedConnectionInfo }
+    val cachedDisplayInfo = cachedPreflight?.displayInfo
+
+    fun cachedValue(value: String): String? =
+        value.takeIf { preferCachedConnectionInfo && it.isNotBlank() && !it.equals("Unknown", ignoreCase = true) }
+
     return runCatching {
         coroutineScope {
-            val modelDeferred = async { shell("getprop ro.product.model") }
-            val manufacturerDeferred = async { shell("getprop ro.product.manufacturer") }
+            val modelDeferred = async { cachedValue(cachedDeviceInfo.model) ?: shell("getprop ro.product.model") }
+            val manufacturerDeferred =
+                async { cachedValue(cachedDeviceInfo.manufacturer) ?: shell("getprop ro.product.manufacturer") }
             val socModelDeferred = async { shell("getprop ro.soc.model") }
-            val androidVersionDeferred = async { shell("getprop ro.build.version.release") }
+            val androidVersionDeferred =
+                async { cachedValue(cachedDeviceInfo.androidVersion) ?: shell("getprop ro.build.version.release") }
             val uptimeDeferred = async { shell("cat /proc/uptime | awk '{print \$1}'") }
             val basebandDeferred = async { shell("getprop gsm.version.baseband") }
             val productCodeNameDeferred = async { shell("getprop ro.product.device") }
             val securityPatchDeferred = async { shell("getprop ro.build.version.security_patch") }
-            val serialDeferred = async { shell("getprop ro.serialno") }
-            val resolutionDeferred = async { shell("wm size | grep -E 'Physical|Override' | head -n 1") }
-            val dpiDeferred = async { shell("wm density | grep -E 'Physical|Override' | head -n 1") }
+            val serialDeferred =
+                async { cachedValue(cachedDeviceInfo.serialNumber) ?: shell("getprop ro.serialno") }
+            val resolutionDeferred =
+                async {
+                    cachedDisplayInfo?.let { "${it.currentWidth}x${it.currentHeight}" }
+                        ?: shell("wm size | grep -E 'Physical|Override' | tail -n 1")
+                }
+            val dpiDeferred =
+                async {
+                    cachedDisplayInfo?.currentDensityDpi?.toString()
+                        ?: shell("wm density | grep -E 'Physical|Override' | tail -n 1")
+                }
             val displayMetricsDeferred =
                 async { shell("dumpsys display | grep -E 'xDpi=|yDpi=|density .* dpi' | head -n 4") }
             val displayRefreshDeferred = async { shell("dumpsys display | grep -m 1 'DisplayDeviceInfo{'") }
@@ -137,7 +158,8 @@ internal suspend fun loadDeviceDashboardSnapshot(sessionData: SessionData): Devi
                 }
             val abiDeferred = async { shell("getprop ro.product.cpu.abilist") }
             val boardDeferred = async { shell("getprop ro.product.board") }
-            val fingerprintDeferred = async { shell("getprop ro.build.fingerprint") }
+            val fingerprintDeferred =
+                async { cachedPreflight?.buildFingerprint?.takeIf { it.isNotBlank() } ?: shell("getprop ro.build.fingerprint") }
             val wirelessPortDeferred = async { shell("getprop service.adb.tcp.port") }
             val cpuCountDeferred = async { shell("cat /proc/cpuinfo | grep -c processor") }
             val cpuFreqDeferred =

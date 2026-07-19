@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
@@ -83,6 +84,7 @@ fun SessionCard(
     val txtConnect = rememberText(SessionTexts.SESSION_CONNECT)
     val txtCopySession = rememberText(SessionTexts.SESSION_COPY)
     val txtManage = rememberText(SessionTexts.SESSION_MANAGE)
+    val txtGameModeBadge = rememberText(SessionTexts.SESSION_GAME_MODE_BADGE)
     val txtResetConnection = rememberText(SessionTexts.SESSION_RESET_CONNECTION)
 
     Card(
@@ -144,6 +146,13 @@ fun SessionCard(
                 displayTransport = displayTransport,
                 endpointStatus = endpointStatus,
             )
+
+            if (sessionData?.config?.gameMode == true) {
+                SessionGameModeBadge(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    label = txtGameModeBadge,
+                )
+            }
 
             Text(
                 text = if (isConnected) txtConnected else txtClickToConnect,
@@ -229,6 +238,37 @@ fun SessionCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SessionGameModeBadge(
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = Color.White.copy(alpha = 0.22f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.SportsEsports,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = label,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

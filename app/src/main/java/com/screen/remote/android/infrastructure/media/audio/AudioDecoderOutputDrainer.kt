@@ -69,10 +69,6 @@ internal class AudioDecoderOutputDrainer(
                                 AudioDebugLog.d(LogTags.AUDIO_DECODER) {
                                     "首个音频输出: size=${bufferInfo.size}, written=$written, pts=${bufferInfo.presentationTimeUs / 1000}ms"
                                 }
-                            } else if (totalOutputCount % OUTPUT_LOG_INTERVAL == 0) {
-                                AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                                    "音频输出累计 $totalOutputCount 个缓冲区，最近 size=${bufferInfo.size}, pts=${bufferInfo.presentationTimeUs / 1000}ms"
-                                }
                             }
                         } else {
                             LogManager.w(
@@ -130,7 +126,6 @@ internal class AudioDecoderOutputDrainer(
     }
 
     private companion object {
-        const val OUTPUT_LOG_INTERVAL = 500
     }
 }
 

@@ -3,6 +3,7 @@ package com.screen.remote.android.feature.session.ui
 import com.screen.remote.android.core.data.repository.ConnectionCandidateData
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -138,7 +139,7 @@ class SessionBadgeStateTest {
             name = "Phone",
             connectionCandidates = listOf(ConnectionCandidateData(transport, host, port)),
             color = "BLUE",
-            deviceSerial = deviceSerial,
+            capabilityCache = DeviceCapabilityCache(deviceSerial = deviceSerial),
         )
 
     private fun session(
@@ -161,7 +162,7 @@ class SessionBadgeStateTest {
             name = "Phone",
             connectionCandidates = listOf(main) + backups,
             color = "BLUE",
-            deviceSerial = deviceSerial,
+            capabilityCache = DeviceCapabilityCache(deviceSerial = deviceSerial),
         )
     }
 }

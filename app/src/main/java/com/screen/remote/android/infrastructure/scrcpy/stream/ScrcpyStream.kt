@@ -1,7 +1,6 @@
 package com.screen.remote.android.infrastructure.scrcpy.stream
 
 import com.screen.remote.android.core.common.constants.LogTags
-import com.screen.remote.android.core.common.constants.ScrcpyConstants.SOCKET_READ_TIMEOUT
 import com.screen.remote.android.core.common.event.DemuxerError
 import com.screen.remote.android.core.common.event.DeviceDisconnected
 import com.screen.remote.android.core.common.event.ScrcpyEvent
@@ -12,6 +11,7 @@ import com.screen.remote.android.infrastructure.media.audio.AudioDebugLog
 import com.screen.remote.android.infrastructure.media.audio.AudioFrameInfo
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.media.video.VideoDebugLog
+import com.screen.remote.android.infrastructure.scrcpy.connection.isExpectedConnectionClosure
 import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoFrameInfo
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoSessionInfo
@@ -38,6 +38,7 @@ class ScrcpyAudioStream(
     private val socket: Socket,
     inputStream: InputStream = socket.inputStream,
     override val codec: String,
+    private val issueTracker: SessionIssueTracker = SessionIssueTracker(),
 ) : AudioStream {
     private val dataInputStream = java.io.DataInputStream(inputStream)
 
@@ -45,13 +46,15 @@ class ScrcpyAudioStream(
     override val channelCount: Int = 2 // scrcpy 固定 2
 
     init {
-        socket.soTimeout = 10000 // 10 秒超时
+        // 握手和流元数据已经读取完成。媒体包必须连续读取；如果超时发生在
+        // header 或 payload 中间，继续读取会从包中间开始并永久破坏帧边界。
+        // 停止或断连时通过关闭 socket 中断阻塞读取。
+        socket.soTimeout = 0
 
         AudioDebugLog.d("ScrcpyAudioStream") { "音频配置: codec=$codec, rate=$sampleRate, channels=$channelCount" }
     }
 
     private var packetCount = 0
-    private var opusSilencePacketCount = 0
     private var frameInfo: AudioFrameInfo? = null
 
     @Throws(IOException::class)
@@ -77,67 +80,19 @@ class ScrcpyAudioStream(
             val isKeyFrame = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_KEY_FRAME) != 0L
             val actualPts = ptsAndFlags and ScrcpyProtocol.PACKET_PTS_MASK
             frameInfo = AudioFrameInfo(pts = actualPts, isConfig = isConfig, isKeyFrame = isKeyFrame)
-            val isOpusSilence = isOpusSilencePacket(codec, packet)
-
-            if (isOpusSilence) {
-                opusSilencePacketCount++
-                if (opusSilencePacketCount == 1 || opusSilencePacketCount % 250 == 0) {
-                    AudioDebugLog.d("AudioDecoder") {
-                        "Opus 静音/DTX 短帧: count=$opusSilencePacketCount, pts=$actualPts"
-                    }
-                }
-            }
-
-            // 打印数据包信息（前10个包和每50个包打印一次）
-            if (!isOpusSilence && (packetCount <= 10 || packetCount % 50 == 0)) {
-                val flags =
-                    buildString {
-                        if (isConfig) append("CONFIG ")
-                        if (isKeyFrame) append("KEY ")
-                        if (isEmpty()) append("NORMAL")
-                    }
-
-                // 打印前16字节的十六进制数据
-                val previewSize = minOf(16, packet.size)
-                val hexPreview = packet.take(previewSize).joinToString(" ") { "%02X".format(it) }
-
-                AudioDebugLog.d("AudioDecoder") {
-                    "音频包 #$packetCount: size=$packetSize, pts=$actualPts, flags=[$flags], data=$hexPreview..."
-                }
-
-                // 未识别的短包仍保留诊断；Opus 静音短帧已在上方低频统计。
-                if (packetSize <= 10) {
-                    LogManager.w(
-                        "AudioDecoder",
-                        "未识别的短音频包 #$packetCount: codec=$codec, 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}",
-                    )
-                }
-            }
-
-            if (isConfig) {
-                AudioDebugLog.d("AudioDecoder") {
-                    "收到配置包 #$packetCount: size=$packetSize, 完整数据=${packet.joinToString(" ") { "%02X".format(it) }}"
-                }
-            }
-
             return AdbShellPacket.StdOut(packet)
-        } catch (_: java.net.SocketTimeoutException) {
-            frameInfo = null
-            return AdbShellPacket.StdOut(byteArrayOf())
         } catch (_: java.io.EOFException) {
             frameInfo = null
             AudioDebugLog.d("AudioDecoder") { "音频流结束，共接收 $packetCount 个包" }
-            SessionIssueTracker.record("audio.eof", "Audio stream closed by peer")
+            issueTracker.record("audio.eof", "Audio stream closed by peer")
             // 推送设备断开事件
             ScrcpyEventBus.pushEvent(DeviceDisconnected)
             return AdbShellPacket.Exit(byteArrayOf(0))
         } catch (e: IOException) {
-            if (e.isExpectedClosed()) {
-                LogManager.w("AudioDecoder", "音频流关闭: ${e.message}")
-            } else {
+            if (!e.isExpectedConnectionClosure()) {
                 LogManager.e("AudioDecoder", "音频流读取错误: ${e.message}", e)
             }
-            SessionIssueTracker.record("audio.io", e.message ?: "Audio stream IO error")
+            issueTracker.record("audio.io", e.message ?: "Audio stream IO error")
             // 推送解复用器错误事件
             ScrcpyEventBus.pushEvent(DemuxerError(e.message ?: "Audio stream error"))
             throw e
@@ -176,10 +131,6 @@ internal fun isOpusSilencePacket(
  * - 推送 DeviceDisconnected 事件（流结束）
  * - 推送 DemuxerError 事件（读取错误）
  *
- * 控制流检测：
- * - 当视频流超时时，检查控制流是否存活
- * - 如果控制流断开，说明连接真正断开，抛出异常
- * - 如果控制流正常，说明只是设备息屏或网络慢，继续等待
  */
 class ScrcpySocketStream(
     private val socket: Socket,
@@ -187,14 +138,16 @@ class ScrcpySocketStream(
     override val codec: String,
     private val onError: (String) -> Unit,
     private val onVideoResolution: (Int, Int) -> Unit = { _, _ -> },
+    private val issueTracker: SessionIssueTracker = SessionIssueTracker(),
 ) : VideoStream {
     private val dataInputStream = java.io.DataInputStream(inputStream)
-    private var packetCount = 0
     private var frameInfo: VideoFrameInfo? = null
     private var pendingSessionInfo: VideoSessionInfo? = null
 
     init {
-        socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
+        // 媒体读取阶段不能在部分 header/payload 已消费后把超时当作“暂无数据”，
+        // 否则下一次读取会失去协议帧边界。关闭 socket 会唤醒阻塞中的读线程。
+        socket.soTimeout = 0
     }
 
     @Throws(IOException::class)
@@ -237,38 +190,25 @@ class ScrcpySocketStream(
                 // 读取完整数据包
                 val packet = ByteArray(packetSize)
                 dataInputStream.readFully(packet, 0, packetSize)
-                packetCount++
                 val isConfig = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_CONFIG) != 0L
                 val isKeyFrame = (ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_KEY_FRAME) != 0L
                 val pts = ptsAndFlags and ScrcpyProtocol.PACKET_PTS_MASK
                 frameInfo = VideoFrameInfo(pts = pts, isConfig = isConfig, isKeyFrame = isKeyFrame)
 
-                if (packetCount <= 8 || packetCount % 60 == 0) {
-                    val preview = packet.take(minOf(16, packet.size)).joinToString(" ") { "%02X".format(it) }
-                    VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
-                        "video packet#$packetCount size=$packetSize pts=$pts config=$isConfig key=$isKeyFrame data=$preview"
-                    }
-                }
-
                 return AdbShellPacket.StdOut(packet)
             }
-        } catch (_: java.net.SocketTimeoutException) {
-            // 读取超时，返回空数据继续等待
-            frameInfo = null
-            VideoDebugLog.d("ScrcpySocketStream") { "💤 设备可能息屏，控制流正常，继续等待..." }
-            return AdbShellPacket.StdOut(byteArrayOf())
         } catch (_: java.io.EOFException) {
             // 流结束
-            SessionIssueTracker.record("video.eof", "Video stream closed by peer")
+            issueTracker.record("video.eof", "Video stream closed by peer")
             onError("视频流已关闭")
             // 推送设备断开事件
             ScrcpyEventBus.pushEvent(DeviceDisconnected)
             return AdbShellPacket.Exit(byteArrayOf(0))
         } catch (e: IOException) {
             // 其他 IO 错误
-            SessionIssueTracker.record("video.io", e.message ?: "Video stream IO error")
-            if (e.isExpectedClosed()) {
-                onError("流关闭 -> ${e.message}")
+            issueTracker.record("video.io", e.message ?: "Video stream IO error")
+            if (e.isExpectedConnectionClosure()) {
+                onError("连接已断开 -> ${e.message}")
             } else {
                 onError("读取失败 -> ${e.message}")
             }
@@ -294,6 +234,3 @@ class ScrcpySocketStream(
         const val MAX_VIDEO_PACKET_SIZE = 32 * 1024 * 1024
     }
 }
-
-private fun IOException.isExpectedClosed(): Boolean =
-    message?.contains("Socket closed") == true || message?.contains("Stream closed") == true

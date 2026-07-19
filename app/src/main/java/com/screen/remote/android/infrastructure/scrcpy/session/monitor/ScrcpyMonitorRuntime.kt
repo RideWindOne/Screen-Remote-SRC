@@ -6,10 +6,10 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketType
 
 internal class ScrcpyMonitorStateReducer {
     fun reduce(
-        currentState: GlobalScrcpyState,
+        currentState: SessionMonitorState,
         event: ScrcpyMonitorEvent,
         now: Long,
-    ): GlobalScrcpyState =
+    ): SessionMonitorState =
         when (event) {
             is ScrcpyMonitorEvent.ServerLog -> {
                 currentState.copy(
@@ -149,32 +149,15 @@ internal class ScrcpyMonitorEventLogger(
 ) {
     fun log(
         event: ScrcpyMonitorEvent,
-        state: GlobalScrcpyState,
     ) {
         when (event) {
             is ScrcpyMonitorEvent.ServerLog -> {
                 LogManager.d(LogTags.SCRCPY_SERVER, "[$deviceId] ${event.message}")
             }
 
-            is ScrcpyMonitorEvent.SocketDataReceived -> {
-                val stats = state.socketStats[event.socketType]
-                if (stats != null && stats.packetsReceived % 100 == 0L) {
-                    LogManager.d(
-                        LogTags.SCRCPY_EVENT_BUS,
-                        "[$deviceId] Socket[${event.socketType}] 接收: ${stats.packetsReceived} 包, ${stats.bytesReceived / 1024} KB",
-                    )
-                }
-            }
+            is ScrcpyMonitorEvent.SocketDataReceived -> Unit
 
-            is ScrcpyMonitorEvent.SocketDataSent -> {
-                val stats = state.socketStats[event.socketType]
-                if (stats != null && stats.packetsSent % 100 == 0L) {
-                    LogManager.d(
-                        LogTags.SCRCPY_EVENT_BUS,
-                        "[$deviceId] Socket[${event.socketType}] 发送: ${stats.packetsSent} 包, ${stats.bytesSent / 1024} KB",
-                    )
-                }
-            }
+            is ScrcpyMonitorEvent.SocketDataSent -> Unit
 
             is ScrcpyMonitorEvent.SocketIdle -> {
                 LogManager.w(
@@ -183,22 +166,9 @@ internal class ScrcpyMonitorEventLogger(
                 )
             }
 
-            is ScrcpyMonitorEvent.VideoFrameDecoded -> {
-                val count = state.videoFrameCount
-                if (count % 100 == 0L) {
-                    LogManager.d(
-                        LogTags.VIDEO_DECODER,
-                        "[$deviceId] 视频帧: $count, 分辨率: ${event.width}x${event.height}",
-                    )
-                }
-            }
+            is ScrcpyMonitorEvent.VideoFrameDecoded -> Unit
 
-            is ScrcpyMonitorEvent.AudioFrameDecoded -> {
-                val count = state.audioFrameCount
-                if (count % 100 == 0L) {
-                    LogManager.d(LogTags.AUDIO_DECODER, "[$deviceId] 音频帧: $count")
-                }
-            }
+            is ScrcpyMonitorEvent.AudioFrameDecoded -> Unit
 
             is ScrcpyMonitorEvent.DeviceScreenLocked -> {
                 LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 🔒 设备锁屏")
@@ -238,7 +208,7 @@ internal class ScrcpyMonitorAnomalyDetector(
     private val deviceId: String,
 ) {
     fun detect(
-        state: GlobalScrcpyState,
+        state: SessionMonitorState,
         now: Long,
     ) {
         if (state.isScreenLocked && state.isVideoActive) {

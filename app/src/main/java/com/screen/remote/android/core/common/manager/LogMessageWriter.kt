@@ -19,7 +19,7 @@ internal class LogMessageWriter(
         tag: String,
         message: String,
     ) {
-        if (!state.isEnabled) {
+        if (!state.isEnabled || state.runtimeLoggingSuppressed) {
             return
         }
 
@@ -42,7 +42,7 @@ internal class LogMessageWriter(
         tag: String,
         message: String,
     ) {
-        if (!state.isEnabled) {
+        if (!state.isEnabled || state.runtimeLoggingSuppressed) {
             return
         }
 
@@ -66,6 +66,7 @@ internal class LogMessageWriter(
         message: String,
         appendTrailingNewline: Boolean,
     ) {
+        if (state.runtimeLoggingSuppressed) return
         val timestamp = state.dateFormat.format(Date())
         val logLine =
             buildString {

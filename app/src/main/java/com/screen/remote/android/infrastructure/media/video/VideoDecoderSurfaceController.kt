@@ -14,6 +14,7 @@ internal class VideoDecoderSurfaceController(
     private var dummySurface: Surface? = null
     private var dummySurfaceTexture: SurfaceTexture? = null
     private var pendingSurface: Surface? = null
+    private var appliedSurface: Surface? = null
 
     fun currentSurface(): Surface? =
         synchronized(surfaceLock) {
@@ -48,6 +49,9 @@ internal class VideoDecoderSurfaceController(
 
     fun releaseDummySurface() {
         try {
+            if (appliedSurface === dummySurface) {
+                appliedSurface = null
+            }
             dummySurface?.release()
             dummySurface = null
             dummySurfaceTexture?.release()
@@ -77,16 +81,21 @@ internal class VideoDecoderSurfaceController(
         synchronized(surfaceLock) {
             surface = newSurface
             val targetSurface = newSurface ?: dummySurface
-            pendingSurface = targetSurface
             try {
                 val codec = decoder
                 if (codec == null || isStopped) {
+                    pendingSurface = targetSurface
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器未运行，已保存待应用 Surface" }
                     return
                 }
 
                 if (targetSurface != null) {
+                    if (targetSurface === appliedSurface && pendingSurface == null) {
+                        return
+                    }
+                    pendingSurface = targetSurface
                     codec.setOutputSurface(targetSurface)
+                    appliedSurface = targetSurface
                     pendingSurface = null
 
                     if (newSurface != null) {
@@ -95,6 +104,7 @@ internal class VideoDecoderSurfaceController(
                         VideoDebugLog.d(LogTags.VIDEO_DECODER) { "已切换到 dummy Surface（后台模式）" }
                     }
                 } else {
+                    pendingSurface = null
                     LogManager.e(LogTags.VIDEO_DECODER, "无法切换 Surface：dummy Surface 不可用")
                 }
             } catch (e: IllegalStateException) {
@@ -124,6 +134,7 @@ internal class VideoDecoderSurfaceController(
             val targetSurface = pendingSurface ?: return
             runCatching {
                 codec.setOutputSurface(targetSurface)
+                appliedSurface = targetSurface
                 pendingSurface = null
                 VideoDebugLog.d(LogTags.VIDEO_DECODER) { "已应用延迟的 Surface 切换" }
             }.onFailure { error ->

@@ -11,6 +11,7 @@ import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.infrastructure.adb.usb.UsbDadb
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import kotlinx.coroutines.CoroutineScope
@@ -202,13 +203,15 @@ internal object DebugUsbAdbCommands {
                                             host = DeviceTransportSerial.stripUsbPrefix(deviceId),
                                         ),
                                     ),
-                                maxSize = 1920,
-                                videoBitRate = 8_000_000,
-                                maxFps = 60,
-                                preferredVideoCodec = "h264",
-                                enableAudio = false,
-                                stayAwake = false,
-                                turnScreenOff = false,
+                                config =
+                                    ScrcpyConfig(
+                                        maxSize = 1920,
+                                        videoBitRate = 8_000_000,
+                                        maxFps = 60,
+                                        enableAudio = false,
+                                        stayAwake = false,
+                                        turnScreenOff = false,
+                                    ),
                             )
 
                         val result =

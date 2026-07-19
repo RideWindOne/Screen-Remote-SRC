@@ -41,7 +41,7 @@ class AudioDecoderManager(
             isAudioDecoderStarting = true
             val codec = stream.codec.lowercase()
             val options = connectionViewModel.getCurrentSessionOptions()
-            val expectedDeviceSerial = options?.deviceSerial.orEmpty()
+            val expectedDeviceSerial = options?.capabilityCache?.deviceSerial.orEmpty()
             val rejectionKey = "$expectedDeviceSerial|audio:$codec"
             LogManager.d(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_START_AUDIO_DECODER.get()}: codec=$codec")
 
@@ -52,9 +52,9 @@ class AudioDecoderManager(
                         options?.getFinalAudioDecoder()
                             ?.ifBlank { null },
                     allowHardwareDecoders =
-                        options?.enableHardwareDecoding != false,
+                        options?.config?.enableHardwareDecoding != false,
                     decoderSelectionPinned =
-                        options?.userAudioDecoder?.isNotBlank() == true,
+                        options?.config?.userAudioDecoder?.isNotBlank() == true,
                     initialRejectedDecoderNames = connectionViewModel.runtimeRejectedDecoders(rejectionKey),
                     sessionContext = connectionViewModel.createSessionContext(),
                 ).apply {

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.FilePickerHelper
+import com.screen.remote.android.infrastructure.adb.connection.installApkFromUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -356,17 +357,14 @@ internal fun SessionManagementAppsPage(
             uri ?: return@rememberImportFileLauncher
             scope.launch {
                 appActionProgress = ManagementTexts.Apps.PREPARING_APK.get()
-                var tempFile: java.io.File? = null
                 val result =
                     runCatching {
-                        tempFile = copyUriToTempApk(context, uri)
                         val connection =
                             SessionManagementAdbConnection.current()
                                 ?: error(ManagementTexts.Apps.NO_ADB_CONNECTION_AVAILABLE.get())
-                        connection.installApk(requireNotNull(tempFile).absolutePath).getOrThrow()
+                        installApkFromUri(context, connection, uri).getOrThrow()
                         ManagementTexts.Apps.INSTALL_SUCCEEDED.get()
                     }
-                withContext(Dispatchers.IO) { tempFile?.delete() }
                 appActionProgress = null
                 appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Apps.INSTALL_FAILED.get())
                 refreshInventory(manual = true)

@@ -11,15 +11,18 @@ package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.common.manager.SessionIssueTracker
-import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionPurpose
 import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
 import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager.killProcess
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
+import com.screen.remote.android.infrastructure.scrcpy.connection.PreparedAdbConnection
+import com.screen.remote.android.infrastructure.scrcpy.session.Session
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.createMonitorBus
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.updateDeviceSerial
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbConnectionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardRemovalTrigger
@@ -38,19 +41,20 @@ import kotlinx.coroutines.supervisorScope
  */
 internal suspend fun ConnectionLifecycle.setupAdbConnection(
     options: ScrcpyOptions,
-): AdbConnection =
+    session: Session,
+): PreparedAdbConnection =
     coroutineScope {
         val portJob = async { findAvailablePort() }
 
-    val connection = getOrCreateAdbConnection(options)
-    activeDeviceId = connection.deviceId
-    AdbBridge.setConnection(connection)
+        val connection = getOrCreateAdbConnection(options, session)
+        AdbBridge.setConnection(connection)
 
         val remoteFingerprint =
-            connection.executeShell("getprop ro.build.fingerprint", retryOnFailure = false)
-                .getOrNull()
-                ?.trim()
-                .orEmpty()
+            connection.getCachedCandidatePreflight()?.buildFingerprint?.takeIf { it.isNotBlank() }
+                ?: connection.executeShell("getprop ro.build.fingerprint", retryOnFailure = false)
+                    .getOrNull()
+                    ?.trim()
+                    .orEmpty()
         val deviceInfo = connection.deviceInfo
         val codecCapabilitySignature =
             listOf(
@@ -59,10 +63,12 @@ internal suspend fun ConnectionLifecycle.setupAdbConnection(
                 AppConstants.SCRCPY_VERSION,
                 "codec-capability-v2",
             ).joinToString("|")
-        sessionContext.currentSession()?.updateDeviceSerial(codecCapabilitySignature)
+        session.updateDeviceSerial(codecCapabilitySignature)
 
-        localPort = portJob.await()
-        connection
+        PreparedAdbConnection(
+            connection = connection,
+            localPort = portJob.await(),
+        )
     }
 
 /**
@@ -73,6 +79,7 @@ internal suspend fun ConnectionLifecycle.setupAdbConnection(
  */
 private suspend fun ConnectionLifecycle.getOrCreateAdbConnection(
     options: ScrcpyOptions,
+    session: Session,
 ): AdbConnection =
     run {
         val raceGeneration = beginAdbRace()
@@ -82,18 +89,19 @@ private suspend fun ConnectionLifecycle.getOrCreateAdbConnection(
         val selected =
             raceAdbConnections(
                 candidates = options.connectionCandidates,
+                purpose = AdbConnectionPurpose.SCRCPY_SESSION,
                 connectionManager = adbConnectionManager,
                 attemptScope = backgroundScope,
                 cleanupScope = backgroundScope,
                 logTag = LogTags.SCRCPY_CLIENT,
                 logLabel = "ADB",
                 isCurrentRace = { isCurrentAdbRace(raceGeneration) },
-            ) { candidate ->
-                getOrCreateAdbConnection(candidate)
-            }
+            )
         val selectedConnection = selected.result.getOrThrow()
-        selectedConnection.bindSessionContext(sessionContext)
-        SessionIssueTracker.updateDeviceId(selectedConnection.deviceId)
+        selectedConnection.bindSessionContext(sessionContext.bindCurrent())
+        session.adbConnection = selectedConnection
+        session.createMonitorBus(selectedConnection.deviceId)
+        issueTracker.updateDeviceId(selectedConnection.deviceId)
         sessionContext.emit(
             SessionEvent.AdbConnected(
                 AdbConnectionContext(
@@ -105,44 +113,41 @@ private suspend fun ConnectionLifecycle.getOrCreateAdbConnection(
         selectedConnection
     }
 
-private suspend fun ConnectionLifecycle.getOrCreateAdbConnection(
-    candidate: ConnectionCandidate,
-): AdbConnection = adbConnectionManager.connectCandidate(candidate).getOrThrow()
-
 /**
  * 清理旧资源
  */
 internal suspend fun ConnectionLifecycle.cleanupOldResources(
-    connection: AdbConnection,
-    previousLocalPort: Int,
-    previousScid: Int?,
+    previous: com.screen.remote.android.infrastructure.scrcpy.connection.ActiveScrcpyConnection?,
 ) {
-    if (previousLocalPort <= 0 && previousScid == null) {
+    if (previous == null) {
         return
     }
+
+    // 重连由生命周期统一接管时，旧媒体/控制 socket 可能仍有部分处于打开状态。
+    // 必须先停止旧健康检查并关闭整组 socket，再启动新 server 并按协议顺序重建。
+    healthMonitor.stopMonitoring()
+    socketManager.closeAllSockets()
 
     // 必须在创建新 forward 之前完成。系统可能复用同一个本地端口，后台延迟删除
     // 旧映射会把刚创建的新映射一并删掉。
     supervisorScope {
-        if (previousLocalPort > 0) {
+        if (previous.tunnelMode == ScrcpyTunnelMode.ADB_FORWARD && previous.localPort > 0) {
             launch {
-                connection
-                    .removeAdbForward(previousLocalPort, ForwardRemovalTrigger.CleanupOldResources)
+                previous.adbConnection
+                    .removeAdbForward(previous.localPort, ForwardRemovalTrigger.CleanupOldResources)
                     .onFailure(::logOldResourceCleanupFailure)
             }
         }
 
-        if (previousScid != null) {
-            launch {
-                runCatching {
-                    val oldScidHex = String.format("%08x", previousScid)
-                    killProcess(connection, "scrcpy.*scid=$oldScidHex")
-                    LogManager.d(
-                        LogTags.SCRCPY_CLIENT,
-                        "${RemoteTexts.SCRCPY_CLEANED_OLD_SERVER_PROCESS.get()} (scid=$oldScidHex)",
-                    )
-                }.onFailure(::logOldResourceCleanupFailure)
-            }
+        launch {
+            runCatching {
+                val oldScidHex = String.format("%08x", previous.scid)
+                killProcess(previous.adbConnection, "scrcpy.*scid=$oldScidHex")
+                LogManager.d(
+                    LogTags.SCRCPY_CLIENT,
+                    "${RemoteTexts.SCRCPY_CLEANED_OLD_SERVER_PROCESS.get()} (scid=$oldScidHex)",
+                )
+            }.onFailure(::logOldResourceCleanupFailure)
         }
     }
 }

@@ -6,9 +6,32 @@ import dadb.android.wireless.AdbMdnsService
 import dadb.android.wireless.AdbMdnsServiceType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class MdnsSessionPresenceTest {
+    @Test
+    fun gameModePauseStopsDiscoveryWithoutDependingOnSavedSessions() {
+        assertFalse(
+            shouldMonitorMdnsDiscovery(
+                gameModePaused = true,
+                hasTrackedSessions = true,
+                interactiveDiscoveryConsumers = 1,
+            ),
+        )
+    }
+
+    @Test
+    fun discoveryResumesAfterGameModePauseEnds() {
+        assertTrue(
+            shouldMonitorMdnsDiscovery(
+                gameModePaused = false,
+                hasTrackedSessions = true,
+                interactiveDiscoveryConsumers = 0,
+            ),
+        )
+    }
+
     @Test
     fun buildsFullMdnsNameFromDiscoveredServiceInstance() {
         val service =

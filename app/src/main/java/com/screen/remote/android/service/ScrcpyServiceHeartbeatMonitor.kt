@@ -3,7 +3,6 @@ package com.screen.remote.android.service
 import android.content.Context
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
@@ -82,13 +81,6 @@ internal class ScrcpyServiceHeartbeatMonitor(
                             .awaitAll()
                             .filterNotNull()
 
-                    if (protectedSnapshots.isNotEmpty()) {
-                        LogManager.d(
-                            LogTags.SCRCPY_SERVICE,
-                            "本轮心跳检测完成 protected=${protectedSnapshots.size}, remove=${devicesToRemove.size}",
-                        )
-                    }
-
                     var removedAny = false
                     devicesToRemove.forEach { failure ->
                         val deviceId = failure.deviceId
@@ -146,7 +138,6 @@ internal class ScrcpyServiceHeartbeatMonitor(
             }
 
             if (connection.isConnected()) {
-                LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 心跳正常: $deviceId")
                 return true
             }
 
@@ -154,7 +145,6 @@ internal class ScrcpyServiceHeartbeatMonitor(
                 LogTags.SCRCPY_SERVICE,
                 "ADB 心跳失败: $deviceId delayedAck=${connection.supportsDelayedAck()}，尝试按原连接重连",
             )
-            SessionIssueTracker.record("adb.heartbeat", "Heartbeat failed for $deviceId")
             tryReconnect(deviceId, protectedDevice, adbManager)
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -163,7 +153,6 @@ internal class ScrcpyServiceHeartbeatMonitor(
                 LogTags.SCRCPY_SERVICE,
                 "ADB 心跳异常 $deviceId: ${e.message}，尝试按原连接重连",
             )
-            SessionIssueTracker.record("adb.heartbeat", "Heartbeat exception for $deviceId: ${e.message}")
             tryReconnect(deviceId, protectedDevice, adbManager)
         }
 

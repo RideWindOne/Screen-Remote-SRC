@@ -1,6 +1,8 @@
 package com.screen.remote.android.feature.remote.widget.floating
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.View
@@ -42,17 +44,14 @@ fun showDualBallSystem(
     // 仅在开关开启时初始化触感反馈
     if (hapticEnabled) {
         HapticHelper.init(context)
-        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "触感反馈已启用")
-    } else {
-        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🔕 触感反馈已禁用")
     }
 
     val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     val density = context.resources.displayMetrics.density
-    val displayMetrics = context.resources.displayMetrics
+    val windowBounds = FloatingMenuWindowBoundsProvider(context).current()
 
     // 判断屏幕方向
-    val isLandscape = displayMetrics.widthPixels > displayMetrics.heightPixels
+    val isLandscape = windowBounds.width > windowBounds.height
 
     // 计算初始位置
     val ballBX: Float
@@ -60,12 +59,12 @@ fun showDualBallSystem(
 
     if (isLandscape) {
         // 横屏：右侧上下居中，距离右边缘 20dp
-        ballBX = displayMetrics.widthPixels - FLOATING_BALL_INITIAL_RIGHT_MARGIN_DP * density - BALL_B_SIZE_DP * density
-        ballBY = (displayMetrics.heightPixels - BALL_B_SIZE_DP * density) / 2f
+        ballBX = windowBounds.right - FLOATING_BALL_INITIAL_RIGHT_MARGIN_DP * density - BALL_B_SIZE_DP * density
+        ballBY = windowBounds.top + (windowBounds.height - BALL_B_SIZE_DP * density) / 2f
     } else {
         // 竖屏：底部左右居中，距离底部 85dp
-        ballBX = (displayMetrics.widthPixels - BALL_B_SIZE_DP * density) / 2f
-        ballBY = displayMetrics.heightPixels - FLOATING_BALL_INITIAL_BOTTOM_MARGIN_DP * density - BALL_B_SIZE_DP * density
+        ballBX = windowBounds.left + (windowBounds.width - BALL_B_SIZE_DP * density) / 2f
+        ballBY = windowBounds.bottom - FLOATING_BALL_INITIAL_BOTTOM_MARGIN_DP * density - BALL_B_SIZE_DP * density
     }
 
     // 小球A的位置（中心对齐大球B）
@@ -111,8 +110,6 @@ fun showDualBallSystem(
                     val result = actions.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
                     if (result.isFailure) {
                         LogManager.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
-                    } else {
-                        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "返回键已发送到远程设备")
                     }
                 }
             }
@@ -122,7 +119,6 @@ fun showDualBallSystem(
         }
     }
 
-    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已创建（${if (isLandscape) "横屏" else "竖屏"}）")
     return Tuple4(ballA, ballB, windowManager, gestureHandler)
 }
 
@@ -142,7 +138,6 @@ fun hideDualBallSystem(reference: BallSystemReference?) {
             if (ballB.isAttachedToWindow) {
                 windowManager.removeView(ballB)
             }
-            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "双球体系统已移除")
         } catch (e: Exception) {
             LogManager.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
         }
@@ -179,22 +174,77 @@ internal fun createBall(
             }
         }
 
-    return object : View(context) {
-        override fun onDraw(canvas: android.graphics.Canvas) {
-            super.onDraw(canvas)
-            val centerX = width / 2f
-            val centerY = height / 2f
-            for (i in ballColorsNormal.indices) {
-                val paint = paints[i]
-                for (j in 0..3) {
-                    canvas.drawCircle(centerX, centerY, radius * layerFactors[j], paint)
-                }
-            }
-        }
-    }.apply {
+    return FloatingBallView(
+        context = context,
+        diameterPx = sizePx,
+        radius = radius,
+        paints = paints,
+        layerFactors = layerFactors,
+    ).apply {
         layoutParams = android.view.ViewGroup.LayoutParams(sizePx, sizePx)
         // ✅ 关键：启用触觉反馈
         isHapticFeedbackEnabled = true
+    }
+}
+
+internal class FloatingBallView(
+    context: Context,
+    private val diameterPx: Int,
+    private val radius: Float,
+    private val paints: List<Paint>,
+    private val layerFactors: FloatArray,
+) : View(context) {
+    var hiddenEdge: FloatingMenuGestureState.Edge? = null
+        private set
+    var hiddenOffsetPx: Float = 0f
+        private set
+
+    fun setEdgeHidden(
+        edge: FloatingMenuGestureState.Edge,
+        offsetPx: Float,
+    ) {
+        hiddenEdge = edge
+        hiddenOffsetPx = offsetPx.coerceIn(0f, diameterPx.toFloat())
+        invalidate()
+    }
+
+    fun showFully() {
+        hiddenEdge = null
+        hiddenOffsetPx = 0f
+        invalidate()
+    }
+
+    fun containsTouch(
+        x: Float,
+        y: Float,
+    ): Boolean {
+        val (centerX, centerY) = drawingCenter()
+        val dx = x - centerX
+        val dy = y - centerY
+        return dx * dx + dy * dy <= radius * radius
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val (centerX, centerY) = drawingCenter()
+        paints.forEach { paint ->
+            layerFactors.forEach { factor ->
+                canvas.drawCircle(centerX, centerY, radius * factor, paint)
+            }
+        }
+    }
+
+    private fun drawingCenter(): Pair<Float, Float> {
+        var centerX = diameterPx / 2f
+        var centerY = diameterPx / 2f
+        when (hiddenEdge) {
+            FloatingMenuGestureState.Edge.LEFT -> centerX -= hiddenOffsetPx
+            FloatingMenuGestureState.Edge.RIGHT -> centerX += hiddenOffsetPx
+            FloatingMenuGestureState.Edge.TOP -> centerY -= hiddenOffsetPx
+            FloatingMenuGestureState.Edge.BOTTOM -> centerY += hiddenOffsetPx
+            null -> Unit
+        }
+        return centerX to centerY
     }
 }
 
@@ -214,14 +264,16 @@ internal fun createWindowParams(
         type = WindowManager.LayoutParams.TYPE_APPLICATION
         format = PixelFormat.TRANSLUCENT
         flags =
-            if (isFocusable) {
-                // 可触摸，但不抢占 Activity 焦点，否则会影响本机输入法弹出
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-            } else {
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-            }
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                if (isFocusable) {
+                    // 可触摸，但不抢占 Activity 焦点，否则会影响本机输入法弹出
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                } else {
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                }
         width = sizePx
         height = sizePx
         gravity = Gravity.TOP or Gravity.START
+        useWholeWindowCoordinateSpace()
     }
 }

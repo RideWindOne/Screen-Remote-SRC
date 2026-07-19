@@ -4,6 +4,7 @@ import com.screen.remote.android.core.domain.model.CodecCatalog
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import org.junit.Assert.assertFalse
@@ -55,8 +56,7 @@ class CodecRemoteDetectionTest {
         ScrcpyOptions(
             sessionId = "session",
             connectionCandidates = listOf(ConnectionCandidate(ConnectionTransport.TCP, "device", 5555)),
-            remoteVideoEncoders = video,
-            remoteAudioEncoders = audio,
+            capabilityCache = DeviceCapabilityCache(remoteVideoEncoders = video, remoteAudioEncoders = audio),
         )
 
     private fun videoEncoder() =

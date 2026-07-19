@@ -18,15 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.screen.remote.android.core.data.repository.SessionData
-import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import com.screen.remote.android.feature.remote.presentation.VideoDecoderManager
-import com.screen.remote.android.infrastructure.scrcpy.connection.TouchAction
-
-private data class RemoteTouchPoint(
-    val x: Int,
-    val y: Int,
-)
+import com.screen.remote.android.feature.remote.widget.touch.RemoteTouchEventDispatcher
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
@@ -42,134 +36,29 @@ fun VideoDisplayArea(
     videoDecoderManager: VideoDecoderManager,
     overlayContent: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {},
 ) {
-    val activeRemotePoints = remember { linkedMapOf<Int, RemoteTouchPoint>() }
-
-    val handleTouch: (View, android.view.MotionEvent) -> Boolean = { view, event ->
-        if (videoWidth <= 0 || videoHeight <= 0 || view.width <= 0 || view.height <= 0) {
-            false
-        } else {
-            val deviceWidth = videoWidth
-            val deviceHeight = videoHeight
-
-            fun dispatchTouchEvent(
-                action: Int,
-                pointerId: Int,
-                remotePoint: RemoteTouchPoint,
-                pressure: Float,
-            ) {
+    val touchDispatcher =
+        remember(controlViewModel) {
+            RemoteTouchEventDispatcher { action, pointerId, x, y, screenWidth, screenHeight, pressure ->
                 controlViewModel.sendTouchEvent(
                     action = action,
-                    pointerId = pointerId.toLong(),
-                    x = remotePoint.x,
-                    y = remotePoint.y,
-                    screenWidth = deviceWidth,
-                    screenHeight = deviceHeight,
+                    pointerId = pointerId,
+                    x = x,
+                    y = y,
+                    screenWidth = screenWidth,
+                    screenHeight = screenHeight,
                     pressure = pressure,
                 )
             }
-
-            fun toRemotePoint(pointerIndex: Int): RemoteTouchPoint =
-                RemoteTouchPoint(
-                    x = (event.getX(pointerIndex) / view.width * deviceWidth).toInt().coerceIn(0, deviceWidth - 1),
-                    y = (event.getY(pointerIndex) / view.height * deviceHeight).toInt().coerceIn(0, deviceHeight - 1),
-                )
-
-            fun releasePointer(
-                pointerId: Int,
-                remotePoint: RemoteTouchPoint,
-            ) {
-                dispatchTouchEvent(TouchAction.ACTION_UP, pointerId, remotePoint, 0f)
-                activeRemotePoints.remove(pointerId)
-            }
-
-            val eventPointerIds = HashSet<Int>(event.pointerCount)
-            val eventRemotePoints = HashMap<Int, RemoteTouchPoint>(event.pointerCount)
-            val eventPressures = HashMap<Int, Float>(event.pointerCount)
-            for (index in 0 until event.pointerCount) {
-                val pointerId = event.getPointerId(index)
-                eventPointerIds += pointerId
-                eventRemotePoints[pointerId] = toRemotePoint(index)
-                eventPressures[pointerId] = event.getPressure(index)
-            }
-
-            val disappearedPointerIds = activeRemotePoints.keys.filter { it !in eventPointerIds }
-            for (pointerId in disappearedPointerIds) {
-                val remotePoint = activeRemotePoints[pointerId] ?: continue
-                releasePointer(pointerId, remotePoint)
-            }
-
-            if (event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
-                val pointersToRelease = activeRemotePoints.keys.toList()
-                pointersToRelease.forEach { pointerId ->
-                    val remotePoint = activeRemotePoints[pointerId] ?: return@forEach
-                    releasePointer(pointerId, remotePoint)
-                }
-                true
-            } else {
-                val endedPointerId =
-                    when (event.actionMasked) {
-                        android.view.MotionEvent.ACTION_UP,
-                        android.view.MotionEvent.ACTION_POINTER_UP,
-                        -> event.getPointerId(event.actionIndex)
-                        else -> null
-                    }
-
-                val justPressed = HashSet<Int>()
-                for (index in 0 until event.pointerCount) {
-                    val pointerId = event.getPointerId(index)
-                    if (pointerId == endedPointerId) {
-                        continue
-                    }
-                    if (activeRemotePoints.containsKey(pointerId)) {
-                        continue
-                    }
-                    val remotePoint = eventRemotePoints[pointerId] ?: continue
-                    val pressure = eventPressures[pointerId] ?: 0f
-
-                    activeRemotePoints[pointerId] = remotePoint
-                    justPressed += pointerId
-
-                    dispatchTouchEvent(TouchAction.ACTION_DOWN, pointerId, remotePoint, pressure)
-                }
-
-                for (index in 0 until event.pointerCount) {
-                    val pointerId = event.getPointerId(index)
-                    if (!activeRemotePoints.containsKey(pointerId)) {
-                        continue
-                    }
-                    if (pointerId == endedPointerId) {
-                        continue
-                    }
-                    if (pointerId in justPressed) {
-                        continue
-                    }
-
-                    val remotePoint = eventRemotePoints[pointerId] ?: continue
-                    val lastRemotePoint = activeRemotePoints[pointerId]
-                    if (lastRemotePoint == remotePoint) {
-                        continue
-                    }
-                    activeRemotePoints[pointerId] = remotePoint
-
-                    dispatchTouchEvent(TouchAction.ACTION_MOVE, pointerId, remotePoint, eventPressures[pointerId] ?: 0f)
-                }
-
-                if (endedPointerId != null) {
-                    val remotePoint =
-                        eventRemotePoints[endedPointerId]
-                            ?: activeRemotePoints[endedPointerId]
-                            ?: toRemotePoint(event.actionIndex)
-
-                    if (event.actionMasked == android.view.MotionEvent.ACTION_UP) {
-                        view.performClick()
-                    }
-
-                    releasePointer(endedPointerId, remotePoint)
-                }
-
-                true
-            }
         }
+
+    DisposableEffect(touchDispatcher, videoWidth, videoHeight) {
+        onDispose {
+            touchDispatcher.cancelActivePointers(videoWidth, videoHeight)
+        }
+    }
+
+    val handleTouch: (View, android.view.MotionEvent) -> Boolean = { view, event ->
+        touchDispatcher.handle(view, event, videoWidth, videoHeight)
     }
 
     Box(
@@ -183,7 +72,7 @@ fun VideoDisplayArea(
             configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
         val matchHeightFirst = videoAspectRatio < containerAspectRatio
 
-        val useFullScreen = sessionData?.useFullScreen ?: false
+        val useFullScreen = sessionData?.config?.let { it.useFullScreen && !it.gameMode } ?: false
 
         Box(
             modifier =

@@ -45,10 +45,10 @@ class CodecCatalogTest {
     }
 
     @Test
-    fun `preferred format is first and the remaining catalog order is stable`() {
+    fun `catalog order defines automatic selection priority`() {
         assertEquals(
-            listOf("vp9", "h264", "h265", "av1", "vp8"),
-            CodecCatalog.orderedSpecs(CodecMediaType.VIDEO, "vp9").map { it.name },
+            listOf("h264", "h265", "av1", "vp9", "vp8"),
+            CodecCatalog.orderedSpecs(CodecMediaType.VIDEO).map { it.name },
         )
     }
 }

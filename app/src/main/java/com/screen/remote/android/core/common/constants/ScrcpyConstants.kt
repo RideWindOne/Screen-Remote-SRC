@@ -72,6 +72,26 @@ object ScrcpyConstants {
     /** 默认视频缓冲（毫秒，实时模式） */
     const val DEFAULT_VIDEO_BUFFER_MS = 0
 
+    /**
+     * Control socket 上普通 MOVE 的最小发送间隔。
+     *
+     * scrcpy 的触控协议没有背压反馈，持续把本机 120/240Hz 的多指 MOVE 全量写入 socket
+     * 会让 server/InputManager 队列积压，后续 DOWN/UP 也只能排在旧 MOVE 后面。5ms 是全局
+     * MOVE 上限；DOWN/UP 会作为顺序屏障立即发送，不受这个间隔限制。
+     */
+    const val GAME_CONTROL_TOUCH_MOVE_INTERVAL_MS = 5L
+
+    /**
+     * 被控端可观察到的最短按压时长。
+     *
+     * 控制协议不携带客户端事件时间。如果发送协程在一次 drain 中同时拿到 DOWN 和 UP，
+     * server 会给两者记录几乎相同的时间，游戏可能漏掉这个短按。这里只延后 UP，不延后 DOWN。
+     */
+    const val GAME_CONTROL_MIN_TOUCH_HOLD_MS = 20L
+
+    /** 游戏模式等待硬解输出的短窗口；命中时可少等一个视频包周期。 */
+    const val GAME_VIDEO_OUTPUT_DEQUEUE_TIMEOUT_US = 2_000L
+
     /** 默认音量 */
     const val DEFAULT_AUDIO_VOLUME = 1.0f
 

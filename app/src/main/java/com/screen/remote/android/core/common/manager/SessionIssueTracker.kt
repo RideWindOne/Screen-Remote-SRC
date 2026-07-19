@@ -10,7 +10,7 @@ import com.screen.remote.android.core.common.LogTags
  * - 输出统一格式，便于从长日志里定位“第一处坏掉的位置”
  * - 不参与状态机和重连逻辑，仅用于诊断
  */
-object SessionIssueTracker {
+class SessionIssueTracker {
     private var sessionId: String? = null
     private var deviceId: String? = null
     private var startedAtMs: Long = 0L

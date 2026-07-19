@@ -2,6 +2,7 @@ package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import java.util.Random
 
@@ -21,12 +22,15 @@ internal suspend fun ConnectionLifecycle.connectSockets(
     options: ScrcpyOptions,
     connection: AdbConnection,
     socketName: String,
+    localPort: Int,
+    tunnelMode: ScrcpyTunnelMode,
 ) {
     socketManager.connectSockets(
         connection = connection,
         socketName = socketName,
-        enableAudio = options.enableAudio,
-        useAdbForward = options.forceAdb,
+        localPort = localPort,
+        enableAudio = options.config.enableAudio,
+        tunnelMode = tunnelMode,
         shouldAbortDirectProbe = shellMonitor::hasStartupFailed,
     )
 }

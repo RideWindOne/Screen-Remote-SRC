@@ -7,12 +7,13 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
+private const val RELEASES_API_URL = "https://api.github.com/repos/XRSec/Screen-Remote/releases"
+
 class GitHubReleaseUpdateChecker(
-    private val owner: String,
-    private val repo: String,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     suspend fun check(
@@ -21,9 +22,8 @@ class GitHubReleaseUpdateChecker(
     ): Result<GitHubReleaseInfo?> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val releases = fetchReleases()
                 selectLatestRelease(
-                    releases = releases,
+                    releases = fetchReleases(),
                     currentVersion = currentVersion,
                     channel = channel,
                 )
@@ -31,30 +31,50 @@ class GitHubReleaseUpdateChecker(
         }
 
     private fun fetchReleases(): List<GitHubReleaseInfo> {
-        val connection =
-            (URL("https://api.github.com/repos/$owner/$repo/releases").openConnection() as HttpURLConnection)
-                .apply {
-                    connectTimeout = 5000
-                    readTimeout = 5000
-                    requestMethod = "GET"
-                    setRequestProperty("Accept", "application/vnd.github+json")
-                    setRequestProperty("User-Agent", "Screen-Remote")
-                }
+        // 临时验证更新 UI 时，可注释真实请求并直接返回以下 mock：
+        //return listOf(
+        //    GitHubReleaseInfo(
+        //        tagName = "99.0.0",
+        //        name = "Screen Remote 99.0.0 (Mock)",
+        //        htmlUrl = "https://github.com/XRSec/Screen-Remote/releases",
+        //        prerelease = false,
+        //        draft = false,
+        //    ),
+        //)
 
-        return connection.inputStream.bufferedReader().use { reader ->
-            val root = json.parseToJsonElement(reader.readText()).jsonArray
-            root.mapNotNull { element ->
-                val obj = element.jsonObject
-                val tagName = obj["tag_name"]?.jsonPrimitive?.content.orEmpty()
-                if (tagName.isBlank()) return@mapNotNull null
-                GitHubReleaseInfo(
-                    tagName = tagName,
-                    name = obj["name"]?.jsonPrimitive?.content.orEmpty(),
-                    htmlUrl = obj["html_url"]?.jsonPrimitive?.content.orEmpty(),
-                    prerelease = obj["prerelease"]?.jsonPrimitive?.booleanOrNull == true,
-                    draft = obj["draft"]?.jsonPrimitive?.booleanOrNull == true,
-                )
+        val connection =
+            (URL(RELEASES_API_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 5000
+                readTimeout = 5000
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                setRequestProperty("User-Agent", "Screen-Remote")
             }
+
+        return try {
+            val responseCode = connection.responseCode
+            if (responseCode !in 200..299) {
+                connection.errorStream?.close()
+                throw IOException("GitHub Releases API returned HTTP $responseCode")
+            }
+
+            connection.inputStream.bufferedReader().use { reader ->
+                json.parseToJsonElement(reader.readText()).jsonArray.mapNotNull { element ->
+                    val obj = element.jsonObject
+                    val tagName = obj["tag_name"]?.jsonPrimitive?.content.orEmpty()
+                    if (tagName.isBlank()) return@mapNotNull null
+                    GitHubReleaseInfo(
+                        tagName = tagName,
+                        name = obj["name"]?.jsonPrimitive?.content.orEmpty(),
+                        htmlUrl = obj["html_url"]?.jsonPrimitive?.content.orEmpty(),
+                        prerelease = obj["prerelease"]?.jsonPrimitive?.booleanOrNull == true,
+                        draft = obj["draft"]?.jsonPrimitive?.booleanOrNull == true,
+                    )
+                }
+            }
+        } finally {
+            connection.disconnect()
         }
     }
 }

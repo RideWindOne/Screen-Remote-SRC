@@ -48,6 +48,7 @@ class MdnsSessionDiscoveryManager private constructor(
     private val lifecycleLock = Any()
     private var interactiveDiscoveryConsumers = 0
     private var monitorStarted = false
+    private var gameModePaused = false
 
     val state: StateFlow<MdnsSessionPresenceState> = _state.asStateFlow()
 
@@ -65,6 +66,15 @@ class MdnsSessionDiscoveryManager private constructor(
                     reconcileMonitoring()
                 }
             }
+        }
+    }
+
+    /** 已连接的游戏会话不需要继续扫描局域网服务。 */
+    fun setGameModePaused(paused: Boolean) {
+        synchronized(lifecycleLock) {
+            if (gameModePaused == paused) return
+            gameModePaused = paused
+            reconcileMonitoring()
         }
     }
 
@@ -136,11 +146,16 @@ class MdnsSessionDiscoveryManager private constructor(
         runCatching { monitor.stop() }
         monitorStarted = false
         _state.value = MdnsSessionPresenceState()
-        LogManager.i(LogTags.ADB_CONNECTION, "Stopped shared mDNS discovery because no saved mDNS sessions remain")
+        LogManager.i(LogTags.ADB_CONNECTION, "Stopped shared mDNS discovery")
     }
 
     private fun reconcileMonitoring() {
-        val shouldMonitor = trackedSessions.value.isNotEmpty() || interactiveDiscoveryConsumers > 0
+        val shouldMonitor =
+            shouldMonitorMdnsDiscovery(
+                gameModePaused = gameModePaused,
+                hasTrackedSessions = trackedSessions.value.isNotEmpty(),
+                interactiveDiscoveryConsumers = interactiveDiscoveryConsumers,
+            )
         if (shouldMonitor) {
             startMonitoring()
         } else {
@@ -192,3 +207,10 @@ class MdnsSessionDiscoveryManager private constructor(
             checkNotNull(instance) { "MdnsSessionDiscoveryManager is not initialized" }
     }
 }
+
+internal fun shouldMonitorMdnsDiscovery(
+    gameModePaused: Boolean,
+    hasTrackedSessions: Boolean,
+    interactiveDiscoveryConsumers: Int,
+): Boolean =
+    !gameModePaused && (hasTrackedSessions || interactiveDiscoveryConsumers > 0)

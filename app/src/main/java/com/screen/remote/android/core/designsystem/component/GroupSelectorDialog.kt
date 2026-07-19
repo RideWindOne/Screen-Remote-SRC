@@ -1,11 +1,5 @@
 package com.screen.remote.android.core.designsystem.component
 
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,7 +18,12 @@ fun GroupSelectorDialog(
     onGroupsSelected: (List<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val state = rememberGroupSelectorDialogState(selectedGroupIds)
+    val availableGroupIds = remember(availableGroups) { availableGroups.mapTo(hashSetOf()) { it.id } }
+    val validSelectedGroupIds =
+        remember(selectedGroupIds, availableGroupIds) {
+            sanitizeSelectedGroupIds(selectedGroupIds, availableGroupIds)
+        }
+    val state = rememberGroupSelectorDialogState(validSelectedGroupIds)
     val treeNodes =
         remember(availableGroups) {
             TreeActions.buildGroupTree(availableGroups)
@@ -40,6 +39,7 @@ fun GroupSelectorDialog(
                 onGroupsSelected = onGroupsSelected,
             )
         },
+        enableScroll = true,
     ) {
         GroupSelectorDialogContent(
             state = state,
@@ -54,38 +54,13 @@ private fun GroupSelectorDialogActions(
     state: GroupSelectorDialogState,
     onGroupsSelected: (List<String>) -> Unit,
 ) {
-    Row {
-        TextButton(
-            onClick = { onGroupsSelected(state.tempSelectedIds) },
-        ) {
-            Text(
-                text = CommonTexts.BUTTON_SAVE.get(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AppColors.iOSBlue,
-            )
-        }
-
-        IconButton(
-            onClick = { state.applySelection() },
-            enabled = state.hasPendingSelection,
-        ) {
-            Icon(
-                imageVector = if (state.isEditMode) Icons.Default.Check else Icons.Default.Add,
-                contentDescription = state.actionContentDescription(),
-                tint =
-                    if (state.hasPendingSelection) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    },
-            )
-        }
+    TextButton(
+        onClick = { onGroupsSelected(state.tempSelectedIds) },
+    ) {
+        Text(
+            text = CommonTexts.BUTTON_SAVE.get(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppColors.iOSBlue,
+        )
     }
 }
-
-private fun GroupSelectorDialogState.actionContentDescription(): String =
-    if (isEditMode) {
-        CommonTexts.BUTTON_DONE.get()
-    } else {
-        CommonTexts.BUTTON_ADD.get()
-    }

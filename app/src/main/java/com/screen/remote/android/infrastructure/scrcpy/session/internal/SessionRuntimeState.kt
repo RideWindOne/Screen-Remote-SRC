@@ -12,86 +12,28 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-internal class SessionStateStore {
+/** 单个 Session 唯一的可变运行态。 */
+internal class SessionRuntimeState {
     private val _sessionState = MutableStateFlow<SessionState>(SessionState.Idle)
     val sessionState: StateFlow<SessionState> = _sessionState.asStateFlow()
 
-    fun updateSessionState(state: SessionState) {
-        _sessionState.value = state
-    }
-}
-
-internal class SessionComponentStateStore {
-    private val _componentStates = MutableStateFlow<Map<SessionComponent, ComponentState>>(emptyMap())
-    private var expectedSocketCount = 3
+    private val componentStates = mutableMapOf<SessionComponent, ComponentState>()
+    private var expectedSocketCount = DEFAULT_SOCKET_COUNT
     private var audioEnabled = true
-    private val _componentSnapshot =
-        MutableStateFlow(
-            emptyMap<SessionComponent, ComponentState>().toSessionComponentStateSnapshot(
-                expectedSocketCount = expectedSocketCount,
-                audioEnabled = audioEnabled,
-            ),
-        )
+    private val _componentSnapshot = MutableStateFlow(buildComponentSnapshot())
     val componentSnapshot: StateFlow<SessionComponentStateSnapshot> = _componentSnapshot.asStateFlow()
 
-    fun updateComponentState(
-        component: SessionComponent,
-        state: ComponentState,
-    ): SessionComponentStateSnapshot {
-        val updatedStates =
-            _componentStates.value.toMutableMap().apply {
-                this[component] = state
-            }
-        val snapshot =
-            updatedStates.toSessionComponentStateSnapshot(
-                expectedSocketCount = expectedSocketCount,
-                audioEnabled = audioEnabled,
-            )
-        _componentStates.value = updatedStates
-        _componentSnapshot.value = snapshot
-        return snapshot
-    }
-
-    fun updateSocketExpectation(
-        expectedSocketCount: Int,
-        audioEnabled: Boolean,
-    ) {
-        this.expectedSocketCount = expectedSocketCount
-        this.audioEnabled = audioEnabled
-        _componentSnapshot.value =
-            _componentStates.value.toSessionComponentStateSnapshot(
-                expectedSocketCount = expectedSocketCount,
-                audioEnabled = audioEnabled,
-            )
-    }
-
-    fun clear() {
-        val clearedStates = emptyMap<SessionComponent, ComponentState>()
-        _componentStates.value = clearedStates
-        expectedSocketCount = 3
-        audioEnabled = true
-        _componentSnapshot.value =
-            clearedStates.toSessionComponentStateSnapshot(
-                expectedSocketCount = expectedSocketCount,
-                audioEnabled = audioEnabled,
-            )
-    }
-}
-
-internal class SessionRuntimeBindings {
     private var reconnectAttempts = 0
     private var decoderRecoveryAttempts = 0
-    private var onReconnectRequest: (() -> Unit)? = null
+    private var reconnectCallback: (() -> Unit)? = null
     private var stateMachine: ConnectionStateMachine? = null
-    private var expectedSocketCount = 3
-    private var audioEnabled = true
 
-    fun setStateMachine(stateMachine: ConnectionStateMachine?) {
+    fun bind(
+        stateMachine: ConnectionStateMachine?,
+        reconnectCallback: (() -> Unit)?,
+    ) {
         this.stateMachine = stateMachine
-    }
-
-    fun setReconnectCallback(callback: (() -> Unit)?) {
-        onReconnectRequest = callback
+        this.reconnectCallback = reconnectCallback
     }
 
     fun updateProgress(
@@ -100,6 +42,37 @@ internal class SessionRuntimeBindings {
         message: String,
     ) {
         stateMachine?.updateProgress(step, status, message)
+    }
+
+    fun updateSessionState(state: SessionState) {
+        if (state is SessionState.Connected) {
+            reconnectAttempts = 0
+        }
+        _sessionState.value = state
+    }
+
+    fun updateComponentState(
+        component: SessionComponent,
+        state: ComponentState,
+    ): SessionComponentStateSnapshot {
+        componentStates[component] = state
+        return buildComponentSnapshot().also { _componentSnapshot.value = it }
+    }
+
+    fun clearComponentStates() {
+        componentStates.clear()
+        expectedSocketCount = DEFAULT_SOCKET_COUNT
+        audioEnabled = true
+        _componentSnapshot.value = buildComponentSnapshot()
+    }
+
+    fun updateSocketExpectation(
+        expectedSocketCount: Int,
+        audioEnabled: Boolean,
+    ) {
+        this.expectedSocketCount = expectedSocketCount
+        this.audioEnabled = audioEnabled
+        _componentSnapshot.value = buildComponentSnapshot()
     }
 
     fun reconnectAttempts(): Int = reconnectAttempts
@@ -119,18 +92,20 @@ internal class SessionRuntimeBindings {
     }
 
     fun invokeReconnectCallback() {
-        onReconnectRequest?.invoke()
-    }
-
-    fun setSocketExpectation(
-        expectedSocketCount: Int,
-        audioEnabled: Boolean,
-    ) {
-        this.expectedSocketCount = expectedSocketCount
-        this.audioEnabled = audioEnabled
+        reconnectCallback?.invoke()
     }
 
     fun expectedSocketCount(): Int = expectedSocketCount
 
     fun audioEnabled(): Boolean = audioEnabled
+
+    private fun buildComponentSnapshot(): SessionComponentStateSnapshot =
+        componentStates.toMap().toSessionComponentStateSnapshot(
+            expectedSocketCount = expectedSocketCount,
+            audioEnabled = audioEnabled,
+        )
+
+    private companion object {
+        const val DEFAULT_SOCKET_COUNT = 3
+    }
 }

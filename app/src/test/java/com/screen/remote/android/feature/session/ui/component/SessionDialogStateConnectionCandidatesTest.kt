@@ -1,10 +1,51 @@
 package com.screen.remote.android.feature.session.ui.component
 
+import com.screen.remote.android.core.data.repository.ConnectionCandidateData
+import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SessionDialogStateConnectionCandidatesTest {
+    @Test
+    fun editingPreservesConfigFieldsNotExposedByTheDialog() {
+        val original =
+            SessionData(
+                id = "session",
+                name = "Device",
+                connectionCandidates = listOf(ConnectionCandidateData("TCP", "192.168.1.2", 5555)),
+                color = "BLUE",
+                config = ScrcpyConfig(displayId = 7, showTouches = true, codecOptions = "profile=high"),
+            )
+
+        val saved = SessionDialogState(original).toSessionData(original.id)
+
+        assertEquals(7, saved.config.displayId)
+        assertEquals(true, saved.config.showTouches)
+        assertEquals("profile=high", saved.config.codecOptions)
+    }
+
+    @Test
+    fun floatingBallVisibilityIsSavedWithTheSession() {
+        val state = SessionDialogState().apply { updateConfig { copy(showFloatingBall = false) } }
+
+        assertEquals(false, state.toSessionData().config.showFloatingBall)
+    }
+
+    @Test
+    fun gameModeIsSavedWithTheSession() {
+        val state = SessionDialogState().apply {
+            sessionName = "game-device"
+            selectDeviceType(SessionDeviceType.TCP)
+            host = "192.168.1.2"
+            port = "5555"
+            updateConfig { copy(gameMode = true) }
+        }
+
+        assertEquals(true, state.toSessionData().config.gameMode)
+    }
+
     @Test
     fun emptyTcpAddressDoesNotRenderDefaultPortByItself() {
         val state = SessionDialogState()

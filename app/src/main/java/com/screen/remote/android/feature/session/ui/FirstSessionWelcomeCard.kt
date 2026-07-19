@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HighQuality
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wifi
@@ -430,6 +432,7 @@ private fun WelcomeFeatureRow(
 private fun welcomePages(isDark: Boolean): List<WelcomePage> {
     val blue = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF)
     val teal = if (isDark) Color(0xFF40C8E0) else Color(0xFF30B0C7)
+    val green = if (isDark) Color(0xFF30D158) else Color(0xFF28A745)
     val purple = if (isDark) Color(0xFFBF5AF2) else Color(0xFFAF52DE)
     val orange = if (isDark) Color(0xFFFF9F0A) else Color(0xFFFF9500)
 
@@ -458,6 +461,33 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
                     WelcomeFeature(Icons.Default.Key, onboardingText(SessionTexts.ONBOARDING_PAIRING_TITLE), onboardingText(SessionTexts.ONBOARDING_PAIRING_BODY)),
                     WelcomeFeature(Icons.Default.Sensors, onboardingText(SessionTexts.ONBOARDING_DISCOVERY_TITLE), onboardingText(SessionTexts.ONBOARDING_DISCOVERY_BODY)),
                     WelcomeFeature(Icons.AutoMirrored.Filled.AltRoute, onboardingText(SessionTexts.ONBOARDING_ENDPOINTS_TITLE), onboardingText(SessionTexts.ONBOARDING_ENDPOINTS_BODY)),
+                ),
+        ),
+        WelcomePage(
+            icon = Icons.Default.Key,
+            eyebrow = onboardingText(SessionTexts.ONBOARDING_PAIRING_GUIDE_EYEBROW),
+            title = onboardingText(SessionTexts.ONBOARDING_PAIRING_GUIDE_TITLE),
+            description = onboardingText(SessionTexts.ONBOARDING_PAIRING_GUIDE_DESCRIPTION),
+            accent = teal,
+            features =
+                listOf(
+                    WelcomeFeature(Icons.Default.Tune, onboardingText(SessionTexts.ONBOARDING_ENABLE_DEVELOPER_OPTIONS_TITLE), onboardingText(SessionTexts.ONBOARDING_ENABLE_DEVELOPER_OPTIONS_BODY)),
+                    WelcomeFeature(Icons.Default.Wifi, onboardingText(SessionTexts.ONBOARDING_OPEN_WIRELESS_DEBUGGING_TITLE), onboardingText(SessionTexts.ONBOARDING_OPEN_WIRELESS_DEBUGGING_BODY)),
+                    WelcomeFeature(Icons.Default.Key, onboardingText(SessionTexts.ONBOARDING_USE_PAIRING_CODE_TITLE), onboardingText(SessionTexts.ONBOARDING_USE_PAIRING_CODE_BODY)),
+                    WelcomeFeature(Icons.Default.Devices, onboardingText(SessionTexts.ONBOARDING_ADD_WIRELESS_SESSION_TITLE), onboardingText(SessionTexts.ONBOARDING_ADD_WIRELESS_SESSION_BODY)),
+                ),
+        ),
+        WelcomePage(
+            icon = Icons.Default.SportsEsports,
+            eyebrow = onboardingText(SessionTexts.ONBOARDING_ADVANCED_EYEBROW),
+            title = onboardingText(SessionTexts.ONBOARDING_ADVANCED_TITLE),
+            description = onboardingText(SessionTexts.ONBOARDING_ADVANCED_DESCRIPTION),
+            accent = green,
+            features =
+                listOf(
+                    WelcomeFeature(Icons.AutoMirrored.Filled.AltRoute, onboardingText(SessionTexts.ONBOARDING_PORT_FORWARD_TITLE), onboardingText(SessionTexts.ONBOARDING_PORT_FORWARD_BODY)),
+                    WelcomeFeature(Icons.Default.DesktopWindows, onboardingText(SessionTexts.ONBOARDING_VIRTUAL_DISPLAY_TITLE), onboardingText(SessionTexts.ONBOARDING_VIRTUAL_DISPLAY_BODY)),
+                    WelcomeFeature(Icons.Default.SportsEsports, onboardingText(SessionTexts.ONBOARDING_GAME_MODE_TITLE), onboardingText(SessionTexts.ONBOARDING_GAME_MODE_BODY)),
                 ),
         ),
         WelcomePage(

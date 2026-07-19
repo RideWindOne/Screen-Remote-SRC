@@ -12,7 +12,10 @@ import android.os.Build
 import android.os.Vibrator
 import android.os.VibrationEffect
 import android.view.HapticFeedbackConstants
+import android.view.View
 import android.view.Window
+import android.view.WindowInsets
+import android.view.inputmethod.InputMethodManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 
@@ -33,6 +36,20 @@ fun setDecorFitsSystemWindows(
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         }
     }
+}
+
+/**
+ * 显示软键盘（兼容不同 API 级别）
+ */
+fun showSoftInputCompat(view: View) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        view.windowInsetsController?.show(WindowInsets.Type.ime())
+        return
+    }
+
+    val inputMethodManager =
+        view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+    inputMethodManager?.showSoftInput(view, 0)
 }
 
 /**

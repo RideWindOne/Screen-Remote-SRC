@@ -1,5 +1,8 @@
 package com.screen.remote.android.core.update
 
+import java.util.Calendar
+import java.util.TimeZone
+
 enum class UpdateChannel {
     STABLE,
     PRERELEASE,
@@ -9,10 +12,11 @@ data class AppVersion(
     val major: Int,
     val minor: Int,
     val patch: Int,
+    val revision: Int = 0,
     val prerelease: String = "",
 ) : Comparable<AppVersion> {
     override fun compareTo(other: AppVersion): Int {
-        compareValuesBy(this, other, AppVersion::major, AppVersion::minor, AppVersion::patch)
+        compareValuesBy(this, other, AppVersion::major, AppVersion::minor, AppVersion::patch, AppVersion::revision)
             .takeIf { it != 0 }
             ?.let { return it }
 
@@ -32,6 +36,25 @@ data class GitHubReleaseInfo(
     val draft: Boolean,
 )
 
+data class UpdateCheckCache(
+    val checkedAtEpochMillis: Long = 0,
+    val latestVersion: String? = null,
+    val releaseUrl: String? = null,
+)
+
+fun isAutomaticUpdateCheckDue(
+    cache: UpdateCheckCache,
+    nowEpochMillis: Long,
+    timeZone: TimeZone = TimeZone.getDefault(),
+): Boolean {
+    if (cache.checkedAtEpochMillis <= 0) return true
+    val lastCheck = Calendar.getInstance(timeZone).apply { timeInMillis = cache.checkedAtEpochMillis }
+    val now = Calendar.getInstance(timeZone).apply { timeInMillis = nowEpochMillis }
+    return lastCheck.get(Calendar.ERA) != now.get(Calendar.ERA) ||
+        lastCheck.get(Calendar.YEAR) != now.get(Calendar.YEAR) ||
+        lastCheck.get(Calendar.DAY_OF_YEAR) != now.get(Calendar.DAY_OF_YEAR)
+}
+
 fun parseAppVersion(raw: String): AppVersion? {
     val normalized = raw.trim().removePrefix("v")
     val core = normalized.substringBefore('-')
@@ -42,6 +65,7 @@ fun parseAppVersion(raw: String): AppVersion? {
         major = parts.getOrNull(0)?.toIntOrNull() ?: return null,
         minor = parts.getOrNull(1)?.toIntOrNull() ?: 0,
         patch = parts.getOrNull(2)?.toIntOrNull() ?: 0,
+        revision = parts.getOrNull(3)?.toIntOrNull() ?: 0,
         prerelease = prerelease,
     )
 }

@@ -1,7 +1,5 @@
 package com.screen.remote.android.feature.remote.widget.floating
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.view.HapticFeedbackConstants
@@ -25,7 +23,6 @@ internal class FloatingMenuEdgeSnap(
     private val menuManager: FloatingMenuViewManager,
     hapticEnabled: Boolean,
 ) {
-    private val density = context.resources.displayMetrics.density
     private val analyzer =
         FloatingMenuEdgeAnalyzer(
             context = context,
@@ -48,9 +45,9 @@ internal class FloatingMenuEdgeSnap(
         deltaY: Float,
     ) {
         analyzer.checkDragOut(deltaX, deltaY) {
+            animator.showFully()
             state.isSnappedToEdge = false
             state.snappedEdge = null
-            FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER_MSG, "🔓 拖出贴边")
             menuManager.centerMenuHorizontally()
         }
     }
@@ -72,14 +69,22 @@ internal class FloatingMenuEdgeSnap(
         state.isSnappedToEdge = true
         state.snappedEdge = target.edge
 
-        FloatingDebugLog.d(
-            LogTags.FLOATING_CONTROLLER_MSG,
-            "🧲 贴边${target.edge.name}: 从(${animator.paramsA.x}, ${animator.paramsA.y}) → (${target.targetX}, ${target.targetY}), " +
-                "目标露出=${EDGE_VISIBLE_WIDTH_DP}dp(${(EDGE_VISIBLE_WIDTH_DP * density).toInt()}px), " +
-                "实际露出=${target.actualVisibleWidth}px, 小球大小=${animator.ballA.width}px",
-        )
-
+        menuManager.hideMenu()
         animator.animateToEdge(target)
+    }
+
+    fun revealFromEdge(): Boolean {
+        val target =
+            analyzer.resolveRevealTarget(
+                paramsA = animator.paramsA,
+                ballA = animator.ballA,
+                ballB = animator.ballB,
+            ) ?: return false
+
+        state.isSnappedToEdge = false
+        state.snappedEdge = null
+        animator.animateToEdge(target)
+        return true
     }
 
     fun resetAPosition() {
@@ -101,7 +106,7 @@ internal class FloatingMenuEdgeAnalyzer(
     private val hapticEnabled: Boolean,
 ) {
     private val density = context.resources.displayMetrics.density
-    private val displayMetrics = context.resources.displayMetrics
+    private val windowBoundsProvider = FloatingMenuWindowBoundsProvider(context)
 
     fun checkDragOut(
         deltaX: Float,
@@ -133,10 +138,11 @@ internal class FloatingMenuEdgeAnalyzer(
         if (state.isSnappedToEdge || !hapticEnabled) return
 
         val snapThreshold = EDGE_SNAP_THRESHOLD_DP * density
-        val distToLeft = centerX - radius
-        val distToRight = displayMetrics.widthPixels - (centerX + radius)
-        val distToTop = centerY - radius
-        val distToBottom = displayMetrics.heightPixels - (centerY + radius)
+        val windowBounds = windowBoundsProvider.current()
+        val distToLeft = centerX - radius - windowBounds.left
+        val distToRight = windowBounds.right - (centerX + radius)
+        val distToTop = centerY - radius - windowBounds.top
+        val distToBottom = windowBounds.bottom - (centerY + radius)
 
         val reachedEdgeInfo =
             when {
@@ -157,19 +163,11 @@ internal class FloatingMenuEdgeAnalyzer(
         ) {
             performHapticFeedbackCompat(HapticFeedbackConstants.VIRTUAL_KEY)
             state.hasTriggeredEdgeHaptic = true
-            FloatingDebugLog.d(
-                LogTags.FLOATING_CONTROLLER_MSG,
-                "🧲 进入边缘区域: ${currentEdge.name}, 距离=${distanceToNearestEdge.toInt()}px",
-            )
         }
 
         val hapticResetThreshold = EDGE_HAPTIC_RESET_DISTANCE_DP * density
         if (state.hasTriggeredEdgeHaptic && distanceToNearestEdge > hapticResetThreshold) {
             state.hasTriggeredEdgeHaptic = false
-            FloatingDebugLog.d(
-                LogTags.FLOATING_CONTROLLER_MSG,
-                "↩️ 离开边缘${distanceToNearestEdge.toInt()}px（阈值${hapticResetThreshold.toInt()}px），重置触感状态",
-            )
         }
     }
 
@@ -179,12 +177,13 @@ internal class FloatingMenuEdgeAnalyzer(
         ballA: View,
         ballB: View,
     ): FloatingMenuSnapTarget? {
-        val ballLeftEdge = paramsA.x.toFloat()
+        val windowBounds = windowBoundsProvider.current()
+        val ballLeftEdge = (paramsA.x - windowBounds.left).toFloat()
         val ballRightEdge = paramsA.x + ballA.width
-        val ballTopEdge = paramsA.y.toFloat()
+        val ballTopEdge = (paramsA.y - windowBounds.top).toFloat()
         val ballBottomEdge = paramsA.y + ballA.height
-        val distanceToRight = (displayMetrics.widthPixels - ballRightEdge).toFloat()
-        val distanceToBottom = (displayMetrics.heightPixels - ballBottomEdge).toFloat()
+        val distanceToRight = (windowBounds.right - ballRightEdge).toFloat()
+        val distanceToBottom = (windowBounds.bottom - ballBottomEdge).toFloat()
 
         val nearest =
             listOf(
@@ -198,56 +197,27 @@ internal class FloatingMenuEdgeAnalyzer(
         val edge = nearest.second
         val snapThreshold = EDGE_SNAP_THRESHOLD_DP * density
         if (minDistance > snapThreshold) {
-            FloatingDebugLog.d(
-                LogTags.FLOATING_CONTROLLER_MSG,
-                "🚫 距离边缘${minDistance.toInt()}px，不贴边（阈值${snapThreshold.toInt()}px）",
-            )
             return null
         }
 
-        val visibleWidth = EDGE_VISIBLE_WIDTH_DP * density
-        val (targetX, targetY, targetBX, targetBY) =
-            when (edge) {
-                FloatingMenuGestureState.Edge.LEFT ->
-                    listOf(
-                        (visibleWidth - ballA.width).toInt(),
-                        paramsA.y,
-                        (visibleWidth - ballB.width).toInt(),
-                        paramsB.y,
-                    )
-
-                FloatingMenuGestureState.Edge.RIGHT ->
-                    listOf(
-                        (displayMetrics.widthPixels - visibleWidth).toInt(),
-                        paramsA.y,
-                        (displayMetrics.widthPixels - visibleWidth).toInt(),
-                        paramsB.y,
-                    )
-
-                FloatingMenuGestureState.Edge.TOP ->
-                    listOf(
-                        paramsA.x,
-                        (visibleWidth - ballA.height).toInt(),
-                        paramsB.x,
-                        (visibleWidth - ballB.height).toInt(),
-                    )
-
-                FloatingMenuGestureState.Edge.BOTTOM ->
-                    listOf(
-                        paramsA.x,
-                        (displayMetrics.heightPixels - visibleWidth).toInt(),
-                        paramsB.x,
-                        (displayMetrics.heightPixels - visibleWidth).toInt(),
-                    )
-            }
-
-        val actualVisibleWidth =
-            when (edge) {
-                FloatingMenuGestureState.Edge.LEFT -> targetX + ballA.width
-                FloatingMenuGestureState.Edge.RIGHT -> displayMetrics.widthPixels - targetX
-                FloatingMenuGestureState.Edge.TOP -> targetY + ballA.height
-                FloatingMenuGestureState.Edge.BOTTOM -> displayMetrics.heightPixels - targetY
-            }
+        val coordinates =
+            calculateFloatingMenuSnapCoordinates(
+                edge = edge,
+                displayWidth = windowBounds.right,
+                displayHeight = windowBounds.bottom,
+                ballAWidth = ballA.width,
+                ballAHeight = ballA.height,
+                ballBWidth = ballB.width,
+                ballBHeight = ballB.height,
+                currentAX = paramsA.x,
+                currentAY = paramsA.y,
+                displayLeft = windowBounds.left,
+                displayTop = windowBounds.top,
+            )
+        val targetX = coordinates.targetAX
+        val targetY = coordinates.targetAY
+        val targetBX = coordinates.targetBX
+        val targetBY = coordinates.targetBY
 
         return FloatingMenuSnapTarget(
             edge = edge,
@@ -255,9 +225,131 @@ internal class FloatingMenuEdgeAnalyzer(
             targetY = targetY,
             targetBX = targetBX,
             targetBY = targetBY,
-            actualVisibleWidth = actualVisibleWidth,
+            actualVisibleWidth = calculateFloatingBallVisibleSize(ballA.width, ballA.height),
+            hiddenOffsetPx = calculateFloatingBallHiddenSize(ballA.width, ballA.height).toFloat(),
         )
     }
+
+    fun resolveRevealTarget(
+        paramsA: WindowManager.LayoutParams,
+        ballA: View,
+        ballB: View,
+    ): FloatingMenuSnapTarget? {
+        val edge = state.snappedEdge ?: return null
+        if (!state.isSnappedToEdge) return null
+        val windowBounds = windowBoundsProvider.current()
+
+        val coordinates =
+            calculateFloatingMenuRevealCoordinates(
+                edge = edge,
+                displayWidth = windowBounds.right,
+                displayHeight = windowBounds.bottom,
+                ballAWidth = ballA.width,
+                ballAHeight = ballA.height,
+                ballBWidth = ballB.width,
+                ballBHeight = ballB.height,
+                currentAX = paramsA.x,
+                currentAY = paramsA.y,
+                displayLeft = windowBounds.left,
+                displayTop = windowBounds.top,
+            )
+        return FloatingMenuSnapTarget(
+            edge = edge,
+            targetX = coordinates.targetAX,
+            targetY = coordinates.targetAY,
+            targetBX = coordinates.targetBX,
+            targetBY = coordinates.targetBY,
+            actualVisibleWidth = minOf(ballA.width, ballA.height),
+            hiddenOffsetPx = 0f,
+        )
+    }
+}
+
+internal data class FloatingMenuSnapCoordinates(
+    val targetAX: Int,
+    val targetAY: Int,
+    val targetBX: Int,
+    val targetBY: Int,
+)
+
+internal fun calculateFloatingMenuSnapCoordinates(
+    edge: FloatingMenuGestureState.Edge,
+    displayWidth: Int,
+    displayHeight: Int,
+    ballAWidth: Int,
+    ballAHeight: Int,
+    ballBWidth: Int,
+    ballBHeight: Int,
+    currentAX: Int,
+    currentAY: Int,
+    displayLeft: Int = 0,
+    displayTop: Int = 0,
+): FloatingMenuSnapCoordinates {
+    val centerOffsetX = (ballAWidth - ballBWidth) / 2f
+    val centerOffsetY = (ballAHeight - ballBHeight) / 2f
+    val targetAX =
+        when (edge) {
+            FloatingMenuGestureState.Edge.LEFT -> displayLeft
+            FloatingMenuGestureState.Edge.RIGHT -> displayWidth - ballAWidth
+            else -> currentAX
+        }
+    val targetAY =
+        when (edge) {
+            FloatingMenuGestureState.Edge.TOP -> displayTop
+            FloatingMenuGestureState.Edge.BOTTOM -> displayHeight - ballAHeight
+            else -> currentAY
+        }
+    return FloatingMenuSnapCoordinates(
+        targetAX = targetAX,
+        targetAY = targetAY,
+        targetBX = (targetAX + centerOffsetX).toInt(),
+        targetBY = (targetAY + centerOffsetY).toInt(),
+    )
+}
+
+internal fun calculateFloatingBallVisibleSize(
+    width: Int,
+    height: Int,
+): Int = minOf(width, height) * EDGE_VISIBLE_NUMERATOR / EDGE_VISIBLE_DENOMINATOR
+
+private fun calculateFloatingBallHiddenSize(
+    width: Int,
+    height: Int,
+): Int = minOf(width, height) - calculateFloatingBallVisibleSize(width, height)
+
+internal fun calculateFloatingMenuRevealCoordinates(
+    edge: FloatingMenuGestureState.Edge,
+    displayWidth: Int,
+    displayHeight: Int,
+    ballAWidth: Int,
+    ballAHeight: Int,
+    ballBWidth: Int,
+    ballBHeight: Int,
+    currentAX: Int,
+    currentAY: Int,
+    displayLeft: Int = 0,
+    displayTop: Int = 0,
+): FloatingMenuSnapCoordinates {
+    val centerOffsetX = (ballAWidth - ballBWidth) / 2f
+    val centerOffsetY = (ballAHeight - ballBHeight) / 2f
+    val targetAX =
+        when (edge) {
+            FloatingMenuGestureState.Edge.LEFT -> displayLeft
+            FloatingMenuGestureState.Edge.RIGHT -> displayWidth - ballAWidth
+            else -> currentAX
+        }
+    val targetAY =
+        when (edge) {
+            FloatingMenuGestureState.Edge.TOP -> displayTop
+            FloatingMenuGestureState.Edge.BOTTOM -> displayHeight - ballAHeight
+            else -> currentAY
+        }
+    return FloatingMenuSnapCoordinates(
+        targetAX = targetAX,
+        targetAY = targetAY,
+        targetBX = (targetAX + centerOffsetX).toInt(),
+        targetBY = (targetAY + centerOffsetY).toInt(),
+    )
 }
 
 internal data class FloatingMenuSnapTarget(
@@ -267,7 +359,11 @@ internal data class FloatingMenuSnapTarget(
     val targetBX: Int,
     val targetBY: Int,
     val actualVisibleWidth: Int,
+    val hiddenOffsetPx: Float,
 )
+
+private const val EDGE_VISIBLE_NUMERATOR = 2
+private const val EDGE_VISIBLE_DENOMINATOR = 5
 
 internal class FloatingMenuEdgeAnimator(
     internal val ballA: View,
@@ -285,8 +381,7 @@ internal class FloatingMenuEdgeAnimator(
         val startAY = paramsA.y
         val startBX = paramsB.x
         val startBY = paramsB.y
-        val startMenuX = menuManager.getMenuX()
-        val startMenuY = menuManager.getMenuY()
+        val startHiddenOffset = (ballA as? FloatingBallView)?.hiddenOffsetPx ?: 0f
 
         resetAnimator?.cancel()
         resetAnimator =
@@ -299,6 +394,13 @@ internal class FloatingMenuEdgeAnimator(
                     paramsA.y = (startAY + (target.targetY - startAY) * fraction).toInt()
                     paramsB.x = (startBX + (target.targetBX - startBX) * fraction).toInt()
                     paramsB.y = (startBY + (target.targetBY - startBY) * fraction).toInt()
+                    val hiddenOffset = startHiddenOffset + (target.hiddenOffsetPx - startHiddenOffset) * fraction
+                    if (hiddenOffset <= 0.5f) {
+                        showFully()
+                    } else {
+                        (ballA as? FloatingBallView)?.setEdgeHidden(target.edge, hiddenOffset)
+                        (ballB as? FloatingBallView)?.setEdgeHidden(target.edge, hiddenOffset)
+                    }
 
                     state.ballBCenterX = paramsB.x + ballB.width / 2f
                     state.ballBCenterY = paramsB.y + ballB.height / 2f
@@ -306,13 +408,7 @@ internal class FloatingMenuEdgeAnimator(
                     try {
                         windowManager.updateViewLayout(ballA, paramsA)
                         windowManager.updateViewLayout(ballB, paramsB)
-                        menuManager.animateMenuWithSnap(
-                            startMenuX = startMenuX,
-                            startMenuY = startMenuY,
-                            deltaX = target.targetX - startAX,
-                            deltaY = target.targetY - startAY,
-                            fraction = fraction,
-                        )
+                        menuManager.syncMenuToBall()
                     } catch (e: Exception) {
                         LogManager.e(LogTags.FLOATING_CONTROLLER, "贴边动画更新失败: ${e.message}")
                         cancel()
@@ -322,21 +418,17 @@ internal class FloatingMenuEdgeAnimator(
             }
     }
 
+    fun showFully() {
+        (ballA as? FloatingBallView)?.showFully()
+        (ballB as? FloatingBallView)?.showFully()
+    }
+
     fun resetAPosition() {
         state.ballBCenterX = paramsB.x + ballB.width / 2f
         state.ballBCenterY = paramsB.y + ballB.height / 2f
 
         val targetX = (state.ballBCenterX - ballA.width / 2f).toInt()
         val targetY = (state.ballBCenterY - ballA.height / 2f).toInt()
-        val targetACenterX = targetX + ballA.width / 2f
-        val targetACenterY = targetY + ballA.height / 2f
-
-        FloatingDebugLog.d(
-            LogTags.FLOATING_CONTROLLER_MSG,
-            "🎯 开始归位: A从(${paramsA.x}, ${paramsA.y}) → ($targetX, $targetY), " +
-                "B中心=(${state.ballBCenterX}, ${state.ballBCenterY}), 归位后A中心=($targetACenterX, $targetACenterY)",
-        )
-
         val startX = paramsA.x
         val startY = paramsA.y
 
@@ -355,19 +447,6 @@ internal class FloatingMenuEdgeAnimator(
                         cancel()
                     }
                 }
-                addListener(
-                    object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) {
-                            val finalACenterX = paramsA.x + ballA.width / 2f
-                            val finalACenterY = paramsA.y + ballA.height / 2f
-                            FloatingDebugLog.d(
-                                LogTags.FLOATING_CONTROLLER_MSG,
-                                "归位完成: A左上角=(${paramsA.x}, ${paramsA.y}), " +
-                                    "A中心=($finalACenterX, $finalACenterY), B中心=(${state.ballBCenterX}, ${state.ballBCenterY})",
-                            )
-                        }
-                    },
-                )
                 start()
             }
     }

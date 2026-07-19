@@ -83,12 +83,6 @@ internal class VideoDecoderPacketProcessor(
 
         val effectiveConfigured = configured || decoderConfigured
         observedPacketCount++
-        if (observedPacketCount <= 12 || observedPacketCount % 60 == 0) {
-            val preview = payload.take(minOf(16, payload.size)).joinToString(" ") { "%02X".format(it) }
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                "收到视频包 #$observedPacketCount: size=${payload.size} configured=$effectiveConfigured config=$packetIsConfig key=$packetIsKeyFrame data=$preview"
-            }
-        }
 
         if (effectiveConfigured && !packetIsConfig) {
             if (waitingForKeyFrameAfterFallback && !packetIsKeyFrame) {
@@ -108,11 +102,6 @@ internal class VideoDecoderPacketProcessor(
             )
         }
         nalBuffer.put(payload)
-        if (observedPacketCount <= 12 || observedPacketCount % 60 == 0) {
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                "缓存 Annex-B 数据: size=${payload.size} bufferPosition=${nalBuffer.position()} codec=$videoCodec"
-            }
-        }
 
         val result =
             when (videoPacketCodecMode(videoCodec)) {
@@ -264,9 +253,6 @@ internal class VideoDecoderPacketProcessor(
             }
             else -> if (configured) {
                 val isKeyFrame = packetIsKeyFrame || nalParser.isH264KeyFrame(nalType)
-                if (isKeyFrame) {
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "🎯 收到关键帧 (IDR) #$frameCount" }
-                }
                 decodeFrame(nalUnit, pts, isKeyFrame)
                 true
             } else configured
@@ -328,9 +314,6 @@ internal class VideoDecoderPacketProcessor(
             }
             else -> if (configured) {
                 val isKeyFrame = packetIsKeyFrame || nalParser.isH265KeyFrame(nalType)
-                if (isKeyFrame) {
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "🎯 收到关键帧 (H265 IDR) #$frameCount" }
-                }
                 decodeFrame(nalUnit, pts, isKeyFrame)
                 true
             } else configured
@@ -490,11 +473,6 @@ internal class VideoDecoderPacketProcessor(
             decoder.queueInputBuffer(inputIndex, 0, frameData.size, mediaCodecPresentationTimeUs(pts), flags)
             if (!isCodecConfig) {
                 queuedFrameCount++
-            }
-            if (!isCodecConfig && (queuedFrameCount <= 8 || queuedFrameCount % 60 == 0)) {
-                VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                    "已送入视频帧 #$queuedFrameCount: size=${frameData.size} key=$isKeyFrame ptsUs=$pts"
-                }
             }
             return true
         } catch (e: Exception) {

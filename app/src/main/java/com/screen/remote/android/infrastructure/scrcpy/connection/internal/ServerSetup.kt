@@ -7,6 +7,7 @@ import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.core.domain.model.CodecCatalog
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.media.codec.CodecSelector
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
@@ -31,13 +32,14 @@ import kotlinx.coroutines.coroutineScope
 internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     connection: AdbConnection,
     socketName: String,
-    useAdbForward: Boolean,
+    localPort: Int,
+    tunnelMode: ScrcpyTunnelMode,
     onServerAvailable: (suspend () -> Unit)? = null,
 ) = coroutineScope {
     val pushTargetPath = AppConstants.SCRCPY_SERVER_PATH
 
     val forwardJob =
-        if (useAdbForward) {
+        if (tunnelMode == ScrcpyTunnelMode.ADB_FORWARD) {
             // 推送 Forward 设置中事件
             sessionContext.emit(SessionEvent.ForwardSetting)
             async {
@@ -73,6 +75,7 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
                 connection.pushScrcpyServer(context).getOrElse { error ->
                     throw Exception("Push failed: ${error.message}", error)
                 }
+                connection.markCompatibleScrcpyServerAvailable()
             }
             pushDurationMs = System.currentTimeMillis() - pushStartTime
             onServerAvailable?.invoke()
@@ -115,6 +118,13 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
 }
 
 private suspend fun AdbConnection.hasRemoteScrcpyServer(path: String): Boolean =
+    if (path == AppConstants.SCRCPY_SERVER_PATH) {
+        getCachedCandidatePreflight()?.hasCompatibleScrcpyServer ?: probeRemoteScrcpyServer(path)
+    } else {
+        probeRemoteScrcpyServer(path)
+    }
+
+private suspend fun AdbConnection.probeRemoteScrcpyServer(path: String): Boolean =
     runCatching {
         executeShell(
             "if [ -s '$path' ] && [ \"\$(sha256sum '$path' 2>/dev/null | cut -d' ' -f1)\" = " +
@@ -131,12 +141,13 @@ private suspend fun AdbConnection.hasRemoteScrcpyServer(path: String): Boolean =
 internal suspend fun ConnectionLifecycle.startScrcpyServer(
     connection: AdbConnection,
     scid: Int,
+    options: ScrcpyOptions,
     waitForReady: Boolean = true,
 ) {
     // 推送 Server 启动事件
     sessionContext.emit(SessionEvent.ServerStarting)
 
-    val command = buildScrcpyCommand(scid)
+    val command = buildScrcpyCommand(scid, options)
 
     LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
     val stream =
@@ -182,8 +193,11 @@ internal fun ConnectionLifecycle.completeScrcpyServerStartup(scid: Int) {
 /**
  * 构建 Scrcpy 命令（从会话配置读取参数）
  */
-internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
-    val options = sessionContext.currentOptions() ?: throw IllegalStateException("会话不存在")
+internal fun ConnectionLifecycle.buildScrcpyCommand(
+    scid: Int,
+    options: ScrcpyOptions,
+): String {
+    val config = options.config
     val videoEncoder = options.getFinalVideoEncoder()
     val videoCodec = resolveVideoCodec(options, videoEncoder)
 
@@ -194,17 +208,17 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
             "log_level=debug",
         )
 
-    if (options.maxSize > 0) {
-        params.add("max_size=${options.maxSize}")
+    if (config.maxSize > 0) {
+        params.add("max_size=${config.maxSize}")
     }
 
     params.addAll(
         listOf(
-            "video_bit_rate=${options.videoBitRate}",
-            "max_fps=${options.maxFps}",
+            "video_bit_rate=${config.videoBitRate}",
+            "max_fps=${config.maxFps}",
             "video_codec=$videoCodec",
-            "stay_awake=${options.stayAwake}",
-            "power_off_on_close=${options.powerOffOnClose}",
+            "stay_awake=${config.stayAwake}",
+            "power_off_on_close=${config.powerOffOnClose}",
             "tunnel_forward=true",
             "send_device_meta=true",
             "send_stream_meta=true",
@@ -213,25 +227,31 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         ),
     )
 
-    if (options.newDisplayEnabled) {
-        params.add("new_display=${options.newDisplay.trim()}")
+    if (config.newDisplayEnabled) {
+        params.add("new_display=${config.newDisplay.trim()}")
+        if (!config.virtualDisplaySystemDecorations) {
+            params.add("vd_system_decorations=false")
+        }
+        if (config.preserveVirtualDisplayContent) {
+            params.add("vd_destroy_content=false")
+        }
     } else {
-        params.add("display_id=${options.displayId.coerceAtLeast(0)}")
+        params.add("display_id=${config.displayId.coerceAtLeast(0)}")
     }
 
-    if (options.showTouches) {
+    if (config.showTouches) {
         params.add("show_touches=true")
     }
 
-    if (!options.enableClipboardSync) {
+    if (!config.clipboardSync) {
         params.add("clipboard_autosync=false")
     }
 
-    if (!options.cleanupOnDisconnect) {
+    if (!config.cleanupOnDisconnect) {
         params.add("cleanup=false")
     }
 
-    if (options.ignoreVideoEncoderConstraints) {
+    if (config.ignoreVideoEncoderConstraints) {
         params.add("ignore_video_encoder_constraints=true")
     }
 
@@ -239,10 +259,10 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
         params.add("video_encoder=$encoder")
     }
 
-    if (options.enableAudio) {
+    if (config.enableAudio) {
         val audioCodec = resolveAudioCodec(options, options.getFinalAudioEncoder())
         params.add("audio_codec=$audioCodec")
-        params.add("audio_bit_rate=${options.audioBitRate}")
+        params.add("audio_bit_rate=${config.audioBitRate}")
         options.getFinalAudioEncoder().takeIf { it.isNotBlank() && audioCodec != "raw" }?.let { encoder ->
             params.add("audio_encoder=$encoder")
         }
@@ -251,7 +271,7 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(scid: Int): String {
     }
 
     // 关键帧间隔不再由应用层配置，遵循 scrcpy-server 默认行为。
-    buildVideoCodecOptions(options.codecOptions)?.let { codecOptions ->
+    buildVideoCodecOptions(config.codecOptions)?.let { codecOptions ->
         params.add("video_codec_options=$codecOptions")
     }
 
@@ -262,56 +282,37 @@ internal fun resolveVideoCodec(
     options: ScrcpyOptions,
     videoEncoder: String,
 ): String {
-    val preferredCodec =
-        CodecCatalog.normalizedName(CodecMediaType.VIDEO, options.preferredVideoCodec)
-            ?: CodecCatalog.DEFAULT_VIDEO_CODEC
-    val selectedCodec = CodecCatalog.normalizedName(CodecMediaType.VIDEO, options.selectedVideoCodec)
+    val capabilityCache = options.capabilityCache
+    val selectedCodec = CodecCatalog.normalizedName(CodecMediaType.VIDEO, capabilityCache.selectedVideoCodec)
     if (selectedCodec != null &&
-        (videoEncoder.isBlank() || options.remoteVideoEncoders.any { it.name == videoEncoder && it.codec == selectedCodec })
+        (videoEncoder.isBlank() || capabilityCache.remoteVideoEncoders.any { it.name == videoEncoder && it.codec == selectedCodec })
     ) {
         return selectedCodec
     }
     if (videoEncoder.isBlank()) {
-        return preferredCodec
+        return selectedCodec ?: CodecCatalog.DEFAULT_VIDEO_CODEC
     }
 
-    val encoderCodec =
-        options.remoteVideoEncoders
-            .firstOrNull { it.name == videoEncoder && it.codec == preferredCodec }
-            ?.codec
-            ?: options.remoteVideoEncoders.firstOrNull { it.name == videoEncoder }?.codec
-            ?: CodecSelector.inferVideoCodecFromName(videoEncoder).ifBlank { preferredCodec }
-    if (encoderCodec != preferredCodec) {
-        LogManager.w(
-            LogTags.SCRCPY_CLIENT,
-            "视频编码格式与编码器不匹配，使用编码器推导格式: preferred=$preferredCodec encoder=$videoEncoder codec=$encoderCodec",
-        )
-    }
-    return encoderCodec
+    return capabilityCache.remoteVideoEncoders.firstOrNull { it.name == videoEncoder }?.codec
+        ?: CodecSelector.inferVideoCodecFromName(videoEncoder).ifBlank { CodecCatalog.DEFAULT_VIDEO_CODEC }
 }
 
 internal fun resolveAudioCodec(
     options: ScrcpyOptions,
     audioEncoder: String,
 ): String {
-    val preferredCodec =
-        CodecCatalog.normalizedName(CodecMediaType.AUDIO, options.preferredAudioCodec)
-            ?: CodecCatalog.DEFAULT_AUDIO_CODEC
-    if (preferredCodec == "raw") return preferredCodec
-    val selectedCodec = CodecCatalog.normalizedName(CodecMediaType.AUDIO, options.selectedAudioCodec)
+    val capabilityCache = options.capabilityCache
+    val selectedCodec = CodecCatalog.normalizedName(CodecMediaType.AUDIO, capabilityCache.selectedAudioCodec)
     if (selectedCodec == "raw" ||
         (selectedCodec != null &&
-            (audioEncoder.isBlank() || options.remoteAudioEncoders.any { it.name == audioEncoder && it.codec == selectedCodec }))
+            (audioEncoder.isBlank() || capabilityCache.remoteAudioEncoders.any { it.name == audioEncoder && it.codec == selectedCodec }))
     ) {
         return selectedCodec
     }
-    if (audioEncoder.isBlank()) return preferredCodec
+    if (audioEncoder.isBlank()) return selectedCodec ?: CodecCatalog.DEFAULT_AUDIO_CODEC
 
-    return options.remoteAudioEncoders
-        .firstOrNull { it.name == audioEncoder && it.codec == preferredCodec }
-        ?.codec
-        ?: options.remoteAudioEncoders.firstOrNull { it.name == audioEncoder }?.codec
-        ?: CodecSelector.inferAudioCodecFromName(audioEncoder).ifBlank { preferredCodec }
+    return capabilityCache.remoteAudioEncoders.firstOrNull { it.name == audioEncoder }?.codec
+        ?: CodecSelector.inferAudioCodecFromName(audioEncoder).ifBlank { CodecCatalog.DEFAULT_AUDIO_CODEC }
 }
 
 private fun buildVideoCodecOptions(userCodecOptions: String): String? =

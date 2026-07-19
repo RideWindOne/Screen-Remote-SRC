@@ -65,6 +65,7 @@ private val OverlayLabelHorizontalPadding = 2.dp
 private val OverlayLabelVerticalPadding = 1.dp
 private val OverlayLabelMinFont = 7.sp
 private val OverlayLabelMaxFont = 9.sp
+private val OverlayDisabledNodeColor = Color(0xFF9E9E9E)
 
 @Composable
 internal fun RemoteLayoutInspectorOverlay(
@@ -96,7 +97,13 @@ internal fun RemoteLayoutInspectorOverlay(
             val topPx = (node.bounds.top - viewportBounds.top) * scaleY
             val widthPx = max((node.bounds.width * scaleX).roundToInt(), 1)
             val heightPx = max((node.bounds.height * scaleY).roundToInt(), 1)
-            val nodeColor = overlayNodeColor(node)
+            val nodeColor = if (node.enabled) overlayNodeColor(node) else OverlayDisabledNodeColor
+            val displayLabel =
+                if (node.enabled || node.label.isBlank()) {
+                    node.label
+                } else {
+                    "${node.label} [disabled]"
+                }
             val nodeWidthDp = with(density) { widthPx.toDp() }
             val nodeHeightDp = with(density) { heightPx.toDp() }
             val indicatorPlacement = overlayIndicatorPlacement(node, nodeWidthDp, nodeHeightDp)
@@ -131,7 +138,7 @@ internal fun RemoteLayoutInspectorOverlay(
                 }
             }
 
-            val shouldShowNodeLabel = node.label.isNotBlank() && !shouldSuppressNodeLabel(node, nodes)
+            val shouldShowNodeLabel = displayLabel.isNotBlank() && !shouldSuppressNodeLabel(node, nodes)
             if (shouldShowNodeLabel) {
                 val remainingWidthDp =
                     with(density) {
@@ -150,7 +157,7 @@ internal fun RemoteLayoutInspectorOverlay(
                 val contentTextWidthPx =
                     textMeasurer
                         .measure(
-                            text = AnnotatedString(node.label),
+                            text = AnnotatedString(displayLabel),
                             style = overlayLabelStyle(initialFontSize = OverlayLabelMaxFont),
                             maxLines = 1,
                             constraints = Constraints(),
@@ -165,7 +172,7 @@ internal fun RemoteLayoutInspectorOverlay(
                 var finalFontSize = initialFontSize
                 var finalLayoutResult =
                     textMeasurer.measure(
-                        text = AnnotatedString(node.label),
+                        text = AnnotatedString(displayLabel),
                         style = overlayLabelStyle(initialFontSize),
                         overflow = TextOverflow.Ellipsis,
                         maxLines = 3,
@@ -175,7 +182,7 @@ internal fun RemoteLayoutInspectorOverlay(
                     finalFontSize = OverlayLabelMinFont
                     finalLayoutResult =
                         textMeasurer.measure(
-                            text = AnnotatedString(node.label),
+                            text = AnnotatedString(displayLabel),
                             style = overlayLabelStyle(finalFontSize),
                             overflow = TextOverflow.Ellipsis,
                             maxLines = 3,
@@ -210,7 +217,7 @@ internal fun RemoteLayoutInspectorOverlay(
                     }
 
                 Text(
-                    text = node.label,
+                    text = displayLabel,
                     modifier =
                         Modifier
                             .offset { IntOffset(leftPx.roundToInt() + 2.dp.roundToPx(), topPx.roundToInt() + 2.dp.roundToPx()) }
@@ -369,19 +376,19 @@ private fun BoxScope.CheckboxIndicator(
     placement: OverlayIndicatorPlacement,
 ) {
     val backgroundColor =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E).copy(alpha = 0.92f)
         } else {
             Color(0xFF6B7280).copy(alpha = 0.72f)
         }
     val borderColor =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E)
         } else {
             Color(0xFFD1D5DB).copy(alpha = 0.9f)
         }
     val iconTint =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color.White
         } else {
             Color(0xFFE5E7EB).copy(alpha = 0.82f)
@@ -398,7 +405,7 @@ private fun BoxScope.CheckboxIndicator(
     ) {
         Icon(
             imageVector = Icons.Default.Check,
-            contentDescription = if (node.checked) "Checked" else "Unchecked checkbox",
+            contentDescription = if (node.isEffectivelyChecked) "Checked" else "Unchecked checkbox",
             tint = iconTint,
             modifier = Modifier.align(Alignment.Center).size(11.dp),
         )
@@ -411,24 +418,24 @@ private fun BoxScope.RadioIndicator(
     placement: OverlayIndicatorPlacement,
 ) {
     val borderColor =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E)
         } else {
             Color(0xFFD1D5DB).copy(alpha = 0.9f)
         }
     val outerBackground =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E).copy(alpha = 0.18f)
         } else {
             Color(0xFF6B7280).copy(alpha = 0.12f)
         }
     val dotColor =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E)
         } else {
             Color(0xFFD1D5DB).copy(alpha = 0.68f)
         }
-    val dotSize = if (node.checked) 6.dp else 4.dp
+    val dotSize = if (node.isEffectivelyChecked) 6.dp else 4.dp
 
     Box(
         modifier =
@@ -455,19 +462,19 @@ private fun BoxScope.SwitchIndicator(
     placement: OverlayIndicatorPlacement,
 ) {
     val trackColor =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E).copy(alpha = 0.9f)
         } else {
             Color(0xFF6B7280).copy(alpha = 0.78f)
         }
     val trackBorder =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color(0xFF22C55E)
         } else {
             Color(0xFFD1D5DB).copy(alpha = 0.82f)
         }
     val thumbColor =
-        if (node.checked) {
+        if (node.isEffectivelyChecked) {
             Color.White
         } else {
             Color(0xFFE5E7EB)
@@ -486,8 +493,8 @@ private fun BoxScope.SwitchIndicator(
         Box(
             modifier =
                 Modifier
-                    .align(if (node.checked) Alignment.CenterEnd else Alignment.CenterStart)
-                    .offset(x = if (node.checked) (-2).dp else 2.dp)
+                    .align(if (node.isEffectivelyChecked) Alignment.CenterEnd else Alignment.CenterStart)
+                    .offset(x = if (node.isEffectivelyChecked) (-2).dp else 2.dp)
                     .size(10.dp)
                     .background(thumbColor, CircleShape),
         )

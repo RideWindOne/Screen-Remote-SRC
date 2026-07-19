@@ -12,6 +12,8 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutBounds
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import com.screen.remote.android.infrastructure.adb.connection.AdbDisplayInfo
+import com.screen.remote.android.infrastructure.adb.connection.installApkFromUri
 import com.screen.remote.android.infrastructure.adb.connection.logShellCommandFailure
 import com.screen.remote.android.infrastructure.adb.connection.logShellStreamOpen
 import com.screen.remote.android.infrastructure.adb.connection.logShellStreamReady
@@ -63,6 +65,8 @@ class ControlViewModel(
     ): Result<Boolean> = scrcpyClient.sendKeyEvent(keyCode, action, 0, metaState)
 
     suspend fun sendText(text: String): Result<Boolean> = scrcpyClient.sendText(text)
+
+    suspend fun setClipboardAndPaste(text: String): Result<Boolean> = scrcpyClient.setClipboardAndPaste(text)
 
     // ============ 触摸控制 ============
 
@@ -164,6 +168,42 @@ class ControlViewModel(
         }
     }
 
+    suspend fun setTargetDisplayResolution(
+        width: Int,
+        height: Int,
+        densityDpi: Int,
+        adapted: Boolean,
+    ): Result<AdbDisplayInfo> {
+        val command =
+            buildTargetDisplayResolutionCommand(
+                width = width,
+                height = height,
+                densityDpi = densityDpi,
+                adapted = adapted,
+            )
+        val changeResult = executeShellCommand(command)
+        if (changeResult.isFailure) {
+            return Result.failure(changeResult.exceptionOrNull()!!)
+        }
+        return getTargetDisplayInfo(refresh = true)
+    }
+
+    suspend fun getTargetDisplayInfo(refresh: Boolean = false): Result<AdbDisplayInfo> =
+        withContext(Dispatchers.IO) {
+            val deviceId =
+                scrcpyClient.getCurrentDeviceId()
+                    ?: return@withContext Result.failure(Exception("未连接设备"))
+            val connection =
+                adbConnectionManager.getConnection(deviceId)
+                    ?: return@withContext Result.failure(Exception("Device connection lost"))
+            if (refresh) {
+                connection.refreshDisplayInfo()
+            } else {
+                connection.getCachedDisplayInfo()?.let(Result.Companion::success)
+                    ?: connection.refreshDisplayInfo()
+            }
+        }
+
     suspend fun captureTargetDeviceScreenshot(): Result<String> =
         withContext(Dispatchers.IO) {
             try {
@@ -210,10 +250,10 @@ class ControlViewModel(
             }
         }
 
-    suspend fun uploadFileToDevice(
+    suspend fun sendFileToDevice(
         context: Context,
         uri: Uri,
-    ): Result<String> =
+    ): Result<RemoteFileSendResult> =
         withContext(Dispatchers.IO) {
             try {
                 val deviceId =
@@ -226,30 +266,37 @@ class ControlViewModel(
 
                 val originalName = resolveDisplayName(context, uri)
                 val safeName = sanitizeFileName(originalName.ifBlank { "upload-${System.currentTimeMillis()}" })
-                val tempFile = copyUriToTempFile(context, uri, safeName)
-                val remoteDir = "/sdcard/Download"
-                val remotePath = "$remoteDir/$safeName"
+                val mimeType = context.contentResolver.getType(uri)
 
-                try {
-                    execute(
-                        connection = connection,
-                        command = "mkdir -p $remoteDir",
-                        retryOnFailure = false,
-                        reportToEventBus = false,
-                    ).getOrElse { error ->
+                if (isApkFile(safeName, mimeType)) {
+                    installApkFromUri(context, connection, uri).getOrElse { error ->
                         return@withContext Result.failure(error)
                     }
+                    Result.success(RemoteFileSendResult.ApkInstalled(safeName))
+                } else {
+                    val tempFile = copyUriToTempFile(context, uri, safeName)
+                    try {
+                        val remoteDir = "/sdcard/Download"
+                        val remotePath = "$remoteDir/$safeName"
+                        execute(
+                            connection = connection,
+                            command = "mkdir -p $remoteDir",
+                            retryOnFailure = false,
+                            reportToEventBus = false,
+                        ).getOrElse { error ->
+                            return@withContext Result.failure(error)
+                        }
 
-                    connection.pushFile(tempFile.absolutePath, remotePath).getOrElse { error ->
-                        return@withContext Result.failure(error)
+                        connection.pushFile(tempFile.absolutePath, remotePath).getOrElse { error ->
+                            return@withContext Result.failure(error)
+                        }
+                        Result.success(RemoteFileSendResult.FileUploaded(remotePath))
+                    } finally {
+                        tempFile.delete()
                     }
-                } finally {
-                    tempFile.delete()
                 }
-
-                Result.success(remotePath)
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "上传文件到目标设备失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "发送文件到目标设备失败: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -435,3 +482,36 @@ class ControlViewModel(
             .replace(Regex("""[\\/:*?"<>|]"""), "_")
             .ifBlank { "upload-${System.currentTimeMillis()}" }
 }
+
+internal fun buildTargetDisplayResolutionCommand(
+    width: Int,
+    height: Int,
+    densityDpi: Int,
+    adapted: Boolean,
+): String {
+    return if (adapted) {
+        require(width > 0) { "width must be positive" }
+        require(height > 0) { "height must be positive" }
+        require(densityDpi > 0) { "densityDpi must be positive" }
+        "wm size ${width}x$height && wm density $densityDpi"
+    } else {
+        "wm size reset && wm density reset"
+    }
+}
+
+sealed interface RemoteFileSendResult {
+    data class FileUploaded(
+        val remotePath: String,
+    ) : RemoteFileSendResult
+
+    data class ApkInstalled(
+        val fileName: String,
+    ) : RemoteFileSendResult
+}
+
+internal fun isApkFile(
+    fileName: String,
+    mimeType: String?,
+): Boolean =
+    fileName.endsWith(".apk", ignoreCase = true) ||
+        mimeType.equals("application/vnd.android.package-archive", ignoreCase = true)

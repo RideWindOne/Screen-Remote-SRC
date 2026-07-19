@@ -68,16 +68,7 @@ internal class AdbEncoderDetectionLauncher(
 ) {
     suspend fun loadEncoderOutput(skipPush: Boolean): String {
         ensureScrcpyServer(skipPush = skipPush)
-        val command =
-            ScrcpyProtocol.buildScrcpyServerCommand(
-                "list_encoders=true",
-                serverPath =
-                    if (skipPush) {
-                        AppConstants.SCRCPY_SERVER_2_PATH
-                    } else {
-                        AppConstants.SCRCPY_SERVER_PATH
-                    },
-            )
+        val command = buildEncoderDetectionCommand()
         LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
 
         val shellStream = openShellStream(command)
@@ -101,6 +92,12 @@ internal class AdbEncoderDetectionLauncher(
         }
     }
 }
+
+internal fun buildEncoderDetectionCommand(): String =
+    ScrcpyProtocol.buildScrcpyServerCommand(
+        "list_encoders=true",
+        "cleanup=false",
+    )
 
 internal object AdbEncoderShellStreamReader {
     fun read(shellStream: dadb.AdbShellStream): String {

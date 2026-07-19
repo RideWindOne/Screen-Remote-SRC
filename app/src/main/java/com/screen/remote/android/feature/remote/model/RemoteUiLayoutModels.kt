@@ -47,10 +47,12 @@ data class RemoteUiLayoutNode(
     val contentDescription: String,
     val isLeaf: Boolean,
     val clickable: Boolean,
+    val enabled: Boolean,
     val focusable: Boolean,
     val focused: Boolean,
     val checkable: Boolean,
     val checked: Boolean,
+    val selected: Boolean,
     val scrollable: Boolean,
     val password: Boolean,
     val visibleToUser: Boolean,
@@ -61,6 +63,31 @@ data class RemoteUiLayoutNode(
 ) {
     val shortClassName: String
         get() = className.substringAfterLast('.').ifBlank { className }
+
+    val isEffectivelyChecked: Boolean
+        get() {
+            if (checked || selected) {
+                return true
+            }
+
+            val stateDescription = contentDescription.trim().lowercase()
+            val explicitlyUnchecked =
+                stateDescription.contains("未选中") ||
+                    stateDescription.contains("未选择") ||
+                    stateDescription.contains("未勾选") ||
+                    stateDescription.contains("unchecked") ||
+                    stateDescription.contains("unselected") ||
+                    stateDescription.contains("not checked") ||
+                    stateDescription.contains("not selected")
+            if (explicitlyUnchecked) {
+                return false
+            }
+
+            return stateDescription.contains("已选中") ||
+                stateDescription.contains("已勾选") ||
+                stateDescription.contains("checked") ||
+                stateDescription.contains("selected")
+        }
 }
 
 data class RemoteUiLayoutSnapshot(

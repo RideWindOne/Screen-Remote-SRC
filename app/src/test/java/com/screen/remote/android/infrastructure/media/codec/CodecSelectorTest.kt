@@ -16,7 +16,6 @@ class CodecSelectorTest {
                 mediaType = CodecMediaType.VIDEO,
                 remoteEncoders = listOf(encoder("vendor.remote.encoder.42", "h265", "video/hevc")),
                 localDecoders = listOf(decoder("vendor.local.decoder.73", "VIDEO/HEVC")),
-                preferredCodec = "h265",
             )
 
         assertEquals(
@@ -31,13 +30,12 @@ class CodecSelectorTest {
     }
 
     @Test
-    fun `unavailable preferred format falls back to the first compatible catalog format`() {
+    fun `automatic selection uses the first compatible catalog format`() {
         val result =
             select(
                 mediaType = CodecMediaType.VIDEO,
                 remoteEncoders = listOf(encoder("opaque.encoder", "h264", "video/avc")),
                 localDecoders = listOf(decoder("opaque.decoder", "video/avc")),
-                preferredCodec = "vp9",
             )
 
         assertEquals("h264", result?.codec)
@@ -51,7 +49,6 @@ class CodecSelectorTest {
                 mediaType = CodecMediaType.AUDIO,
                 remoteEncoders = emptyList(),
                 localDecoders = emptyList(),
-                preferredCodec = "raw",
             )
 
         assertEquals(
@@ -67,7 +64,6 @@ class CodecSelectorTest {
                 mediaType = CodecMediaType.AUDIO,
                 remoteEncoders = emptyList(),
                 localDecoders = emptyList(),
-                preferredCodec = "opus",
             )
 
         assertEquals(
@@ -77,7 +73,7 @@ class CodecSelectorTest {
     }
 
     @Test
-    fun `user decoder MIME mismatch rejects preferred pair and falls back to a compatible format`() {
+    fun `user decoder constrains selection to a compatible format`() {
         val result =
             select(
                 mediaType = CodecMediaType.VIDEO,
@@ -88,7 +84,6 @@ class CodecSelectorTest {
                     ),
                 localDecoders = listOf(decoder("user.decoder", "video/avc")),
                 userDecoder = "user.decoder",
-                preferredCodec = "h265",
             )
 
         assertEquals("h264", result?.codec)
@@ -97,7 +92,7 @@ class CodecSelectorTest {
     }
 
     @Test
-    fun `software-only policy excludes otherwise preferred hardware decoder`() {
+    fun `software-only policy excludes hardware decoder`() {
         val result =
             CodecSelector.selectBestCodec(
                 mediaType = CodecMediaType.VIDEO,
@@ -113,7 +108,6 @@ class CodecSelectorTest {
                     ),
                 userEncoder = null,
                 userDecoder = null,
-                preferredCodec = "h264",
                 logTag = LogTags.VIDEO_DECODER,
                 allowHardwareDecoders = false,
             )
@@ -137,10 +131,57 @@ class CodecSelectorTest {
                             lowLatencyMimeTypes = listOf("video/avc"),
                         ),
                     ),
-                preferredCodec = "h264",
             )
 
         assertEquals("low.latency.decoder", result?.decoder)
+    }
+
+    @Test
+    fun `incompatible manual pair is ignored and automatic pair is selected`() {
+        val result =
+            select(
+                mediaType = CodecMediaType.VIDEO,
+                remoteEncoders =
+                    listOf(
+                        encoder("manual.hevc.encoder", "h265", "video/hevc"),
+                        encoder("auto.avc.encoder", "h264", "video/avc"),
+                    ),
+                localDecoders =
+                    listOf(
+                        decoder("manual.avc.decoder", "video/avc"),
+                        decoder("auto.avc.decoder", "video/avc"),
+                    ),
+                userEncoder = "manual.hevc.encoder",
+                userDecoder = "manual.avc.decoder",
+            )
+
+        assertEquals("h264", result?.codec)
+        assertEquals("auto.avc.encoder", result?.encoder)
+        assertEquals(true, result?.ignoredUserSelection)
+    }
+
+    @Test
+    fun `incompatible manual audio pair is ignored and opus pair is selected`() {
+        val result =
+            select(
+                mediaType = CodecMediaType.AUDIO,
+                remoteEncoders =
+                    listOf(
+                        encoder("manual.aac.encoder", "aac", "audio/mp4a-latm"),
+                        encoder("auto.opus.encoder", "opus", "audio/opus"),
+                    ),
+                localDecoders =
+                    listOf(
+                        decoder("manual.opus.decoder", "audio/opus"),
+                        decoder("auto.opus.decoder", "audio/opus"),
+                    ),
+                userEncoder = "manual.aac.encoder",
+                userDecoder = "manual.opus.decoder",
+            )
+
+        assertEquals("opus", result?.codec)
+        assertEquals("auto.opus.encoder", result?.encoder)
+        assertEquals(true, result?.ignoredUserSelection)
     }
 
     private fun select(
@@ -149,7 +190,6 @@ class CodecSelectorTest {
         localDecoders: List<DecoderCapability>,
         userEncoder: String? = null,
         userDecoder: String? = null,
-        preferredCodec: String? = null,
     ): CodecSelectionResult? =
         CodecSelector.selectBestCodec(
             mediaType = mediaType,
@@ -157,7 +197,6 @@ class CodecSelectorTest {
             localDecoders = localDecoders,
             userEncoder = userEncoder,
             userDecoder = userDecoder,
-            preferredCodec = preferredCodec,
             // This category is disabled by default, keeping the pure selection tests independent
             // from the Android Log stub used by local JVM tests.
             logTag = LogTags.VIDEO_DECODER,

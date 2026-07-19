@@ -15,6 +15,7 @@ data class CodecSelectionResult(
     val decoder: String,
     val codec: String,
     val mimeType: String = "",
+    val ignoredUserSelection: Boolean = false,
 )
 
 /**
@@ -26,7 +27,6 @@ object CodecSelector {
         remoteEncoders: List<EncoderCapability>,
         userEncoder: String? = null,
         userDecoder: String? = null,
-        preferredCodec: String? = CodecCatalog.DEFAULT_VIDEO_CODEC,
         allowHardwareDecoders: Boolean = true,
     ): CodecSelectionResult? =
         selectBestCodec(
@@ -35,7 +35,6 @@ object CodecSelector {
             localDecoders = LocalDecoderCache.getVideoDecoders(),
             userEncoder = userEncoder,
             userDecoder = userDecoder,
-            preferredCodec = preferredCodec,
             allowHardwareDecoders = allowHardwareDecoders,
             logTag = LogTags.VIDEO_DECODER,
         )
@@ -44,7 +43,6 @@ object CodecSelector {
         remoteEncoders: List<EncoderCapability>,
         userEncoder: String? = null,
         userDecoder: String? = null,
-        preferredCodec: String? = CodecCatalog.DEFAULT_AUDIO_CODEC,
         allowHardwareDecoders: Boolean = true,
     ): CodecSelectionResult? =
         selectBestCodec(
@@ -53,7 +51,6 @@ object CodecSelector {
             localDecoders = LocalDecoderCache.getAudioDecoders(),
             userEncoder = userEncoder,
             userDecoder = userDecoder,
-            preferredCodec = preferredCodec,
             allowHardwareDecoders = allowHardwareDecoders,
             logTag = LogTags.AUDIO_DECODER,
         )
@@ -64,40 +61,66 @@ object CodecSelector {
         localDecoders: List<DecoderCapability>,
         userEncoder: String?,
         userDecoder: String?,
-        preferredCodec: String?,
         logTag: String,
         allowHardwareDecoders: Boolean = true,
     ): CodecSelectionResult? {
-        val preferredSpec = preferredCodec?.let { CodecCatalog.find(mediaType, it) }
         val requestedEncoder = userEncoder?.trim().orEmpty()
         val requestedDecoder = userDecoder?.trim().orEmpty()
-        if (mediaType == CodecMediaType.AUDIO && preferredSpec?.name == "raw") {
-            return CodecSelectionResult(
-                encoder = "",
-                decoder = "",
-                codec = preferredSpec.name,
-                mimeType = preferredSpec.mimeType,
-            )
-        }
-
         val remote = remoteEncoders.filter { it.mediaType == mediaType }
         val eligibleDecoders =
             if (allowHardwareDecoders) localDecoders else localDecoders.filter { it.acceleration == CodecAcceleration.SOFTWARE }
         if (remote.isEmpty() || eligibleDecoders.isEmpty()) {
-            if (mediaType == CodecMediaType.AUDIO && requestedEncoder.isEmpty() && requestedDecoder.isEmpty()) {
-                return rawAudioSelection()
+            if (mediaType == CodecMediaType.AUDIO) {
+                return rawAudioSelection().copy(
+                    ignoredUserSelection = requestedEncoder.isNotEmpty() || requestedDecoder.isNotEmpty(),
+                )
             }
             LogManager.w(logTag, "编解码能力不完整: remote=${remote.size}, local=${eligibleDecoders.size}")
             return null
         }
 
-        val orderedSpecs = CodecCatalog.orderedSpecs(mediaType, preferredCodec)
+        val requestedResult =
+            selectBestCodecAttempt(
+                mediaType = mediaType,
+                remote = remote,
+                eligibleDecoders = eligibleDecoders,
+                requestedEncoder = requestedEncoder,
+                requestedDecoder = requestedDecoder,
+                logTag = logTag,
+            )
+        if (requestedResult != null) return requestedResult
+        if (requestedEncoder.isEmpty() && requestedDecoder.isEmpty()) return null
+
+        LogManager.d(
+            logTag,
+            "用户指定的编解码器无法组成兼容组合，忽略手动选择并自动重选: " +
+                "encoder=${requestedEncoder.ifBlank { "auto" }} decoder=${requestedDecoder.ifBlank { "auto" }}",
+        )
+        return selectBestCodecAttempt(
+            mediaType = mediaType,
+            remote = remote,
+            eligibleDecoders = eligibleDecoders,
+            requestedEncoder = "",
+            requestedDecoder = "",
+            logTag = logTag,
+        )?.copy(ignoredUserSelection = true)
+    }
+
+    private fun selectBestCodecAttempt(
+        mediaType: CodecMediaType,
+        remote: List<EncoderCapability>,
+        eligibleDecoders: List<DecoderCapability>,
+        requestedEncoder: String,
+        requestedDecoder: String,
+        logTag: String,
+    ): CodecSelectionResult? {
+        val orderedSpecs = CodecCatalog.orderedSpecs(mediaType)
         val fixedDecoder =
             requestedDecoder.takeIf { it.isNotEmpty() }?.let { name ->
                 eligibleDecoders.firstOrNull { it.name == name }
             }
         if (requestedDecoder.isNotEmpty() && fixedDecoder == null) {
-            LogManager.w(logTag, "用户指定的解码器不存在: $requestedDecoder")
+            LogManager.d(logTag, "用户指定的解码器不存在: $requestedDecoder")
             return null
         }
 
@@ -154,9 +177,9 @@ object CodecSelector {
             return result
         }
 
-        LogManager.w(
+        LogManager.d(
             logTag,
-            "未找到匹配组合: preferred=$preferredCodec encoder=${requestedEncoder.ifBlank { "auto" }} " +
+            "未找到匹配组合: encoder=${requestedEncoder.ifBlank { "auto" }} " +
                 "decoder=${requestedDecoder.ifBlank { "auto" }}",
         )
         return null

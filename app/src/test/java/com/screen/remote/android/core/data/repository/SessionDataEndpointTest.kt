@@ -2,7 +2,10 @@ package com.screen.remote.android.core.data.repository
 
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,21 +16,88 @@ import kotlinx.serialization.json.jsonObject
 
 class SessionDataEndpointTest {
     @Test
-    fun `blank max size keeps native resolution through options updates`() {
+    fun `tunnel mode is shared by persistence and runtime options`() {
+        val original = sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP)
+        val session = original.copy(config = original.config.copy(tunnelMode = ScrcpyTunnelMode.ADB_FORWARD))
+
+        val options = session.toScrcpyOptions()
+        val updated = session.fromScrcpyOptions(options)
+
+        assertEquals(ScrcpyTunnelMode.ADB_FORWARD, options.config.tunnelMode)
+        assertEquals(ScrcpyTunnelMode.ADB_FORWARD, updated.config.tunnelMode)
+    }
+
+    @Test
+    fun `zero max size keeps native resolution through options updates`() {
         val session = sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP)
 
         val options = session.toScrcpyOptions()
         val updated = session.fromScrcpyOptions(options)
 
-        assertEquals(0, options.maxSize)
-        assertEquals("", updated.maxSize)
+        assertEquals(0, options.config.maxSize)
+        assertEquals(0, updated.config.maxSize)
     }
 
     @Test
     fun `blank video bitrate uses four megabits per second`() {
         val session = sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP)
 
-        assertEquals(4_000_000, session.toScrcpyOptions().videoBitRate)
+        assertEquals(4_000_000, session.toScrcpyOptions().config.videoBitRate)
+    }
+
+    @Test
+    fun `game mode survives options round trip`() {
+        val session =
+            sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP)
+                .let { it.copy(config = it.config.copy(gameMode = true)) }
+
+        val options = session.toScrcpyOptions()
+        val updated = session.fromScrcpyOptions(options)
+
+        assertTrue(options.config.gameMode)
+        assertTrue(updated.config.gameMode)
+    }
+
+    @Test
+    fun `connection UI options survive options round trip`() {
+        val session =
+            sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP).let {
+                it.copy(config = it.config.copy(useFullScreen = true, showFloatingBall = false))
+            }
+
+        val options = session.toScrcpyOptions()
+        val updated = session.fromScrcpyOptions(options)
+
+        assertTrue(options.config.useFullScreen)
+        assertTrue(updated.config.useFullScreen)
+        assertFalse(options.config.showFloatingBall)
+        assertFalse(updated.config.showFloatingBall)
+    }
+
+    @Test
+    fun `virtual display start app survives options round trip`() {
+        val session =
+            sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP).let {
+                it.copy(
+                    config =
+                        it.config.copy(
+                            newDisplayEnabled = true,
+                            startApp = "com.example.remote",
+                            virtualDisplaySystemDecorations = false,
+                            preserveVirtualDisplayContent = true,
+                        ),
+                )
+            }
+
+        val options = session.toScrcpyOptions()
+        val updated = session.fromScrcpyOptions(options)
+
+        assertEquals("com.example.remote", options.config.startApp)
+        assertEquals("com.example.remote", updated.config.startApp)
+        assertFalse(options.config.virtualDisplaySystemDecorations)
+        assertFalse(updated.config.virtualDisplaySystemDecorations)
+        assertTrue(options.config.preserveVirtualDisplayContent)
+        assertTrue(updated.config.preserveVirtualDisplayContent)
     }
 
     @Test
@@ -55,39 +125,43 @@ class SessionDataEndpointTest {
     @Test
     fun `clearing auto detected codec state resets every detected field and preserves user choices`() {
         val session =
-            sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP).copy(
-                deviceSerial = "device-serial",
-                remoteVideoEncoders =
-                    listOf(EncoderCapability("video-encoder", "h264", "video/avc", CodecMediaType.VIDEO)),
-                remoteAudioEncoders =
-                    listOf(EncoderCapability("audio-encoder", "opus", "audio/opus", CodecMediaType.AUDIO)),
-                selectedVideoEncoder = "auto-video-encoder",
-                selectedAudioEncoder = "auto-audio-encoder",
-                selectedVideoDecoder = "auto-video-decoder",
-                selectedAudioDecoder = "auto-audio-decoder",
-                preferredVideoCodec = "h265",
-                preferredAudioCodec = "aac",
-                userVideoEncoder = "user-video-encoder",
-                userAudioEncoder = "user-audio-encoder",
-                userVideoDecoder = "user-video-decoder",
-                userAudioDecoder = "user-audio-decoder",
-            )
+            sessionData(host = "192.168.1.2", transport = ConnectionTransport.TCP).let {
+                it.copy(
+                    config =
+                        ScrcpyConfig(
+                            userVideoEncoder = "user-video-encoder",
+                            userAudioEncoder = "user-audio-encoder",
+                            userVideoDecoder = "user-video-decoder",
+                            userAudioDecoder = "user-audio-decoder",
+                        ),
+                    capabilityCache =
+                        DeviceCapabilityCache(
+                            deviceSerial = "device-serial",
+                            remoteVideoEncoders =
+                                listOf(EncoderCapability("video-encoder", "h264", "video/avc", CodecMediaType.VIDEO)),
+                            remoteAudioEncoders =
+                                listOf(EncoderCapability("audio-encoder", "opus", "audio/opus", CodecMediaType.AUDIO)),
+                            selectedVideoEncoder = "auto-video-encoder",
+                            selectedAudioEncoder = "auto-audio-encoder",
+                            selectedVideoDecoder = "auto-video-decoder",
+                            selectedAudioDecoder = "auto-audio-decoder",
+                        ),
+                )
+            }
 
         val refreshed = session.clearAutoDetectedCodecState()
 
-        assertEquals("", refreshed.deviceSerial)
-        assertTrue(refreshed.remoteVideoEncoders.isEmpty())
-        assertTrue(refreshed.remoteAudioEncoders.isEmpty())
-        assertEquals("", refreshed.selectedVideoEncoder)
-        assertEquals("", refreshed.selectedAudioEncoder)
-        assertEquals("", refreshed.selectedVideoDecoder)
-        assertEquals("", refreshed.selectedAudioDecoder)
-        assertEquals("h265", refreshed.preferredVideoCodec)
-        assertEquals("aac", refreshed.preferredAudioCodec)
-        assertEquals("user-video-encoder", refreshed.userVideoEncoder)
-        assertEquals("user-audio-encoder", refreshed.userAudioEncoder)
-        assertEquals("user-video-decoder", refreshed.userVideoDecoder)
-        assertEquals("user-audio-decoder", refreshed.userAudioDecoder)
+        assertEquals("", refreshed.capabilityCache.deviceSerial)
+        assertTrue(refreshed.capabilityCache.remoteVideoEncoders.isEmpty())
+        assertTrue(refreshed.capabilityCache.remoteAudioEncoders.isEmpty())
+        assertEquals("", refreshed.capabilityCache.selectedVideoEncoder)
+        assertEquals("", refreshed.capabilityCache.selectedAudioEncoder)
+        assertEquals("", refreshed.capabilityCache.selectedVideoDecoder)
+        assertEquals("", refreshed.capabilityCache.selectedAudioDecoder)
+        assertEquals("user-video-encoder", refreshed.config.userVideoEncoder)
+        assertEquals("user-audio-encoder", refreshed.config.userAudioEncoder)
+        assertEquals("user-video-decoder", refreshed.config.userVideoDecoder)
+        assertEquals("user-audio-decoder", refreshed.config.userAudioDecoder)
     }
 
     @Test

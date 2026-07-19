@@ -33,6 +33,7 @@ import com.screen.remote.android.feature.codec.component.encoder.matchesAudioCod
 import com.screen.remote.android.feature.codec.component.encoder.matchesVideoCodecFilter
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionPurpose
 import com.screen.remote.android.service.ScrcpyForegroundService
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -129,6 +130,7 @@ fun EncoderSelectionDialog(
                     coroutineScope {
                         raceAdbConnections(
                             candidates = connectionCandidates,
+                            purpose = AdbConnectionPurpose.CODEC_TEST,
                             connectionManager = adbConnectionManager,
                             attemptScope = this,
                             cleanupScope = this,
@@ -137,11 +139,9 @@ fun EncoderSelectionDialog(
                                     LogTags.VIDEO_CODEC_SELECTOR
                                 } else {
                                     LogTags.AUDIO_CODEC_SELECTOR
-                                },
+                            },
                             logLabel = "Codec detection ADB",
-                        ) { candidate ->
-                            adbConnectionManager.connectCandidate(candidate).getOrThrow()
-                        }.result.getOrThrow()
+                        ).result.getOrThrow()
                     }
 
                 if (connection.deviceId !in existingDeviceIds) {
@@ -154,7 +154,12 @@ fun EncoderSelectionDialog(
 
                 // 检测编码器
                 // UI owns the result. Never persist through a SessionContext left bound by another session.
-                val result = connection.detectEncoders(context, persistToBoundSession = false)
+                val result =
+                    connection.detectEncoders(
+                        context = context,
+                        skipPush = connection.getCachedCandidatePreflight()?.hasCompatibleScrcpyServer == true,
+                        persistToBoundSession = false,
+                    )
                 if (result.isSuccess) {
                     val detectionResult = result.getOrNull()
                     if (detectionResult != null) {

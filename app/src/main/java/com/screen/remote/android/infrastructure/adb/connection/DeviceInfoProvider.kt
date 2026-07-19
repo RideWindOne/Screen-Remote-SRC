@@ -5,8 +5,6 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.domain.model.ConnectionType
 import com.screen.remote.android.core.i18n.AdbTexts
 import dadb.Dadb
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 
 /**
  * 设备信息提供器
@@ -22,44 +20,34 @@ internal object DeviceInfoProvider {
         customName: String?,
         connectionType: ConnectionType,
     ): DeviceInfo =
-        coroutineScope {
             try {
-                suspend fun shell(command: String): String {
+                val command = buildBasicDeviceInfoCommand()
+                logShellCommandStart(LogTags.ADB_CONNECTION, command)
+                val response =
                     try {
-                        logShellCommandStart(LogTags.ADB_CONNECTION, command)
-                        val response = dadb.shell(command)
-                        logShellCommandResult(
-                            tag = LogTags.ADB_CONNECTION,
-                            command = command,
-                            exitCode = response.exitCode,
-                            output = response.output,
-                            errorOutput = response.errorOutput,
-                        )
-                        return response.output.trim()
+                        dadb.shell(command)
                     } catch (error: Exception) {
                         logShellCommandFailure(LogTags.ADB_CONNECTION, command, error)
                         throw error
                     }
-                }
-
-                val modelDeferred = async { shell("getprop ro.product.model") }
-                val manufacturerDeferred = async { shell("getprop ro.product.manufacturer") }
-                val androidVersionDeferred = async { shell("getprop ro.build.version.release") }
-                val serialNumberDeferred = async { shell("getprop ro.serialno") }
-
-                val model = modelDeferred.await()
-                val manufacturer = manufacturerDeferred.await()
-                val androidVersion = androidVersionDeferred.await()
-                val serialNumber = serialNumberDeferred.await()
-                val displayName = customName ?: model
+                logShellCommandResult(
+                    tag = LogTags.ADB_CONNECTION,
+                    command = command,
+                    exitCode = response.exitCode,
+                    output = response.output,
+                    errorOutput = response.errorOutput,
+                )
+                check(response.exitCode == 0) { response.errorOutput.ifBlank { "读取设备基础信息失败" } }
+                val properties = parseBasicDeviceInfo(response.output)
+                val displayName = customName ?: properties.model
 
                 DeviceInfo(
                     deviceId = deviceId,
                     name = displayName,
-                    model = model,
-                    manufacturer = manufacturer,
-                    androidVersion = androidVersion,
-                    serialNumber = serialNumber,
+                    model = properties.model,
+                    manufacturer = properties.manufacturer,
+                    androidVersion = properties.androidVersion,
+                    serialNumber = properties.serialNumber,
                     connectionType = connectionType,
                 )
             } catch (e: java.net.ConnectException) {
@@ -85,8 +73,38 @@ internal object DeviceInfoProvider {
                 )
                 throw Exception("${AdbTexts.ADB_CANNOT_GET_DEVICE_INFO.get()}: ${e.message}", e)
             }
-        }
 }
+
+internal data class BasicDeviceInfo(
+    val model: String,
+    val manufacturer: String,
+    val androidVersion: String,
+    val serialNumber: String,
+)
+
+internal fun buildBasicDeviceInfoCommand(): String =
+    "echo '$BASIC_INFO_MODEL'; getprop ro.product.model; " +
+        "echo '$BASIC_INFO_MANUFACTURER'; getprop ro.product.manufacturer; " +
+        "echo '$BASIC_INFO_ANDROID'; getprop ro.build.version.release; " +
+        "echo '$BASIC_INFO_SERIAL'; getprop ro.serialno"
+
+internal fun parseBasicDeviceInfo(output: String): BasicDeviceInfo =
+    BasicDeviceInfo(
+        model = output.basicInfoValue(BASIC_INFO_MODEL, BASIC_INFO_MANUFACTURER),
+        manufacturer = output.basicInfoValue(BASIC_INFO_MANUFACTURER, BASIC_INFO_ANDROID),
+        androidVersion = output.basicInfoValue(BASIC_INFO_ANDROID, BASIC_INFO_SERIAL),
+        serialNumber = output.substringAfter(BASIC_INFO_SERIAL, missingDelimiterValue = "").trim(),
+    )
+
+private fun String.basicInfoValue(
+    marker: String,
+    nextMarker: String,
+): String = substringAfter(marker, missingDelimiterValue = "").substringBefore(nextMarker).trim()
+
+private const val BASIC_INFO_MODEL = "__SCREEN_REMOTE_MODEL__"
+private const val BASIC_INFO_MANUFACTURER = "__SCREEN_REMOTE_MANUFACTURER__"
+private const val BASIC_INFO_ANDROID = "__SCREEN_REMOTE_ANDROID__"
+private const val BASIC_INFO_SERIAL = "__SCREEN_REMOTE_SERIAL__"
 
 data class DeviceInfo(
     val deviceId: String,

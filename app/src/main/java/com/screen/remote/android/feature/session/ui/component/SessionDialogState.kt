@@ -4,15 +4,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.screen.remote.android.core.common.ScrcpyConstants
 import com.screen.remote.android.core.common.constants.NetworkConstants
+import com.screen.remote.android.core.common.constants.ScrcpyConstants
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.common.util.normalizeEndpointHost
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.toData
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
-import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.domain.model.formatSessionAddress
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.domain.model.parseTcpHostPort
@@ -25,6 +27,8 @@ import java.util.UUID
 class SessionDialogState(
     sessionData: SessionData? = null,
 ) {
+    private val initialConfig = sessionData?.config ?: ScrcpyConfig()
+    private val initialCapabilityCache = sessionData?.capabilityCache ?: DeviceCapabilityCache()
     private val initialPrimaryCandidate =
         sessionData?.toConnectionCandidates()?.minByOrNull(ConnectionCandidate::priority)
     var deviceType by mutableStateOf(SessionDeviceType.from(sessionData))
@@ -64,57 +68,26 @@ class SessionDialogState(
     // 分组
     var selectedGroupIds by mutableStateOf(sessionData?.groupIds ?: emptyList())
 
-    // 连接选项
-    var forceAdb by mutableStateOf(sessionData?.forceAdb ?: false)
+    // 会话级配置和设备能力各自保持单一状态对象，避免在 UI 草稿层再次展开整套字段。
+    var config by mutableStateOf(initialConfig)
+        private set
+    var capabilityCache by mutableStateOf(initialCapabilityCache)
+        private set
 
     // 视频配置
-    var maxSize by mutableStateOf(sessionData?.maxSize ?: "")
-    var videoBitrate by mutableStateOf(sessionData?.videoBitrate ?: "")
-    var maxFps by mutableStateOf(sessionData?.maxFps ?: "")
-    var preferredVideoCodec by mutableStateOf(sessionData?.preferredVideoCodec ?: ScrcpyConstants.DEFAULT_VIDEO_CODEC)
-    var userVideoEncoder by mutableStateOf(sessionData?.userVideoEncoder ?: "")
-    var userVideoDecoder by mutableStateOf(sessionData?.userVideoDecoder ?: "")
+    var maxSize by mutableStateOf(initialConfig.maxSize.takeIf { it > 0 }?.toString().orEmpty())
+    var videoBitrate by mutableStateOf(initialConfig.videoBitRate.toString())
+    var maxFps by mutableStateOf(initialConfig.maxFps.toString())
 
     // 音频配置
-    var enableAudio by mutableStateOf(sessionData?.enableAudio ?: false)
-    var preferredAudioCodec by mutableStateOf(sessionData?.preferredAudioCodec ?: ScrcpyConstants.DEFAULT_AUDIO_CODEC)
-    var userAudioEncoder by mutableStateOf(sessionData?.userAudioEncoder ?: "")
-    var userAudioDecoder by mutableStateOf(sessionData?.userAudioDecoder ?: "")
-    var audioBitrate by mutableStateOf(sessionData?.audioBitrate ?: "")
+    var audioBitrate by mutableStateOf(initialConfig.audioBitRate.toString())
     var audioVolume by mutableFloatStateOf(1.0f)
-
-    // 编码器缓存（远程设备能力，每个会话独立）
-    var remoteVideoEncoders: List<EncoderCapability> by
-        mutableStateOf(sessionData?.remoteVideoEncoders ?: emptyList())
-    var remoteAudioEncoders: List<EncoderCapability> by
-        mutableStateOf(sessionData?.remoteAudioEncoders ?: emptyList())
-    var selectedVideoEncoder by mutableStateOf(sessionData?.selectedVideoEncoder ?: "")
-    var selectedAudioEncoder by mutableStateOf(sessionData?.selectedAudioEncoder ?: "")
-    var selectedVideoCodec by mutableStateOf(sessionData?.selectedVideoCodec ?: "")
-    var selectedAudioCodec by mutableStateOf(sessionData?.selectedAudioCodec ?: "")
-    var selectedVideoDecoder by mutableStateOf(sessionData?.selectedVideoDecoder ?: "")
-    var selectedAudioDecoder by mutableStateOf(sessionData?.selectedAudioDecoder ?: "")
-    var deviceSerial by mutableStateOf(sessionData?.deviceSerial ?: "")
-
-    // 其他选项
-    var enableClipboardSync by mutableStateOf(sessionData?.enableClipboardSync ?: true)
-    var turnScreenOff by mutableStateOf(sessionData?.turnScreenOff ?: true)
-    var powerOffOnClose by mutableStateOf(sessionData?.powerOffOnClose ?: false)
-    var cleanupOnDisconnect by mutableStateOf(sessionData?.cleanupOnDisconnect ?: true)
-    var ignoreVideoEncoderConstraints by mutableStateOf(sessionData?.ignoreVideoEncoderConstraints ?: false)
-    var useFullScreen by mutableStateOf(sessionData?.useFullScreen ?: false)
-    var keepDeviceAwake by mutableStateOf(sessionData?.keepDeviceAwake ?: false)
-    var enableHardwareDecoding by mutableStateOf(sessionData?.enableHardwareDecoding ?: true)
-    var followRemoteOrientation by mutableStateOf(sessionData?.followRemoteOrientation ?: false)
     private val tcpPortForwardRules = sessionData?.tcpPortForwardRules
-    var showNewDisplay by mutableStateOf(sessionData?.newDisplayEnabled ?: false)
-    var newDisplayWidth by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).width)
-    var newDisplayHeight by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).height)
-    var newDisplayDpi by mutableStateOf(parseNewDisplay(sessionData?.newDisplay).dpi)
+    var newDisplayWidth by mutableStateOf(parseNewDisplay(initialConfig.newDisplay).width)
+    var newDisplayHeight by mutableStateOf(parseNewDisplay(initialConfig.newDisplay).height)
+    var newDisplayDpi by mutableStateOf(parseNewDisplay(initialConfig.newDisplay).dpi)
 
     // UI 状态
-    var showVideoCodecMenu by mutableStateOf(false)
-    var showAudioCodecMenu by mutableStateOf(false)
     var showEncoderOptionsDialog by mutableStateOf(false)
     var showAudioEncoderDialog by mutableStateOf(false)
     var showVideoDecoderSelector by mutableStateOf(false)
@@ -125,6 +98,42 @@ class SessionDialogState(
     var showDeviceTypeMenu by mutableStateOf(false)
     var showSessionAddressDialog by mutableStateOf(false)
     var showConnectionLatencyTest by mutableStateOf(false)
+    var showRemoteAppSelector by mutableStateOf(false)
+
+    init {
+        if (config.gameMode) {
+            config = config.copy(useFullScreen = false)
+            normalizeGameVideoSettings()
+        }
+    }
+
+    fun updateConfig(transform: ScrcpyConfig.() -> ScrcpyConfig) {
+        config = config.transform()
+    }
+
+    fun updateCapabilityCache(transform: DeviceCapabilityCache.() -> DeviceCapabilityCache) {
+        capabilityCache = capabilityCache.transform()
+    }
+
+    fun updateGameMode(enabled: Boolean) {
+        if (config.gameMode == enabled) return
+        config = config.copy(gameMode = enabled)
+        if (enabled) {
+            config = config.copy(useFullScreen = false)
+            normalizeGameVideoSettings()
+        }
+    }
+
+    private fun normalizeGameVideoSettings() {
+        maxSize = closestGameOption(maxSize.toIntOrNull(), GAME_MAX_SIZE_OPTIONS, defaultValue = 720).toString()
+        videoBitrate =
+            closestGameOption(
+                parseBitrateBitsPerSecond(videoBitrate),
+                GAME_VIDEO_BITRATE_OPTIONS,
+                defaultValue = ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
+            ).toGameBitrateLabel()
+        maxFps = closestGameOption(maxFps.toIntOrNull(), GAME_MAX_FPS_OPTIONS, defaultValue = 60).toString()
+    }
 
     /**
      * 转换为 SessionData
@@ -151,40 +160,25 @@ class SessionDialogState(
             color = color,
             profileId = profileId,
             useProfileDefaults = useProfileDefaults,
-            forceAdb = forceAdb,
-            maxSize = maxSize,
-            videoBitrate = videoBitrate,
-            maxFps = maxFps,
-            newDisplayEnabled = showNewDisplay,
-            newDisplay = if (showNewDisplay) buildNewDisplay(newDisplayWidth, newDisplayHeight, newDisplayDpi) else "",
-            preferredVideoCodec = preferredVideoCodec,
-            userVideoEncoder = userVideoEncoder,
-            userVideoDecoder = userVideoDecoder,
-            enableAudio = enableAudio,
-            preferredAudioCodec = preferredAudioCodec,
-            userAudioEncoder = userAudioEncoder,
-            userAudioDecoder = userAudioDecoder,
-            audioBitrate = audioBitrate,
-            enableClipboardSync = enableClipboardSync,
-            stayAwake = false,
-            turnScreenOff = turnScreenOff,
-            powerOffOnClose = powerOffOnClose,
-            cleanupOnDisconnect = cleanupOnDisconnect,
-            ignoreVideoEncoderConstraints = ignoreVideoEncoderConstraints,
-            useFullScreen = useFullScreen,
-            keepDeviceAwake = keepDeviceAwake,
-            enableHardwareDecoding = enableHardwareDecoding,
-            followRemoteOrientation = followRemoteOrientation,
+            config =
+                config.copy(
+                    maxSize = maxSize.toIntOrNull()?.takeIf { it > 0 } ?: 0,
+                    videoBitRate = parseBitrateBitsPerSecond(videoBitrate) ?: ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
+                    maxFps = maxFps.toIntOrNull() ?: 60,
+                    newDisplay =
+                        if (config.newDisplayEnabled) {
+                            buildNewDisplay(newDisplayWidth, newDisplayHeight, newDisplayDpi)
+                        } else {
+                            ""
+                        },
+                    audioBitRate = parseBitrateBitsPerSecond(audioBitrate) ?: 128000,
+                    stayAwake = config.stayAwake && config.cleanupOnDisconnect,
+                    useFullScreen = config.useFullScreen && !config.gameMode,
+                    startApp = if (config.newDisplayEnabled) config.startApp.trim() else "",
+                ),
             tcpPortForwardRules = tcpPortForwardRules ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),
-            selectedVideoEncoder = selectedVideoEncoder,
-            selectedAudioEncoder = selectedAudioEncoder,
-            selectedVideoCodec = selectedVideoCodec,
-            selectedAudioCodec = selectedAudioCodec,
-            selectedVideoDecoder = selectedVideoDecoder,
-            selectedAudioDecoder = selectedAudioDecoder,
-            deviceSerial = deviceSerial,
-            remoteVideoEncoders = remoteVideoEncoders,
-            remoteAudioEncoders = remoteAudioEncoders,
+            capabilityCache =
+                capabilityCache,
             groupIds = selectedGroupIds,
         )
     }
@@ -313,6 +307,33 @@ class SessionDialogState(
             .mapIndexed { index, candidate -> candidate.copy(priority = index) }
     }
 }
+
+internal val GAME_MAX_SIZE_OPTIONS = listOf(720, 1080, 1920)
+internal val GAME_VIDEO_BITRATE_OPTIONS = listOf(1_000_000, 2_000_000, 4_000_000)
+internal val GAME_MAX_FPS_OPTIONS = listOf(60, 90, 120)
+
+internal fun closestGameOption(
+    value: Int?,
+    options: List<Int>,
+    defaultValue: Int,
+): Int =
+    value?.let { current -> options.minByOrNull { option -> kotlin.math.abs(option.toLong() - current.toLong()) } }
+        ?: defaultValue
+
+private fun parseBitrateBitsPerSecond(value: String): Int? {
+    val normalized = value.trim().lowercase()
+    if (normalized.isBlank()) return null
+    val multiplier =
+        when {
+            normalized.endsWith("m") -> 1_000_000
+            normalized.endsWith("k") -> 1_000
+            else -> 1
+        }
+    val number = if (multiplier == 1) normalized else normalized.dropLast(1)
+    return number.toDoubleOrNull()?.times(multiplier)?.toInt()
+}
+
+private fun Int.toGameBitrateLabel(): String = "${this / 1_000_000}M"
 
 private fun backupEndpointsFrom(sessionData: SessionData?): List<String> =
     sessionData

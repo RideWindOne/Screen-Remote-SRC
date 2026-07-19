@@ -3,10 +3,9 @@ package com.screen.remote.android.infrastructure.scrcpy.controller
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.LogManager.dControl
+import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.i18n.AdbTexts
 import com.screen.remote.android.core.i18n.RemoteTexts
-import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
-import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager.execute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -18,21 +17,27 @@ import java.net.Socket
  * 消息编码和发送队列都下沉到协作对象，控制器本身只保留用例编排职责。
  */
 class ScrcpyController(
-    private val adbConnectionManager: AdbConnectionManager,
     private val getDeviceId: () -> String?,
     getControlSocket: () -> Socket?,
     clearControlSocket: () -> Unit,
     localPort: Int,
+    onClipboardReceived: (String) -> Unit,
+    issueTracker: SessionIssueTracker,
 ) {
     private val transport =
         ScrcpyControllerTransport(
             getControlSocket = getControlSocket,
             clearControlSocket = clearControlSocket,
             localPort = localPort,
+            onClipboardReceived = onClipboardReceived,
+            issueTracker = issueTracker,
         )
 
-    fun start(deviceId: String) {
-        transport.start(deviceId)
+    fun start(
+        deviceId: String,
+        gameMode: Boolean,
+    ) {
+        transport.start(deviceId, gameMode)
     }
 
     fun isRunning(): Boolean = transport.isRunning()
@@ -124,37 +129,20 @@ class ScrcpyController(
 
     suspend fun setClipboardAndPaste(text: String): Result<Boolean> =
         withContext(Dispatchers.IO) {
-            val deviceId =
-                requireDeviceId() ?: return@withContext Result.failure(
-                    Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
-                )
+            requireDeviceId() ?: return@withContext Result.failure(
+                Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
+            )
 
-            dControl(LogTags.SCRCPY_CLIENT) { "通过剪贴板注入文本: '$text'" }
+            ensureControlSocketReady() ?: return@withContext Result.failure(
+                Exception(RemoteTexts.ERROR_CONTROL_NOT_READY.get()),
+            )
+
+            dControl(LogTags.SCRCPY_CLIENT) {
+                "通过剪贴板注入文本: utf8Bytes=${text.toByteArray(Charsets.UTF_8).size}"
+            }
 
             try {
-                val connection =
-                    adbConnectionManager.getConnection(deviceId)
-                        ?: return@withContext Result.failure(Exception(AdbTexts.ERROR_DEVICE_CONNECTION_LOST.get()))
-
-                val base64Text =
-                    android.util.Base64.encodeToString(
-                        text.toByteArray(Charsets.UTF_8),
-                        android.util.Base64.NO_WRAP,
-                    )
-                val setClipboardCmd =
-                    "am broadcast -a clipper.set -e text \"$base64Text\" 2>/dev/null || " +
-                        "service call clipboard 1 i32 0 s16 com.android.shell s16 \"$text\""
-
-                val clipResult = execute(connection, setClipboardCmd)
-                if (clipResult.isFailure) {
-                    LogManager.w(LogTags.SCRCPY_CLIENT, "设置剪贴板失败，尝试直接粘贴")
-                }
-
-                delay(100)
-                sendKeyEvent(279)
-
-                dControl(LogTags.SCRCPY_CLIENT) { "文本注入成功" }
-                Result.success(true)
+                transport.enqueueClipboard(text, paste = true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "注入文本失败: ${e.message}", e)
                 Result.failure(e)
@@ -175,6 +163,25 @@ class ScrcpyController(
                 transport.enqueueDisplayPower(on)
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "发送屏幕电源控制失败: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    suspend fun startApp(name: String): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            requireDeviceId() ?: return@withContext Result.failure(
+                Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
+            )
+
+            ensureControlSocketReady() ?: return@withContext Result.failure(
+                Exception(RemoteTexts.ERROR_CONTROL_NOT_READY.get()),
+            )
+
+            val normalizedName = name.trim()
+            try {
+                transport.enqueueStartApp(normalizedName)
+            } catch (e: Exception) {
+                LogManager.e(LogTags.SCRCPY_CLIENT, "启动远端 App 消息发送失败: ${e.message}", e)
                 Result.failure(e)
             }
         }

@@ -7,6 +7,8 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssue
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import dadb.AdbShellStream
@@ -30,6 +32,7 @@ typealias ShellStream = AdbShellStream
  */
 class ConnectionShellMonitor(
     private val sessionContext: SessionContext,
+    private val issueTracker: SessionIssueTracker,
 ) {
     private companion object {
         private const val SERVER_DEVICE_LOG_SETTLE_MS = 350L
@@ -269,7 +272,7 @@ class ConnectionShellMonitor(
                 line.contains("exception", ignoreCase = true) ||
                 line.contains("failed", ignoreCase = true)
             ) {
-                SessionIssueTracker.record("server.stdout", line)
+                issueTracker.record("server.stdout", line)
                 sessionContext.emit(
                     SessionEvent.ServerFailed(
                         ServerIssue(
@@ -302,7 +305,7 @@ class ConnectionShellMonitor(
 
         appendShellLine("ERR", line)
         LogManager.e(LogTags.SCRCPY_SERVER, line)
-        SessionIssueTracker.record("server.stderr", line)
+        issueTracker.record("server.stderr", line)
 
         if (isRuntimeMonitoringEnabled()) {
             sessionContext.emit(
@@ -330,7 +333,7 @@ class ConnectionShellMonitor(
         val exitCode = packet.payload.getOrNull(0)?.toInt() ?: -1
         dShell(LogTags.SCRCPY_SERVER) { "${currentStageLabel()} exit packet: exitCode=$exitCode" }
         dumpRecentShellLines("${currentStageLabel()}-exit")
-        SessionIssueTracker.record("server.exit", "Server process exited: $exitCode")
+        issueTracker.record("server.exit", "Server process exited: $exitCode")
 
         if (isRuntimeMonitoringEnabled()) {
             sessionContext.emit(
@@ -371,13 +374,27 @@ class ConnectionShellMonitor(
                 is java.io.EOFException -> "Server 进程意外终止"
                 else -> error.message ?: error.javaClass.simpleName
             }
+        val expectedConnectionClosure = error.isExpectedConnectionClosure()
 
         if (isRuntimeMonitoringEnabled()) {
+            if (expectedConnectionClosure) {
+                LogManager.w(LogTags.SCRCPY_SERVER, "Shell 流随 ADB 连接断开: $errorMsg")
+                issueTracker.record("server.connection_closed", errorMsg)
+                sessionContext.emit(
+                    SessionEvent.RequestReconnect(
+                        ReconnectIssue(
+                            kind = ReconnectIssueKind.RuntimeError,
+                            detail = errorMsg,
+                        ),
+                    ),
+                )
+                return
+            }
             if (error !is java.io.EOFException) {
                 LogManager.e(LogTags.SCRCPY_SERVER, "Shell 监控异常 -> $errorMsg", error)
             }
             dumpRecentShellLines("monitor-exception")
-            SessionIssueTracker.record("server.monitor", errorMsg)
+            issueTracker.record("server.monitor", errorMsg)
             sessionContext.emit(
                 SessionEvent.ServerFailed(
                     ServerIssue(
@@ -389,8 +406,10 @@ class ConnectionShellMonitor(
             return
         }
 
-        dumpRecentShellLines("startup-exception")
-        if (error !is java.io.EOFException) {
+        if (expectedConnectionClosure) {
+            LogManager.w(LogTags.SCRCPY_SERVER, "等待 scrcpy-server 启动时 ADB 连接断开: $errorMsg")
+        } else if (error !is java.io.EOFException) {
+            dumpRecentShellLines("startup-exception")
             LogManager.e(LogTags.SCRCPY_SERVER, "等待 scrcpy-server 启动时出错: ${error.message}", error)
         }
         recordStartupFailure(

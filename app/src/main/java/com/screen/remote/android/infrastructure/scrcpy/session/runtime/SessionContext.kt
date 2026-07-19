@@ -1,6 +1,5 @@
 package com.screen.remote.android.infrastructure.scrcpy.session.runtime
 
-import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.scrcpy.session.Session
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 
@@ -12,12 +11,19 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEven
  */
 class SessionContext(
     private val currentSessionProvider: () -> Session?,
+    private val boundSession: Session? = null,
 ) {
-    fun currentSession(): Session? = currentSessionProvider()
+    fun currentSession(): Session? =
+        boundSession?.takeIf { currentSessionProvider() === it }
+            ?: if (boundSession == null) currentSessionProvider() else null
 
     fun requireSession(): Session = currentSession() ?: error("会话不存在")
 
-    fun currentOptions(): ScrcpyOptions? = currentSession()?.options
+    /**
+     * 将上下文绑定到当前会话实例。长生命周期协程和解码线程必须使用绑定上下文，
+     * 避免旧会话的迟到事件被投递到随后创建的新会话。
+     */
+    fun bindCurrent(): SessionContext = SessionContext(currentSessionProvider, requireSession())
 
     fun emit(event: SessionEvent) {
         currentSession()?.handleEvent(event)

@@ -16,7 +16,10 @@ object SessionTexts {
     val SESSION_CLICK_TO_CONNECT = TextPair("点击连接", "Tap to Connect")
     val SESSION_CONNECTED = TextPair("已连接", "Connected")
     val SESSION_CONFIRM_DELETE = TextPair("确认删除", "Confirm Delete")
-    val SESSION_CONFIRM_DELETE_MESSAGE = TextPair("确定要删除会话 \"%s\" 吗？", "Are you sure you want to delete session \"%s\"?")
+    val SESSION_CONFIRM_DELETE_MESSAGE = TextPair(
+        "确定要删除会话 \"%s\" 吗？",
+        "Are you sure you want to delete session \"%s\"?"
+    )
     val SESSION_DELETE = TextPair("删除", "Delete")
     val SESSION_CANCEL = TextPair("取消", "Cancel")
     val SESSION_URL_COPIED = TextPair("URL 已复制", "URL Copied")
@@ -25,6 +28,7 @@ object SessionTexts {
     val SESSION_CONNECT = TextPair("连接会话", "Connect Session")
     val SESSION_COPY = TextPair("复制会话", "Copy Session")
     val SESSION_MANAGE = TextPair("管理功能", "Manage")
+    val SESSION_GAME_MODE_BADGE = TextPair("游戏", "Game")
     val SESSION_RESET_CONNECTION = TextPair("重置连接并重新检测", "Reset Connection and Redetect")
     val SESSION_RESET_CONNECTION_SUCCESS =
         TextPair(
@@ -55,59 +59,149 @@ object SessionTexts {
 
     val ONBOARDING_SESSION_EYEBROW = TextPair("会话配置", "SESSION SETUP")
     val ONBOARDING_SESSION_TITLE = TextPair("画质与流畅度，由你决定", "Tune quality your way")
-    val ONBOARDING_SESSION_DESCRIPTION =
-        TextPair("每个会话都能保存独立的画面与声音设置，连接不同设备时无需反复调整。", "Each session keeps its own video and audio settings, so every device reconnects just the way you like it.")
+    val ONBOARDING_SESSION_DESCRIPTION = TextPair(
+        "每个会话都能保存独立的画面与声音设置，连接不同设备时无需反复调整。",
+        "Each session keeps its own video and audio settings, so every device reconnects just the way you like it."
+    )
     val ONBOARDING_RESOLUTION_TITLE = TextPair("分辨率", "Resolution")
     val ONBOARDING_RESOLUTION_BODY =
-        TextPair("保持原始画质，或限制为 1080p、720p 来降低延迟。", "Keep native quality, or cap it at 1080p or 720p for lower latency.")
+        TextPair(
+            "保持原始画质，或限制为 1080p、720p 来降低延迟。",
+            "Keep native quality, or cap it at 1080p or 720p for lower latency."
+        )
     val ONBOARDING_FPS_TITLE = TextPair("帧率与码率", "Frame rate & bitrate")
     val ONBOARDING_FPS_BODY =
-        TextPair("在 60 fps 的顺滑体验和更低的带宽占用之间自由取舍。", "Balance fluid 60 fps motion against lower bandwidth usage.")
+        TextPair(
+            "在 60 fps 的顺滑体验和更低的带宽占用之间自由取舍。",
+            "Balance fluid 60 fps motion against lower bandwidth usage."
+        )
     val ONBOARDING_CODEC_TITLE = TextPair("音视频编解码", "Audio & video codecs")
     val ONBOARDING_CODEC_BODY =
-        TextPair("可选择视频与音频格式，也能指定设备端编码器和本机解码器。", "Choose audio and video formats, plus the encoder on the device and decoder on this phone.")
+        TextPair(
+            "可选择视频与音频格式，也能指定设备端编码器和本机解码器。",
+            "Choose audio and video formats, plus the encoder on the device and decoder on this phone."
+        )
+
+    val ONBOARDING_ADVANCED_EYEBROW = TextPair("进阶玩法", "ADVANCED FEATURES")
+    val ONBOARDING_ADVANCED_TITLE = TextPair("更多场景，一台设备搞定", "Built for more ways to play and work")
+    val ONBOARDING_ADVANCED_DESCRIPTION =
+        TextPair(
+            "从网络服务到独立屏幕和低延迟操控，按你的使用场景自由扩展。",
+            "Extend your setup with network services, an independent display, and low-latency controls."
+        )
+    val ONBOARDING_PORT_FORWARD_TITLE = TextPair("端口转发", "Port forwarding")
+    val ONBOARDING_PORT_FORWARD_BODY =
+        TextPair(
+            "为目标设备配置端口转发，直接访问设备上的网络服务。",
+            "Configure forwarding for the target device and reach its network services directly."
+        )
+    val ONBOARDING_VIRTUAL_DISPLAY_TITLE = TextPair("虚拟屏", "Virtual display")
+    val ONBOARDING_VIRTUAL_DISPLAY_BODY =
+        TextPair(
+            "创建独立虚拟屏运行 App 或启动器，不影响设备主屏。",
+            "Run an app or launcher on an independent virtual display without disturbing the main screen."
+        )
+    val ONBOARDING_GAME_MODE_TITLE = TextPair("游戏模式", "Game mode")
+    val ONBOARDING_GAME_MODE_BODY =
+        TextPair(
+            "针对高帧率画面与触控链路优化，获得更跟手的操控体验。",
+            "Optimize high-frame-rate video and touch handling for more responsive controls."
+        )
 
     val ONBOARDING_WIRELESS_EYEBROW = TextPair("灵活连接", "FLEXIBLE CONNECTIONS")
     val ONBOARDING_WIRELESS_TITLE = TextPair("有线、无线，都能快速连上", "Connect over USB or Wi-Fi")
-    val ONBOARDING_WIRELESS_DESCRIPTION =
-        TextPair("从 USB 到 Android 无线调试，Screen Remote 会帮你管理不同的连接方式。", "From USB to Android wireless debugging, Screen Remote keeps every connection method in one place.")
+    val ONBOARDING_WIRELESS_DESCRIPTION = TextPair(
+        "从 USB 到 Android 无线调试，Screen Remote 会帮你管理不同的连接方式。",
+        "From USB to Android wireless debugging, Screen Remote keeps every connection method in one place."
+    )
     val ONBOARDING_PAIRING_TITLE = TextPair("无线调试配对", "Wireless debugging pairing")
-    val ONBOARDING_PAIRING_BODY =
-        TextPair("直接输入配对地址与配对码，无需电脑完成首次授权。", "Enter the pairing address and code to authorize a device without a computer.")
+    val ONBOARDING_PAIRING_BODY = TextPair(
+        "直接输入配对地址与配对码，无需电脑完成首次授权。",
+        "Enter the pairing address and code to authorize a device without a computer."
+    )
     val ONBOARDING_DISCOVERY_TITLE = TextPair("自动发现", "Automatic discovery")
     val ONBOARDING_DISCOVERY_BODY =
-        TextPair("通过 mDNS 查找局域网中的可连接设备，减少手动输入。", "Find connectable devices on your local network through mDNS.")
+        TextPair(
+            "通过 mDNS 查找局域网中的可连接设备，减少手动输入。",
+            "Find connectable devices on your local network through mDNS."
+        )
     val ONBOARDING_ENDPOINTS_TITLE = TextPair("备用地址", "Fallback addresses")
-    val ONBOARDING_ENDPOINTS_BODY =
-        TextPair("为同一会话保存多个地址，在网络变化时自动尝试下一条链路。", "Save multiple addresses for one session and try another route when the network changes.")
+    val ONBOARDING_ENDPOINTS_BODY = TextPair(
+        "为同一会话保存多个地址，在网络变化时自动尝试下一条链路。",
+        "Save multiple addresses for one session and try another route when the network changes."
+    )
+
+    val ONBOARDING_PAIRING_GUIDE_EYEBROW = TextPair("首次连接", "FIRST CONNECTION")
+    val ONBOARDING_PAIRING_GUIDE_TITLE = TextPair("四步完成无线调试连接", "Connect with Wireless debugging in 4 steps")
+    val ONBOARDING_PAIRING_GUIDE_DESCRIPTION = TextPair(
+        "请在被控 Android 设备上完成前两步，并让两台设备连接同一 Wi-Fi。",
+        "Complete the first two steps on the Android device you want to control, and keep both devices on the same Wi-Fi network."
+    )
+    val ONBOARDING_ENABLE_DEVELOPER_OPTIONS_TITLE = TextPair("1  启用开发者选项", "1  Enable Developer options")
+    val ONBOARDING_ENABLE_DEVELOPER_OPTIONS_BODY = TextPair(
+        "打开「设置 > 关于手机 > 版本信息」，连续点击「软件版本号」7 次；不同品牌的菜单名称可能略有不同。",
+        "Open Settings > About phone > Version information, then tap Software version 7 times. Menu names may vary by device brand."
+    )
+    val ONBOARDING_OPEN_WIRELESS_DEBUGGING_TITLE = TextPair("2  打开无线调试", "2  Open Wireless debugging")
+    val ONBOARDING_OPEN_WIRELESS_DEBUGGING_BODY = TextPair(
+        "返回设置，在「系统管理与升级 > 开发者选项」中进入「无线调试」页面并开启开关。",
+        "Return to Settings, open System management > Developer options > Wireless debugging, and turn it on."
+    )
+    val ONBOARDING_USE_PAIRING_CODE_TITLE = TextPair("3  使用配对码", "3  Use a pairing code")
+    val ONBOARDING_USE_PAIRING_CODE_BODY = TextPair(
+        "点击「使用配对码配对设备」，再到 Screen Remote 的「设置 > 使用配对码进行 ADB 配对」，输入页面显示的配对地址和 6 位配对码。",
+        "Tap Pair device with pairing code. In Screen Remote, open Settings > ADB Pairing with Pairing Code and enter the pairing address and 6-digit code shown."
+    )
+    val ONBOARDING_ADD_WIRELESS_SESSION_TITLE = TextPair("4  添加无线会话", "4  Add a wireless session")
+    val ONBOARDING_ADD_WIRELESS_SESSION_BODY = TextPair(
+        "配对成功后回到主页点击「+」，打开「会话地址」，选择 mDNS 和发现到的设备，保存后即可连接。",
+        "After pairing, return home and tap +. Open Session addresses, choose mDNS and the discovered device, then save and connect."
+    )
 
     val ONBOARDING_MANAGE_EYEBROW = TextPair("设备管理", "DEVICE MANAGEMENT")
     val ONBOARDING_MANAGE_TITLE = TextPair("不只投屏，还能管理设备", "More than screen mirroring")
-    val ONBOARDING_MANAGE_DESCRIPTION =
-        TextPair("连接后可直接进入管理页面，常用维护工具不必再切换应用。", "Open device management after connecting and keep everyday maintenance tools close at hand.")
+    val ONBOARDING_MANAGE_DESCRIPTION = TextPair(
+        "连接后可直接进入管理页面，常用维护工具不必再切换应用。",
+        "Open device management after connecting and keep everyday maintenance tools close at hand."
+    )
     val ONBOARDING_APPS_TITLE = TextPair("应用管理", "Apps")
     val ONBOARDING_APPS_BODY =
-        TextPair("查看应用信息，并执行常用的应用管理操作。", "Inspect installed apps and run common app-management actions.")
+        TextPair(
+            "查看应用信息，并执行常用的应用管理操作。",
+            "Inspect installed apps and run common app-management actions."
+        )
     val ONBOARDING_FILES_TITLE = TextPair("文件与进程", "Files & processes")
     val ONBOARDING_FILES_BODY =
-        TextPair("浏览设备文件、传输内容，并查看正在运行的进程。", "Browse device files, transfer content, and inspect running processes.")
+        TextPair(
+            "浏览设备文件、传输内容，并查看正在运行的进程。",
+            "Browse device files, transfer content, and inspect running processes."
+        )
     val ONBOARDING_SHELL_TITLE = TextPair("Shell 与设备信息", "Shell & device info")
     val ONBOARDING_SHELL_BODY =
-        TextPair("运行常用命令，快速检查系统、显示与网络状态。", "Run useful commands and quickly inspect system, display, and network status.")
+        TextPair(
+            "运行常用命令，快速检查系统、显示与网络状态。",
+            "Run useful commands and quickly inspect system, display, and network status."
+        )
 
     val ONBOARDING_BACKUP_EYEBROW = TextPair("备份与恢复", "BACKUP & RESTORE")
     val ONBOARDING_BACKUP_TITLE = TextPair("换设备，也不必重新配置", "Take your setup with you")
-    val ONBOARDING_BACKUP_DESCRIPTION =
-        TextPair("将关键配置导出为一个备份文件，需要时再一键恢复。", "Export your essential setup to one backup file and restore it whenever you need it.")
+    val ONBOARDING_BACKUP_DESCRIPTION = TextPair(
+        "将关键配置导出为一个备份文件，需要时再一键恢复。",
+        "Export your essential setup to one backup file and restore it whenever you need it."
+    )
     val ONBOARDING_CONFIG_TITLE = TextPair("会话、分组与设置", "Sessions, groups & settings")
     val ONBOARDING_CONFIG_BODY =
         TextPair("保存会话参数、分组结构和应用偏好。", "Preserve session options, group structure, and app preferences.")
     val ONBOARDING_KEYS_TITLE = TextPair("ADB 身份", "ADB identity")
-    val ONBOARDING_KEYS_BODY =
-        TextPair("备份 ADB 密钥和无线调试 TLS 身份，减少重复授权。", "Back up ADB keys and wireless-debugging TLS identity to avoid repeated authorization.")
+    val ONBOARDING_KEYS_BODY = TextPair(
+        "备份 ADB 密钥和无线调试 TLS 身份，减少重复授权。",
+        "Back up ADB keys and wireless-debugging TLS identity to avoid repeated authorization."
+    )
     val ONBOARDING_RESTORE_TITLE = TextPair("JSON 备份文件", "Portable JSON backup")
-    val ONBOARDING_RESTORE_BODY =
-        TextPair("使用系统文件选择器导出或导入，文件由你自行保管。", "Export or import with the system file picker—the backup stays under your control.")
+    val ONBOARDING_RESTORE_BODY = TextPair(
+        "使用系统文件选择器导出或导入，文件由你自行保管。",
+        "Export or import with the system file picker—the backup stays under your control."
+    )
 
     // 分组管理
     val GROUP_ALL = TextPair("主页", "Home")
@@ -124,7 +218,8 @@ object SessionTexts {
     val GROUP_ALREADY_ADDED = TextPair("已添加", "Added")
     val GROUP_REMOVE = TextPair("删除", "Remove")
     val GROUP_CONFIRM_DELETE = TextPair("确认删除分组", "Confirm Delete Group")
-    val GROUP_CONFIRM_DELETE_MESSAGE = TextPair("确定要删除分组 \"%s\" 吗？", "Are you sure you want to delete group \"%s\"?")
+    val GROUP_CONFIRM_DELETE_MESSAGE =
+        TextPair("确定要删除分组 \"%s\" 吗？", "Are you sure you want to delete group \"%s\"?")
     val GROUP_PLACEHOLDER_NAME = TextPair("输入分组名称", "Enter group name")
     val GROUP_PLACEHOLDER_DESCRIPTION = TextPair("可选", "Optional")
     val GROUP_PARENT_PATH = TextPair("父路径", "Parent Path")
@@ -153,6 +248,7 @@ object SessionTexts {
     val SECTION_VIDEO_CONFIG = TextPair("视频配置", "Video Config")
     val SECTION_AUDIO_CONFIG = TextPair("音频配置", "Audio Config")
     val SECTION_OTHER_OPTIONS = TextPair("其他选项", "Other Options")
+    val SECTION_VIRTUAL_DISPLAY = TextPair("虚拟显示", "Virtual Display")
     val SECTION_ENCODER_OPTIONS = TextPair("编码器选项", "Encoder Options")
     val SECTION_DECODER_OPTIONS = TextPair("解码器选项", "Decoder Options")
     val SECTION_DETECTED_ENCODERS = TextPair("检测到的编码器", "Detected Encoders")
@@ -172,17 +268,17 @@ object SessionTexts {
     val LABEL_VIDEO_BITRATE = TextPair("视频码率", "Video Bitrate")
     val PLACEHOLDER_VIDEO_BITRATE = TextPair("留空默认 4M；如 500k、2m、4M", "Empty defaults to 4M; e.g. 500k, 2m, 4M")
     val LABEL_MAX_FPS = TextPair("最大帧率", "Max FPS")
-    val LABEL_VIDEO_CODEC = TextPair("视频编码格式", "Video Codec Format")
     val LABEL_VIDEO_ENCODER = TextPair("视频编码器", "Video Encoder")
     val LABEL_VIDEO_DECODER = TextPair("视频解码器", "Video Decoder")
-    val LABEL_AUDIO_CODEC = TextPair("音频编码格式", "Audio Codec Format")
+    val LABEL_AUDIO_BITRATE = TextPair("音频码率", "Audio Bitrate")
     val LABEL_AUDIO_ENCODER = TextPair("音频编码器", "Audio Encoder")
     val LABEL_AUDIO_DECODER = TextPair("音频解码器", "Audio Decoder")
-    val LABEL_AUDIO_BITRATE = TextPair("音频码率", "Audio Bitrate")
     val LABEL_AUDIO_BUFFER = TextPair("音频缓冲", "Audio Buffer")
     val LABEL_VIDEO_BUFFER = TextPair("视频缓冲", "Video Buffer")
     val LABEL_AUDIO_VOLUME = TextPair("音量缩放", "Audio Volume")
     val LABEL_DEFAULT = TextPair("默认", "Default")
+    val LABEL_ORIGINAL = TextPair("原始", "Original")
+    val LABEL_CUSTOM = TextPair("自定义", "Custom")
     val LABEL_CACHED = TextPair("已缓存", "Cached")
     val LABEL_DEVICE_INFO = TextPair("设备信息", "Device Info")
     val LABEL_DEVICE_ID = TextPair("设备 ID", "Device ID")
@@ -191,6 +287,8 @@ object SessionTexts {
     val LABEL_NEW_DISPLAY_WIDTH = TextPair("宽度", "Width")
     val LABEL_NEW_DISPLAY_HEIGHT = TextPair("高度", "Height")
     val LABEL_NEW_DISPLAY_DPI = TextPair("DPI", "DPI")
+    val LABEL_NEW_DISPLAY_SIZE = TextPair("尺寸", "Size")
+    val LABEL_START_APP = TextPair("启动 App", "Start App")
     val DEVICE_TYPE_TCP = TextPair("TCP", "TCP")
     val DEVICE_TYPE_USB = TextPair("USB", "USB")
     val DEVICE_TYPE_MDNS = TextPair("mDNS", "mDNS")
@@ -198,23 +296,44 @@ object SessionTexts {
     val ACTION_REMOVE_ENDPOINT = TextPair("删除", "Remove")
     val DIALOG_SESSION_ADDRESS_TITLE = TextPair("会话地址", "Session Address")
 
-    // 会话对话框 - 开关
-    val SWITCH_FORCE_ADB = TextPair("强制使用 ADB 转发连接", "Force ADB Forward")
-    val SWITCH_ENABLE_AUDIO = TextPair("启用音频", "Enable Audio")
-    val SWITCH_ENABLE_CLIPBOARD_SYNC = TextPair("启用剪贴板同步", "Enable Clipboard Sync")
-    val SWITCH_STAY_AWAKE = TextPair("保持唤醒", "Stay Awake")
-    val SWITCH_TURN_SCREEN_OFF = TextPair("连接后关闭远程屏幕", "Turn Screen Off")
-    val SWITCH_POWER_OFF_ON_CLOSE = TextPair("断开后锁定远程屏幕(按电源键)", "Power Off on Close")
-    val SWITCH_NO_CLEANUP_ON_DISCONNECT = TextPair("断开后不清理（保持屏幕状态）", "Don't Clean Up on Disconnect")
+    // 会话对话框 - 连接选项
+    val SWITCH_GAME_MODE = TextPair("游戏模式", "Game Mode")
     val SWITCH_FULL_SCREEN = TextPair("全屏模式", "Full Screen")
-    val SWITCH_KEEP_DEVICE_AWAKE = TextPair("使用期间保持设备唤醒", "Keep Device Awake")
+    val SWITCH_SHOW_FLOATING_BALL = TextPair("显示悬浮球", "Show Floating Ball")
     val SWITCH_ENABLE_HARDWARE_DECODING = TextPair("启用硬件解码", "Enable Hardware Decoding")
+    val SWITCH_FOLLOW_ORIENTATION = TextPair("跟随设备旋转变化", "Follow Remote Orientation Change")
+    val SWITCH_USE_ADB_FORWARD = TextPair("使用 ADB 转发建立连接", "Connect via ADB Forwarding")
+
+    // 会话对话框 - 音频配置
+    val SWITCH_ENABLE_AUDIO = TextPair("启用音频", "Enable Audio")
+
+    // 会话对话框 - 其他选项
+    val SWITCH_CLIPBOARD_SYNC = TextPair("粘贴板同步", "Clipboard Sync")
+    val SWITCH_TURN_SCREEN_OFF = TextPair("连接后关闭远程屏幕", "Turn Screen Off")
+    val SWITCH_POWER_OFF_ON_CLOSE = TextPair("断开后锁定设备", "Power Off on Close")
+    val SWITCH_CLEANUP_ON_DISCONNECT = TextPair("断开后清理", "Clean Up on Disconnect")
+    val SWITCH_KEEP_DEVICE_AWAKE = TextPair("保持控制端唤醒", "Keep Controller Awake")
+    val SWITCH_STAY_AWAKE = TextPair("保持远程设备唤醒", "Keep Remote Device Awake")
     val SWITCH_IGNORE_VIDEO_ENCODER_CONSTRAINTS =
         TextPair("忽略视频编码器约束", "Ignore Video Encoder Constraints")
-    val SWITCH_FOLLOW_ORIENTATION = TextPair("跟随设备旋转变化", "Follow Remote Orientation Change")
+
+    // 会话对话框 - 虚拟屏
     val SWITCH_NEW_DISPLAY = TextPair("启动新的显示", "New Display")
-    val ACTION_SYNC_LOCAL_DISPLAY_SIZE = TextPair("同步本机尺寸", "Sync Local Size")
+    val SWITCH_VIRTUAL_DISPLAY_SYSTEM_DECORATIONS = TextPair("显示虚拟屏系统界面", "Show Virtual Display System UI")
+    val SWITCH_PRESERVE_VIRTUAL_DISPLAY_CONTENT = TextPair("断开后保留虚拟屏内容", "Preserve Virtual Display Content")
+    val ACTION_SYNC_LOCAL_DISPLAY_SIZE = TextPair("同步", "Sync")
+    val ACTION_CLEAR_NEW_DISPLAY_SIZE = TextPair("清空", "Clear")
     val ACTION_SWAP_NEW_DISPLAY_SIZE = TextPair("交换宽高", "Swap Width/Height")
+    val ACTION_SELECT_REMOTE_APP = TextPair("选择", "Select")
+    val DIALOG_SELECT_REMOTE_APP = TextPair("选择远端 App", "Select Remote App")
+    val PLACEHOLDER_START_APP = TextPair("远端应用包名", "Remote app package")
+    val PLACEHOLDER_SEARCH_REMOTE_APP = TextPair("搜索包名", "Search package")
+    val STATUS_LOADING_REMOTE_APPS = TextPair("正在读取远端应用…", "Loading remote apps…")
+    val STATUS_ENTER_REMOTE_APP_QUERY =
+        TextPair("输入关键字后点击 Q，或直接查询全部", "Enter a keyword and tap Q, or query all apps")
+    val ACTION_QUERY_ALL_REMOTE_APPS = TextPair("全部", "All")
+    val STATUS_NO_REMOTE_APPS = TextPair("未找到可启动的远端应用", "No launchable remote apps found")
+    val ERROR_REMOTE_APP_LIST = TextPair("读取远端应用列表失败", "Couldn't load remote apps")
 
     // 会话对话框 - 状态
     val STATUS_DETECTING_VIDEO_ENCODERS = TextPair("正在检测视频编码器...", "Detecting video encoders...")
@@ -278,18 +397,82 @@ object SessionTexts {
         )
     val HELP_PORT =
         TextPair(
-            "远程设备的 ADB 端口号，默认为 5555。如果使用 ADB 转发连接，此端口会被自动设置。",
-            "The ADB port number of the remote device, default is 5555. If using ADB forward connection, this port will be set automatically.",
+            "远程设备的 ADB 端口号，默认为 5555。如果使用 ADB 转发建立连接，此端口会被自动设置。",
+            "The ADB port number of the remote device, default is 5555. If ADB forwarding is used to establish the connection, this port will be set automatically.",
         )
     val HELP_SELECT_GROUP =
         TextPair(
             "将会话添加到一个或多个分组中，便于管理和查找。可以在主页面通过分组筛选会话。",
             "Add the session to one or more groups for easier management and search. You can filter sessions by group on the home page.",
         )
-    val HELP_FORCE_ADB =
+
+    // 连接选项
+    val HELP_GAME_MODE =
         TextPair(
-            "默认关闭。关闭时优先使用基于优化 DADB 驱动的 ADB 多路复用直连服务流，通常延迟更低、链路更简单；只有在兼容性或排障需要时，才建议开启并强制回退到 ADB 转发连接。",
-            "Off by default. When disabled, it prefers direct ADB stream multiplexing based on the optimized DADB transport, which is usually simpler and lower-latency. Enable it only for compatibility or troubleshooting to force fallback to ADB forward.",
+            "面向实时游戏优化触控与视频调度。开启后，最大尺寸、视频码率和最大帧率使用独立的低延迟档位；连接成功后暂停悬浮球、日志记录、性能面板和 mDNS 后台发现。",
+            "Optimize touch and video scheduling for real-time games. Max size, video bitrate, and max FPS use independent low-latency presets. Floating controls, logging, performance stats, and background mDNS discovery are paused after connection.",
+        )
+    val HELP_GAME_MODE_FULL_SCREEN_DISABLED =
+        TextPair(
+            "游戏模式不支持全屏模式。开启游戏模式后会关闭并禁用基于 TextureView 的全屏渲染。",
+            "Full-screen mode is unavailable in game mode. Enabling game mode disables the TextureView-based full-screen renderer.",
+        )
+    val HELP_USE_FULL_SCREEN =
+        TextPair(
+            "启用后使用 TextureView 渲染，支持真全屏（隐藏导航栏）和后台运行（不会被系统杀死），但延迟略高。关闭则使用 SurfaceView，延迟更低但不支持真全屏（导航栏仍显示），切换到后台时需要使用虚拟 Surface 方案保持连接。两种模式都可能因屏幕比例不同而出现黑边。",
+            "When enabled, uses TextureView for rendering, supporting true fullscreen (hide navigation bar) and background running (won't be killed by system), but with slightly higher latency. When disabled, uses SurfaceView with lower latency but no true fullscreen support (navigation bar remains visible), requiring virtual Surface solution to maintain connection when switching to background. Both modes may have black bars due to different screen aspect ratios.",
+        )
+    val HELP_SHOW_FLOATING_BALL =
+        TextPair(
+            "在远程控制页面显示用于快捷操作的悬浮球。游戏模式下始终隐藏。",
+            "Show the floating ball for quick actions on the remote control screen. It is always hidden in Game Mode.",
+        )
+    val HELP_ENABLE_HARDWARE_DECODING =
+        TextPair(
+            "使用硬件解码器解码视频，可以降低 CPU 占用和发热，但部分设备可能不支持或有兼容性问题。",
+            "Use hardware decoder to decode video, which can reduce CPU usage and heat, but some devices may not support it or have compatibility issues.",
+        )
+    val HELP_FOLLOW_ORIENTATION =
+        TextPair(
+            "自动跟随远程设备的屏幕旋转方向。关闭后本地画面方向保持固定。",
+            "Automatically follow the remote device's screen rotation. When turned off, the local screen orientation remains fixed.",
+        )
+    val HELP_USE_ADB_FORWARD =
+        TextPair(
+            "默认关闭。关闭时优先使用基于优化 DADB 驱动的多路复用直连服务流，通常延迟更低、链路更简单；开启后将通过 ADB 端口转发建立 scrcpy 连接，适合兼容性或排障场景。",
+            "Off by default. When disabled, the optimized DADB transport uses direct multiplexed service streams for a simpler, lower-latency path. When enabled, scrcpy connects through ADB port forwarding for compatibility or troubleshooting.",
+        )
+
+    // 视频配置
+    val HELP_GAME_MAX_SIZE =
+        TextPair(
+            "游戏模式可选 720、1080、1920。尺寸与码率互不联动。",
+            "Game mode offers 720, 1080, and 1920. Size and bitrate are configured independently.",
+        )
+    val HELP_GAME_VIDEO_BITRATE =
+        TextPair(
+            "游戏模式可选 1M、2M、4M。调整码率不会自动修改最大尺寸。",
+            "Game mode offers 1M, 2M, and 4M. Changing bitrate does not change max size.",
+        )
+    val HELP_GAME_MAX_FPS =
+        TextPair(
+            "游戏模式仅允许 60、90、120 fps，最低为 60 fps。实际帧率仍受被控设备、编码器和显示刷新率限制。",
+            "Game mode allows only 60, 90, and 120 fps, with a minimum of 60 fps. Actual FPS still depends on the remote device, encoder, and display refresh rate.",
+        )
+    val HELP_NORMAL_MAX_SIZE =
+        TextPair(
+            "在数值方块内上下滑动，可选 720、1080、1920、原始和自定义。原始表示不限制最大尺寸；停在自定义后会自动要求输入，未输入则回到原始。",
+            "Swipe vertically inside the value box to choose 720, 1080, 1920, Original, or Custom. Original applies no max-size limit. Stopping on Custom opens an editor; leaving it empty returns to Original.",
+        )
+    val HELP_NORMAL_VIDEO_BITRATE =
+        TextPair(
+            "在数值方块内上下滑动，可选 8M、12M 和自定义。停在自定义后自动弹出输入框；未输入则保留之前的码率。",
+            "Swipe vertically inside the value box to choose 8M, 12M, or Custom. Stopping on Custom opens an editor; leaving it empty keeps the previous bitrate.",
+        )
+    val HELP_NORMAL_MAX_FPS =
+        TextPair(
+            "在数值方块内上下滑动，可选 15、30、60、90、120 和自定义。停在自定义后自动弹出输入框；未输入则保留之前的帧率。",
+            "Swipe vertically inside the value box to choose 15, 30, 60, 90, 120, or Custom. Stopping on Custom opens an editor; leaving it empty keeps the previous FPS.",
         )
     val HELP_MAX_SIZE =
         TextPair(
@@ -306,10 +489,10 @@ object SessionTexts {
             "限制视频的最大帧率。默认 60 fps。较低的帧率可以减少 CPU 占用和带宽。示例：30 表示每秒 30 帧。",
             "Limit the maximum video frame rate. Default is 60 fps. Lower values reduce CPU and bandwidth usage. Example: 30 means 30 frames per second.",
         )
-    val HELP_VIDEO_CODEC =
+    val HELP_VIDEO_BUFFER =
         TextPair(
-            "支持 H264、H265、AV1、VP9 和 VP8。H264 兼容性最好；H265/AV1 压缩效率更高；VP8/VP9 可用于部分不支持 HEVC 的设备。连接时会按远端编码器与本机解码器的真实 MIME 能力校验。",
-            "Supports H264, H265, AV1, VP9, and VP8. H264 is the most compatible; H265/AV1 are more efficient; VP8/VP9 cover devices without HEVC. The connection validates real remote-encoder and local-decoder MIME capabilities.",
+            "视频缓冲时间（毫秒）。增加缓冲可平滑网络抖动，但会增加延迟。常见值：0（实时）、33（1帧）、50-100（平滑播放）。留空使用 0ms。",
+            "Video buffer time (milliseconds). Increase buffer to smooth network jitter, but adds latency. Common values: 0 (realtime), 33 (1 frame), 50-100 (smooth playback). Leave empty for 0ms.",
         )
     val HELP_VIDEO_ENCODER =
         TextPair(
@@ -321,20 +504,17 @@ object SessionTexts {
             "选择本机的视频解码器。优先选择硬件解码器以降低延迟和功耗。留空使用系统默认解码器。\n\n推荐配置（按优先级）：\n1. 硬件 + 低延迟 + C2架构\n2. 硬件 + 低延迟 + OMX\n3. 硬件 + C2架构\n4. 硬件 + OMX",
             "Select video decoder on this device. Hardware decoders are preferred for lower latency and power consumption. Leave empty to use system default decoder.\n\nRecommended (by priority):\n1. Hardware + Low Latency + C2\n2. Hardware + Low Latency + OMX\n3. Hardware + C2\n4. Hardware + OMX",
         )
-    val HELP_USE_FULL_SCREEN =
-        TextPair(
-            "启用后使用 TextureView 渲染，支持真全屏（隐藏导航栏）和后台运行（不会被系统杀死），但延迟略高。关闭则使用 SurfaceView，延迟更低但不支持真全屏（导航栏仍显示），切换到后台时需要使用虚拟 Surface 方案保持连接。两种模式都可能因屏幕比例不同而出现黑边。",
-            "When enabled, uses TextureView for rendering, supporting true fullscreen (hide navigation bar) and background running (won't be killed by system), but with slightly higher latency. When disabled, uses SurfaceView with lower latency but no true fullscreen support (navigation bar remains visible), requiring virtual Surface solution to maintain connection when switching to background. Both modes may have black bars due to different screen aspect ratios.",
-        )
+
+    // 音频配置
     val HELP_ENABLE_AUDIO =
         TextPair(
             "启用音频传输。需要设备支持音频捕获（Android 11+）。音频传输会增加带宽占用。",
             "Enable audio transmission. Requires device to support audio capture (Android 11+). Audio transmission will increase bandwidth usage.",
         )
-    val HELP_AUDIO_CODEC =
+    val HELP_AUDIO_BITRATE_PICKER =
         TextPair(
-            "选择音频编码格式。AAC 兼容性最好，Opus 压缩率更高，FLAC 无损但占用大，RAW 未压缩。",
-            "Select audio codec format. AAC has best compatibility, Opus has better compression, FLAC is lossless but large, RAW is uncompressed.",
+            "在数值方块内上下滑动，可选 128K、192K、256K 和自定义。停在自定义后自动弹出输入框；未输入则保留之前的音频码率。",
+            "Swipe vertically inside the value box to choose 128K, 192K, 256K, or Custom. Stopping on Custom opens an editor; leaving it empty keeps the previous audio bitrate.",
         )
     val HELP_AUDIO_ENCODER =
         TextPair(
@@ -356,22 +536,14 @@ object SessionTexts {
             "音频缓冲时间（毫秒）。根据编码格式自动计算：Opus/AAC 默认 50ms，FLAC 默认 120ms。留空使用自动值。",
             "Audio buffer time (milliseconds). Auto-calculated by codec: Opus/AAC default 50ms, FLAC default 120ms. Leave empty for auto.",
         )
-    val HELP_VIDEO_BUFFER =
-        TextPair(
-            "视频缓冲时间（毫秒）。增加缓冲可平滑网络抖动，但会增加延迟。常见值：0（实时）、33（1帧）、50-100（平滑播放）。留空使用 0ms。",
-            "Video buffer time (milliseconds). Increase buffer to smooth network jitter, but adds latency. Common values: 0 (realtime), 33 (1 frame), 50-100 (smooth playback). Leave empty for 0ms.",
-        )
     val HELP_AUDIO_VOLUME =
         TextPair(
             "调整音频播放音量的缩放倍数。1.0x 为原始音量，小于 1.0 降低音量，大于 1.0 提高音量（可能失真）。",
             "Adjust audio playback volume scale. 1.0x is original volume, less than 1.0 reduces volume, greater than 1.0 increases volume (may distort).",
         )
-    val HELP_STAY_AWAKE =
-        TextPair(
-            "连接期间保持远程设备屏幕常亮，防止自动息屏。断开连接后恢复原设置。",
-            "Keep the remote device screen on during connection to prevent auto sleep. Restores original setting after disconnection.",
-        )
-    val HELP_ENABLE_CLIPBOARD_SYNC =
+
+    // 其他选项
+    val HELP_CLIPBOARD_SYNC =
         TextPair(
             "允许 scrcpy 与远程设备同步剪贴板内容。关闭后仍可使用文本输入，但不会自动交换剪贴板。",
             "Allow scrcpy to synchronize clipboard contents with the remote device. When disabled, text input still works, but clipboards are not exchanged automatically.",
@@ -386,34 +558,41 @@ object SessionTexts {
             "断开连接时自动锁定远程设备屏幕（相当于按电源键）。适合远程控制后需要锁屏的场景。",
             "Automatically lock the remote device screen when disconnecting (equivalent to pressing power button). Suitable for scenarios requiring screen lock after remote control.",
         )
-    val HELP_NO_CLEANUP_ON_DISCONNECT =
+    val HELP_CLEANUP_ON_DISCONNECT =
         TextPair(
-            "断开连接时不恢复 scrcpy 启动期间修改的远程设备状态，例如保持当前屏幕状态。对应 cleanup=false。",
-            "Do not restore remote device state changed during scrcpy startup when disconnecting, keeping the current screen state. Maps to cleanup=false.",
+            "断开连接时恢复 scrcpy 启动期间修改的远程设备状态。关闭后会保留可复用的连接资源，减少下次连接的准备时间。",
+            "Restore remote-device state changed during scrcpy startup when disconnecting. Disabling this keeps reusable connection resources and reduces preparation time for the next connection.",
         )
     val HELP_KEEP_DEVICE_AWAKE =
         TextPair(
-            "使用期间保持本地设备（控制端）屏幕常亮，防止自动息屏导致连接中断。",
-            "Keep the local device (controller) screen on during use to prevent connection interruption due to auto sleep.",
+            "远控期间保持本机（控制端）屏幕常亮，防止控制端自动息屏。此选项不会修改远程设备的唤醒设置。",
+            "Keep this controller's screen on during remote control. This option does not change the remote device's stay-awake setting.",
         )
-    val HELP_ENABLE_HARDWARE_DECODING =
+    val HELP_STAY_AWAKE =
         TextPair(
-            "使用硬件解码器解码视频，可以降低 CPU 占用和发热，但部分设备可能不支持或有兼容性问题。",
-            "Use hardware decoder to decode video, which can reduce CPU usage and heat, but some devices may not support it or have compatibility issues.",
+            "连接期间让远程设备在充电时保持唤醒。此功能依赖 scrcpy 清理进程，因此关闭“断开后清理”时不可用。杀掉控制端后台后，只要远端连接随之结束，清理进程通常仍会恢复原设置。",
+            "Keep the remote device awake while it is plugged in during the connection. This requires the scrcpy cleanup process, so it is unavailable when cleanup on disconnect is disabled. If the controller app is killed, the previous setting is normally restored once the remote connection ends.",
         )
     val HELP_IGNORE_VIDEO_ENCODER_CONSTRAINTS =
         TextPair(
             "跳过 scrcpy 对视频编码器尺寸和对齐限制的自动修正。仅在设备编码器能力被错误识别时启用，启用后可能导致 server 启动或编码失败。",
             "Skip scrcpy's automatic video encoder size and alignment constraints. Enable only when encoder capabilities are detected incorrectly; this may cause server startup or encoding failures.",
         )
-    val HELP_FOLLOW_ORIENTATION =
-        TextPair(
-            "自动跟随远程设备的屏幕旋转方向。关闭后本地画面方向保持固定。",
-            "Automatically follow the remote device's screen rotation. When turned off, the local screen orientation remains fixed.",
-        )
+
+    // 虚拟屏
     val HELP_NEW_DISPLAY =
         TextPair(
-            "在远程设备上创建一个新的虚拟显示器进行镜像，而不是镜像主屏幕。宽高和 DPI 留空时使用远程主屏幕默认值。",
-            "Create a new virtual display on the remote device for mirroring instead of mirroring the main screen. Leave width, height, and DPI empty to use the remote main display defaults.",
+            "在远端设备上创建一个独立的虚拟屏幕，可用来运行指定 App 或启动器，不影响主屏幕。启动 App 和尺寸均可留空。\n\nscrcpy 虚拟显示说明：\nhttps://github.com/Genymobile/scrcpy/blob/master/doc/virtual-display.md\n\n可选启动器示例：\nhttps://f-droid.org/en/packages/org.fossify.home/",
+            "Create an independent virtual screen on the remote device for an app or launcher without affecting the main screen. The start app and size are both optional.\n\nscrcpy virtual display guide:\nhttps://github.com/Genymobile/scrcpy/blob/master/doc/virtual-display.md\n\nOptional launcher example:\nhttps://f-droid.org/en/packages/org.fossify.home/",
+        )
+    val HELP_VIRTUAL_DISPLAY_SYSTEM_DECORATIONS =
+        TextPair(
+            "推荐开启。此选项不只控制状态栏和导航栏，还会影响虚拟屏内的系统导航与按键处理能力。开启后，虚拟屏内的 App 能自行处理主页、最近任务和返回等导航按键；关闭后，这些按键可能落到真机主屏。仅在明确不需要虚拟屏系统界面，并能接受设备相关的导航限制时关闭。",
+            "Recommended. This option affects system navigation and key handling inside the virtual display, not only status and navigation bars. When enabled, apps on the virtual display can handle navigation keys such as Home, Recents, and Back themselves; when disabled, these keys may fall back to the physical device's main display. Disable only when virtual-display system UI is intentionally unwanted and device-specific navigation limitations are acceptable.",
+        )
+    val HELP_PRESERVE_VIRTUAL_DISPLAY_CONTENT =
+        TextPair(
+            "开启后，关闭虚拟显示时不会销毁其中运行的 App，而是将其移动到真机主屏。",
+            "Keep apps running when the virtual display closes by moving them to the physical device's main display instead of destroying them.",
         )
 }

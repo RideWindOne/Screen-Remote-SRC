@@ -1,6 +1,7 @@
 package com.screen.remote.android.infrastructure.media.video
 
 import android.media.MediaCodec
+import android.os.Process
 import android.view.Surface
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
@@ -13,8 +14,10 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderType
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * VideoDecoder - 视频解码器入口。
@@ -29,8 +32,16 @@ class VideoDecoder(
     allowHardwareDecoders: Boolean = true,
     decoderSelectionPinned: Boolean = false,
     initialRejectedDecoderNames: Set<String> = emptySet(),
+    performanceCounters: VideoPerformanceCounters = VideoPerformanceCounters(),
     private val sessionContext: SessionContext,
+    private val gameMode: Boolean = false,
 ) {
+    private val decoderDispatcher =
+        Executors
+            .newSingleThreadExecutor { runnable ->
+                Thread(runnable, "scrcpy-video-$videoCodec").apply { isDaemon = true }
+            }.asCoroutineDispatcher()
+    private val decoderDispatcherClosed = AtomicBoolean(false)
     private val runtimeState = VideoDecoderRuntimeState()
     private val surfaceController = VideoDecoderSurfaceController(surface)
     private val codecManager =
@@ -55,13 +66,15 @@ class VideoDecoder(
             isRunning = { isRunning },
             isStopped = { isStopped },
             shouldReportConnectionLost = ::shouldReportConnectionLost,
+            performanceCounters = performanceCounters,
+            gameMode = gameMode,
             onVideoStateChanged = ::updateVideoState,
             onConnectionLost = { onConnectionLost?.invoke() },
         )
 
-    private var decoder: MediaCodec? = null
-    private var isRunning = false
-    private var isStopped = false
+    @Volatile private var decoder: MediaCodec? = null
+    @Volatile private var isRunning = false
+    @Volatile private var isStopped = false
     private var lifecycleReportedStarted = false
 
     var onVideoSizeChanged: ((width: Int, height: Int, rotation: Int) -> Unit)? = null
@@ -85,8 +98,9 @@ class VideoDecoder(
         videoStream: VideoStream,
         width: Int,
         height: Int,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(decoderDispatcher) {
         try {
+            configureDecoderThreadPriority()
             VideoDebugLog.d(LogTags.VIDEO_DECODER) { "开始解码 $videoCodec: ${width}x$height" }
 
             surfaceController.createDummySurface(width, height)
@@ -138,8 +152,10 @@ class VideoDecoder(
         }
     }
 
+    @Synchronized
     fun stop() {
         if (isStopped) {
+            closeDecoderDispatcher()
             VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器已停止，跳过" }
             return
         }
@@ -160,6 +176,7 @@ class VideoDecoder(
             sessionContext.emit(SessionEvent.DecoderStopped(DecoderType.Video))
             lifecycleReportedStarted = false
         }
+        closeDecoderDispatcher()
     }
 
     fun setSurface(newSurface: Surface?) {
@@ -168,6 +185,25 @@ class VideoDecoder(
 
     private fun shouldReportConnectionLost(): Boolean {
         return sessionContext.currentSession()?.sessionState?.value !is SessionState.Idle
+    }
+
+    private fun configureDecoderThreadPriority() {
+        val priority =
+            if (gameMode) {
+                Process.THREAD_PRIORITY_DISPLAY
+            } else {
+                Process.THREAD_PRIORITY_DEFAULT
+            }
+        runCatching { Process.setThreadPriority(priority) }
+            .onFailure { error ->
+                LogManager.w(LogTags.VIDEO_DECODER, "设置视频解码线程优先级失败: ${error.message}")
+            }
+    }
+
+    private fun closeDecoderDispatcher() {
+        if (decoderDispatcherClosed.compareAndSet(false, true)) {
+            decoderDispatcher.close()
+        }
     }
 
     private fun markStarted(

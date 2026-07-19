@@ -131,6 +131,15 @@ private fun GeneralSettingsSection(
             },
         )
         SettingsDivider()
+        SettingsSwitch(
+            title = texts.performanceStats,
+            checked = settings.showPerformanceStats,
+            helpText = texts.helpPerformanceStats,
+            onCheckedChange = {
+                onUpdateSettings(settings.copy(showPerformanceStats = it))
+            },
+        )
+        SettingsDivider()
         SettingsItem(
             title = texts.language,
             onClick = onNavigateToLanguage,

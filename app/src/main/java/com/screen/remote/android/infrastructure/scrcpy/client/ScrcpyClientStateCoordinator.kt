@@ -45,14 +45,12 @@ internal class ScrcpyClientStateCoordinator(
                         connectionState.value = ConnectionState.Connected
                     }
                 }
-                reconnectManager.reset()
             }
 
             is SessionState.Reconnecting -> {
                 CoroutineScope(Dispatchers.Main).launch {
                     connectionState.value = ConnectionState.Reconnecting
                 }
-                reconnectManager.triggerReconnect()
             }
 
             is SessionState.Failed -> {

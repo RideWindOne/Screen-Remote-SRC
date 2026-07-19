@@ -50,7 +50,6 @@ object TTSManager {
                         setPitch(1.0f)
                     }
                     isInitialized = true
-                    LogManager.d(LogTags.TTS_MANAGER, "TTS 初始化成功")
                     
                     if (showToast) {
                         Toast.makeText(
@@ -112,7 +111,6 @@ object TTSManager {
             ttsInstance?.shutdown()
             ttsInstance = null
             isInitialized = false
-            LogManager.d(LogTags.TTS_MANAGER, "TTS 已释放")
         } catch (e: Exception) {
             LogManager.e(LogTags.TTS_MANAGER, "TTS 释放失败: ${e.message}", e)
         }

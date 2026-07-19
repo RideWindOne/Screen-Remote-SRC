@@ -33,7 +33,12 @@ internal object RemoteUiLayoutParser {
 
         val rootNodeElement = findRootNodeElement(document.documentElement)
         val nodes = mutableListOf<RemoteUiLayoutNode>()
-        traverse(document.documentElement, nodes, inheritedComponentKey = null)
+        traverse(
+            element = document.documentElement,
+            out = nodes,
+            inheritedComponentKey = null,
+            inAgreementGroup = false,
+        )
 
         val sortedNodes = postProcess(nodes)
         val viewportBounds =
@@ -64,6 +69,7 @@ internal object RemoteUiLayoutParser {
         element: Element?,
         out: MutableList<RemoteUiLayoutNode>,
         inheritedComponentKey: String?,
+        inAgreementGroup: Boolean,
     ) {
         if (element == null) {
             return
@@ -76,20 +82,34 @@ internal object RemoteUiLayoutParser {
 
         if (element.tagName == "node") {
             val currentComponentKey = deriveComponentKey(element, inheritedComponentKey)
+            val descendantSummary = summarizeDescendants(element)
             parseNode(
                 element = element,
                 isLeaf = childNodeElements.isEmpty(),
                 componentKey = currentComponentKey,
+                descendantSummary = descendantSummary,
+                inAgreementGroup = inAgreementGroup,
             )?.takeIf(::shouldRender)?.let(out::add)
 
+            val childrenAreInAgreementGroup = hasDirectAgreementLabel(element)
             childNodeElements.forEach { child ->
-                traverse(child, out, inheritedComponentKey = currentComponentKey)
+                traverse(
+                    element = child,
+                    out = out,
+                    inheritedComponentKey = currentComponentKey,
+                    inAgreementGroup = childrenAreInAgreementGroup,
+                )
             }
             return
         }
 
         childNodeElements.forEach { child ->
-            traverse(child, out, inheritedComponentKey = inheritedComponentKey)
+            traverse(
+                element = child,
+                out = out,
+                inheritedComponentKey = inheritedComponentKey,
+                inAgreementGroup = false,
+            )
         }
     }
 
@@ -107,6 +127,8 @@ internal object RemoteUiLayoutParser {
         element: Element,
         isLeaf: Boolean,
         componentKey: String?,
+        descendantSummary: DescendantSummary,
+        inAgreementGroup: Boolean,
     ): RemoteUiLayoutNode? {
         val bounds = parseBounds(element.getAttribute("bounds")) ?: return null
         val className = element.getAttribute("class").trim()
@@ -118,16 +140,20 @@ internal object RemoteUiLayoutParser {
         val clickable = element.getAttribute("clickable").toBoolean()
         val focusable = element.getAttribute("focusable").toBoolean()
         val checkable = element.getAttribute("checkable").toBoolean()
+        val enabled = element.getAttribute("enabled").ifBlank { "true" }.toBoolean()
+        val selected = element.getAttribute("selected").toBoolean()
         val kind =
             classifyNode(
                 className = className,
                 resourceId = resourceId,
+                contentDescription = contentDescription,
                 bounds = bounds,
                 clickable = clickable,
                 focusable = focusable,
                 checkable = checkable,
+                inAgreementGroup = inAgreementGroup,
+                descendantSummary = descendantSummary,
             )
-        val descendantSummary = summarizeDescendants(element)
         val parsedLabel =
             buildLabel(
                 kind = kind,
@@ -135,6 +161,7 @@ internal object RemoteUiLayoutParser {
                 contentDescription = contentDescription,
                 resourceId = resourceId,
                 password = password,
+                descendantSummary = descendantSummary,
             )
 
         return RemoteUiLayoutNode(
@@ -150,10 +177,12 @@ internal object RemoteUiLayoutParser {
             contentDescription = contentDescription,
             isLeaf = isLeaf,
             clickable = clickable,
+            enabled = enabled,
             focusable = focusable,
             focused = element.getAttribute("focused").toBoolean(),
             checkable = checkable,
             checked = element.getAttribute("checked").toBoolean(),
+            selected = selected,
             scrollable = element.getAttribute("scrollable").toBoolean(),
             password = password,
             visibleToUser = element.getAttribute("visible-to-user").ifBlank { "true" }.toBoolean(),
@@ -231,6 +260,7 @@ internal object RemoteUiLayoutParser {
 
         return when {
             node.kind == RemoteUiLayoutNodeKind.INPUT -> true
+            node.kind == RemoteUiLayoutNodeKind.TOGGLE -> true
             isSemanticContainer -> true
             isLabeledInteractiveContainer -> true
             isCustomCheckContainer -> true
@@ -304,10 +334,13 @@ internal object RemoteUiLayoutParser {
     private fun classifyNode(
         className: String,
         resourceId: String,
+        contentDescription: String,
         bounds: RemoteUiLayoutBounds,
         clickable: Boolean,
         focusable: Boolean,
         checkable: Boolean,
+        inAgreementGroup: Boolean,
+        descendantSummary: DescendantSummary,
     ): RemoteUiLayoutNodeKind {
         val shortName = className.substringAfterLast('.')
         return when {
@@ -315,11 +348,22 @@ internal object RemoteUiLayoutParser {
                 shortName.contains("TextInput", ignoreCase = true) ||
                 shortName.contains("AutoComplete", ignoreCase = true) -> RemoteUiLayoutNodeKind.INPUT
 
-            shortName.contains("CompoundButton", ignoreCase = true) ||
+            checkable ||
+                shortName.contains("CompoundButton", ignoreCase = true) ||
                 shortName.contains("CheckBox", ignoreCase = true) ||
                 shortName.contains("Switch", ignoreCase = true) ||
                 shortName.contains("Toggle", ignoreCase = true) ||
                 shortName.contains("RadioButton", ignoreCase = true) -> RemoteUiLayoutNodeKind.TOGGLE
+
+            looksLikeSemanticToggle(
+                className = className,
+                resourceId = resourceId,
+                contentDescription = contentDescription,
+                bounds = bounds,
+                clickable = clickable,
+                focusable = focusable,
+                inAgreementGroup = inAgreementGroup,
+            ) -> RemoteUiLayoutNodeKind.TOGGLE
 
             shortName.contains("Button", ignoreCase = true) ||
                 shortName.contains("Chip", ignoreCase = true) -> RemoteUiLayoutNodeKind.BUTTON
@@ -338,6 +382,13 @@ internal object RemoteUiLayoutParser {
                 checkable = checkable,
             ) -> RemoteUiLayoutNodeKind.TOGGLE
 
+            looksLikeCustomButton(
+                resourceId = resourceId,
+                bounds = bounds,
+                clickable = clickable,
+                descendantSummary = descendantSummary,
+            ) -> RemoteUiLayoutNodeKind.BUTTON
+
             shortName.contains("Layout", ignoreCase = true) ||
                 shortName.contains("ViewGroup", ignoreCase = true) ||
                 shortName.contains("RecyclerView", ignoreCase = true) ||
@@ -347,6 +398,93 @@ internal object RemoteUiLayoutParser {
 
             else -> RemoteUiLayoutNodeKind.OTHER
         }
+    }
+
+    private fun looksLikeSemanticToggle(
+        className: String,
+        resourceId: String,
+        contentDescription: String,
+        bounds: RemoteUiLayoutBounds,
+        clickable: Boolean,
+        focusable: Boolean,
+        inAgreementGroup: Boolean,
+    ): Boolean {
+        val width = bounds.width
+        val height = bounds.height
+        if (width !in 16..200 || height !in 16..200) {
+            return false
+        }
+
+        val larger = maxOf(width, height).toFloat()
+        val smaller = minOf(width, height).coerceAtLeast(1).toFloat()
+        if (larger / smaller > 3.2f) {
+            return false
+        }
+
+        val loweredResource = resourceId.lowercase()
+        val loweredDescription = contentDescription.lowercase()
+        val hasToggleResource =
+            loweredResource.contains(":id/scb_") ||
+                loweredResource.contains("/scb_") ||
+                loweredResource.contains("checkbox") ||
+                loweredResource.contains("check_box") ||
+                loweredResource.contains("protocol_checkbox") ||
+                loweredResource.contains("confirm_container") ||
+                loweredResource.contains("agree") ||
+                loweredResource.contains("consent") ||
+                loweredResource.contains("toggle") ||
+                loweredResource.contains("radio")
+        val hasToggleDescription =
+            loweredDescription.contains("勾选") ||
+                loweredDescription.contains("复选") ||
+                loweredDescription.contains("已选中") ||
+                loweredDescription.contains("未选中") ||
+                loweredDescription.contains("同意协议") ||
+                loweredDescription.contains("checkbox") ||
+                loweredDescription.contains("checked") ||
+                loweredDescription.contains("unchecked") ||
+                loweredDescription.contains("selected") ||
+                loweredDescription.contains("unselected")
+
+        if (hasToggleResource || hasToggleDescription) {
+            return clickable || focusable || contentDescription.isNotBlank()
+        }
+
+        val shortName = className.substringAfterLast('.')
+        val canBeAgreementIndicator =
+            shortName.contains("Image", ignoreCase = true) ||
+                shortName.contains("Button", ignoreCase = true) ||
+                shortName.equals("View", ignoreCase = true)
+        return inAgreementGroup &&
+            canBeAgreementIndicator &&
+            (clickable || focusable) &&
+            width <= 96 &&
+            height <= 96
+    }
+
+    private fun looksLikeCustomButton(
+        resourceId: String,
+        bounds: RemoteUiLayoutBounds,
+        clickable: Boolean,
+        descendantSummary: DescendantSummary,
+    ): Boolean {
+        if (!clickable || descendantSummary.hasInput || descendantSummary.primaryLabel == null) {
+            return false
+        }
+        if (bounds.width < 180 || bounds.height !in 60..240) {
+            return false
+        }
+
+        val loweredResource = resourceId.lowercase()
+        return loweredResource.contains("button") ||
+            loweredResource.contains("_btn") ||
+            loweredResource.contains("btn_") ||
+            loweredResource.contains("login") ||
+            loweredResource.contains("submit") ||
+            loweredResource.contains("continue") ||
+            loweredResource.contains("next") ||
+            loweredResource.contains("verify") ||
+            loweredResource.contains("confirm")
     }
 
     private fun looksLikeCustomToggleView(
@@ -399,6 +537,7 @@ internal object RemoteUiLayoutParser {
         contentDescription: String,
         resourceId: String,
         password: Boolean,
+        descendantSummary: DescendantSummary,
     ): ParsedLabel {
         val sanitizedText = sanitizePrimaryLabel(text, kind)
         if (sanitizedText.isNotBlank()) {
@@ -410,13 +549,23 @@ internal object RemoteUiLayoutParser {
             return ParsedLabel(sanitizedContentDescription.take(48), RemoteUiLayoutLabelSource.CONTENT_DESCRIPTION)
         }
 
+        if (kind in setOf(RemoteUiLayoutNodeKind.INPUT, RemoteUiLayoutNodeKind.BUTTON)) {
+            descendantSummary.primaryLabel?.let { descendantLabel ->
+                return descendantLabel.copy(text = descendantLabel.text.take(48))
+            }
+        }
+
         val resourceName =
             resourceId
                 .substringAfterLast('/')
                 .substringAfterLast(':')
                 .trim()
 
-        if (resourceName.isNotBlank() && shouldUseResourceFallback(kind)) {
+        if (
+            resourceName.isNotBlank() &&
+            !isObfuscatedResourceName(resourceName) &&
+            shouldUseResourceFallback(kind)
+        ) {
             if (isArrowLikeResourceName(resourceName) && kind in setOf(RemoteUiLayoutNodeKind.IMAGE, RemoteUiLayoutNodeKind.OTHER, RemoteUiLayoutNodeKind.BUTTON)) {
                 return ParsedLabel("", RemoteUiLayoutLabelSource.FALLBACK)
             }
@@ -439,6 +588,10 @@ internal object RemoteUiLayoutParser {
     ): String {
         val label = rawLabel.trim()
         if (label.isBlank()) {
+            return ""
+        }
+
+        if (isPrivateUseGlyphLabel(label)) {
             return ""
         }
 
@@ -471,6 +624,21 @@ internal object RemoteUiLayoutParser {
         return lowered.isNotBlank() &&
             lowered !in GENERIC_LABELS &&
             !isSuspiciousShortCodeLabel(label)
+    }
+
+    private fun isObfuscatedResourceName(resourceName: String): Boolean {
+        val lowered = resourceName.lowercase()
+        return lowered == "obfuscated" ||
+            lowered.contains("resource_name_obfuscated") ||
+            lowered.contains("resource-name-obfuscated")
+    }
+
+    private fun isPrivateUseGlyphLabel(label: String): Boolean {
+        val visibleCharacters = label.filterNot(Char::isWhitespace)
+        return visibleCharacters.isNotEmpty() &&
+            visibleCharacters.all { character ->
+                character.code in 0xE000..0xF8FF
+            }
     }
 
     private fun humanizeResourceName(resourceName: String): String {
@@ -582,12 +750,16 @@ internal object RemoteUiLayoutParser {
             return true
         }
 
-        if (existing.labelSource == RemoteUiLayoutLabelSource.TEXT && candidate.labelSource != RemoteUiLayoutLabelSource.TEXT) {
+        if (
+            existing.labelSource == RemoteUiLayoutLabelSource.TEXT &&
+            candidate.labelSource != RemoteUiLayoutLabelSource.TEXT &&
+            candidate.kind != RemoteUiLayoutNodeKind.TOGGLE
+        ) {
             return true
         }
 
         if (existing.kind in setOf(RemoteUiLayoutNodeKind.TEXT, RemoteUiLayoutNodeKind.INPUT) &&
-            candidate.kind in setOf(RemoteUiLayoutNodeKind.BUTTON, RemoteUiLayoutNodeKind.IMAGE, RemoteUiLayoutNodeKind.OTHER, RemoteUiLayoutNodeKind.TOGGLE)
+            candidate.kind in setOf(RemoteUiLayoutNodeKind.BUTTON, RemoteUiLayoutNodeKind.IMAGE, RemoteUiLayoutNodeKind.OTHER)
         ) {
             return true
         }
@@ -624,10 +796,10 @@ internal object RemoteUiLayoutParser {
             }
         val kindScore =
             when (node.kind) {
-                RemoteUiLayoutNodeKind.INPUT -> 8
+                RemoteUiLayoutNodeKind.INPUT -> 12
+                RemoteUiLayoutNodeKind.TOGGLE -> 11
+                RemoteUiLayoutNodeKind.BUTTON -> 10
                 RemoteUiLayoutNodeKind.TEXT -> 7
-                RemoteUiLayoutNodeKind.BUTTON -> 5
-                RemoteUiLayoutNodeKind.TOGGLE -> 4
                 RemoteUiLayoutNodeKind.IMAGE -> 3
                 RemoteUiLayoutNodeKind.OTHER -> 2
                 RemoteUiLayoutNodeKind.CONTAINER -> 1
@@ -761,6 +933,8 @@ internal object RemoteUiLayoutParser {
         var hasText = false
         var hasButton = false
         var hasCheckIndicator = false
+        var firstTextLabel: ParsedLabel? = null
+        var firstContentDescriptionLabel: ParsedLabel? = null
 
         val childNodeElements =
             element
@@ -768,18 +942,8 @@ internal object RemoteUiLayoutParser {
                 .filter { it.tagName == "node" }
 
         childNodeElements.forEach { child ->
-            val childBounds =
-                parseBounds(child.getAttribute("bounds"))
-                    ?: RemoteUiLayoutBounds(0, 0, 0, 0)
-            val childKind =
-                classifyNode(
-                    className = child.getAttribute("class").trim(),
-                    resourceId = child.getAttribute("resource-id").trim(),
-                    bounds = childBounds,
-                    clickable = child.getAttribute("clickable").toBoolean(),
-                    focusable = child.getAttribute("focusable").toBoolean(),
-                    checkable = child.getAttribute("checkable").toBoolean(),
-                )
+            val childClassName = child.getAttribute("class").trim()
+            val childKind = classifyDescendantKind(childClassName)
             when (childKind) {
                 RemoteUiLayoutNodeKind.INPUT -> hasInput = true
                 RemoteUiLayoutNodeKind.TEXT -> hasText = true
@@ -787,12 +951,38 @@ internal object RemoteUiLayoutParser {
                 else -> Unit
             }
 
+            val childText = normalizeLabel(child.getAttribute("text"))
+            val childContentDescription = normalizeLabel(child.getAttribute("content-desc"))
+            val sanitizedChildText = sanitizePrimaryLabel(childText, childKind)
+            val sanitizedChildContentDescription =
+                sanitizePrimaryLabel(childContentDescription, childKind)
+            if (firstTextLabel == null && sanitizedChildText.isNotBlank()) {
+                firstTextLabel =
+                    ParsedLabel(
+                        text = sanitizedChildText,
+                        source = RemoteUiLayoutLabelSource.TEXT,
+                    )
+            }
+            if (firstContentDescriptionLabel == null && sanitizedChildContentDescription.isNotBlank()) {
+                firstContentDescriptionLabel =
+                    ParsedLabel(
+                        text = sanitizedChildContentDescription,
+                        source = RemoteUiLayoutLabelSource.CONTENT_DESCRIPTION,
+                    )
+            }
+
             val childResourceId = child.getAttribute("resource-id").trim().lowercase()
+            val loweredChildDescription = childContentDescription.lowercase()
             if (
                 childResourceId.contains("check") ||
                 childResourceId.contains("checkbox") ||
                 childResourceId.contains("confirm") ||
-                childResourceId.contains("tick")
+                childResourceId.contains("tick") ||
+                childClassName.contains("CheckBox", ignoreCase = true) ||
+                childClassName.contains("Toggle", ignoreCase = true) ||
+                loweredChildDescription.contains("勾选") ||
+                loweredChildDescription.contains("已选中") ||
+                loweredChildDescription.contains("未选中")
             ) {
                 hasCheckIndicator = true
             }
@@ -802,6 +992,12 @@ internal object RemoteUiLayoutParser {
             hasText = hasText || childSummary.hasText
             hasButton = hasButton || childSummary.hasButton
             hasCheckIndicator = hasCheckIndicator || childSummary.hasCheckIndicator
+            if (firstTextLabel == null) {
+                firstTextLabel = childSummary.firstTextLabel
+            }
+            if (firstContentDescriptionLabel == null) {
+                firstContentDescriptionLabel = childSummary.firstContentDescriptionLabel
+            }
         }
 
         return DescendantSummary(
@@ -809,7 +1005,53 @@ internal object RemoteUiLayoutParser {
             hasText = hasText,
             hasButton = hasButton,
             hasCheckIndicator = hasCheckIndicator,
+            firstTextLabel = firstTextLabel,
+            firstContentDescriptionLabel = firstContentDescriptionLabel,
         )
+    }
+
+    private fun classifyDescendantKind(className: String): RemoteUiLayoutNodeKind {
+        val shortName = className.substringAfterLast('.')
+        return when {
+            shortName.contains("EditText", ignoreCase = true) ||
+                shortName.contains("TextInput", ignoreCase = true) ||
+                shortName.contains("AutoComplete", ignoreCase = true) -> RemoteUiLayoutNodeKind.INPUT
+
+            shortName.contains("CompoundButton", ignoreCase = true) ||
+                shortName.contains("CheckBox", ignoreCase = true) ||
+                shortName.contains("Switch", ignoreCase = true) ||
+                shortName.contains("Toggle", ignoreCase = true) ||
+                shortName.contains("RadioButton", ignoreCase = true) -> RemoteUiLayoutNodeKind.TOGGLE
+
+            shortName.contains("Button", ignoreCase = true) ||
+                shortName.contains("Chip", ignoreCase = true) -> RemoteUiLayoutNodeKind.BUTTON
+
+            shortName.contains("Image", ignoreCase = true) -> RemoteUiLayoutNodeKind.IMAGE
+            shortName.contains("Text", ignoreCase = true) -> RemoteUiLayoutNodeKind.TEXT
+            else -> RemoteUiLayoutNodeKind.OTHER
+        }
+    }
+
+    private fun hasDirectAgreementLabel(element: Element): Boolean =
+        element
+            .childElements()
+            .asSequence()
+            .filter { it.tagName == "node" }
+            .any { child ->
+                isAgreementLabel(child.getAttribute("text")) ||
+                    isAgreementLabel(child.getAttribute("content-desc"))
+            }
+
+    private fun isAgreementLabel(value: String): Boolean {
+        val normalized = normalizeLabel(value).lowercase()
+        return normalized.contains("阅读并同意") ||
+            normalized.contains("已阅读并同意") ||
+            normalized.contains("服务协议") ||
+            normalized.contains("用户协议") ||
+            normalized.contains("隐私政策") ||
+            normalized.contains("个人信息保护") ||
+            normalized.contains("privacy policy") ||
+            normalized.contains("terms of service")
     }
 
     private data class ParsedLabel(
@@ -822,5 +1064,10 @@ internal object RemoteUiLayoutParser {
         val hasText: Boolean,
         val hasButton: Boolean,
         val hasCheckIndicator: Boolean,
-    )
+        val firstTextLabel: ParsedLabel?,
+        val firstContentDescriptionLabel: ParsedLabel?,
+    ) {
+        val primaryLabel: ParsedLabel?
+            get() = firstTextLabel ?: firstContentDescriptionLabel
+    }
 }

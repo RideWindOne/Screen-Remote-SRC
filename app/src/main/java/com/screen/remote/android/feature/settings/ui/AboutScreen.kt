@@ -17,11 +17,13 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,19 +33,24 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -59,14 +66,56 @@ import com.screen.remote.android.R
 import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.designsystem.component.DialogPage
+import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
+import com.screen.remote.android.core.update.GitHubReleaseInfo
+import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+private const val RELEASES_URL = "https://github.com/XRSec/Screen-Remote/releases"
 
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val updateChecker = remember { GitHubReleaseUpdateChecker() }
+    val preferencesManager = remember(context) { PreferencesManager(context.applicationContext) }
     var showWechatGroupDialog by remember { mutableStateOf(false) }
     var showDonateDialog by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
+    var autoCheckUpdates by remember { mutableStateOf<Boolean?>(null) }
+
+    fun checkForUpdate() {
+        if (checkingUpdate) return
+        scope.launch {
+            val now = System.currentTimeMillis()
+            val settings = preferencesManager.settingsFlow.first()
+            checkingUpdate = true
+            updateChecker
+                .check(
+                    currentVersion = AppConstants.APP_VERSION,
+                    channel = settings.updateChannel,
+                ).onSuccess { release ->
+                    preferencesManager.recordUpdateCheck(now, release)
+                    if (release == null) {
+                        Toast.makeText(context, SettingsTexts.ABOUT_UPDATE_LATEST.get(), Toast.LENGTH_SHORT).show()
+                    } else {
+                        availableUpdate = release
+                    }
+                }.onFailure {
+                    Toast.makeText(context, SettingsTexts.ABOUT_UPDATE_FAILED.get(), Toast.LENGTH_SHORT).show()
+                }
+            checkingUpdate = false
+        }
+    }
+
+    LaunchedEffect(preferencesManager) {
+        val settings = preferencesManager.settingsFlow.first()
+        autoCheckUpdates = settings.autoCheckUpdates
+    }
 
     DialogPage(
         title = SettingsTexts.SETTINGS_ABOUT.get(),
@@ -97,6 +146,69 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = { checkForUpdate() },
+                    enabled = !checkingUpdate,
+                ) {
+                    if (checkingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                    }
+                    Text(
+                        if (checkingUpdate) {
+                            SettingsTexts.ABOUT_CHECKING_UPDATE.get()
+                        } else {
+                            SettingsTexts.ABOUT_CHECK_UPDATE.get()
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+
+                Row(
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(enabled = autoCheckUpdates != null) {
+                                val enabled = autoCheckUpdates != true
+                                autoCheckUpdates = enabled
+                                scope.launch {
+                                    val settings = preferencesManager.settingsFlow.first()
+                                    preferencesManager.updateSettings(settings.copy(autoCheckUpdates = enabled))
+                                }
+                            },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = autoCheckUpdates == true,
+                        onCheckedChange = null,
+                        enabled = autoCheckUpdates != null,
+                        modifier =
+                            Modifier
+                                .requiredSize(26.dp)
+                                .scale(0.72f),
+                    )
+                    Spacer(modifier = Modifier.size(2.dp))
+                    Text(
+                        text = SettingsTexts.ABOUT_AUTO_CHECK_UPDATE.get(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -292,6 +404,122 @@ fun AboutScreen(onBack: () -> Unit) {
                 onDismiss = { showDonateDialog = false },
             )
         }
+
+        availableUpdate?.let { release ->
+            UpdateAvailableDialog(
+                release = release,
+                onDismiss = { availableUpdate = null },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun UpdateAvailableDialog(
+    release: GitHubReleaseInfo,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO),
+        title = {
+            Text(
+                text = SettingsTexts.ABOUT_UPDATE_AVAILABLE.get(),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
+        text = {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    ),
+                border =
+                    BorderStroke(
+                        width = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    UpdateVersionRow(
+                        label = SettingsTexts.ABOUT_UPDATE_CURRENT_VERSION.format(""),
+                        version = AppConstants.APP_VERSION,
+                        highlight = false,
+                    )
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    )
+                    UpdateVersionRow(
+                        label = SettingsTexts.ABOUT_UPDATE_LATEST_VERSION.format(""),
+                        version = release.tagName,
+                        highlight = true,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                onClick = {
+                    val url = release.htmlUrl.ifBlank { RELEASES_URL }
+                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                    onDismiss()
+                },
+            ) {
+                Text(
+                    text = SettingsTexts.ABOUT_UPDATE_OPEN_RELEASES.get(),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                onClick = onDismiss,
+            ) {
+                Text(
+                    text = SettingsTexts.ABOUT_UPDATE_LATER.get(),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+    )
+}
+
+@Composable
+private fun UpdateVersionRow(
+    label: String,
+    version: String,
+    highlight: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label.trimEnd('：', ':', ' '),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = version,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (highlight) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

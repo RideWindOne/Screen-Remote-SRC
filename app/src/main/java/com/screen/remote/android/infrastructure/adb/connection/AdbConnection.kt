@@ -77,6 +77,12 @@ class AdbConnection(
 ) {
     private val transportDisconnectNotified = AtomicBoolean(false)
 
+    @Volatile
+    private var cachedDisplayInfo: AdbDisplayInfo? = null
+
+    @Volatile
+    private var cachedCandidatePreflight: AdbCandidatePreflight? = null
+
     private val shellExecutor =
         AdbConnectionShellExecutor(
             dadb = dadb,
@@ -150,6 +156,38 @@ class AdbConnection(
 
     suspend fun executeShellAsync(command: String) {
         shellExecutor.executeAsync(command)
+    }
+
+    fun getCachedDisplayInfo(): AdbDisplayInfo? = cachedDisplayInfo
+
+    fun getCachedCandidatePreflight(): AdbCandidatePreflight? = cachedCandidatePreflight
+
+    suspend fun refreshCandidatePreflight(purpose: AdbConnectionPurpose): Result<AdbCandidatePreflight> =
+        executeShell(buildAdbCandidatePreflightCommand(purpose), retryOnFailure = false)
+            .mapCatching(::parseAdbCandidatePreflight)
+            .map { preflight ->
+                val merged = cachedCandidatePreflight?.merge(preflight) ?: preflight
+                cachedCandidatePreflight = merged
+                merged.displayInfo?.let { displayInfo -> cachedDisplayInfo = displayInfo }
+                merged
+            }
+
+    suspend fun refreshDisplayInfo(): Result<AdbDisplayInfo> =
+        executeShell(READ_ADB_DISPLAY_INFO_COMMAND, retryOnFailure = false)
+            .mapCatching(::parseAdbDisplayInfo)
+            .onSuccess { displayInfo ->
+                cachedDisplayInfo = displayInfo
+                cachedCandidatePreflight = cachedCandidatePreflight?.copy(displayInfo = displayInfo)
+            }
+
+    fun markCompatibleScrcpyServerAvailable() {
+        cachedCandidatePreflight =
+            cachedCandidatePreflight?.copy(hasCompatibleScrcpyServer = true)
+                ?: AdbCandidatePreflight(
+                    buildFingerprint = "",
+                    displayInfo = cachedDisplayInfo,
+                    hasCompatibleScrcpyServer = true,
+                )
     }
 
     suspend fun openShellStream(command: String): AdbShellStream? = shellExecutor.openStream(command)

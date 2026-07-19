@@ -140,6 +140,10 @@ class GroupViewModel(
      */
     fun updateGroup(group: DeviceGroup) {
         viewModelScope.launch {
+            val previousGroup = groupRepository.getGroup(group.id)
+            if (previousGroup?.type == GroupType.SESSION && group.type != GroupType.SESSION) {
+                sessionRepository.removeGroupReferences(group.id)
+            }
             val groupData =
                 GroupData(
                     id = group.id,
@@ -158,7 +162,10 @@ class GroupViewModel(
      * 删除分组
      */
     fun removeGroup(groupId: String) {
+        if (groupId == DefaultGroups.ALL_DEVICES || groupId == DefaultGroups.UNGROUPED) return
+
         viewModelScope.launch {
+            sessionRepository.removeGroupReferences(groupId)
             groupRepository.removeGroup(groupId)
         }
     }

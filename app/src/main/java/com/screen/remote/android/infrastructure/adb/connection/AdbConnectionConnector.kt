@@ -19,6 +19,7 @@ import dadb.Dadb
 import dadb.android.runtime.AdbRuntime
 import dadb.android.runtime.ExperimentalDadbAndroidApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,7 +40,7 @@ internal class AdbConnectionConnector(
         deviceName: String?,
         forceReconnect: Boolean,
         sessionContext: SessionContext?,
-    ): Result<String> =
+    ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedHost = normalizeEndpointHost(host)
             val deviceId = transportDeviceId ?: DeviceTransportSerial.tcp(normalizedHost, port)
@@ -54,7 +55,7 @@ internal class AdbConnectionConnector(
                         LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.get())
                         val verifyResult = existingConnection.verify()
                         if (verifyResult.isSuccess) {
-                            return@withContext Result.success(deviceId)
+                            return@withContext Result.success(existingConnection)
                         }
                         runCatching { existingConnection.close() }
                         connectionRegistry.remove(deviceId)
@@ -65,10 +66,6 @@ internal class AdbConnectionConnector(
 
                 val dadb =
                     try {
-                        LogManager.d(
-                            LogTags.ADB_CONNECTION,
-                            "Connecting with identity: ${AdbRuntimeDiagnostics.identitySummary(adbRuntime)}",
-                        )
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
                             "Endpoint state before connect: ${AdbRuntimeDiagnostics.endpointSummary(
@@ -87,6 +84,8 @@ internal class AdbConnectionConnector(
                     } catch (e: java.net.ConnectException) {
                         LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_REFUSED.get()}: ${e.message}")
                         return@withContext Result.failure(Exception(AdbTexts.ADB_CONNECTION_REFUSED_DETAILS.get()))
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (e: Exception) {
                         return@withContext Result.failure(e)
                     }
@@ -99,7 +98,9 @@ internal class AdbConnectionConnector(
                     )
                 if (verifyResult.isFailure) {
                     runCatching { dadb.close() }
-                    return@withContext verifyResult.map { deviceId }
+                    return@withContext Result.failure(
+                        verifyResult.exceptionOrNull() ?: IllegalStateException("ADB verification failed: $deviceId"),
+                    )
                 }
 
                 val isTlsConnection = dadb.isTlsConnection()
@@ -145,7 +146,9 @@ internal class AdbConnectionConnector(
                     deviceName = deviceName,
                     connectionType = connectionType,
                 )
-                Result.success(deviceId)
+                Result.success(connection)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
                 Result.failure(e)
@@ -156,7 +159,7 @@ internal class AdbConnectionConnector(
         usbDevice: UsbDevice,
         deviceName: String?,
         sessionContext: SessionContext?,
-    ): Result<String> =
+    ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             try {
                 val serialNumber = ApiCompatHelper.getUsbDeviceSerialNumber(usbDevice) ?: usbDevice.deviceName
@@ -182,7 +185,7 @@ internal class AdbConnectionConnector(
                     val verifyResult = existingConnection.verify()
                     if (verifyResult.isSuccess) {
                         LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFIED.get())
-                        return@withContext Result.success(deviceId)
+                        return@withContext Result.success(existingConnection)
                     }
                     LogManager.w(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFY_FAILED.get())
                     runCatching { existingConnection.close() }
@@ -195,7 +198,9 @@ internal class AdbConnectionConnector(
                         LogTags.ADB_CONNECTION,
                         "USB permission request failed for $deviceId: ${permissionResult.exceptionOrNull()?.message}",
                     )
-                    return@withContext permissionResult.map { deviceId }
+                    return@withContext Result.failure(
+                        permissionResult.exceptionOrNull() ?: IllegalStateException("USB permission request failed: $deviceId"),
+                    )
                 }
                 if (permissionResult.getOrNull() != true) {
                     LogManager.w(LogTags.ADB_CONNECTION, "USB permission denied for $deviceId")
@@ -234,6 +239,8 @@ internal class AdbConnectionConnector(
                                 description = deviceId,
                                 features = features,
                             )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
                         } catch (e: Exception) {
                             lastError = e
                             return@repeat
@@ -276,7 +283,7 @@ internal class AdbConnectionConnector(
                             deviceName = deviceName,
                             connectionType = ConnectionType.USB,
                         )
-                        return@withContext Result.success(deviceId)
+                        return@withContext Result.success(connection)
                     }
 
                     lastError = verifyResult.exceptionOrNull()
@@ -305,6 +312,8 @@ internal class AdbConnectionConnector(
                 }
 
                 Result.failure(IllegalStateException("USB connection retry exhausted without error"))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
                 Result.failure(e)
@@ -315,7 +324,7 @@ internal class AdbConnectionConnector(
         deviceId: String,
         deviceName: String?,
         sessionContext: SessionContext?,
-    ): Result<String> =
+    ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedId = normalizeUsbDeviceId(deviceId)
             val serial = DeviceTransportSerial.stripUsbPrefix(normalizedId)
@@ -490,6 +499,8 @@ internal class AdbConnectionConnector(
                         "${SessionTexts.LABEL_DEVICE_INFO.get()}: ${detailedDeviceInfo.name} (${detailedDeviceInfo.model})",
                     )
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 LogManager.w(
                     LogTags.ADB_CONNECTION,

@@ -12,7 +12,11 @@ import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedAudioDecoder
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedVideoDecoder
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssue
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -124,6 +128,9 @@ class ConnectionViewModel(
                                 )
                         }
                     }
+                } catch (cancelled: CancellationException) {
+                    LogManager.d(LogTags.CONNECTION_VM, "连接任务已取消: $sessionId")
+                    throw cancelled
                 } catch (e: Exception) {
                     LogManager.e(LogTags.CONNECTION_VM, "连接会话异常: ${e.message}")
                     withContext(Dispatchers.Main) {
@@ -195,38 +202,15 @@ class ConnectionViewModel(
             return
         }
 
-        LogManager.w(LogTags.CONNECTION_VM, "处理连接丢失：断开 scrcpy，保留 ADB 保活")
-
-        // 取消正在进行的连接任务
-        connectJob?.cancel()
-        connectJob = null
-
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // 1. 断开 scrcpy 连接（保留 ADB 连接）
-                scrcpyClient.disconnect()
-
-                LogManager.d(LogTags.CONNECTION_VM, "scrcpy 已断开，ADB 连接保持保活")
-
-                // 2. 更新 UI 状态（保持 connectedSessionId，让用户停留在 RemoteDisplayScreen）
-                withContext(Dispatchers.Main) {
-                    val sessionId = _connectedSessionId.value
-                    if (sessionId != null) {
-                        _connectStatus.value =
-                            ConnectStatus.Connecting(
-                                sessionId,
-                                "Connection lost, preparing to reconnect...",
-                            )
-                    } else {
-                        _connectStatus.value = ConnectStatus.Idle
-                    }
-                }
-
-                LogManager.d(LogTags.CONNECTION_VM, "连接丢失处理完成")
-            } catch (e: Exception) {
-                LogManager.e(LogTags.CONNECTION_VM, "处理连接丢失异常: ${e.message}", e)
-            }
-        }
+        LogManager.w(LogTags.CONNECTION_VM, "处理连接丢失：交由会话生命周期统一重连")
+        createSessionContext().emit(
+            SessionEvent.RequestReconnect(
+                ReconnectIssue(
+                    kind = ReconnectIssueKind.SocketDisconnected,
+                    detail = "媒体流由远端结束",
+                ),
+            ),
+        )
     }
 
     /**

@@ -1,9 +1,11 @@
 package com.screen.remote.android.infrastructure.scrcpy.session
 
+import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.event.ScrcpyEventBus
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.storage.SessionStorage
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
-import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionRuntimeLifecycle
-import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionRuntimeStore
+import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 
 /**
  * 活跃会话管理器。
@@ -11,30 +13,37 @@ import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionRu
  * 当前只维护一个运行中的会话实例，但保留实例化形态，
  * 为后续多会话运行时留出扩展空间。
  */
-class SessionManager(
-    private val runtimeStore: SessionRuntimeStore = SessionRuntimeStore(),
-) {
-    private val lifecycle = SessionRuntimeLifecycle(runtimeStore)
+class SessionManager {
+    @Volatile
+    private var activeSession: Session? = null
 
     val current: Session
-        get() = lifecycle.current
+        get() = activeSession ?: error("当前没有活跃会话，请先调用 start()")
 
     val currentOrNull: Session?
-        get() = lifecycle.currentOrNull
+        get() = activeSession
+
+    fun createContext(): SessionContext = SessionContext(currentSessionProvider = { activeSession })
 
     fun start(
         options: ScrcpyOptions,
         storage: SessionStorage,
         onVideoResolution: (Int, Int) -> Unit = { _, _ -> },
-    ): Session = lifecycle.start(options, storage, onVideoResolution)
+    ): Session {
+        activeSession?.let { previous ->
+            val previousDeviceId = previous.deviceIdentifier
+            LogManager.w(LogTags.SCRCPY_CLIENT, "会话已存在，先清理: $previousDeviceId")
+            stop()
+            ScrcpyEventBus.clearDeviceState(previousDeviceId)
+        }
 
-    fun stop() = lifecycle.stop()
+        return Session(options, storage, onVideoResolution).also { activeSession = it }
+    }
 
-    fun exists(): Boolean = lifecycle.exists()
-
-    val deviceIdentifier: String?
-        get() = lifecycle.deviceIdentifier
-
-    val sessionId: String?
-        get() = lifecycle.sessionId
+    fun stop() {
+        val session = activeSession ?: return
+        activeSession = null
+        LogManager.d(LogTags.SCRCPY_CLIENT, "停止会话: ${session.deviceIdentifier}, sessionId=${session.sessionId}")
+        session.cleanup()
+    }
 }

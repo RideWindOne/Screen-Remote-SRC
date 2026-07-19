@@ -5,7 +5,9 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.domain.model.CodecCatalog
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.resetForDevice
 import com.screen.remote.android.infrastructure.scrcpy.session.Session
 
 /**
@@ -24,7 +26,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.Session
  */
 internal suspend fun Session.updateOptions(update: (ScrcpyOptions) -> ScrcpyOptions) {
     updateOptionsInMemory(update)
-    storage().updateOptions(sessionId, update)
+    storage.updateOptions(sessionId, update)
     LogManager.d(LogTags.SCRCPY_CLIENT, "更新配置: sessionId=$sessionId")
 }
 
@@ -37,8 +39,11 @@ internal suspend fun Session.saveDiscoveredEncoders(
 ) {
     updateOptions {
         it.copy(
-            remoteVideoEncoders = remoteVideoEncoders,
-            remoteAudioEncoders = remoteAudioEncoders,
+            capabilityCache =
+                it.capabilityCache.copy(
+                    remoteVideoEncoders = remoteVideoEncoders,
+                    remoteAudioEncoders = remoteAudioEncoders,
+                ),
         )
     }
 }
@@ -50,87 +55,40 @@ internal suspend fun Session.updateDeviceSerial(newSerial: String) {
     val current = options
 
     // 序列号相同，无需更新
-    if (current.deviceSerial == newSerial) {
+    if (current.capabilityCache.deviceSerial == newSerial) {
         return
     }
 
-    // 身份字段为空时也不能信任预置能力；能力必须和本次真实设备指纹绑定。
-    if (current.deviceSerial.isBlank()) {
-        LogManager.i(
-            LogTags.SCRCPY_CLIENT,
-            "首次设置设备能力签名，清空未验证的能力缓存",
-        )
-        updateOptions {
-            it.copy(
-                deviceSerial = newSerial,
-                remoteVideoEncoders = emptyList(),
-                remoteAudioEncoders = emptyList(),
-                selectedVideoCodec = "",
-                selectedAudioCodec = "",
-                selectedVideoEncoder = "",
-                selectedAudioEncoder = "",
-                selectedVideoDecoder = "",
-                selectedAudioDecoder = "",
-            )
+    val message =
+        if (current.capabilityCache.deviceSerial.isBlank()) {
+            "首次设置设备能力签名，清空未验证的能力缓存"
+        } else {
+            "设备序列号变化: ${current.capabilityCache.deviceSerial} -> $newSerial，清空设备能力"
         }
-        return
-    }
-
-    // 序列号不同（且当前不为空），更新并清空设备能力（设备切换场景）
-    LogManager.i(
-        LogTags.SCRCPY_CLIENT,
-        "设备序列号变化: ${current.deviceSerial} -> $newSerial，清空设备能力",
-    )
-
-    updateOptions {
-        it.copy(
-            deviceSerial = newSerial,
-            remoteVideoEncoders = emptyList(),
-            remoteAudioEncoders = emptyList(),
-            selectedVideoCodec = "",
-            selectedAudioCodec = "",
-            selectedVideoEncoder = "",
-            selectedAudioEncoder = "",
-            selectedVideoDecoder = "",
-            selectedAudioDecoder = "",
-        )
-    }
+    LogManager.i(LogTags.SCRCPY_CLIENT, message)
+    updateOptions { it.copy(capabilityCache = it.capabilityCache.resetForDevice(newSerial)) }
 }
 
 /**
  * 保存编解码器检测结果
  */
 internal fun Session.saveCodecDetectionResult(
-    deviceSerial: String,
-    remoteVideoEncoders: List<EncoderCapability>,
-    remoteAudioEncoders: List<EncoderCapability>,
-    selectedVideoCodec: String,
-    selectedAudioCodec: String,
-    selectedVideoEncoder: String,
-    selectedAudioEncoder: String,
-    selectedVideoDecoder: String,
-    selectedAudioDecoder: String,
-    preferredVideoCodec: String,
-    preferredAudioCodec: String,
+    detectedCapabilities: DeviceCapabilityCache,
+    clearUserVideoSelection: Boolean,
+    clearUserAudioSelection: Boolean,
 ) {
     val applyDetectionResult: (ScrcpyOptions) -> ScrcpyOptions =
         { current ->
-            if (current.deviceSerial != deviceSerial) {
+            if (current.capabilityCache.deviceSerial != detectedCapabilities.deviceSerial) {
                 current
             } else {
-                current.copy(
-                    deviceSerial = deviceSerial,
-                    remoteVideoEncoders = remoteVideoEncoders,
-                    remoteAudioEncoders = remoteAudioEncoders,
-                    selectedVideoCodec = selectedVideoCodec,
-                    selectedAudioCodec = selectedAudioCodec,
-                    selectedVideoEncoder = selectedVideoEncoder,
-                    selectedAudioEncoder = selectedAudioEncoder,
-                    selectedVideoDecoder = selectedVideoDecoder,
-                    selectedAudioDecoder = selectedAudioDecoder,
-                    preferredVideoCodec = preferredVideoCodec,
-                    preferredAudioCodec = preferredAudioCodec,
-                )
+                current
+                    .copy(
+                        capabilityCache = detectedCapabilities,
+                    ).clearIgnoredUserCodecSelections(
+                        clearVideo = clearUserVideoSelection,
+                        clearAudio = clearUserAudioSelection,
+                    )
             }
         }
 
@@ -139,30 +97,19 @@ internal fun Session.saveCodecDetectionResult(
     LogManager.d(LogTags.SCRCPY_CLIENT, "编解码器检测结果已更新到内存，后台保存: sessionId=$sessionId")
 }
 
-/**
- * 保存编解码器选择（UI 手动选择时调用）
- */
-internal suspend fun Session.saveCodecSelection(
-    videoEncoder: String,
-    audioEncoder: String,
-    videoDecoder: String,
-    audioDecoder: String,
-    preferredVideoCodec: String,
-    preferredAudioCodec: String,
-) {
-    updateOptions {
-        it.copy(
-            selectedVideoCodec = preferredVideoCodec,
-            selectedAudioCodec = preferredAudioCodec,
-            selectedVideoEncoder = videoEncoder,
-            selectedAudioEncoder = audioEncoder,
-            selectedVideoDecoder = videoDecoder,
-            selectedAudioDecoder = audioDecoder,
-            preferredVideoCodec = preferredVideoCodec,
-            preferredAudioCodec = preferredAudioCodec,
-        )
-    }
-}
+internal fun ScrcpyOptions.clearIgnoredUserCodecSelections(
+    clearVideo: Boolean,
+    clearAudio: Boolean,
+): ScrcpyOptions =
+    copy(
+        config =
+            config.copy(
+                userVideoEncoder = if (clearVideo) "" else config.userVideoEncoder,
+                userVideoDecoder = if (clearVideo) "" else config.userVideoDecoder,
+                userAudioEncoder = if (clearAudio) "" else config.userAudioEncoder,
+                userAudioDecoder = if (clearAudio) "" else config.userAudioDecoder,
+            ),
+    )
 
 internal fun Session.rememberResolvedVideoDecoder(
     decoderName: String,
@@ -170,11 +117,11 @@ internal fun Session.rememberResolvedVideoDecoder(
     expectedCodec: String,
 ) {
     val current = options
-    if (decoderName.isBlank() || current.userVideoDecoder.isNotBlank()) return
-    if (current.deviceSerial != expectedDeviceSerial || current.resolvedVideoCodec() != expectedCodec) return
+    if (decoderName.isBlank() || current.config.userVideoDecoder.isNotBlank()) return
+    if (current.capabilityCache.deviceSerial != expectedDeviceSerial || current.resolvedVideoCodec() != expectedCodec) return
     val update: (ScrcpyOptions) -> ScrcpyOptions = {
-        if (it.deviceSerial == expectedDeviceSerial && it.resolvedVideoCodec() == expectedCodec) {
-            it.copy(selectedVideoDecoder = decoderName)
+        if (it.capabilityCache.deviceSerial == expectedDeviceSerial && it.resolvedVideoCodec() == expectedCodec) {
+            it.copy(capabilityCache = it.capabilityCache.copy(selectedVideoDecoder = decoderName))
         } else {
             it
         }
@@ -189,11 +136,11 @@ internal fun Session.rememberResolvedAudioDecoder(
     expectedCodec: String,
 ) {
     val current = options
-    if (decoderName.isBlank() || current.userAudioDecoder.isNotBlank()) return
-    if (current.deviceSerial != expectedDeviceSerial || current.resolvedAudioCodec() != expectedCodec) return
+    if (decoderName.isBlank() || current.config.userAudioDecoder.isNotBlank()) return
+    if (current.capabilityCache.deviceSerial != expectedDeviceSerial || current.resolvedAudioCodec() != expectedCodec) return
     val update: (ScrcpyOptions) -> ScrcpyOptions = {
-        if (it.deviceSerial == expectedDeviceSerial && it.resolvedAudioCodec() == expectedCodec) {
-            it.copy(selectedAudioDecoder = decoderName)
+        if (it.capabilityCache.deviceSerial == expectedDeviceSerial && it.resolvedAudioCodec() == expectedCodec) {
+            it.copy(capabilityCache = it.capabilityCache.copy(selectedAudioDecoder = decoderName))
         } else {
             it
         }
@@ -206,7 +153,9 @@ internal fun Session.rememberNegotiatedVideoCodec(codec: String) {
     rememberNegotiatedCodec(
         codec = codec,
         mediaType = CodecMediaType.VIDEO,
-        updateCodec = { options, normalized -> options.copy(selectedVideoCodec = normalized) },
+        updateCodec = { options, normalized ->
+            options.copy(capabilityCache = options.capabilityCache.copy(selectedVideoCodec = normalized))
+        },
     )
 }
 
@@ -214,7 +163,9 @@ internal fun Session.rememberNegotiatedAudioCodec(codec: String) {
     rememberNegotiatedCodec(
         codec = codec,
         mediaType = CodecMediaType.AUDIO,
-        updateCodec = { options, normalized -> options.copy(selectedAudioCodec = normalized) },
+        updateCodec = { options, normalized ->
+            options.copy(capabilityCache = options.capabilityCache.copy(selectedAudioCodec = normalized))
+        },
     )
 }
 
@@ -226,9 +177,9 @@ private fun Session.rememberNegotiatedCodec(
     val normalized =
         CodecCatalog.normalizedName(mediaType, codec)
             ?: return
-    val expectedDeviceSerial = options.deviceSerial
+    val expectedDeviceSerial = options.capabilityCache.deviceSerial
     val update: (ScrcpyOptions) -> ScrcpyOptions = {
-        if (it.deviceSerial == expectedDeviceSerial) updateCodec(it, normalized) else it
+        if (it.capabilityCache.deviceSerial == expectedDeviceSerial) updateCodec(it, normalized) else it
     }
     updateOptionsInMemory(update)
     persistOptionsInBackground(update)
@@ -238,12 +189,12 @@ private fun ScrcpyOptions.resolvedVideoCodec(): String =
     CodecCatalog
         .normalizedName(
             CodecMediaType.VIDEO,
-            selectedVideoCodec.ifBlank { preferredVideoCodec },
+            capabilityCache.selectedVideoCodec,
         ).orEmpty()
 
 private fun ScrcpyOptions.resolvedAudioCodec(): String =
     CodecCatalog
         .normalizedName(
             CodecMediaType.AUDIO,
-            selectedAudioCodec.ifBlank { preferredAudioCodec },
+            capabilityCache.selectedAudioCodec,
         ).orEmpty()

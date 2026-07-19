@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.map
  * storage.saveOptions(options)
  * 
  * // 更新配置
- * storage.updateOptions(sessionId) { it.copy(maxSize = 1080) }
+ * storage.updateOptions(sessionId) { it.copy(config = it.config.copy(maxSize = 1080)) }
  * 
  * // 获取所有会话
  * val allSessions = storage.getAllSessions()
@@ -122,15 +122,6 @@ class SessionStorage(
             sessionId = sessionId,
             profileId = profileId,
             connectionCandidates = connectionCandidates,
-            deviceSerial = deviceSerial,
-            remoteVideoEncoders = remoteVideoEncoders,
-            remoteAudioEncoders = remoteAudioEncoders,
-            selectedVideoCodec = selectedVideoCodec,
-            selectedAudioCodec = selectedAudioCodec,
-            selectedVideoEncoder = selectedVideoEncoder,
-            selectedAudioEncoder = selectedAudioEncoder,
-            selectedVideoDecoder = selectedVideoDecoder,
-            selectedAudioDecoder = selectedAudioDecoder,
         )
     }
 }

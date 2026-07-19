@@ -4,11 +4,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -50,6 +52,7 @@ private fun updateText(
 private fun recentUpdatePages(isDark: Boolean): List<WelcomePage> {
     val teal = if (isDark) Color(0xFF40C8E0) else Color(0xFF1597A8)
     val blue = if (isDark) Color(0xFF64A8FF) else Color(0xFF007AFF)
+    val green = if (isDark) Color(0xFF30D158) else Color(0xFF28A745)
     val purple = if (isDark) Color(0xFFBF5AF2) else Color(0xFFAF52DE)
 
     return listOf(
@@ -108,6 +111,35 @@ private fun recentUpdatePages(isDark: Boolean): List<WelcomePage> {
                         Icons.Default.Devices,
                         updateText("状态更准确", "More accurate status"),
                         updateText("主备地址统一聚合在线状态，并显示当前真正使用的连接类型。", "Primary and fallback routes now share one presence state while showing the transport actually in use."),
+                    ),
+                ),
+        ),
+        WelcomePage(
+            icon = Icons.Default.SportsEsports,
+            eyebrow = updateText("进阶玩法", "ADVANCED FEATURES"),
+            title = updateText("端口、虚拟屏与游戏模式", "Ports, virtual displays, and game mode"),
+            description =
+                updateText(
+                    "新增三项实用能力，覆盖服务访问、独立屏幕与低延迟游戏操控。",
+                    "Three new capabilities cover service access, independent screens, and low-latency gaming controls.",
+                ),
+            accent = green,
+            features =
+                listOf(
+                    WelcomeFeature(
+                        Icons.AutoMirrored.Filled.AltRoute,
+                        updateText("端口转发", "Port forwarding"),
+                        updateText("为目标设备配置端口转发，直接访问设备上的网络服务。", "Configure forwarding for the target device and reach its network services directly."),
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.DesktopWindows,
+                        updateText("虚拟屏", "Virtual display"),
+                        updateText("创建独立虚拟屏运行 App 或启动器，不影响设备主屏。", "Run an app or launcher on an independent virtual display without disturbing the main screen."),
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.SportsEsports,
+                        updateText("游戏模式", "Game mode"),
+                        updateText("优化高帧率视频与触控处理，让操作更稳定、更跟手。", "Optimize high-frame-rate video and touch handling for steadier, more responsive controls."),
                     ),
                 ),
         ),

@@ -5,12 +5,15 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.screen.remote.android.core.domain.model.AppLanguage
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.ThemeMode
 import com.screen.remote.android.core.update.UpdateChannel
+import com.screen.remote.android.core.update.GitHubReleaseInfo
+import com.screen.remote.android.core.update.UpdateCheckCache
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -31,8 +34,13 @@ class PreferencesManager(
         val ENABLE_MANAGEMENT_LOG = booleanPreferencesKey("enable_management_log")
         val ENABLE_DEBUG_MODE = booleanPreferencesKey("enable_debug_mode")
         val ENABLE_FLOATING_HAPTIC_FEEDBACK = booleanPreferencesKey("enable_floating_haptic_feedback")
+        val SHOW_PERFORMANCE_STATS = booleanPreferencesKey("show_performance_stats")
+        val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val UPDATE_CHANNEL = stringPreferencesKey("update_channel")
         val LAST_SEEN_ONBOARDING_VERSION = stringPreferencesKey("last_seen_onboarding_version")
+        val LAST_UPDATE_CHECK_AT = longPreferencesKey("last_update_check_at")
+        val LAST_UPDATE_VERSION = stringPreferencesKey("last_update_version")
+        val LAST_UPDATE_RELEASE_URL = stringPreferencesKey("last_update_release_url")
     }
 
     val lastSeenOnboardingVersionFlow: Flow<String?> =
@@ -44,6 +52,31 @@ class PreferencesManager(
     suspend fun markOnboardingVersionSeen(version: String) {
         context.dataStore.edit { preferences ->
             preferences[Keys.LAST_SEEN_ONBOARDING_VERSION] = version
+        }
+    }
+
+    val updateCheckCacheFlow: Flow<UpdateCheckCache> =
+        context.dataStore.data.map { preferences ->
+            UpdateCheckCache(
+                checkedAtEpochMillis = preferences[Keys.LAST_UPDATE_CHECK_AT] ?: 0,
+                latestVersion = preferences[Keys.LAST_UPDATE_VERSION],
+                releaseUrl = preferences[Keys.LAST_UPDATE_RELEASE_URL],
+            )
+        }
+
+    suspend fun recordUpdateCheck(
+        checkedAtEpochMillis: Long,
+        release: GitHubReleaseInfo?,
+    ) {
+        context.dataStore.edit { preferences ->
+            preferences[Keys.LAST_UPDATE_CHECK_AT] = checkedAtEpochMillis
+            if (release == null) {
+                preferences.remove(Keys.LAST_UPDATE_VERSION)
+                preferences.remove(Keys.LAST_UPDATE_RELEASE_URL)
+            } else {
+                preferences[Keys.LAST_UPDATE_VERSION] = release.tagName
+                preferences[Keys.LAST_UPDATE_RELEASE_URL] = release.htmlUrl
+            }
         }
     }
 
@@ -75,6 +108,8 @@ class PreferencesManager(
                 enableManagementLog = preferences[Keys.ENABLE_MANAGEMENT_LOG] ?: false,
                 enableDebugMode = preferences[Keys.ENABLE_DEBUG_MODE] ?: false,
                 enableFloatingHapticFeedback = preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] ?: true,
+                showPerformanceStats = preferences[Keys.SHOW_PERFORMANCE_STATS] ?: false,
+                autoCheckUpdates = preferences[Keys.AUTO_CHECK_UPDATES] ?: true,
                 updateChannel =
                     preferences[Keys.UPDATE_CHANNEL]?.let {
                         runCatching { UpdateChannel.valueOf(it) }.getOrDefault(UpdateChannel.STABLE)
@@ -95,6 +130,8 @@ class PreferencesManager(
             preferences[Keys.ENABLE_MANAGEMENT_LOG] = settings.enableManagementLog
             preferences[Keys.ENABLE_DEBUG_MODE] = settings.enableDebugMode
             preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] = settings.enableFloatingHapticFeedback
+            preferences[Keys.SHOW_PERFORMANCE_STATS] = settings.showPerformanceStats
+            preferences[Keys.AUTO_CHECK_UPDATES] = settings.autoCheckUpdates
             preferences[Keys.UPDATE_CHANNEL] = settings.updateChannel.name
         }
     }

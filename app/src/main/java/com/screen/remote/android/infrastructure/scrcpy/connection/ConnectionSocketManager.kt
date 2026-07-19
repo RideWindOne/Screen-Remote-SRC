@@ -5,6 +5,7 @@ import com.screen.remote.android.core.common.NetworkConstants
 import com.screen.remote.android.core.common.constants.ScrcpyConstants.SOCKET_READ_TIMEOUT
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.RemoteTexts
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketConnectContext
@@ -36,8 +37,6 @@ class ConnectionSocketManager(
         private const val SOCKET_DUMMY_BYTE_RETRY_DELAY_MS = 80L
     }
 
-    private var localPort: Int = 0
-
     var videoSocket: Socket? = null
         private set
 
@@ -48,20 +47,14 @@ class ConnectionSocketManager(
         private set
 
     /**
-     * 设置本地端口
-     */
-    fun setLocalPort(port: Int) {
-        localPort = port
-    }
-
-    /**
      * 连接所有需要的 Socket
      */
     suspend fun connectSockets(
         connection: AdbConnection,
         socketName: String,
+        localPort: Int,
         enableAudio: Boolean,
-        useAdbForward: Boolean,
+        tunnelMode: ScrcpyTunnelMode,
         shouldAbortDirectProbe: () -> Boolean = { false },
     ) = withContext(Dispatchers.IO) {
         try {
@@ -78,8 +71,9 @@ class ConnectionSocketManager(
             connectSocketsOnce(
                 connection = connection,
                 socketName = socketName,
+                localPort = localPort,
                 enableAudio = enableAudio,
-                useAdbForward = useAdbForward,
+                tunnelMode = tunnelMode,
                 shouldAbortDirectProbe = shouldAbortDirectProbe,
             )
             LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.get())
@@ -150,8 +144,9 @@ class ConnectionSocketManager(
     private suspend fun connectSocketsOnce(
         connection: AdbConnection,
         socketName: String,
+        localPort: Int,
         enableAudio: Boolean,
-        useAdbForward: Boolean,
+        tunnelMode: ScrcpyTunnelMode,
         shouldAbortDirectProbe: () -> Boolean,
     ) {
         var socketCandidates: Map<String, Socket>? = null
@@ -159,7 +154,8 @@ class ConnectionSocketManager(
             socketCandidates = openSocketCandidatesInProtocolOrder(
                 connection = connection,
                 socketName = socketName,
-                useAdbForward = useAdbForward,
+                localPort = localPort,
+                tunnelMode = tunnelMode,
                 enableAudio = enableAudio,
                 shouldAbortDirectProbe = shouldAbortDirectProbe,
             )
@@ -188,7 +184,8 @@ class ConnectionSocketManager(
     private suspend fun openSocketCandidatesInProtocolOrder(
         connection: AdbConnection,
         socketName: String,
-        useAdbForward: Boolean,
+        localPort: Int,
+        tunnelMode: ScrcpyTunnelMode,
         enableAudio: Boolean,
         shouldAbortDirectProbe: () -> Boolean,
     ): Map<String, Socket> {
@@ -196,10 +193,10 @@ class ConnectionSocketManager(
         try {
             openScrcpyChannelsSequentially(enableAudio, sockets) { type ->
                 val socket =
-                    if (type == "video" && !useAdbForward) {
+                    if (type == "video" && tunnelMode == ScrcpyTunnelMode.DIRECT_ADB) {
                         createDirectVideoChannelWhenReady(connection, socketName, shouldAbortDirectProbe)
                     } else {
-                        createChannel(connection, socketName, type, useAdbForward)
+                        createChannel(connection, socketName, type, localPort, tunnelMode)
                     }
                 LogManager.d(LogTags.SCRCPY_CLIENT, "$type socket connected")
                 socket
@@ -334,10 +331,11 @@ class ConnectionSocketManager(
         connection: AdbConnection,
         socketName: String,
         type: String,
-        useAdbForward: Boolean,
+        localPort: Int,
+        tunnelMode: ScrcpyTunnelMode,
     ): Socket =
-        if (useAdbForward) {
-            createAndConnectSocket(type)
+        if (tunnelMode == ScrcpyTunnelMode.ADB_FORWARD) {
+            createAndConnectSocket(type, localPort)
         } else {
             connection.openLocalAbstractSocket(socketName).getOrElse { error ->
                 throw IOException("Failed to open $type adb stream: ${error.message}", error)
@@ -351,7 +349,10 @@ class ConnectionSocketManager(
         socket.soTimeout = SOCKET_READ_TIMEOUT.toInt()
     }
 
-    private fun createAndConnectSocket(type: String): Socket {
+    private fun createAndConnectSocket(
+        type: String,
+        localPort: Int,
+    ): Socket {
         val socket = Socket()
 
         // TCP 优化：禁用 Nagle 算法，降低延迟（参考 scrcpy 原生对 control_socket 的优化）

@@ -79,7 +79,52 @@ class AdbConnectionManager private constructor(
         deviceName: String? = null,
         forceReconnect: Boolean = false,
         sessionContext: SessionContext? = null,
-    ): Result<String> =
+    ): Result<String> = connectTcpConnection(host, port, deviceName, forceReconnect, sessionContext).map { it.deviceId }
+
+    suspend fun connectMdnsService(
+        serviceName: String,
+        deviceName: String? = null,
+        forceReconnect: Boolean = false,
+        sessionContext: SessionContext? = null,
+    ): Result<String> = connectMdnsConnection(serviceName, deviceName, forceReconnect, sessionContext).map { it.deviceId }
+
+    suspend fun connectUsbDevice(
+        usbDevice: UsbDevice,
+        deviceName: String? = null,
+        sessionContext: SessionContext? = null,
+    ): Result<String> = connectUsbConnection(usbDevice, deviceName, sessionContext).map { it.deviceId }
+
+    suspend fun connectUsbDeviceById(
+        deviceId: String,
+        deviceName: String? = null,
+        sessionContext: SessionContext? = null,
+    ): Result<String> = connectUsbConnection(deviceId, deviceName, sessionContext).map { it.deviceId }
+
+    /**
+     * Resolve, connect and verify one session candidate using the same transport rules as scrcpy.
+     */
+    suspend fun connectCandidate(
+        candidate: ConnectionCandidate,
+        deviceName: String? = null,
+        forceReconnect: Boolean = false,
+        sessionContext: SessionContext? = null,
+    ): Result<AdbConnection> =
+        when (candidate.transport) {
+            ConnectionTransport.TCP ->
+                connectTcpConnection(candidate.host, candidate.port, deviceName, forceReconnect, sessionContext)
+            ConnectionTransport.MDNS ->
+                connectMdnsConnection(candidate.host, deviceName, forceReconnect, sessionContext)
+            ConnectionTransport.USB ->
+                connectUsbConnection(candidate.deviceIdentifier(), deviceName, sessionContext)
+        }
+
+    private suspend fun connectTcpConnection(
+        host: String,
+        port: Int,
+        deviceName: String? = null,
+        forceReconnect: Boolean = false,
+        sessionContext: SessionContext? = null,
+    ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedHost = normalizeEndpointHost(host)
             withDeviceOperationLock(DeviceTransportSerial.tcp(normalizedHost, port)) {
@@ -94,12 +139,12 @@ class AdbConnectionManager private constructor(
             }
         }
 
-    suspend fun connectMdnsService(
+    private suspend fun connectMdnsConnection(
         serviceName: String,
         deviceName: String? = null,
         forceReconnect: Boolean = false,
         sessionContext: SessionContext? = null,
-    ): Result<String> =
+    ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedServiceName = serviceName.trim()
             val mdnsDeviceId = DeviceTransportSerial.mdns(normalizedServiceName)
@@ -124,59 +169,22 @@ class AdbConnectionManager private constructor(
             }
         }
 
-    suspend fun connectUsbDevice(
+    private suspend fun connectUsbConnection(
         usbDevice: UsbDevice,
         deviceName: String? = null,
         sessionContext: SessionContext? = null,
-    ): Result<String> =
+    ): Result<AdbConnection> =
         withDeviceOperationLock(resolveUsbOperationKey(usbDevice)) {
-            connector.connectUsb(
-                usbDevice = usbDevice,
-                deviceName = deviceName,
-                sessionContext = sessionContext,
-            )
+            connector.connectUsb(usbDevice, deviceName, sessionContext)
         }
 
-    suspend fun connectUsbDeviceById(
+    private suspend fun connectUsbConnection(
         deviceId: String,
         deviceName: String? = null,
         sessionContext: SessionContext? = null,
-    ): Result<String> =
+    ): Result<AdbConnection> =
         withDeviceOperationLock(normalizeUsbDeviceId(deviceId)) {
-            connector.connectUsbByDeviceId(
-                deviceId = deviceId,
-                deviceName = deviceName,
-                sessionContext = sessionContext,
-            )
-        }
-
-    /**
-     * Resolve, connect and verify one session candidate using the same transport rules as scrcpy.
-     */
-    suspend fun connectCandidate(candidate: ConnectionCandidate): Result<AdbConnection> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val deviceId = candidate.deviceIdentifier()
-                getConnection(deviceId)?.let { existingConnection ->
-                    if (existingConnection.verifyWithoutSessionEvents().isSuccess) {
-                        return@withContext Result.success(existingConnection)
-                    }
-                    disconnectDeviceIfCurrent(deviceId, existingConnection).getOrThrow()
-                }
-
-                val connectedDeviceId =
-                    when (candidate.transport) {
-                        ConnectionTransport.TCP ->
-                            connectDevice(candidate.host, candidate.port).getOrThrow()
-                        ConnectionTransport.MDNS ->
-                            connectMdnsService(candidate.host).getOrThrow()
-                        ConnectionTransport.USB ->
-                            connectUsbDeviceById(deviceId).getOrThrow()
-                    }
-
-                getConnection(connectedDeviceId)
-                    ?: throw IllegalStateException("ADB connection missing after connect: $connectedDeviceId")
-            }
+            connector.connectUsbByDeviceId(deviceId, deviceName, sessionContext)
         }
 
     suspend fun scanUsbDevices() = usbAdbManager.scanUsbDevices()

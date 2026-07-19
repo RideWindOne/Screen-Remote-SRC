@@ -26,6 +26,7 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionPurpose
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import com.screen.remote.android.service.ScrcpyForegroundService
@@ -563,56 +564,21 @@ private class ManagementAdbSessionController(
             val selected =
                 raceAdbConnections(
                     candidates = sessionData.toConnectionCandidates(),
+                    purpose = AdbConnectionPurpose.MANAGEMENT,
                     connectionManager = adbConnectionManager,
                     attemptScope = scope,
                     cleanupScope = scope,
                     logTag = LogTags.MANAGEMENT,
                     logLabel = "管理 ADB",
+                    deviceName = sessionData.name.takeIf { it.isNotBlank() },
                     isCurrentRace = { connectGeneration.get() == generation },
-                ) { candidate ->
-                    connectAdbCandidate(sessionData, candidate)
-                }
+                )
             Result.success(selected.result.getOrThrow().deviceId)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
             Result.failure(error)
         }
-
-    private suspend fun connectAdbCandidate(
-        sessionData: SessionData,
-        candidate: ConnectionCandidate,
-    ): AdbConnection {
-        val deviceId = candidate.deviceIdentifier()
-        adbConnectionManager.getConnection(deviceId)?.let { existingConnection ->
-            if (existingConnection.verifyWithoutSessionEvents().isSuccess) {
-                return existingConnection
-            }
-            adbConnectionManager.disconnectDeviceIfCurrent(deviceId, existingConnection)
-        }
-
-        val connectedDeviceId =
-            when (candidate.transport) {
-                ConnectionTransport.USB ->
-                    adbConnectionManager.connectUsbDeviceById(
-                        deviceId = candidate.deviceIdentifier(),
-                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
-                    ).getOrThrow()
-                ConnectionTransport.MDNS ->
-                    adbConnectionManager.connectMdnsService(
-                        serviceName = candidate.host,
-                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
-                    ).getOrThrow()
-                ConnectionTransport.TCP ->
-                    adbConnectionManager.connectDevice(
-                        host = candidate.host,
-                        port = candidate.port,
-                        deviceName = sessionData.name.takeIf { it.isNotBlank() },
-                    ).getOrThrow()
-            }
-        return adbConnectionManager.getConnection(connectedDeviceId)
-            ?: throw IllegalStateException("ADB 连接已建立，但未找到连接对象: $connectedDeviceId")
-    }
 
     private suspend fun disconnectDevice(deviceId: String) {
         runCatching { adbConnectionManager.disconnectDevice(deviceId) }

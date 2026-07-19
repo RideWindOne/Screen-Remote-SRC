@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.util.compat.putIfAbsentCompat
@@ -906,21 +905,6 @@ private fun getIconIndexFile(context: Context): File =
         ),
         "index.json",
     )
-
-internal suspend fun copyUriToTempApk(
-    context: Context,
-    uri: Uri,
-): File =
-    withContext(Dispatchers.IO) {
-        val tempDir = File(context.cacheDir, "session-management/install").apply { mkdirs() }
-        val tempFile = File(tempDir, "picked-${System.currentTimeMillis()}.apk")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            tempFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        } ?: error(ManagementTexts.Apps.APK_READ_FAILED.get())
-        tempFile
-    }
 
 internal fun loadLocalInstalledApps(context: Context): List<LocalInstalledApp> {
     val packageManager = context.packageManager

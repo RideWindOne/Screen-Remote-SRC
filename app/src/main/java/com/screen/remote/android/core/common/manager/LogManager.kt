@@ -5,11 +5,15 @@ import android.content.Context
 import android.util.Log
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.domain.model.AppSettings
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 
 @SuppressLint("StaticFieldLeak")
 object LogManager {
     private val state = LogManagerState()
+    private val _runtimeLoggingSuppressed = MutableStateFlow(false)
+    val runtimeLoggingSuppressed = _runtimeLoggingSuppressed.asStateFlow()
     private val fileController =
         LogFileController(
             state = state,
@@ -35,7 +39,8 @@ object LogManager {
     }
 
     fun applySettings(settings: AppSettings) {
-        LiveLogStore.setEnabled(settings.enableDebugMode)
+        state.liveLogRequested = settings.enableDebugMode
+        LiveLogStore.setEnabled(settings.enableDebugMode && !state.runtimeLoggingSuppressed)
         if (state.isEnabled != settings.enableActivityLog) {
             fileController.setEnabled(settings.enableActivityLog)
         }
@@ -47,8 +52,16 @@ object LogManager {
         state.enableManagementLog = settings.enableManagementLog
     }
 
+    /** 暂停所有应用内日志路径；退出游戏运行态后按用户设置恢复。 */
+    fun setRuntimeLoggingSuppressed(suppressed: Boolean) {
+        state.runtimeLoggingSuppressed = suppressed
+        _runtimeLoggingSuppressed.value = suppressed
+        LiveLogStore.setEnabled(state.liveLogRequested && !suppressed)
+    }
+
     fun isDetailLoggingEnabled(category: LogDetailCategory): Boolean =
-        state.isEnabled &&
+        !state.runtimeLoggingSuppressed &&
+            state.isEnabled &&
             when (category) {
                 LogDetailCategory.AUDIO_STREAM -> state.enableAudioStreamLog
                 LogDetailCategory.VIDEO_STREAM -> state.enableVideoStreamLog
@@ -144,6 +157,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        if (state.runtimeLoggingSuppressed) return
         LiveLogStore.append("W", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.w(tag, message, throwable)
@@ -159,6 +173,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        if (state.runtimeLoggingSuppressed) return
         LiveLogStore.append("E", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
             Log.e(tag, message, throwable)
@@ -190,6 +205,7 @@ object LogManager {
         tag: String,
         message: String,
     ) {
+        if (state.runtimeLoggingSuppressed) return
         LiveLogStore.append(level, tag, message)
         messageWriter.writeRawLog(level, tag, message)
     }
@@ -204,6 +220,7 @@ object LogManager {
     }
 
     private fun isDebugLoggingEnabledForTag(tag: String): Boolean {
+        if (state.runtimeLoggingSuppressed) return false
         val category = detailCategoryForTag(tag) ?: return true
         return isDetailLoggingEnabled(category)
     }

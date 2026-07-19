@@ -18,7 +18,13 @@ object ScrcpyProtocol {
     const val MSG_TYPE_INJECT_KEYCODE = 0
     const val MSG_TYPE_INJECT_TEXT = 1
     const val MSG_TYPE_INJECT_TOUCH_EVENT = 2
+    const val MSG_TYPE_SET_CLIPBOARD = 9
     const val MSG_TYPE_SET_DISPLAY_POWER = 10
+    const val MSG_TYPE_START_APP = 16
+
+    // scrcpy 4.1 ControlMessageReader.MESSAGE_MAX_SIZE
+    const val CONTROL_MESSAGE_MAX_SIZE = 1 shl 18
+    const val CLIPBOARD_TEXT_MAX_LENGTH = CONTROL_MESSAGE_MAX_SIZE - 14
 
     /**
      * 构建 scrcpy-server 基础命令

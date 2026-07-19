@@ -8,8 +8,6 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlin.math.hypot
@@ -17,32 +15,14 @@ import kotlin.math.hypot
 data class FloatingMenuActions(
     val controlViewModel: ControlViewModel,
     val captureTargetDeviceScreenshot: suspend () -> Result<String>,
+    val toggleDeviceResolutionAdaptation: suspend () -> Result<Boolean>,
+    val isDeviceResolutionAdapted: () -> Boolean,
     val disconnect: suspend () -> Unit,
     val showKeyboardInput: () -> Unit,
     val requestUploadFilePicker: () -> Unit,
     val requestLayoutInspectorRender: () -> Unit,
     val hapticEnabled: Boolean,
 )
-
-internal object FloatingDebugLog {
-    inline fun d(
-        tag: String,
-        message: () -> String,
-    ) {
-        if (LogManager.isDetailLoggingEnabled(com.screen.remote.android.core.common.manager.LogDetailCategory.MANAGEMENT)) {
-            LogManager.d(tag, message())
-        }
-    }
-
-    fun d(
-        tag: String,
-        message: String,
-    ) {
-        if (LogManager.isDetailLoggingEnabled(com.screen.remote.android.core.common.manager.LogDetailCategory.MANAGEMENT)) {
-            LogManager.d(tag, message)
-        }
-    }
-}
 
 internal const val BALL_A_SIZE_DP = 48
 internal const val BALL_B_SIZE_DP = 41
@@ -58,7 +38,6 @@ internal const val DIRECTION_THRESHOLD_DP = 15f
 internal const val DIRECTION_HAPTIC_DELAY_MS = 300L
 internal const val RESET_ANIMATION_DURATION_MS = 200L
 internal const val EDGE_SNAP_THRESHOLD_DP = 40f
-internal const val EDGE_VISIBLE_WIDTH_DP = 16f
 internal const val EDGE_DRAG_OUT_THRESHOLD_DP = 30f
 internal const val EDGE_HAPTIC_RESET_DISTANCE_DP = 40f
 
@@ -154,7 +133,6 @@ internal class FloatingMenuLongPressScheduler(
                     if (hapticEnabled) {
                         performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
                     }
-                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住300ms未移动，可以进入长按模式")
                 }
             }
         val reservedFunctionRunnable =
@@ -164,7 +142,6 @@ internal class FloatingMenuLongPressScheduler(
                     if (hapticEnabled) {
                         performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
                     }
-                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 按住800ms未移动，预留功能触发")
                 }
             }
 
@@ -197,6 +174,7 @@ class FloatingMenuGestureHandler(
             context = context,
             windowManager = windowManager,
             paramsA = paramsA,
+            paramsB = paramsB,
             ballA = ballA,
             ballB = this.ballB,
             actions = actions,
@@ -254,7 +232,6 @@ class FloatingMenuGestureHandler(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (!isTouchInsideCircle(v, event)) {
-                    FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "❌ 触摸点在圆外")
                     return false
                 }
                 handleDown(event)
@@ -271,6 +248,9 @@ class FloatingMenuGestureHandler(
         view: View,
         event: MotionEvent,
     ): Boolean {
+        if (view is FloatingBallView) {
+            return view.containsTouch(event.x, event.y)
+        }
         val radius = view.width / 2f
         val centerX = view.width / 2f
         val centerY = view.height / 2f
@@ -301,16 +281,10 @@ class FloatingMenuGestureHandler(
         state.downOffsetX = event.rawX - ballACenterX
         state.downOffsetY = event.rawY - ballACenterY
 
-        longPressScheduler.schedule()
+        if (!state.isMenuShown) {
+            longPressScheduler.schedule()
+        }
 
-        FloatingDebugLog.d(
-            LogTags.FLOATING_CONTROLLER,
-            "⬇️ 按下 at (${event.rawX}, ${event.rawY}), " +
-                "B中心=(${state.ballBCenterX}, ${state.ballBCenterY}), " +
-                "A中心=($ballACenterX, $ballACenterY), " +
-                "A左上角=(${paramsA.x}, ${paramsA.y}), " +
-                "偏移=(${state.downOffsetX}, ${state.downOffsetY})",
-        )
     }
 
     private fun handleMove(event: MotionEvent) {
@@ -318,6 +292,15 @@ class FloatingMenuGestureHandler(
         val dy = event.rawY - state.downRawY
         val distance = hypot(dx.toDouble(), dy.toDouble()).toFloat()
         val duration = System.currentTimeMillis() - state.downTime
+
+        if (state.isMenuShown) {
+            state.cancelLongPressCallbacks()
+            state.isLongPress = false
+            if (detector.checkMovementThreshold(dx, dy)) {
+                ballMovement.moveAAndBTogether(event)
+            }
+            return
+        }
 
         detector.checkLongPressTransition(distance, duration)
 
@@ -333,7 +316,6 @@ class FloatingMenuGestureHandler(
     }
 
     private fun handleCancel() {
-        FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "❌ 手势取消")
         state.cancelLongPressCallbacks()
         state.reset()
     }

@@ -6,112 +6,14 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.screen.remote.android.core.common.ScrcpyConstants
 import com.screen.remote.android.core.domain.model.ScrcpyProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
 private val Context.scrcpyProfileDataStore: DataStore<Preferences> by preferencesDataStore(name = "scrcpy_profiles")
-
-@Serializable
-data class ScrcpyProfileData(
-    val id: String,
-    val name: String,
-    val sortOrder: Int = 0,
-    val maxSize: Int = 1920,
-    val videoBitRate: Int = ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
-    val maxFps: Int = 60,
-    val displayId: Int = 0,
-    val newDisplayEnabled: Boolean = false,
-    val newDisplay: String = "",
-    val showTouches: Boolean = false,
-    val enableClipboardSync: Boolean = true,
-    val stayAwake: Boolean = false,
-    val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
-    val powerOffOnClose: Boolean = false,
-    val cleanupOnDisconnect: Boolean = true,
-    val ignoreVideoEncoderConstraints: Boolean = false,
-    val enableAudio: Boolean = false,
-    val audioBitRate: Int = 128000,
-    val turnScreenOff: Boolean = true,
-    val keepDeviceAwake: Boolean = false,
-    val enableHardwareDecoding: Boolean = true,
-    val followRemoteOrientation: Boolean = false,
-    val preferredVideoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC,
-    val preferredAudioCodec: String = ScrcpyConstants.DEFAULT_AUDIO_CODEC,
-    val userVideoEncoder: String = "",
-    val userAudioEncoder: String = "",
-    val userVideoDecoder: String = "",
-    val userAudioDecoder: String = "",
-) {
-    fun toDomain(): ScrcpyProfile =
-        ScrcpyProfile(
-            id = id,
-            name = name,
-            sortOrder = sortOrder,
-            maxSize = maxSize,
-            videoBitRate = videoBitRate,
-            maxFps = maxFps,
-            displayId = displayId,
-            newDisplayEnabled = newDisplayEnabled,
-            newDisplay = newDisplay,
-            showTouches = showTouches,
-            enableClipboardSync = enableClipboardSync,
-            stayAwake = stayAwake,
-            codecOptions = codecOptions,
-            powerOffOnClose = powerOffOnClose,
-            cleanupOnDisconnect = cleanupOnDisconnect,
-            ignoreVideoEncoderConstraints = ignoreVideoEncoderConstraints,
-            enableAudio = enableAudio,
-            audioBitRate = audioBitRate,
-            turnScreenOff = turnScreenOff,
-            keepDeviceAwake = keepDeviceAwake,
-            enableHardwareDecoding = enableHardwareDecoding,
-            followRemoteOrientation = followRemoteOrientation,
-            preferredVideoCodec = preferredVideoCodec,
-            preferredAudioCodec = preferredAudioCodec,
-            userVideoEncoder = userVideoEncoder,
-            userAudioEncoder = userAudioEncoder,
-            userVideoDecoder = userVideoDecoder,
-            userAudioDecoder = userAudioDecoder,
-        )
-}
-
-fun ScrcpyProfile.toData(): ScrcpyProfileData =
-    ScrcpyProfileData(
-        id = id,
-        name = name,
-        sortOrder = sortOrder,
-        maxSize = maxSize,
-        videoBitRate = videoBitRate,
-        maxFps = maxFps,
-        displayId = displayId,
-        newDisplayEnabled = newDisplayEnabled,
-        newDisplay = newDisplay,
-        showTouches = showTouches,
-        enableClipboardSync = enableClipboardSync,
-        stayAwake = stayAwake,
-        codecOptions = codecOptions,
-        powerOffOnClose = powerOffOnClose,
-        cleanupOnDisconnect = cleanupOnDisconnect,
-        ignoreVideoEncoderConstraints = ignoreVideoEncoderConstraints,
-        enableAudio = enableAudio,
-        audioBitRate = audioBitRate,
-        turnScreenOff = turnScreenOff,
-        keepDeviceAwake = keepDeviceAwake,
-        enableHardwareDecoding = enableHardwareDecoding,
-        followRemoteOrientation = followRemoteOrientation,
-        preferredVideoCodec = preferredVideoCodec,
-        preferredAudioCodec = preferredAudioCodec,
-        userVideoEncoder = userVideoEncoder,
-        userAudioEncoder = userAudioEncoder,
-        userVideoDecoder = userVideoDecoder,
-        userAudioDecoder = userAudioDecoder,
-    )
 
 class ScrcpyProfileRepository(
     private val context: Context,
@@ -143,7 +45,7 @@ class ScrcpyProfileRepository(
                 (current.filterNot { it.id == profile.id } + profile)
                     .ensureDefaultProfile()
                     .sortedWith(compareBy<ScrcpyProfile> { it.sortOrder }.thenBy { it.name })
-            preferences[Keys.PROFILES] = json.encodeToString(updated.map { it.toData() })
+            preferences[Keys.PROFILES] = json.encodeToString(updated)
         }
     }
 
@@ -182,7 +84,7 @@ class ScrcpyProfileRepository(
                             profile.copy(sortOrder = order[profile.id] ?: profile.sortOrder)
                         }
                     }.ensureDefaultProfile()
-            preferences[Keys.PROFILES] = json.encodeToString(updated.map { it.toData() })
+            preferences[Keys.PROFILES] = json.encodeToString(updated)
         }
     }
 
@@ -190,13 +92,13 @@ class ScrcpyProfileRepository(
         if (id == ScrcpyProfile.DEFAULT_ID) return
         context.scrcpyProfileDataStore.edit { preferences ->
             val updated = decodeProfiles(preferences[Keys.PROFILES]).filterNot { it.id == id }.ensureDefaultProfile()
-            preferences[Keys.PROFILES] = json.encodeToString(updated.map { it.toData() })
+            preferences[Keys.PROFILES] = json.encodeToString(updated)
         }
     }
 
     private fun decodeProfiles(raw: String?): List<ScrcpyProfile> =
         runCatching {
-            json.decodeFromString<List<ScrcpyProfileData>>(raw ?: "[]").map { it.toDomain() }
+            json.decodeFromString<List<ScrcpyProfile>>(raw ?: "[]")
         }.getOrDefault(emptyList())
             .ensureDefaultProfile()
             .sortedWith(compareBy<ScrcpyProfile> { it.sortOrder }.thenBy { it.name })

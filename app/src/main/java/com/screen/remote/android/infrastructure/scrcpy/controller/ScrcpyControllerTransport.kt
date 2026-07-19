@@ -1,31 +1,121 @@
 package com.screen.remote.android.infrastructure.scrcpy.controller
 
+import android.os.Process
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.ScrcpyConstants
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.LogManager.dControl
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.i18n.RemoteTexts
+import com.screen.remote.android.infrastructure.scrcpy.connection.TouchAction
+import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyClipboardProtocol
+import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyDeviceMessage
+import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyDeviceMessageReader
 import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.DataOutputStream
+import java.io.DataInputStream
+import java.io.EOFException
 import java.net.Socket
+import java.nio.ByteBuffer
+import java.util.concurrent.Executors
+
+internal fun configureControlSocketForStreaming(socket: Socket) {
+    socket.soTimeout = 0
+}
+
+internal class TouchTransportTiming(
+    minimumHoldDurationNanos: Long = 0L,
+    moveIntervalNanos: Long = 0L,
+    private val nanoTime: () -> Long = System::nanoTime,
+) {
+    private var minimumHoldDurationNanos = minimumHoldDurationNanos
+    private var moveIntervalNanos = moveIntervalNanos
+    private val downSentAtNanos = HashMap<Long, Long>()
+    private var lastMoveSentAtNanos: Long? = null
+
+    init {
+        require(minimumHoldDurationNanos >= 0L)
+        require(moveIntervalNanos >= 0L)
+    }
+
+    @Synchronized
+    fun configureGameMode(enabled: Boolean) {
+        minimumHoldDurationNanos =
+            if (enabled) {
+                ScrcpyConstants.GAME_CONTROL_MIN_TOUCH_HOLD_MS * NANOS_PER_MILLISECOND
+            } else {
+                0L
+            }
+        moveIntervalNanos =
+            if (enabled) {
+                ScrcpyConstants.GAME_CONTROL_TOUCH_MOVE_INTERVAL_MS * NANOS_PER_MILLISECOND
+            } else {
+                0L
+            }
+        clearLocked()
+    }
+
+    @Synchronized
+    fun remainingHoldDelayNanos(pointerId: Long): Long {
+        val downAt = downSentAtNanos[pointerId] ?: return 0L
+        return (minimumHoldDurationNanos - (nanoTime() - downAt)).coerceAtLeast(0L)
+    }
+
+    @Synchronized
+    fun remainingMoveDelayNanos(): Long {
+        val lastMoveAt = lastMoveSentAtNanos ?: return 0L
+        return (moveIntervalNanos - (nanoTime() - lastMoveAt)).coerceAtLeast(0L)
+    }
+
+    @Synchronized
+    fun onTouchSent(
+        action: Int,
+        pointerId: Long,
+    ) {
+        when (action) {
+            TouchAction.ACTION_DOWN -> downSentAtNanos[pointerId] = nanoTime()
+            TouchAction.ACTION_UP -> downSentAtNanos.remove(pointerId)
+            TouchAction.ACTION_MOVE -> lastMoveSentAtNanos = nanoTime()
+        }
+    }
+
+    @Synchronized
+    fun clear() {
+        clearLocked()
+    }
+
+    private fun clearLocked() {
+        downSentAtNanos.clear()
+        lastMoveSentAtNanos = null
+    }
+
+    private companion object {
+        const val NANOS_PER_MILLISECOND = 1_000_000L
+    }
+}
 
 internal class ScrcpyControllerTransport(
     private val getControlSocket: () -> Socket?,
     private val clearControlSocket: () -> Unit,
     private val localPort: Int,
+    private val onClipboardReceived: (String) -> Unit,
+    private val issueTracker: SessionIssueTracker,
 ) {
     private interface ControlMessage {
-        fun writeTo(output: DataOutputStream)
+        fun encodeTo(buffer: ByteBuffer)
     }
 
     private data class TouchMessage(
@@ -37,17 +127,17 @@ internal class ScrcpyControllerTransport(
         val screenHeight: Int,
         val pressure: Float,
     ) : ControlMessage {
-        override fun writeTo(output: DataOutputStream) {
-            output.writeByte(ScrcpyProtocol.MSG_TYPE_INJECT_TOUCH_EVENT)
-            output.writeByte(action)
-            output.writeLong(pointerId)
-            output.writeInt(x)
-            output.writeInt(y)
-            output.writeShort(screenWidth)
-            output.writeShort(screenHeight)
-            output.writeShort((pressure * 0xFFFF).toInt().coerceIn(0, 0xFFFF))
-            output.writeInt(0)
-            output.writeInt(0)
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_INJECT_TOUCH_EVENT.toByte())
+            buffer.put(action.toByte())
+            buffer.putLong(pointerId)
+            buffer.putInt(x)
+            buffer.putInt(y)
+            buffer.putShort(screenWidth.toShort())
+            buffer.putShort(screenHeight.toShort())
+            buffer.putShort((pressure.coerceIn(0f, 1f) * 0xFFFF).toInt().toShort())
+            buffer.putInt(0)
+            buffer.putInt(0)
         }
     }
 
@@ -57,38 +147,56 @@ internal class ScrcpyControllerTransport(
         val repeat: Int,
         val metaState: Int,
     ) : ControlMessage {
-        override fun writeTo(output: DataOutputStream) {
-            output.writeByte(ScrcpyProtocol.MSG_TYPE_INJECT_KEYCODE)
-            output.writeByte(action)
-            output.writeInt(keyCode)
-            output.writeInt(repeat)
-            output.writeInt(metaState)
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_INJECT_KEYCODE.toByte())
+            buffer.put(action.toByte())
+            buffer.putInt(keyCode)
+            buffer.putInt(repeat)
+            buffer.putInt(metaState)
         }
     }
 
     private data class TextMessage(
         val textBytes: ByteArray,
     ) : ControlMessage {
-        override fun writeTo(output: DataOutputStream) {
-            output.writeByte(ScrcpyProtocol.MSG_TYPE_INJECT_TEXT)
-            output.writeInt(textBytes.size)
-            output.write(textBytes)
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_INJECT_TEXT.toByte())
+            buffer.putInt(textBytes.size)
+            buffer.put(textBytes)
+        }
+    }
+
+    private data class EncodedMessage(
+        val bytes: ByteArray,
+    ) : ControlMessage {
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(bytes)
         }
     }
 
     private object KeepaliveMessage : ControlMessage {
-        override fun writeTo(output: DataOutputStream) {
-            output.writeByte(ScrcpyProtocol.MSG_TYPE_INJECT_TEXT)
-            output.writeInt(0)
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_INJECT_TEXT.toByte())
+            buffer.putInt(0)
         }
     }
 
     private data class DisplayPowerMessage(
         val on: Boolean,
     ) : ControlMessage {
-        override fun writeTo(output: DataOutputStream) {
-            output.writeByte(ScrcpyProtocol.MSG_TYPE_SET_DISPLAY_POWER)
-            output.writeBoolean(on)
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_SET_DISPLAY_POWER.toByte())
+            buffer.put((if (on) 1 else 0).toByte())
+        }
+    }
+
+    private data class StartAppMessage(
+        val nameBytes: ByteArray,
+    ) : ControlMessage {
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_START_APP.toByte())
+            buffer.put(nameBytes.size.toByte())
+            buffer.put(nameBytes)
         }
     }
 
@@ -96,8 +204,15 @@ internal class ScrcpyControllerTransport(
     private val queueLock = Any()
     private val orderedMessages = ArrayDeque<ControlMessage>()
     private val latestTouchMoves = LinkedHashMap<Long, TouchMessage>()
-    private val controlScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val controlDispatcher =
+        Executors
+            .newSingleThreadExecutor { runnable ->
+                Thread(runnable, "scrcpy-control-$localPort").apply { isDaemon = true }
+            }.asCoroutineDispatcher()
+    private val controlScope = CoroutineScope(controlDispatcher + SupervisorJob())
+    private val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var senderJob: Job? = null
+    private var receiverJob: Job? = null
 
     @Volatile
     private var output: DataOutputStream? = null
@@ -108,8 +223,14 @@ internal class ScrcpyControllerTransport(
     @Volatile
     private var lastControlActivityAtMs: Long = 0L
     private var keepaliveSentCount: Int = 0
+    private val messageBuffer = ByteBuffer.allocate(MAX_BUFFERED_CONTROL_MESSAGE_SIZE)
+    private val touchTiming = TouchTransportTiming()
 
-    fun start(deviceId: String) {
+    fun start(
+        deviceId: String,
+        gameMode: Boolean,
+    ) {
+        touchTiming.configureGameMode(gameMode)
         if (senderJob?.isActive == true) {
             dControl(LogTags.SCRCPY_CLIENT) { "控制消息发送线程已在运行: $deviceId" }
             return
@@ -120,18 +241,24 @@ internal class ScrcpyControllerTransport(
 
         senderJob =
             controlScope.launch {
+                configureSenderThreadPriority(gameMode)
                 dControl(LogTags.SDL) { "控制消息发送线程已启动" }
                 while (isActive) {
                     try {
+                        drainReadyMessages()
+
+                        val waitMs = nextWakeDelayMs()
+                        if (waitMs == 0L) {
+                            continue
+                        }
+
                         val signalReceived =
-                            withTimeoutOrNull(ScrcpyConstants.CONTROL_KEEPALIVE_INTERVAL_MS) {
+                            withTimeoutOrNull(waitMs) {
                                 wakeSignal.receive()
                                 true
                             } ?: false
 
-                        if (signalReceived) {
-                            drainPendingMessages()
-                        } else if (shouldSendKeepalive()) {
+                        if (!signalReceived && !hasPendingMessages() && shouldSendKeepalive()) {
                             sendControlMessage(KeepaliveMessage, isKeepalive = true)
                         }
                     } catch (e: Exception) {
@@ -142,6 +269,11 @@ internal class ScrcpyControllerTransport(
                 }
                 dControl(LogTags.SDL) { "控制消息发送线程已停止: $deviceId" }
             }
+
+        receiverJob =
+            receiverScope.launch {
+                receiveDeviceMessages(deviceId)
+            }
     }
 
     fun isRunning(): Boolean = senderJob?.isActive == true
@@ -149,6 +281,8 @@ internal class ScrcpyControllerTransport(
     fun stop() {
         senderJob?.cancel()
         senderJob = null
+        receiverJob?.cancel()
+        receiverJob = null
         synchronized(queueLock) {
             orderedMessages.clear()
             latestTouchMoves.clear()
@@ -159,12 +293,15 @@ internal class ScrcpyControllerTransport(
         outputSocket = null
         lastControlActivityAtMs = 0L
         keepaliveSentCount = 0
+        touchTiming.clear()
         dControl(LogTags.SDL) { "控制消息发送线程已取消" }
     }
 
     fun destroy() {
         stop()
         controlScope.cancel()
+        receiverScope.cancel()
+        controlDispatcher.close()
     }
 
     fun enqueueTouch(
@@ -212,7 +349,25 @@ internal class ScrcpyControllerTransport(
         return enqueue(TextMessage(textBytes))
     }
 
+    fun enqueueClipboard(
+        text: String,
+        paste: Boolean,
+    ): Result<Boolean> =
+        try {
+            enqueue(EncodedMessage(ScrcpyClipboardProtocol.encode(text, paste)))
+        } catch (e: IllegalArgumentException) {
+            Result.failure(e)
+        }
+
     fun enqueueDisplayPower(on: Boolean): Result<Boolean> = enqueue(DisplayPowerMessage(on))
+
+    fun enqueueStartApp(name: String): Result<Boolean> {
+        val nameBytes = name.toByteArray(Charsets.UTF_8)
+        if (nameBytes.isEmpty() || nameBytes.size > 255) {
+            return Result.failure(IllegalArgumentException("Start app name must contain 1 to 255 UTF-8 bytes"))
+        }
+        return enqueue(StartAppMessage(nameBytes))
+    }
 
     private fun enqueue(message: ControlMessage): Result<Boolean> =
         try {
@@ -220,15 +375,9 @@ internal class ScrcpyControllerTransport(
                 if (message is TouchMessage && message.action == 2) {
                     latestTouchMoves[message.pointerId] = message
                 } else {
-                    if (message is TouchMessage) {
-                        if (message.action == 1 || message.action == 3) {
-                            latestTouchMoves.remove(message.pointerId)?.let { latestMove ->
-                                orderedMessages.addLast(latestMove)
-                            }
-                        } else {
-                            latestTouchMoves.remove(message.pointerId)
-                        }
-                    }
+                    // DOWN/UP/key/text are ordering barriers. Flush only the latest MOVE for each
+                    // active pointer before the barrier so old positions can never overtake it.
+                    flushLatestTouchMovesLocked()
                     orderedMessages.addLast(message)
                 }
             }
@@ -238,6 +387,11 @@ internal class ScrcpyControllerTransport(
             LogManager.e(LogTags.SCRCPY_CLIENT, "消息入队失败: ${e.message}")
             Result.failure(e)
         }
+
+    private fun flushLatestTouchMovesLocked() {
+        latestTouchMoves.values.forEach(orderedMessages::addLast)
+        latestTouchMoves.clear()
+    }
 
     fun currentSocket(): Socket? = getControlSocket()
 
@@ -256,13 +410,13 @@ internal class ScrcpyControllerTransport(
         return idleMs >= ScrcpyConstants.CONTROL_KEEPALIVE_INTERVAL_MS
     }
 
-    private fun drainPendingMessages() {
+    private suspend fun drainReadyMessages() {
         while (true) {
             val nextMessage =
                 synchronized(queueLock) {
                     when {
                         orderedMessages.isNotEmpty() -> orderedMessages.removeFirst()
-                        latestTouchMoves.isNotEmpty() -> {
+                        latestTouchMoves.isNotEmpty() && touchTiming.remainingMoveDelayNanos() == 0L -> {
                             val iterator = latestTouchMoves.entries.iterator()
                             if (!iterator.hasNext()) {
                                 null
@@ -278,7 +432,21 @@ internal class ScrcpyControllerTransport(
         }
     }
 
-    private fun sendControlMessage(
+    private fun nextWakeDelayMs(): Long =
+        synchronized(queueLock) {
+            when {
+                orderedMessages.isNotEmpty() -> 0L
+                latestTouchMoves.isNotEmpty() -> nanosToDelayMillis(touchTiming.remainingMoveDelayNanos())
+                else -> ScrcpyConstants.CONTROL_KEEPALIVE_INTERVAL_MS
+            }
+        }
+
+    private fun hasPendingMessages(): Boolean =
+        synchronized(queueLock) {
+            orderedMessages.isNotEmpty() || latestTouchMoves.isNotEmpty()
+        }
+
+    private suspend fun sendControlMessage(
         message: ControlMessage,
         isKeepalive: Boolean,
     ) {
@@ -291,9 +459,28 @@ internal class ScrcpyControllerTransport(
         }
 
         try {
-            message.writeTo(out)
+            if (message is TouchMessage && message.action == TouchAction.ACTION_UP) {
+                val holdDelayNanos = touchTiming.remainingHoldDelayNanos(message.pointerId)
+                if (holdDelayNanos > 0L) {
+                    delay(nanosToDelayMillis(holdDelayNanos))
+                }
+            }
+
+            if (message is EncodedMessage) {
+                // Clipboard packets can be 256 KiB. Write their already encoded bytes directly
+                // instead of retaining another large buffer and copying every packet into it.
+                out.write(message.bytes)
+            } else {
+                messageBuffer.clear()
+                message.encodeTo(messageBuffer)
+                out.write(messageBuffer.array(), 0, messageBuffer.position())
+            }
             out.flush()
             lastControlActivityAtMs = System.currentTimeMillis()
+
+            if (message is TouchMessage) {
+                touchTiming.onTouchSent(message.action, message.pointerId)
+            }
 
             if (isKeepalive) {
                 keepaliveSentCount++
@@ -301,6 +488,8 @@ internal class ScrcpyControllerTransport(
                     dControl(LogTags.SCRCPY_CLIENT) { "控制流保活已发送: count=$keepaliveSentCount, port=$localPort" }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             handleWriteError(e, isKeepalive)
         }
@@ -331,9 +520,80 @@ internal class ScrcpyControllerTransport(
     ) {
         val message = if (isKeepalive) "控制流保活发送失败: ${e.message}" else "Socket 发送失败: ${e.message}"
         LogManager.e(LogTags.SCRCPY_CLIENT, message)
-        SessionIssueTracker.record("control.write", e.message ?: "Unknown control socket write error")
+        issueTracker.record("control.write", e.message ?: "Unknown control socket write error")
         output = null
         outputSocket = null
+        touchTiming.clear()
         clearControlSocket()
+    }
+
+    private suspend fun receiveDeviceMessages(deviceId: String) {
+        var activeSocket: Socket? = null
+        var input: DataInputStream? = null
+        while (currentCoroutineContext().isActive) {
+            val socket = getControlSocket()
+            if (socket == null || socket.isClosed || !socket.isConnected) {
+                activeSocket = null
+                input = null
+                delay(CONTROL_SOCKET_POLL_INTERVAL_MS)
+                continue
+            }
+
+            if (activeSocket !== socket || input == null) {
+                activeSocket = socket
+                // 握手完成后的 control 通道允许长期没有设备消息，不能沿用建链阶段的读超时。
+                // 停止/重连通过关闭 socket 唤醒阻塞读取。
+                configureControlSocketForStreaming(socket)
+                input = DataInputStream(socket.getInputStream())
+            }
+
+            try {
+                when (val message = ScrcpyDeviceMessageReader.read(input)) {
+                    is ScrcpyDeviceMessage.Clipboard -> onClipboardReceived(message.text)
+                    is ScrcpyDeviceMessage.ClipboardAck -> Unit
+                    is ScrcpyDeviceMessage.UhidOutput -> Unit
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: EOFException) {
+                if (currentCoroutineContext().isActive && getControlSocket() === socket) {
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "控制消息接收流已关闭: $deviceId")
+                    clearControlSocket()
+                }
+            } catch (e: Exception) {
+                if (currentCoroutineContext().isActive && getControlSocket() === socket) {
+                    LogManager.e(LogTags.SCRCPY_CLIENT, "控制消息接收失败: ${e.message}")
+                    issueTracker.record("control.read", e.message ?: "Unknown control socket read error")
+                    clearControlSocket()
+                }
+            }
+        }
+    }
+
+    private fun configureSenderThreadPriority(gameMode: Boolean) {
+        val priority =
+            if (gameMode) {
+                Process.THREAD_PRIORITY_DISPLAY
+            } else {
+                Process.THREAD_PRIORITY_DEFAULT
+            }
+        runCatching { Process.setThreadPriority(priority) }
+            .onFailure { error ->
+                LogManager.w(LogTags.SCRCPY_CLIENT, "设置控制流线程优先级失败: ${error.message}")
+            }
+    }
+
+    private fun nanosToDelayMillis(nanos: Long): Long =
+        if (nanos <= 0L) {
+            0L
+        } else {
+            (nanos + NANOS_PER_MILLISECOND - 1L) / NANOS_PER_MILLISECOND
+        }
+
+    private companion object {
+        const val NANOS_PER_MILLISECOND = 1_000_000L
+        // INJECT_TEXT is capped at 300 UTF-8 bytes; all other buffered packets are smaller.
+        const val MAX_BUFFERED_CONTROL_MESSAGE_SIZE = 512
+        const val CONTROL_SOCKET_POLL_INTERVAL_MS = 50L
     }
 }

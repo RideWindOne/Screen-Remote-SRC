@@ -2,55 +2,60 @@ package com.screen.remote.android.feature.codec.util
 
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.EncoderCapability
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CodecUtilsTest {
     @Test
-    fun `same implementation name is resolved by selected codec identity`() {
-        val encoders =
-            listOf(
-                encoder(codec = "h264", mimeType = "video/avc"),
-                encoder(codec = "h265", mimeType = "video/hevc"),
-            )
-
-        assertEquals(
-            "video/hevc",
-            CodecUtils.resolveEncoderMimeType(
-                encoders = encoders,
-                encoderName = "vendor.multi.encoder",
-                preferredCodec = "h265",
-                type = CodecUtils.CodecType.VIDEO,
+    fun `save validation accepts a shared encoder decoder MIME`() {
+        assertTrue(
+            CodecUtils.hasCompatibleMimeType(
+                encoders =
+                    listOf(
+                        encoder("multi.encoder", "h264", "video/avc"),
+                        encoder("multi.encoder", "h265", "video/hevc"),
+                    ),
+                encoderName = "multi.encoder",
+                decoderMimeTypes = listOf("video/hevc"),
+                mediaType = CodecMediaType.VIDEO,
             ),
         )
     }
 
     @Test
-    fun `ambiguous implementation does not invent unsupported preferred mime`() {
-        val encoders =
-            listOf(
-                encoder(codec = "h264", mimeType = "video/avc"),
-                encoder(codec = "h265", mimeType = "video/hevc"),
-            )
+    fun `save validation rejects encoder decoder without a shared MIME`() {
+        assertFalse(
+            CodecUtils.hasCompatibleMimeType(
+                encoders = listOf(encoder("aac.encoder", "aac", "audio/mp4a-latm", CodecMediaType.AUDIO)),
+                encoderName = "aac.encoder",
+                decoderMimeTypes = listOf("audio/opus"),
+                mediaType = CodecMediaType.AUDIO,
+            ),
+        )
+    }
 
-        assertNull(
-            CodecUtils.resolveEncoderMimeType(
-                encoders = encoders,
-                encoderName = "vendor.multi.encoder",
-                preferredCodec = "vp9",
-                type = CodecUtils.CodecType.VIDEO,
+    @Test
+    fun `unknown custom encoder remains eligible for connection time detection`() {
+        assertTrue(
+            CodecUtils.hasCompatibleMimeType(
+                encoders = emptyList(),
+                encoderName = "vendor.custom.encoder",
+                decoderMimeTypes = listOf("video/avc"),
+                mediaType = CodecMediaType.VIDEO,
             ),
         )
     }
 
     private fun encoder(
+        name: String,
         codec: String,
         mimeType: String,
+        mediaType: CodecMediaType = CodecMediaType.VIDEO,
     ) = EncoderCapability(
-        name = "vendor.multi.encoder",
+        name = name,
         codec = codec,
         mimeType = mimeType,
-        mediaType = CodecMediaType.VIDEO,
+        mediaType = mediaType,
     )
 }

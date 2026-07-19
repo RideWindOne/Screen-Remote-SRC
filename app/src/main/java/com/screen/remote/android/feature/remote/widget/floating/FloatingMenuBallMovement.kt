@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import com.screen.remote.android.core.common.LogTags
 import kotlin.math.hypot
 
 /**
@@ -23,7 +22,7 @@ internal class FloatingMenuBallMovement(
     private val menuManager: FloatingMenuViewManager,
 ) {
     private val density = context.resources.displayMetrics.density
-    private val displayMetrics = context.resources.displayMetrics
+    private val windowBoundsProvider = FloatingMenuWindowBoundsProvider(context)
 
     /**
      * 普通拖动：A 和 B 一起移动，菜单跟随，检测拖出贴边和到达边缘
@@ -34,7 +33,10 @@ internal class FloatingMenuBallMovement(
         val deltaY = event.rawY - state.lastRawY
 
         // 检测拖出贴边
-        edgeSnap.checkDragOut(deltaX, deltaY)
+        edgeSnap.checkDragOut(
+            deltaX = event.rawX - state.downRawX,
+            deltaY = event.rawY - state.downRawY,
+        )
 
         // 计算A球的新中心位置
         val ballARadius = ballA.width / 2f
@@ -43,12 +45,14 @@ internal class FloatingMenuBallMovement(
         val currentACenterY = paramsA.y + ballARadius
         val newACenterX = currentACenterX + deltaX
         val newACenterY = currentACenterY + deltaY
+        val windowBounds = windowBoundsProvider.current()
 
         // 计算边界限制
-        val minX = ballARadius.coerceAtLeast(ballBRadius)
-        val maxX = displayMetrics.widthPixels - ballARadius.coerceAtLeast(ballBRadius)
-        val minY = ballARadius.coerceAtLeast(ballBRadius)
-        val maxY = displayMetrics.heightPixels - ballARadius.coerceAtLeast(ballBRadius)
+        val maxBallRadius = ballARadius.coerceAtLeast(ballBRadius)
+        val minX = windowBounds.left + maxBallRadius
+        val maxX = windowBounds.right - maxBallRadius
+        val minY = windowBounds.top + maxBallRadius
+        val maxY = windowBounds.bottom - maxBallRadius
 
         // 检测边缘触感
         edgeSnap.checkEdgeHaptic(newACenterX, newACenterY, ballARadius)
@@ -94,15 +98,11 @@ internal class FloatingMenuBallMovement(
         state.ballBCenterY = paramsB.y + ballB.height / 2f
 
         // 菜单跟随移动
-        menuManager.updateMenuPosition(finalDeltaX, finalDeltaY)
+        menuManager.syncMenuToBall()
 
         state.lastRawX = event.rawX
         state.lastRawY = event.rawY
 
-        FloatingDebugLog.d(
-            LogTags.FLOATING_CONTROLLER,
-            "拖动 A+B: Δ($finalDeltaX, $finalDeltaY), A中心=(${paramsA.x + ballARadius}, ${paramsA.y + ballARadius}), B中心=(${state.ballBCenterX}, ${state.ballBCenterY})",
-        )
     }
 
     /**
@@ -120,15 +120,17 @@ internal class FloatingMenuBallMovement(
         val ballARadius = ballA.width / 2f
         val newACenterX = fingerX - state.downOffsetX
         val newACenterY = fingerY - state.downOffsetY
+        val windowBounds = windowBoundsProvider.current()
 
         // 计算边界限制
-        val minX = ballARadius
-        val maxX = displayMetrics.widthPixels - ballARadius
-        val maxY = displayMetrics.heightPixels - ballARadius
+        val minX = windowBounds.left + ballARadius
+        val maxX = windowBounds.right - ballARadius
+        val minY = windowBounds.top + ballARadius
+        val maxY = windowBounds.bottom - ballARadius
 
         // 限制小球中心位置
         var clampedACenterX = newACenterX.coerceIn(minX, maxX)
-        var clampedACenterY = newACenterY.coerceIn(ballARadius, maxY)
+        var clampedACenterY = newACenterY.coerceIn(minY, maxY)
 
         // 计算相对于B球的偏移和距离
         val dx = clampedACenterX - state.ballBCenterX
@@ -147,7 +149,7 @@ internal class FloatingMenuBallMovement(
 
             // 再次检查屏幕边界
             clampedACenterX = clampedACenterX.coerceIn(minX, maxX)
-            clampedACenterY = clampedACenterY.coerceIn(ballARadius, maxY)
+            clampedACenterY = clampedACenterY.coerceIn(minY, maxY)
         }
 
         // 计算小球左上角位置
@@ -159,29 +161,15 @@ internal class FloatingMenuBallMovement(
         paramsA.y = newAY
         windowManager.updateViewLayout(ballA, paramsA)
 
-        // 计算最终距离
-        val finalDx = clampedACenterX - state.ballBCenterX
-        val finalDy = clampedACenterY - state.ballBCenterY
-        val finalDistance = hypot(finalDx.toDouble(), finalDy.toDouble()).toFloat()
-
         state.lastRawX = event.rawX
         state.lastRawY = event.rawY
-
-        FloatingDebugLog.d(
-            LogTags.FLOATING_CONTROLLER,
-            "🔁 长按拖动: 手指=(${fingerX.toInt()}, ${fingerY.toInt()}), " +
-                "偏移=(${state.downOffsetX.toInt()}, ${state.downOffsetY.toInt()}), " +
-                "A中心=(${clampedACenterX.toInt()}, ${clampedACenterY.toInt()}), " +
-                "A左上角=(${paramsA.x}, ${paramsA.y}), " +
-                "距离B=${finalDistance.toInt()}px/${maxDistancePx.toInt()}px, " +
-                "方向=${state.detectedDirection}",
-        )
     }
 
     /**
      * 对齐球体：确保A球和B球中心对齐
      */
     fun alignBalls() {
+        val windowBounds = windowBoundsProvider.current()
         val ballARadius = ballA.width / 2f
         val ballBRadius = ballB.width / 2f
         val ballACenterX = paramsA.x + ballARadius
@@ -193,12 +181,13 @@ internal class FloatingMenuBallMovement(
         val newBY = (ballACenterY - ballBRadius).toInt()
 
         // 检查边界限制
-        val minX = ballBRadius
-        val maxX = displayMetrics.widthPixels - ballBRadius
-        val maxY = displayMetrics.heightPixels - ballBRadius
+        val minX = windowBounds.left + ballBRadius
+        val maxX = windowBounds.right - ballBRadius
+        val minY = windowBounds.top + ballBRadius
+        val maxY = windowBounds.bottom - ballBRadius
 
         val clampedBCenterX = ballBCenterX.coerceIn(minX, maxX)
-        val clampedBCenterY = ballACenterY.coerceIn(ballBRadius, maxY)
+        val clampedBCenterY = ballACenterY.coerceIn(minY, maxY)
 
         if (clampedBCenterX != ballBCenterX || clampedBCenterY != ballACenterY) {
             // B球被边界限制，调整A球位置
@@ -221,10 +210,5 @@ internal class FloatingMenuBallMovement(
         state.ballBCenterX = paramsB.x + ballB.width / 2f
         state.ballBCenterY = paramsB.y + ballB.height / 2f
 
-        FloatingDebugLog.d(
-            LogTags.FLOATING_CONTROLLER_MSG,
-            "对齐完成: A中心=(${paramsA.x + ballARadius}, ${paramsA.y + ballARadius}), " +
-                "B中心=(${state.ballBCenterX}, $ballACenterY)",
-        )
     }
 }

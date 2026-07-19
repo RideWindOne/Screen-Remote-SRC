@@ -35,7 +35,6 @@ object HapticFeedbackManager {
                 val settings = preferencesManager.settingsFlow.first()
                 isEnabled = settings.enableFloatingHapticFeedback
 
-                LogManager.d(LogTags.APP, "触感反馈管理器初始化: ${if (isEnabled) "开启" else "关闭"}")
             } catch (e: Exception) {
                 LogManager.e(LogTags.APP, "触感反馈管理器初始化失败: ${e.message}", e)
                 // 初始化失败时使用默认值（开启）
@@ -50,6 +49,5 @@ object HapticFeedbackManager {
      */
     fun setEnabled(enabled: Boolean) {
         isEnabled = enabled
-        LogManager.d(LogTags.APP, "触感反馈开关更新: ${if (enabled) "开启" else "关闭"}")
     }
 }

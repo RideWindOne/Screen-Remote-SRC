@@ -66,7 +66,7 @@ sealed class ScrcpyMonitorEvent {
 /**
  * 全局 Scrcpy 状态
  */
-data class GlobalScrcpyState(
+data class SessionMonitorState(
     // 连接状态
     val isConnected: Boolean = false,
     val connectionTime: Long = 0,
@@ -139,7 +139,7 @@ enum class ExceptionType {
 
 internal fun buildScrcpyMonitorSummary(
     deviceId: String,
-    state: GlobalScrcpyState,
+    state: SessionMonitorState,
 ): String =
     buildString {
         appendLine("=== Scrcpy 状态摘要 [$deviceId] ===")

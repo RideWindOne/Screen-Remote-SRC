@@ -9,7 +9,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.screen.remote.android.core.common.ScrcpyConstants
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
-import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
@@ -36,48 +37,11 @@ data class SessionData(
     val name: String,
     val connectionCandidates: List<ConnectionCandidateData>,
     val color: String,
-    val forceAdb: Boolean = false,
-    val maxSize: String = "",
-    val videoBitrate: String = "",
-    val maxFps: String = "", // 最大帧率
-    val displayId: Int = 0,
-    val newDisplayEnabled: Boolean = false,
-    val newDisplay: String = "",
-    val showTouches: Boolean = false,
-    val enableClipboardSync: Boolean = true,
-    val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
-    val preferredVideoCodec: String = ScrcpyConstants.DEFAULT_VIDEO_CODEC,
-    val userVideoEncoder: String = "",
-    val userVideoDecoder: String = "",
-    val enableAudio: Boolean = false,
-    val preferredAudioCodec: String = ScrcpyConstants.DEFAULT_AUDIO_CODEC,
-    val userAudioEncoder: String = "",
-    val userAudioDecoder: String = "",
-    val audioBitrate: String = "", // 音频码率（如 128k）
-    val stayAwake: Boolean = false, // 改为 false，不强制保持唤醒
-    val turnScreenOff: Boolean = true,
-    val powerOffOnClose: Boolean = false,
-    val cleanupOnDisconnect: Boolean = true,
-    val ignoreVideoEncoderConstraints: Boolean = false,
+    val config: ScrcpyConfig = ScrcpyConfig(),
+    val capabilityCache: DeviceCapabilityCache = DeviceCapabilityCache(),
     val profileId: String = "",
     val useProfileDefaults: Boolean = false,
-    val keepDeviceAwake: Boolean = false,
-    val enableHardwareDecoding: Boolean = true,
-    val followRemoteOrientation: Boolean = false,
-    val useFullScreen: Boolean = false, // 全屏模式（TextureView），默认关闭
     val tcpPortForwardRules: List<TcpPortForwardRule> = listOf(TcpPortForwardRule()),
-    // 设备信息和编解码器
-    // 编解码器能力签名：ro.serialno|ro.build.fingerprint|scrcpyVersion|cacheVersion
-    val deviceSerial: String = "",
-    val remoteVideoEncoders: List<EncoderCapability> = emptyList(),
-    val remoteAudioEncoders: List<EncoderCapability> = emptyList(),
-    val selectedVideoCodec: String = "",
-    val selectedAudioCodec: String = "",
-    val selectedVideoDecoder: String = "", // 选中的最佳视频解码器
-    val selectedAudioDecoder: String = "", // 选中的最佳音频解码器
-    val selectedVideoEncoder: String = "", // 选中的最佳视频编解器
-    val selectedAudioEncoder: String = "", // 选中的最佳音频编解器
-    // 分组信息
     val groupIds: List<String> = emptyList(), // 所属分组 ID 列表，支持多分组
 ) {
     init {
@@ -105,44 +69,13 @@ data class SessionData(
         }
 
     /**
-     * 判断编解码器是否匹配当前设备
-     * @param deviceSerial 当前设备序列号
-     * @return 是否匹配
-     */
-    fun isEncoderListValid(deviceSerial: String): Boolean {
-        // 如果没有保存的序列号，说明从未连接过
-        if (this.deviceSerial.isBlank()) return false
-
-        // 如果当前设备序列号为空，无法验证
-        if (deviceSerial.isBlank()) return false
-
-        // 序列号必须匹配
-        if (this.deviceSerial != deviceSerial) return false
-
-        // 必须有编解码器列表
-        if (remoteVideoEncoders.isEmpty() && remoteAudioEncoders.isEmpty()) return false
-
-        return true
-    }
-
-    /**
      * 清空连接过程中自动探测出的设备身份和编解码器能力。
      *
-     * 用户手动选择的编解码器与偏好格式属于配置，不属于探测缓存，必须保留。
+     * 用户手动选择的编解码器属于配置，不属于探测缓存，必须保留。
      * 清空设备序列号可确保下次连接从设备身份校验开始完整执行探测流程。
      */
     fun clearAutoDetectedCodecState(): SessionData =
-        copy(
-            deviceSerial = "",
-            remoteVideoEncoders = emptyList(),
-            remoteAudioEncoders = emptyList(),
-            selectedVideoCodec = "",
-            selectedAudioCodec = "",
-            selectedVideoEncoder = "",
-            selectedAudioEncoder = "",
-            selectedVideoDecoder = "",
-            selectedAudioDecoder = "",
-        )
+        copy(capabilityCache = DeviceCapabilityCache())
 
     /**
      * 获取设备唯一标识
@@ -167,42 +100,8 @@ data class SessionData(
             sessionId = id,
             profileId = profileId.takeIf { useProfileDefaults }.orEmpty(),
             connectionCandidates = toConnectionCandidates(),
-            forceAdb = forceAdb,
-            // 0 means that max_size is omitted from the scrcpy server command.
-            maxSize = maxSize.toIntOrNull()?.takeIf { it > 0 } ?: 0,
-            videoBitRate = parseBitRate(videoBitrate) ?: ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
-            maxFps = maxFps.toIntOrNull() ?: 60,
-            displayId = displayId,
-            newDisplayEnabled = newDisplayEnabled,
-            newDisplay = newDisplay,
-            showTouches = showTouches,
-            enableClipboardSync = enableClipboardSync,
-            codecOptions = codecOptions,
-            preferredVideoCodec = preferredVideoCodec,
-            userVideoEncoder = userVideoEncoder,
-            userVideoDecoder = userVideoDecoder,
-            enableAudio = enableAudio,
-            preferredAudioCodec = preferredAudioCodec,
-            userAudioEncoder = userAudioEncoder,
-            userAudioDecoder = userAudioDecoder,
-            audioBitRate = parseBitRate(audioBitrate) ?: 128000,
-            stayAwake = stayAwake,
-            turnScreenOff = turnScreenOff,
-            powerOffOnClose = powerOffOnClose,
-            cleanupOnDisconnect = cleanupOnDisconnect,
-            ignoreVideoEncoderConstraints = ignoreVideoEncoderConstraints,
-            keepDeviceAwake = keepDeviceAwake,
-            enableHardwareDecoding = enableHardwareDecoding,
-            followRemoteOrientation = followRemoteOrientation,
-            selectedVideoEncoder = selectedVideoEncoder,
-            selectedAudioEncoder = selectedAudioEncoder,
-            selectedVideoCodec = selectedVideoCodec,
-            selectedAudioCodec = selectedAudioCodec,
-            selectedVideoDecoder = selectedVideoDecoder,
-            selectedAudioDecoder = selectedAudioDecoder,
-            deviceSerial = deviceSerial,
-            remoteVideoEncoders = remoteVideoEncoders,
-            remoteAudioEncoders = remoteAudioEncoders,
+            config = config,
+            capabilityCache = capabilityCache,
         )
 
     /**
@@ -210,44 +109,11 @@ data class SessionData(
      */
     fun fromScrcpyOptions(options: ScrcpyOptions): SessionData =
         copy(
-            forceAdb = options.forceAdb,
-            maxSize = preserveOptionalLimitText(maxSize, options.maxSize),
-            videoBitrate = preserveBitRateText(videoBitrate, options.videoBitRate),
-            maxFps = options.maxFps.toString(),
-            displayId = options.displayId,
-            newDisplayEnabled = options.newDisplayEnabled,
-            newDisplay = options.newDisplay,
-            showTouches = options.showTouches,
-            enableClipboardSync = options.enableClipboardSync,
-            codecOptions = options.codecOptions,
-            preferredVideoCodec = options.preferredVideoCodec,
-            userVideoEncoder = options.userVideoEncoder,
-            userVideoDecoder = options.userVideoDecoder,
-            enableAudio = options.enableAudio,
-            preferredAudioCodec = options.preferredAudioCodec,
-            userAudioEncoder = options.userAudioEncoder,
-            userAudioDecoder = options.userAudioDecoder,
-            audioBitrate = preserveBitRateText(audioBitrate, options.audioBitRate),
-            stayAwake = options.stayAwake,
-            turnScreenOff = options.turnScreenOff,
-            powerOffOnClose = options.powerOffOnClose,
-            cleanupOnDisconnect = options.cleanupOnDisconnect,
-            ignoreVideoEncoderConstraints = options.ignoreVideoEncoderConstraints,
             profileId = options.profileId,
             useProfileDefaults = options.profileId.isNotBlank(),
             connectionCandidates = options.connectionCandidates.map { it.toData() },
-            keepDeviceAwake = options.keepDeviceAwake,
-            enableHardwareDecoding = options.enableHardwareDecoding,
-            followRemoteOrientation = options.followRemoteOrientation,
-            selectedVideoEncoder = options.selectedVideoEncoder,
-            selectedAudioEncoder = options.selectedAudioEncoder,
-            selectedVideoCodec = options.selectedVideoCodec,
-            selectedAudioCodec = options.selectedAudioCodec,
-            selectedVideoDecoder = options.selectedVideoDecoder,
-            selectedAudioDecoder = options.selectedAudioDecoder,
-            deviceSerial = options.deviceSerial,
-            remoteVideoEncoders = options.remoteVideoEncoders,
-            remoteAudioEncoders = options.remoteAudioEncoders,
+            config = options.config,
+            capabilityCache = options.capabilityCache,
         )
 }
 
@@ -389,6 +255,22 @@ class SessionRepository(
         }
     }
 
+    suspend fun removeGroupReferences(groupId: String) {
+        context.sessionDataStore.edit { preferences ->
+            val currentJson = preferences[Keys.SESSIONS] ?: "[]"
+            val currentList =
+                try {
+                    json.decodeFromString<List<SessionData>>(currentJson)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            val updatedList = removeGroupReferences(currentList, groupId)
+            if (updatedList != currentList) {
+                preferences[Keys.SESSIONS] = json.encodeToString(updatedList)
+            }
+        }
+    }
+
     suspend fun updateSession(sessionData: SessionData) {
         context.sessionDataStore.edit { preferences ->
             val currentJson = preferences[Keys.SESSIONS] ?: "[]"
@@ -403,6 +285,25 @@ class SessionRepository(
                     if (it.id == sessionData.id) sessionData else it
                 }
             preferences[Keys.SESSIONS] = json.encodeToString(updatedList)
+        }
+    }
+
+    /**
+     * 按会话 ID 原子保存：已有 ID 时更新，不存在时新增。
+     *
+     * 保存语义不能依赖当前是否打开编辑弹窗，否则列表快捷操作会被误判为新增会话。
+     */
+    suspend fun upsertSession(sessionData: SessionData) {
+        context.sessionDataStore.edit { preferences ->
+            val currentJson = preferences[Keys.SESSIONS] ?: "[]"
+            val currentList =
+                try {
+                    json.decodeFromString<List<SessionData>>(currentJson)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            preferences[Keys.SESSIONS] =
+                json.encodeToString(upsertSessionById(currentList, sessionData))
         }
     }
 
@@ -474,3 +375,30 @@ class SessionRepository(
             hasWarning = false,
         )
 }
+
+/** Replace one logical session and collapse any duplicate rows carrying the same ID. */
+internal fun upsertSessionById(
+    current: List<SessionData>,
+    sessionData: SessionData,
+): List<SessionData> =
+    buildList(current.size + 1) {
+        var replaced = false
+        current.forEach { item ->
+            if (item.id != sessionData.id) {
+                add(item)
+            } else if (!replaced) {
+                add(sessionData)
+                replaced = true
+            }
+        }
+        if (!replaced) add(sessionData)
+    }
+
+internal fun removeGroupReferences(
+    sessions: List<SessionData>,
+    groupId: String,
+): List<SessionData> =
+    sessions.map { session ->
+        val validGroupIds = session.groupIds.filterNot { it == groupId }.distinct()
+        if (validGroupIds == session.groupIds) session else session.copy(groupIds = validGroupIds)
+    }

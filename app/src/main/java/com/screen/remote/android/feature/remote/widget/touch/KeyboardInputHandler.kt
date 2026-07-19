@@ -1,7 +1,7 @@
 package com.screen.remote.android.feature.remote.widget.touch
 
+import android.content.ClipboardManager
 import android.content.Context
-import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +27,6 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -35,6 +34,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import kotlinx.coroutines.delay
@@ -55,14 +55,9 @@ fun KeyboardInputHandler(
     requestToken: Int,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
     val hostView = LocalView.current
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
-    val inputMethodManager =
-        remember(context) {
-            context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        }
     var keyboardText by remember { mutableStateOf(TextFieldValue("")) }
     var lastTextLength by remember { mutableIntStateOf(0) }
 
@@ -91,8 +86,11 @@ fun KeyboardInputHandler(
                     // 获取所有新增的字符
                     val newChars = newText.substring(oldText.length)
                     scope.launch {
-                        // 使用 INJECT_TEXT，配合 keyboard=uhid 支持所有语言
-                        controlViewModel.sendText(newChars)
+                        if (shouldUseClipboardPaste(newChars)) {
+                            controlViewModel.setClipboardAndPaste(newChars)
+                        } else {
+                            controlViewModel.sendText(newChars)
+                        }
                     }
                 }
 
@@ -162,19 +160,21 @@ fun KeyboardInputHandler(
                                 }
 
                                 Key.V -> {
-                                    // Ctrl+V: 粘贴
+                                    // Sync the local clipboard through scrcpy before pasting. Sending
+                                    // Ctrl+V alone would paste stale content from the remote device.
                                     scope.launch {
-                                        controlViewModel.sendKeyEvent(
-                                            keyCode = 50, // KEYCODE_V
-                                            action = 0,
-                                            metaState = 4096,
-                                        )
-                                        delay(10)
-                                        controlViewModel.sendKeyEvent(
-                                            keyCode = 50,
-                                            action = 1,
-                                            metaState = 4096,
-                                        )
+                                        val clipboard =
+                                            hostView.context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        val text =
+                                            clipboard
+                                                ?.primaryClip
+                                                ?.takeIf { clip -> clip.itemCount > 0 }
+                                                ?.getItemAt(0)
+                                                ?.coerceToText(hostView.context)
+                                                ?.toString()
+                                        if (text != null) {
+                                            controlViewModel.setClipboardAndPaste(text)
+                                        }
                                     }
                                     true
                                 }
@@ -211,10 +211,15 @@ fun KeyboardInputHandler(
             focusRequester.requestFocus()
             hostView.requestFocus()
             delay(80)
-            inputMethodManager?.showSoftInput(hostView, InputMethodManager.SHOW_IMPLICIT)
+            ApiCompatHelper.showSoftInput(hostView)
             keyboardController?.show()
         } catch (e: Exception) {
             LogManager.e(LogTags.CONTROL_HANDLER, "${RemoteTexts.REMOTE_FOCUS_REQUEST_FAILED.get()}: ${e.message}")
         }
     }
 }
+
+internal fun shouldUseClipboardPaste(text: String): Boolean =
+    text.length > 1 ||
+        text.toByteArray(Charsets.UTF_8).size > 300 ||
+        text.any { character -> character.code > 0x7f || character == '\n' || character == '\r' || character == '\t' }

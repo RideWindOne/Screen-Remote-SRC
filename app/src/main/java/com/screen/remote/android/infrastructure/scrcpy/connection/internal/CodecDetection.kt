@@ -40,7 +40,7 @@ internal suspend fun ConnectionLifecycle.detectRemoteEncodersAfterPush(
         return
     }
 
-    if (!options.enableAudio) {
+    if (!options.config.enableAudio) {
         val remoteVideoOnlyNeedDetect = shouldDetectVideoCodec(options)
         if (!remoteVideoOnlyNeedDetect) {
             LogManager.d(LogTags.SCRCPY_CLIENT, "编解码器配置完整且未启用音频，跳过检测")
@@ -102,19 +102,21 @@ internal suspend fun ConnectionLifecycle.processCodecSelection(
     if (sessionContext.currentSession()?.sessionId != expectedSessionId) {
         return
     }
+    val currentCapabilities = targetSession.options.capabilityCache
     targetSession.saveCodecDetectionResult(
-        deviceSerial = targetSession.options.deviceSerial,
-        remoteVideoEncoders = videoEncoderCapabilities,
-        remoteAudioEncoders = audioEncoderCapabilities,
-        selectedVideoCodec = videoResult?.codec ?: targetSession.options.selectedVideoCodec,
-        selectedAudioCodec = audioResult?.codec ?: targetSession.options.selectedAudioCodec,
-        selectedVideoEncoder = videoResult?.encoder ?: targetSession.options.selectedVideoEncoder,
-        selectedAudioEncoder = audioResult?.encoder ?: targetSession.options.selectedAudioEncoder,
-        selectedVideoDecoder = videoResult?.decoder ?: targetSession.options.selectedVideoDecoder,
-        selectedAudioDecoder = audioResult?.decoder ?: targetSession.options.selectedAudioDecoder,
-        // 自动回退是本次设备的解析结果，不得覆盖用户的格式偏好。
-        preferredVideoCodec = targetSession.options.preferredVideoCodec,
-        preferredAudioCodec = targetSession.options.preferredAudioCodec,
+        detectedCapabilities =
+            currentCapabilities.copy(
+                remoteVideoEncoders = videoEncoderCapabilities,
+                remoteAudioEncoders = audioEncoderCapabilities,
+                selectedVideoCodec = videoResult?.codec ?: currentCapabilities.selectedVideoCodec,
+                selectedAudioCodec = audioResult?.codec ?: currentCapabilities.selectedAudioCodec,
+                selectedVideoEncoder = videoResult?.encoder ?: currentCapabilities.selectedVideoEncoder,
+                selectedAudioEncoder = audioResult?.encoder ?: currentCapabilities.selectedAudioEncoder,
+                selectedVideoDecoder = videoResult?.decoder ?: currentCapabilities.selectedVideoDecoder,
+                selectedAudioDecoder = audioResult?.decoder ?: currentCapabilities.selectedAudioDecoder,
+            ),
+        clearUserVideoSelection = videoResult?.ignoredUserSelection == true,
+        clearUserAudioSelection = audioResult?.ignoredUserSelection == true,
     )
 
     LogManager.d(LogTags.SCRCPY_CLIENT, "已保存编解码器检测结果到会话 $expectedSessionId")
@@ -123,27 +125,30 @@ internal suspend fun ConnectionLifecycle.processCodecSelection(
 internal fun ConnectionLifecycle.shouldDetectVideoCodec(options: ScrcpyOptions): Boolean =
     options.getFinalVideoEncoder().isBlank() ||
         options.getFinalVideoDecoder().isBlank() ||
+        options.capabilityCache.selectedVideoCodec.isBlank() ||
+        (options.config.userVideoEncoder.isNotBlank() && options.capabilityCache.selectedVideoEncoder != options.config.userVideoEncoder) ||
+        (options.config.userVideoDecoder.isNotBlank() && options.capabilityCache.selectedVideoDecoder != options.config.userVideoDecoder) ||
         !hasRemoteEncoderCapability(
-            capabilities = options.remoteVideoEncoders,
+            capabilities = options.capabilityCache.remoteVideoEncoders,
             encoderName = options.getFinalVideoEncoder(),
-            codec = options.preferredVideoCodec,
+            codec = options.capabilityCache.selectedVideoCodec,
         )
 
 internal fun ConnectionLifecycle.shouldDetectAudioCodec(options: ScrcpyOptions): Boolean =
-    if (!options.enableAudio) {
+    if (!options.config.enableAudio) {
         false
-    } else if (
-        com.screen.remote.android.core.domain.model.CodecCatalog
-            .normalizedName(com.screen.remote.android.core.domain.model.CodecMediaType.AUDIO, options.preferredAudioCodec) == "raw"
-    ) {
+    } else if (options.capabilityCache.selectedAudioCodec == "raw" && options.config.userAudioEncoder.isBlank() && options.config.userAudioDecoder.isBlank()) {
         false
     } else {
         options.getFinalAudioEncoder().isBlank() ||
             options.getFinalAudioDecoder().isBlank() ||
+            options.capabilityCache.selectedAudioCodec.isBlank() ||
+            (options.config.userAudioEncoder.isNotBlank() && options.capabilityCache.selectedAudioEncoder != options.config.userAudioEncoder) ||
+            (options.config.userAudioDecoder.isNotBlank() && options.capabilityCache.selectedAudioDecoder != options.config.userAudioDecoder) ||
             !hasRemoteEncoderCapability(
-                capabilities = options.remoteAudioEncoders,
+                capabilities = options.capabilityCache.remoteAudioEncoders,
                 encoderName = options.getFinalAudioEncoder(),
-                codec = options.preferredAudioCodec,
+                codec = options.capabilityCache.selectedAudioCodec,
             )
     }
 
@@ -159,43 +164,6 @@ internal fun hasRemoteEncoderCapability(
     return capabilities.any { it.name == encoderName && it.codec == normalizedCodec }
 }
 
-internal fun ConnectionLifecycle.shouldDetectDecoder(
-    selectedDecoder: String,
-    userEncoder: String,
-    inferCodec: (String) -> String,
-): Boolean {
-    if (selectedDecoder.isBlank()) {
-        return true
-    }
-    return inferCodec(userEncoder) != inferCodec(selectedDecoder)
-}
-
-internal fun ConnectionLifecycle.shouldDetectEncoder(
-    selectedEncoder: String,
-    userDecoder: String,
-    inferCodec: (String) -> String,
-): Boolean {
-    if (selectedEncoder.isBlank()) {
-        return true
-    }
-    return inferCodec(userDecoder) != inferCodec(selectedEncoder)
-}
-
-internal fun ConnectionLifecycle.hasVideoCodecDrift(
-    preferredVideoCodec: String,
-    selectedEncoder: String,
-    selectedDecoder: String,
-): Boolean {
-    val normalizedPreferred =
-        preferredVideoCodec
-            .ifBlank { return true }
-            .let(CodecSelector::inferVideoCodecFromName)
-    val encoderCodec = CodecSelector.inferVideoCodecFromName(selectedEncoder)
-    val decoderCodec = CodecSelector.inferVideoCodecFromName(selectedDecoder)
-
-    return encoderCodec != normalizedPreferred || decoderCodec != normalizedPreferred
-}
-
 internal suspend fun ConnectionLifecycle.selectVideoCodecIfNeeded(
     needDetect: Boolean,
     encoderCapabilities: List<EncoderCapability>,
@@ -204,10 +172,9 @@ internal suspend fun ConnectionLifecycle.selectVideoCodecIfNeeded(
     if (needDetect) {
         CodecSelector.selectBestVideoCodec(
             remoteEncoders = encoderCapabilities,
-            userEncoder = options.userVideoEncoder.ifBlank { null },
-            userDecoder = options.userVideoDecoder.ifBlank { null },
-            preferredCodec = options.preferredVideoCodec,
-            allowHardwareDecoders = options.enableHardwareDecoding,
+            userEncoder = options.config.userVideoEncoder.ifBlank { null },
+            userDecoder = options.config.userVideoDecoder.ifBlank { null },
+            allowHardwareDecoders = options.config.enableHardwareDecoding,
         )
     } else {
         null
@@ -221,10 +188,9 @@ internal suspend fun ConnectionLifecycle.selectAudioCodecIfNeeded(
     if (needDetect) {
         CodecSelector.selectBestAudioCodec(
             remoteEncoders = encoderCapabilities,
-            userEncoder = options.userAudioEncoder.ifBlank { null },
-            userDecoder = options.userAudioDecoder.ifBlank { null },
-            preferredCodec = options.preferredAudioCodec,
-            allowHardwareDecoders = options.enableHardwareDecoding,
+            userEncoder = options.config.userAudioEncoder.ifBlank { null },
+            userDecoder = options.config.userAudioDecoder.ifBlank { null },
+            allowHardwareDecoders = options.config.enableHardwareDecoding,
         )
     } else {
         null

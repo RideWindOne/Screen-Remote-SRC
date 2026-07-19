@@ -5,7 +5,7 @@
  * - MediaApiCompat.kt: MediaCodec、音视频编解码器相关 API
  * - NetworkApiCompat.kt: 网络、广播接收器相关 API
  * - StorageApiCompat.kt: USB、Intent、Parcelable 相关 API
- * - UiApiCompat.kt: 窗口、系统栏、触觉反馈、震动相关 API
+ * - UiApiCompat.kt: 窗口、系统栏、输入法、触觉反馈、震动相关 API
  * 
  * 本文件保留：系统服务、通知、PendingIntent、权限等核心 API
  */
@@ -80,6 +80,12 @@ object ApiCompatHelper {
         window: android.view.Window?,
         decorFitsSystemWindows: Boolean,
     ) = com.screen.remote.android.core.common.util.compat.setDecorFitsSystemWindows(window, decorFitsSystemWindows)
+
+    /**
+     * 显示软键盘
+     */
+    fun showSoftInput(view: android.view.View) =
+        com.screen.remote.android.core.common.util.compat.showSoftInputCompat(view)
 
     // ============ 共享内存（ashmem）兼容说明 ============
 

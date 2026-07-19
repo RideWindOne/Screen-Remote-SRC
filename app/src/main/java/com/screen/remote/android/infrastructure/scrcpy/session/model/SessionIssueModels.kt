@@ -170,16 +170,11 @@ data class ConnectedContext(
         get() = connectedSockets.size
 }
 
-data class CleanupContext(
-    val trigger: CleanupTrigger,
-    val preserveAdbConnection: Boolean,
-)
-
-enum class CleanupTrigger {
-    UserDisconnect,
-    CancelConnect,
-    RuntimeReset,
-    Unknown,
+enum class CleanupTrigger(
+    val logLabel: String,
+) {
+    UserDisconnect("user_disconnect"),
+    CancelConnect("cancel_connect"),
 }
 
 data class SocketDisconnectContext(

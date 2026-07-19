@@ -1,18 +1,29 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection
 
-import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 
 /**
- * 连接配置 - 包含会话的所有配置参数
+ * 一次实际 scrcpy 建链所拥有的资源快照。
+ *
+ * 配置可能在会话运行期间更新，清理逻辑不能重新读取“当前配置”来猜测当初
+ * 建立了哪些资源。这里记录本次连接真正采用的设备、端口、SCID 和隧道模式，
+ * 创建、重连和销毁都以同一份快照为准。
  */
-data class ConnectionConfig(
-    val sessionId: String, // 会话 UUID（唯一标识）
-    val deviceId: String, // 设备标识（host:port 或 usb:serial）
-    val options: ScrcpyOptions, // Scrcpy 选项
-    val skipAdbConnect: Boolean = false,
-    val host: String = "",
-    val port: Int = 5555,
-    val onVideoResolution: (Int, Int) -> Unit = { _, _ -> }, // 视频分辨率回调
+internal data class ActiveScrcpyConnection(
+    val sessionId: String,
+    val adbConnection: AdbConnection,
+    val localPort: Int,
+    val scid: Int,
+    val socketName: String,
+    val tunnelMode: ScrcpyTunnelMode,
+) {
+    val deviceId: String = adbConnection.deviceId
+}
+
+internal data class PreparedAdbConnection(
+    val connection: AdbConnection,
+    val localPort: Int,
 )
 
 /**

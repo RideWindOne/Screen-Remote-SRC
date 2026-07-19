@@ -1,6 +1,7 @@
 package com.screen.remote.android.infrastructure.scrcpy.client
+
 import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.common.NetworkConstants
+import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
@@ -8,12 +9,10 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionHealthMonitor
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
-import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionShellMonitor
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionStateMachine
 import com.screen.remote.android.infrastructure.scrcpy.controller.ScrcpyController
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
-import com.screen.remote.android.infrastructure.scrcpy.session.model.CleanupContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.CleanupTrigger
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
@@ -21,7 +20,11 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 internal class ScrcpyClientConnectionCoordinator(
@@ -32,164 +35,142 @@ internal class ScrcpyClientConnectionCoordinator(
     private val videoResolution: MutableStateFlow<Pair<Int, Int>?>,
     private val lifecycle: ConnectionLifecycle,
     private val controller: ScrcpyController,
-    private val shellMonitor: ConnectionShellMonitor,
     private val healthMonitor: ConnectionHealthMonitor,
     private val sessionRuntime: ScrcpyClientSessionRuntime,
     private val reconnectManager: ScrcpyClientReconnect,
+    private val issueTracker: SessionIssueTracker,
     private val getCurrentDeviceId: () -> String?,
-    private val setCurrentIds: (String, String) -> Unit,
     private val onSessionStateChanged: (SessionState) -> Unit,
     private val startForegroundService: (String, ScrcpyOptions) -> Unit,
 ) {
     private val observerScope = CoroutineScope(Dispatchers.Main)
+    private val operationMutex = Mutex()
 
     suspend fun connect(
         sessionId: String,
         options: ScrcpyOptions,
         isReconnecting: Boolean = false,
     ): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            stateMachine.clearProgress()
-            connectionState.value = ConnectionState.Connecting
+        operationMutex.withLock {
+            withContext(Dispatchers.IO) {
+                stateMachine.clearProgress()
+                connectionState.value = ConnectionState.Connecting
 
-            val deviceId = prepareConnection(sessionId, options, isReconnecting)
+                val deviceId = prepareConnection(sessionId, options, isReconnecting)
 
-            sessionRuntime.ensureSession(
-                sessionId = sessionId,
-                options = options,
-                onVideoResolution = { width, height ->
-                    videoResolution.value = Pair(width, height)
-                    LogManager.d(LogTags.SCRCPY_CLIENT, "视频分辨率已设置: ${width}x$height")
-                },
-            )
-
-            sessionRuntime.ensureMonitor(
-                stateMachine = stateMachine,
-                onReconnect = { reconnectManager.triggerReconnect() },
-                observerScope = observerScope,
-                onSessionStateChanged = onSessionStateChanged,
-            )
-
-            val connectionResult = lifecycle.connect()
-            if (connectionResult.isFailure) {
-                handleConnectionFailure(connectionResult.exceptionOrNull())
-                return@withContext Result.failure(
-                    connectionResult.exceptionOrNull() ?: Exception("Unknown error"),
+                sessionRuntime.ensureSession(
+                    sessionId = sessionId,
+                    options = options,
+                    onVideoResolution = { width, height ->
+                        videoResolution.value = Pair(width, height)
+                        LogManager.d(LogTags.SCRCPY_CLIENT, "视频分辨率已设置: ${width}x$height")
+                    },
                 )
-            }
 
-            val activeDeviceId = lifecycle.activeDeviceId ?: deviceId
-            if (activeDeviceId != deviceId) {
-                LogManager.d(
-                    LogTags.SCRCPY_CLIENT,
-                    "实际连接候选已更新: prepared=$deviceId active=$activeDeviceId",
+                sessionRuntime.ensureMonitor(
+                    stateMachine = stateMachine,
+                    onReconnect = { reconnectManager.triggerReconnect() },
+                    observerScope = observerScope,
+                    onSessionStateChanged = onSessionStateChanged,
                 )
-            }
-            setCurrentIds(sessionId, activeDeviceId)
-            SessionIssueTracker.updateDeviceId(activeDeviceId)
 
-            if (!controller.isRunning()) {
-                controller.start(activeDeviceId)
-            }
+                val connectionResult = lifecycle.connect()
+                if (connectionResult.isFailure) {
+                    handleConnectionFailure(connectionResult.exceptionOrNull())
+                    return@withContext Result.failure(
+                        connectionResult.exceptionOrNull() ?: Exception("Unknown error"),
+                    )
+                }
 
-            if (options.turnScreenOff) {
-                controller.setDisplayPower(on = false)
-                    .onFailure { error ->
-                        LogManager.w(LogTags.SCRCPY_CLIENT, "请求关闭设备屏幕失败: ${error.message}")
+                val activeDeviceId = lifecycle.activeDeviceId ?: deviceId
+                if (activeDeviceId != deviceId) {
+                    LogManager.d(
+                        LogTags.SCRCPY_CLIENT,
+                        "实际连接候选已更新: prepared=$deviceId active=$activeDeviceId",
+                    )
+                }
+                issueTracker.updateDeviceId(activeDeviceId)
+
+                if (!controller.isRunning()) {
+                    controller.start(activeDeviceId, gameMode = options.config.gameMode)
+                }
+
+                options.config.startApp.trim().takeIf(String::isNotEmpty)?.let { startApp ->
+                    controller.startApp(startApp)
+                        .onFailure { error ->
+                            LogManager.w(LogTags.SCRCPY_CLIENT, "请求在虚拟显示器启动 App 失败: ${error.message}")
+                        }
+                }
+
+                if (options.config.turnScreenOff) {
+                    controller.setDisplayPower(on = false)
+                        .onFailure { error ->
+                            LogManager.w(LogTags.SCRCPY_CLIENT, "请求关闭设备屏幕失败: ${error.message}")
+                        }
+                }
+
+                val resolution = videoResolution.value
+                if (resolution != null) {
+                    startForegroundService(activeDeviceId, options)
+                }
+
+                withContext(Dispatchers.Main) {
+                    connectionState.value = ConnectionState.Connected
+                }
+                Result.success(true)
+            }
+        }
+
+    suspend fun disconnect(): Result<Boolean> = cleanup(CleanupTrigger.UserDisconnect)
+
+    suspend fun cancelConnect(): Result<Boolean> = cleanup(CleanupTrigger.CancelConnect)
+
+    private suspend fun cleanup(trigger: CleanupTrigger): Result<Boolean> {
+        reconnectManager.cancelPending()
+        return operationMutex.withLock {
+            // 一旦获得生命周期锁，清理必须完整执行，不能随页面协程销毁而中断一半。
+            withContext(Dispatchers.IO + NonCancellable) {
+                try {
+                    connectionState.value = ConnectionState.Disconnecting
+                    sessionRuntime.sessionManager.currentOrNull?.handleEventAndWait(
+                        SessionEvent.RequestCleanup(trigger),
+                    )
+                    cleanupSessionRuntime()
+                    sessionRuntime.clearMonitor()
+                    connectionState.value = ConnectionState.Disconnected
+                    reconnectManager.reset()
+                    issueTracker.clear(trigger.logLabel)
+
+                    if (trigger == CleanupTrigger.CancelConnect) {
+                        LogManager.d(LogTags.SCRCPY_CLIENT, "连接已取消")
                     }
-            }
-
-            val resolution = videoResolution.value
-            if (resolution != null) {
-                startForegroundService(activeDeviceId, options)
-            }
-
-            withContext(Dispatchers.Main) {
-                connectionState.value = ConnectionState.Connected
-            }
-            Result.success(true)
-        }
-
-    suspend fun disconnect(): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            try {
-                connectionState.value = ConnectionState.Disconnecting
-
-                getCurrentDeviceId()?.let {
-                    sessionRuntime.sessionManager.currentOrNull?.handleEvent(
-                        SessionEvent.RequestCleanup(
-                            CleanupContext(
-                                trigger = CleanupTrigger.UserDisconnect,
-                                preserveAdbConnection = true,
-                            ),
-                        ),
-                    )
+                    Result.success(true)
+                } catch (error: Exception) {
+                    LogManager.e(LogTags.SCRCPY_CLIENT, "${trigger.logLabel} 清理失败: ${error.message}", error)
+                    Result.failure(error)
                 }
-
-                ScrcpyClientCleanup.cleanupSessionRuntime(
-                    videoStreamState = videoStreamState,
-                    audioStreamState = audioStreamState,
-                    lifecycle = lifecycle,
-                    controller = controller,
-                    shellMonitor = shellMonitor,
-                    healthMonitor = healthMonitor,
-                    videoResolution = videoResolution,
-                    deviceId = getCurrentDeviceId(),
-                    sessionManager = sessionRuntime.sessionManager,
-                )
-
-                sessionRuntime.clearMonitor()
-                connectionState.value = ConnectionState.Disconnected
-                reconnectManager.reset()
-                SessionIssueTracker.clear("disconnect")
-
-                Result.success(true)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "断开连接失败: ${e.message}")
-                Result.failure(e)
             }
         }
+    }
 
-    suspend fun cancelConnect(): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            try {
-                connectionState.value = ConnectionState.Disconnecting
+    private suspend fun cleanupSessionRuntime() {
+        // 先停止健康检查，避免主动关闭流和 Socket 被解释为连接丢失。
+        healthMonitor.stopMonitoring()
+        videoStreamState.value?.close()
+        audioStreamState.value?.close()
+        videoStreamState.value = null
+        audioStreamState.value = null
+        delay(50)
 
-                getCurrentDeviceId()?.let {
-                    sessionRuntime.sessionManager.currentOrNull?.handleEvent(
-                        SessionEvent.RequestCleanup(
-                            CleanupContext(
-                                trigger = CleanupTrigger.CancelConnect,
-                                preserveAdbConnection = true,
-                            ),
-                        ),
-                    )
-                }
+        lifecycle.disconnect()
+        controller.stop()
 
-                ScrcpyClientCleanup.cleanupSessionRuntime(
-                    videoStreamState = videoStreamState,
-                    audioStreamState = audioStreamState,
-                    lifecycle = lifecycle,
-                    controller = controller,
-                    shellMonitor = shellMonitor,
-                    healthMonitor = healthMonitor,
-                    videoResolution = videoResolution,
-                    deviceId = getCurrentDeviceId(),
-                    sessionManager = sessionRuntime.sessionManager,
-                )
-
-                sessionRuntime.clearMonitor()
-                connectionState.value = ConnectionState.Disconnected
-                reconnectManager.reset()
-                SessionIssueTracker.clear("cancel_connect")
-
-                LogManager.d(LogTags.SCRCPY_CLIENT, "连接已取消")
-                Result.success(true)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "取消连接失败: ${e.message}", e)
-                Result.failure(e)
-            }
-        }
+        // 即使 ADB 尚未胜出，初始连接取消也必须销毁 Session。
+        val deviceId = sessionRuntime.sessionManager.currentOrNull?.deviceIdentifier
+        sessionRuntime.sessionManager.stop()
+        deviceId?.let(ScrcpyEventBus::clearDeviceState)
+        videoResolution.value = null
+    }
 
     private fun prepareConnection(
         sessionId: String,
@@ -202,8 +183,7 @@ internal class ScrcpyClientConnectionCoordinator(
             } else {
                 options.getDeviceIdentifier()
             }
-        setCurrentIds(sessionId, deviceId)
-        SessionIssueTracker.begin(sessionId, deviceId, isReconnecting)
+        issueTracker.begin(sessionId, deviceId, isReconnecting)
         return deviceId
     }
 

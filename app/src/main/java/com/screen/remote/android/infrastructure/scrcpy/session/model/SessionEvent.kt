@@ -112,7 +112,7 @@ sealed class SessionEvent {
             get() = issue.message
     }
     data class RequestCleanup(
-        val context: CleanupContext,
+        val trigger: CleanupTrigger,
     ) : SessionEvent()
 
     // Codec 事件

@@ -22,13 +22,14 @@ internal data class AdbConnectionRaceOutcome(
 
 internal suspend fun raceAdbConnections(
     candidates: List<ConnectionCandidate>,
+    purpose: AdbConnectionPurpose,
     connectionManager: AdbConnectionManager,
     attemptScope: CoroutineScope,
     cleanupScope: CoroutineScope,
     logTag: String,
     logLabel: String,
+    deviceName: String? = null,
     isCurrentRace: () -> Boolean = { true },
-    connectCandidate: suspend (ConnectionCandidate) -> AdbConnection,
 ): AdbConnectionRaceOutcome {
     val distinctCandidates = candidates.distinctBy(ConnectionCandidate::deviceIdentifier)
     require(distinctCandidates.isNotEmpty()) { "会话没有可用的 connectionCandidates" }
@@ -50,7 +51,7 @@ internal suspend fun raceAdbConnections(
 
     LogManager.i(
         logTag,
-        "启动 $logLabel 多线路竞速 (${distinctCandidates.size}): " +
+        "启动 $logLabel 多线路竞速 (${distinctCandidates.size}, purpose=$purpose): " +
             distinctCandidates.joinToString { formatAdbRaceCandidate(it) },
     )
 
@@ -60,7 +61,21 @@ internal suspend fun raceAdbConnections(
                 LogManager.d(logTag, "$logLabel candidate started: ${formatAdbRaceCandidate(candidate)}")
                 val result =
                     try {
-                        Result.success(connectCandidate(candidate))
+                        val connection =
+                            connectionManager.connectCandidate(
+                                candidate = candidate,
+                                deviceName = deviceName,
+                            ).getOrThrow()
+                        if (purpose != AdbConnectionPurpose.LATENCY_TEST) {
+                            connection.refreshCandidatePreflight(purpose)
+                                .onFailure { error ->
+                                    LogManager.w(
+                                        logTag,
+                                        "$logLabel candidate preflight failed: ${formatAdbRaceCandidate(candidate)} ${error.message}",
+                                    )
+                                }
+                        }
+                        Result.success(connection)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Throwable) {

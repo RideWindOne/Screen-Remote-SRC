@@ -41,6 +41,7 @@ fun CompactSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     helpText: String? = null,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier =
@@ -61,6 +62,7 @@ fun CompactSwitchRow(
         IOSSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            enabled = enabled,
         )
     }
 }

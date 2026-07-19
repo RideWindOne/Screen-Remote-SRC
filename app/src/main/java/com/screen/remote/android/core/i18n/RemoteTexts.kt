@@ -4,6 +4,12 @@ package com.screen.remote.android.core.i18n
  * 远程控制相关文本（RemoteDisplayScreen & ScrcpyClient）
  */
 object RemoteTexts {
+    val REMOTE_STATS_RENDER = TextPair("渲染", "Render")
+    val REMOTE_STATS_DECODE = TextPair("解码", "Decode")
+    val REMOTE_STATS_VIDEO = TextPair("视频", "Video")
+    val REMOTE_STATS_WIFI_LINK = TextPair("Wi-Fi 链路", "Wi-Fi Link")
+    val REMOTE_STATS_NETWORK_ACTUAL = TextPair("网络实际", "Network Actual")
+
     // 远程控制错误
     val ERROR_CONTROL_NOT_READY = TextPair("控制连接未就绪", "Control connection not ready")
     val ERROR_SEND_FAILED = TextPair("发送失败", "Send failed")
@@ -53,6 +59,14 @@ object RemoteTexts {
     val REMOTE_SURFACE_UNAVAILABLE = TextPair("Surface 不可用", "Surface unavailable")
     val REMOTE_FOCUS_REQUEST_FAILED = TextPair("请求焦点失败", "Focus request failed")
     val REMOTE_MORE_ACTIONS = TextPair("更多操作", "More actions")
+    val REMOTE_ADAPT_DEVICE_RESOLUTION = TextPair("适配设备分辨率", "Adapt device resolution")
+    val REMOTE_RESTORE_DEVICE_RESOLUTION = TextPair("恢复设备分辨率", "Restore device resolution")
+    val REMOTE_DEVICE_RESOLUTION_ADAPTED = TextPair("已适配设备分辨率", "Device resolution adapted")
+    val REMOTE_DEVICE_RESOLUTION_RESTORED = TextPair("已恢复设备分辨率", "Device resolution restored")
+    val REMOTE_DEVICE_RESOLUTION_CHANGE_FAILED = TextPair("修改设备分辨率失败", "Failed to change device resolution")
+    val REMOTE_FILE_UPLOADED = TextPair("已上传到 %s", "Uploaded to %s")
+    val REMOTE_APK_INSTALLED = TextPair("APK 安装成功：%s", "APK installed: %s")
+    val REMOTE_FILE_SEND_FAILED = TextPair("文件发送失败", "Failed to send file")
     val REMOTE_LAYOUT_RENDER = TextPair("UI 布局渲染", "UI layout render")
     val REMOTE_LAYOUT_RENDER_DESC =
         TextPair(

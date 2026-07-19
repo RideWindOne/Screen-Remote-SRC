@@ -14,6 +14,7 @@ object SettingsTexts {
     val SETTINGS_LANGUAGE = TextPair("语言 / Language", "Language / 语言")
     val SETTINGS_ABOUT = TextPair("关于 Screen Remote", "About Screen Remote")
     val SETTINGS_FLOATING_HAPTIC = TextPair("悬浮球触感反馈", "Floating Ball Haptic Feedback")
+    val SETTINGS_PERFORMANCE_STATS = TextPair("显示帧率与网络速率", "Show FPS & Network Rates")
     val SETTINGS_MANAGE_ADB_KEYS = TextPair("管理 ADB 密钥", "Manage ADB Keys")
     val SETTINGS_DEVICE_PAIRING = TextPair("使用配对码进行 ADB 配对", "ADB Pairing with Pairing Code")
     val SETTINGS_ENABLE_LOG = TextPair("启用日志记录", "Enable Logging")
@@ -54,6 +55,16 @@ object SettingsTexts {
 
     // 关于页面
     val ABOUT_BASED_ON = TextPair("基于 Scrcpy", "Based on Scrcpy")
+    val ABOUT_CHECK_UPDATE = TextPair("检查更新", "Check for updates")
+    val ABOUT_AUTO_CHECK_UPDATE = TextPair("自动检测更新", "Automatically check for updates")
+    val ABOUT_CHECKING_UPDATE = TextPair("正在检查…", "Checking…")
+    val ABOUT_UPDATE_AVAILABLE = TextPair("发现新版本", "Update available")
+    val ABOUT_UPDATE_CURRENT_VERSION = TextPair("当前版本：%s", "Current version: %s")
+    val ABOUT_UPDATE_LATEST_VERSION = TextPair("最新版本：%s", "Latest version: %s")
+    val ABOUT_UPDATE_OPEN_RELEASES = TextPair("查看发布页", "View release")
+    val ABOUT_UPDATE_LATER = TextPair("稍后", "Later")
+    val ABOUT_UPDATE_LATEST = TextPair("当前已是最新版本", "You're up to date")
+    val ABOUT_UPDATE_FAILED = TextPair("检查更新失败，请稍后重试", "Update check failed. Please try again later")
     val ABOUT_DESCRIPTION =
         TextPair(
             "Screen Remote 是一款基于 ADB 协议的远程桌面工具，通常用于连接具有公网 IP 地址的服务或同一局域网内的服务。",
@@ -100,6 +111,11 @@ object SettingsTexts {
         TextPair(
             "启用后，点击悬浮球按钮时会产生触感反馈（震动）。触感反馈可以提供更好的操作体验，但会略微增加电量消耗。",
             "When enabled, tapping floating ball buttons will produce haptic feedback (vibration). Haptic feedback provides better user experience but slightly increases battery consumption.",
+        )
+    val HELP_PERFORMANCE_STATS =
+        TextPair(
+            "在 scrcpy 会话左上角显示实际解码/渲染 FPS、视频流码率，以及本应用的网络发送与接收速率。默认关闭，开启后无需重连即可生效。",
+            "Show decoded/rendered FPS, video stream bitrate, and this app's network TX/RX rates in scrcpy sessions. Off by default and takes effect without reconnecting.",
         )
     val HELP_MANAGE_ADB_KEYS =
         TextPair(

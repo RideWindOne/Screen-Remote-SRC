@@ -39,5 +39,7 @@ data class AppSettings(
     val enableManagementLog: Boolean = false,
     val enableDebugMode: Boolean = false,
     val enableFloatingHapticFeedback: Boolean = true,
+    val showPerformanceStats: Boolean = false,
+    val autoCheckUpdates: Boolean = true,
     val updateChannel: UpdateChannel = UpdateChannel.STABLE,
 )

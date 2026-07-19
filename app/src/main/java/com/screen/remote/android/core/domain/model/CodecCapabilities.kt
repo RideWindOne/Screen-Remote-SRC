@@ -113,14 +113,7 @@ object CodecCatalog {
         codec: String,
     ): String? = find(mediaType, codec)?.name
 
-    fun orderedSpecs(
-        mediaType: CodecMediaType,
-        preferredCodec: String?,
-    ): List<CodecSpec> {
-        val specs = specs(mediaType)
-        val preferred = preferredCodec?.let { find(mediaType, it) }
-        return if (preferred == null) specs else listOf(preferred) + specs.filterNot { it.name == preferred.name }
-    }
+    fun orderedSpecs(mediaType: CodecMediaType): List<CodecSpec> = specs(mediaType)
 
     /**
      * 仅供用户手填实现名时兜底。自动探测和运行时主路径必须使用结构化能力。

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.manager.LanguageManager
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.feature.session.ui.MainScreen
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
                 SettingsViewModel.provideFactory(preferencesManager)
             )[SettingsViewModel::class.java]
             val settings by settingsViewModel.settings.collectAsState()
+            val runtimeLoggingSuppressed by LogManager.runtimeLoggingSuppressed.collectAsState()
             val canDrawOverlays by overlayPermissionGranted
             val overlayPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -86,7 +88,7 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         MainScreen()
                         DebugLogOverlay(
-                            enabled = settings.enableDebugMode && canDrawOverlays,
+                            enabled = settings.enableDebugMode && canDrawOverlays && !runtimeLoggingSuppressed,
                         )
                     }
                 }

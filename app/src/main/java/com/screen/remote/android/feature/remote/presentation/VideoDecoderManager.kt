@@ -12,6 +12,8 @@ import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.media.video.VideoDecoder
+import com.screen.remote.android.infrastructure.media.video.VideoPerformanceCounters
+import com.screen.remote.android.infrastructure.media.video.VideoPerformanceSnapshot
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,6 +28,8 @@ class VideoDecoderManager(
     private val connectionViewModel: ConnectionViewModel,
     private val onVideoSizeChanged: (width: Int, height: Int, aspectRatio: Float) -> Unit,
 ) {
+    private val performanceCounters = VideoPerformanceCounters()
+
     var videoDecoder: VideoDecoder? = null
         private set
 
@@ -35,6 +39,8 @@ class VideoDecoderManager(
     var isDecoderStarting: Boolean = false
         private set
 
+    fun performanceSnapshot(): VideoPerformanceSnapshot = performanceCounters.snapshot()
+
     fun startDecoder(
         stream: VideoStream,
         surface: Surface?,
@@ -43,6 +49,7 @@ class VideoDecoderManager(
         if (isDecoderStarting || videoDecoder != null) return
 
         try {
+            performanceCounters.reset()
             LogManager.d(
                 LogTags.VIDEO_DECODER,
                 "${RemoteTexts.REMOTE_PREPARE_VIDEO_DECODER.get()} (surface=${surface != null && surface.isValid})",
@@ -59,7 +66,7 @@ class VideoDecoderManager(
 
             val options = connectionViewModel.getCurrentSessionOptions()
             val videoCodec = stream.codec
-            val expectedDeviceSerial = options?.deviceSerial.orEmpty()
+            val expectedDeviceSerial = options?.capabilityCache?.deviceSerial.orEmpty()
             val rejectionKey = "$expectedDeviceSerial|video:$videoCodec"
             val decoderName = options?.getFinalVideoDecoder()?.ifBlank { null }
             LogManager.d(
@@ -72,10 +79,12 @@ class VideoDecoderManager(
                     surface = surface,
                     videoCodec = videoCodec,
                     cachedDecoderName = decoderName,
-                    allowHardwareDecoders = options?.enableHardwareDecoding != false,
-                    decoderSelectionPinned = options?.userVideoDecoder?.isNotBlank() == true,
+                    allowHardwareDecoders = options?.config?.enableHardwareDecoding != false,
+                    decoderSelectionPinned = options?.config?.userVideoDecoder?.isNotBlank() == true,
                     initialRejectedDecoderNames = connectionViewModel.runtimeRejectedDecoders(rejectionKey),
+                    performanceCounters = performanceCounters,
                     sessionContext = connectionViewModel.createSessionContext(),
+                    gameMode = options?.config?.gameMode == true,
                 ).apply {
                     onDecoderSelected = { decoder ->
                         connectionViewModel.rememberResolvedVideoDecoder(

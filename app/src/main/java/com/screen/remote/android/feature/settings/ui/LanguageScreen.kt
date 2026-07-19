@@ -68,7 +68,6 @@ fun LanguageScreen(
                     title = txtAuto,
                     isSelected = settings.language == AppLanguage.AUTO,
                     onClick = {
-                        LogManager.d(LogTags.APP, "切换语言: AUTO")
                         viewModel.updateSettings(settings.copy(language = AppLanguage.AUTO))
                         LanguageManager.setLanguage(AppLanguage.AUTO)
                     },
@@ -84,7 +83,6 @@ fun LanguageScreen(
                     title = txtChinese,
                     isSelected = settings.language == AppLanguage.CHINESE,
                     onClick = {
-                        LogManager.d(LogTags.APP, "切换语言: CHINESE")
                         viewModel.updateSettings(settings.copy(language = AppLanguage.CHINESE))
                         LanguageManager.setLanguage(AppLanguage.CHINESE)
                     },
@@ -100,7 +98,6 @@ fun LanguageScreen(
                     title = txtEnglish,
                     isSelected = settings.language == AppLanguage.ENGLISH,
                     onClick = {
-                        LogManager.d(LogTags.APP, "切换语言: ENGLISH")
                         viewModel.updateSettings(settings.copy(language = AppLanguage.ENGLISH))
                         LanguageManager.setLanguage(AppLanguage.ENGLISH)
                     },

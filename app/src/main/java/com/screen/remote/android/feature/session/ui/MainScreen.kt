@@ -52,8 +52,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.constants.AppColors
+import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.manager.rememberText
+import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AddActionDialog
 import com.screen.remote.android.core.designsystem.component.CompactGroupSelector
@@ -62,6 +64,9 @@ import com.screen.remote.android.core.designsystem.component.PathBreadcrumb
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.SessionTexts
+import com.screen.remote.android.core.update.GitHubReleaseInfo
+import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
+import com.screen.remote.android.core.update.isAutomaticUpdateCheckDue
 import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.device.ui.component.AdbKeyManagementDialog
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
@@ -76,6 +81,8 @@ import com.screen.remote.android.feature.settings.ui.BackupRestoreScreen
 import com.screen.remote.android.feature.settings.ui.LanguageScreen
 import com.screen.remote.android.feature.settings.ui.LogManagementScreen
 import com.screen.remote.android.feature.settings.ui.SettingsScreen
+import com.screen.remote.android.feature.settings.ui.UpdateAvailableDialog
+import kotlinx.coroutines.flow.first
 
 private val MainScreenHeaderPadding = 16.dp
 private val MainScreenTabSelectorWidth = 132.dp
@@ -175,11 +182,33 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
     val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
     val selectedAutomationGroupPath by viewModel.selectedAutomationGroupPath.collectAsState()
     val onboardingState by viewModel.sessionOnboardingState.collectAsState()
+    val updatePreferences = remember(context) { PreferencesManager(context.applicationContext) }
+    val updateChecker = remember { GitHubReleaseUpdateChecker() }
+    var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
 
     RequestNotificationPermissionEffect(
         context = context,
         enabled = onboardingState == SessionOnboardingState.HIDDEN,
     )
+
+    LaunchedEffect(onboardingState) {
+        if (onboardingState != SessionOnboardingState.HIDDEN) return@LaunchedEffect
+        val settings = updatePreferences.settingsFlow.first()
+        if (!settings.autoCheckUpdates) return@LaunchedEffect
+
+        val cache = updatePreferences.updateCheckCacheFlow.first()
+        val now = System.currentTimeMillis()
+        if (!isAutomaticUpdateCheckDue(cache, now)) return@LaunchedEffect
+
+        updateChecker
+            .check(
+                currentVersion = AppConstants.APP_VERSION,
+                channel = settings.updateChannel,
+            ).onSuccess { release ->
+                updatePreferences.recordUpdateCheck(now, release)
+                availableUpdate = release
+            }
+    }
 
     LaunchedEffect(managementConnectStatus, routeState.pendingManagementSessionId) {
         when (val status = managementConnectStatus) {
@@ -262,6 +291,13 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
                         routeState.cancelPendingSessionManagement(pendingManagementSessionId)
                         viewModel.cancelManagementConnect(pendingManagementSessionId)
                     },
+                )
+            }
+
+            availableUpdate?.let { release ->
+                UpdateAvailableDialog(
+                    release = release,
+                    onDismiss = { availableUpdate = null },
                 )
             }
         }

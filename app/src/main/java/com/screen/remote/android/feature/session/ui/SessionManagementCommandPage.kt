@@ -1,6 +1,9 @@
 package com.screen.remote.android.feature.session.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,16 +48,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
 import com.screen.remote.android.core.i18n.ManagementTexts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +78,8 @@ private const val SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT = 16_000
 private const val SESSION_MANAGEMENT_SHELL_KEEPALIVE_INTERVAL_MS = 20_000L
 private const val SESSION_MANAGEMENT_SHELL_RECONNECT_DELAY_MS = 1_200L
 private const val SESSION_MANAGEMENT_SHELL_MAX_RECONNECT_ATTEMPTS = 3
+private const val SESSION_MANAGEMENT_TERMINAL_MIN_TEXT_SCALE = 0.7f
+private const val SESSION_MANAGEMENT_TERMINAL_MAX_TEXT_SCALE = 2.2f
 private val SESSION_MANAGEMENT_ANSI_PATTERN =
     Regex("""\u001B(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\)|[PX^_].*?\u001B\\|[@-Z\\-_])""")
 
@@ -201,6 +209,11 @@ private fun SessionManagementTerminalDisplay(
     onClear: () -> Unit,
 ) {
     val terminalPalette = sessionManagementTerminalPalette()
+    var textScale by rememberSaveable { mutableStateOf(1f) }
+    val outputFontSize = SessionManagementTerminalTextTokens.outputFontSize * textScale
+    val outputLineHeight = SessionManagementTerminalTextTokens.outputLineHeight * textScale
+    val inputFontSize = SessionManagementTerminalTextTokens.inputFontSize * textScale
+    val inputLineHeight = SessionManagementTerminalTextTokens.inputLineHeight * textScale
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -215,6 +228,15 @@ private fun SessionManagementTerminalDisplay(
                 Modifier
                     .fillMaxWidth()
                     .fillMaxHeight()
+                    .terminalPinchZoom(
+                        onZoom = { zoom ->
+                            textScale =
+                                (textScale * zoom).coerceIn(
+                                    SESSION_MANAGEMENT_TERMINAL_MIN_TEXT_SCALE,
+                                    SESSION_MANAGEMENT_TERMINAL_MAX_TEXT_SCALE,
+                                )
+                        },
+                    )
                     .padding(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
         ) {
             Column(
@@ -227,6 +249,8 @@ private fun SessionManagementTerminalDisplay(
                     modifier = Modifier.weight(1f),
                     output = output,
                     isConnected = isConnected,
+                    fontSize = outputFontSize,
+                    lineHeight = outputLineHeight,
                     onClear = onClear,
                 )
 
@@ -245,6 +269,8 @@ private fun SessionManagementTerminalDisplay(
                 SessionManagementTerminalInputLine(
                     commandInput = commandInput,
                     inputEnabled = inputEnabled,
+                    fontSize = inputFontSize,
+                    lineHeight = inputLineHeight,
                     onCommandInputChange = onCommandInputChange,
                     onExecuteCommand = onExecuteCommand,
                 )
@@ -252,6 +278,24 @@ private fun SessionManagementTerminalDisplay(
         }
     }
 }
+
+private fun Modifier.terminalPinchZoom(onZoom: (Float) -> Unit): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            do {
+                val event = awaitPointerEvent()
+                val pressedPointers = event.changes.filter { it.pressed }
+                if (pressedPointers.size >= 2) {
+                    val zoom = event.calculateZoom()
+                    if (zoom.isFinite() && zoom > 0f && zoom != 1f) {
+                        onZoom(zoom)
+                    }
+                    pressedPointers.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+        }
+    }
 
 @Composable
 private fun SessionManagementTerminalHistoryActions(
@@ -297,6 +341,8 @@ private fun SessionManagementTerminalContent(
     modifier: Modifier = Modifier,
     output: String,
     isConnected: Boolean,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
     onClear: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -334,8 +380,8 @@ private fun SessionManagementTerminalContent(
                         style =
                             MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = SessionManagementTerminalTextTokens.monospace,
-                                fontSize = SessionManagementTerminalTextTokens.outputFontSize,
-                                lineHeight = SessionManagementTerminalTextTokens.outputLineHeight,
+                                fontSize = fontSize,
+                                lineHeight = lineHeight,
                             ),
                         color = SessionManagementCommandTextColor,
                     )
@@ -445,6 +491,8 @@ private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
 private fun SessionManagementTerminalInputLine(
     commandInput: String,
     inputEnabled: Boolean,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
     onCommandInputChange: (String) -> Unit,
     onExecuteCommand: (String) -> Unit,
 ) {
@@ -464,6 +512,8 @@ private fun SessionManagementTerminalInputLine(
                 MaterialTheme.typography.bodyLarge.copy(
                     fontFamily = SessionManagementTerminalTextTokens.monospace,
                     fontWeight = FontWeight.Bold,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
                 ),
             color = SessionManagementCommandPromptColor,
             modifier =
@@ -484,8 +534,8 @@ private fun SessionManagementTerminalInputLine(
             textStyle =
                 TextStyle(
                     fontFamily = SessionManagementTerminalTextTokens.monospace,
-                    fontSize = SessionManagementTerminalTextTokens.inputFontSize,
-                    lineHeight = SessionManagementTerminalTextTokens.inputLineHeight,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
                     color = SessionManagementCommandTextColor,
                 ),
             cursorBrush = SolidColor(SessionManagementCommandPromptColor),
@@ -517,8 +567,8 @@ private fun SessionManagementTerminalInputLine(
                             style =
                                 MaterialTheme.typography.bodySmall.copy(
                                     fontFamily = SessionManagementTerminalTextTokens.monospace,
-                                    fontSize = SessionManagementTerminalTextTokens.outputFontSize,
-                                    lineHeight = SessionManagementTerminalTextTokens.inputLineHeight,
+                                    fontSize = fontSize,
+                                    lineHeight = lineHeight,
                                 ),
                             color = SessionManagementCommandHintColor,
                         )

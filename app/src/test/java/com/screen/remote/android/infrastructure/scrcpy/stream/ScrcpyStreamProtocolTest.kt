@@ -15,6 +15,32 @@ import org.junit.Test
 
 class ScrcpyStreamProtocolTest {
     @Test
+    fun `audio stream disables read timeout after metadata handshake`() {
+        val socket = Socket().apply { soTimeout = 10_000 }
+
+        val stream = ScrcpyAudioStream(socket, ByteArrayInputStream(byteArrayOf()), "opus")
+
+        assertEquals(0, socket.soTimeout)
+        stream.close()
+    }
+
+    @Test
+    fun `video stream disables read timeout after metadata handshake`() {
+        val socket = Socket().apply { soTimeout = 10_000 }
+
+        val stream =
+            ScrcpySocketStream(
+                socket = socket,
+                inputStream = ByteArrayInputStream(byteArrayOf()),
+                codec = "h264",
+                onError = {},
+            )
+
+        assertEquals(0, socket.soTimeout)
+        stream.close()
+    }
+
+    @Test
     fun `audio stream preserves protocol PTS config and key flags`() {
         val payload = ByteArray(12) { (it + 1).toByte() }
         val bytes = frameBytes(123_456L or ScrcpyProtocol.PACKET_FLAG_KEY_FRAME, payload)

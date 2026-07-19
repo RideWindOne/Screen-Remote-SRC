@@ -26,11 +26,11 @@ import kotlinx.coroutines.launch
  * 6. 异常处理
  */
 class ScrcpyMonitorBus(
-    private val deviceId: String,
+    val deviceId: String,
 ) {
     private val eventChannel = Channel<ScrcpyMonitorEvent>(Channel.UNLIMITED)
-    private val _globalState = MutableStateFlow(GlobalScrcpyState())
-    val globalState: StateFlow<GlobalScrcpyState> = _globalState.asStateFlow()
+    private val _state = MutableStateFlow(SessionMonitorState())
+    val state: StateFlow<SessionMonitorState> = _state.asStateFlow()
     private var monitorJob: Job? = null
     private val eventStats = mutableMapOf<String, EventStatistics>()
     private val stateReducer = ScrcpyMonitorStateReducer()
@@ -69,7 +69,7 @@ class ScrcpyMonitorBus(
         monitorJob = null
         eventChannel.close()
         eventStats.clear()
-        _globalState.value = GlobalScrcpyState()
+        _state.value = SessionMonitorState()
     }
 
     /**
@@ -94,9 +94,9 @@ class ScrcpyMonitorBus(
     private fun handleEvent(event: ScrcpyMonitorEvent) {
         updateStatistics(event)
         val now = System.currentTimeMillis()
-        val newState = stateReducer.reduce(_globalState.value, event, now)
-        _globalState.value = newState
-        eventLogger.log(event, newState)
+        val newState = stateReducer.reduce(_state.value, event, now)
+        _state.value = newState
+        eventLogger.log(event)
         anomalyDetector.detect(newState, now)
     }
 
@@ -111,6 +111,6 @@ class ScrcpyMonitorBus(
     }
 
     fun getStateSummary(): String {
-        return buildScrcpyMonitorSummary(deviceId, _globalState.value)
+        return buildScrcpyMonitorSummary(deviceId, _state.value)
     }
 }

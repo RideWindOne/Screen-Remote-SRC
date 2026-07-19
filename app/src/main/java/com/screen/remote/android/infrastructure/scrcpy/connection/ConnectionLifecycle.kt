@@ -3,7 +3,9 @@ package com.screen.remote.android.infrastructure.scrcpy.connection
 import android.content.Context
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -29,12 +31,16 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEven
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketType
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 
@@ -93,15 +99,21 @@ class ConnectionLifecycle(
     internal val socketManager: ConnectionSocketManager,
     private val metadataReader: ConnectionMetadataReader,
     internal val shellMonitor: ConnectionShellMonitor,
+    internal val issueTracker: SessionIssueTracker,
     private val onVideoStreamReady: (VideoStream?) -> Unit,
     private val onAudioStreamReady: (AudioStream?) -> Unit,
 ) {
-    internal var localPort: Int = 0
-    internal var activeDeviceId: String? = null
-    var currentScid: Int? = null
-        internal set
+    @Volatile
+    private var activeConnection: ActiveScrcpyConnection? = null
+
+    val activeDeviceId: String?
+        get() = activeConnection?.deviceId
+
+    val currentScid: Int?
+        get() = activeConnection?.scid
     val healthMonitor = ConnectionHealthMonitor()
     internal val backgroundScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val lifecycleMutex = Mutex()
     private val adbRaceGeneration = AtomicLong(0)
     private var codecDetectionJob: Job? = null
 
@@ -113,38 +125,45 @@ class ConnectionLifecycle(
      * 建立连接（从 CurrentSession 获取配置）
      */
     suspend fun connect(): Result<Pair<VideoStream?, AudioStream?>> =
+        lifecycleMutex.withLock { connectInternal() }
+
+    private suspend fun connectInternal(): Result<Pair<VideoStream?, AudioStream?>> =
         withContext(Dispatchers.IO) {
             var codecDetectionStarted = false
             var ownsConnectionCleanup = false
             try {
                 val session = sessionContext.currentSession() ?: throw IllegalStateException("会话不存在")
                 val initialOptions = session.options
-                val previousLocalPort = localPort
-                val previousScid = currentScid
-                val previousConnection =
-                    activeDeviceId?.let(adbConnectionManager::getConnection)
+                val previousConnection = activeConnection
                 // 步骤 1: 建立/验证 ADB 连接并分配端口
-                val connection = setupAdbConnection(initialOptions)
+                val prepared = setupAdbConnection(initialOptions, session)
+                val connection = prepared.connection
                 val options = session.options
                 val needsCodecDetection = shouldRunRemoteCodecDetectionInBackground(options)
                 codecDetectionStarted = needsCodecDetection
 
                 // 步骤 2: 在创建新 forward 前完成旧资源清理，避免端口复用时误删新映射。
                 ownsConnectionCleanup = true
-                cleanupOldResources(
-                    connection = previousConnection ?: connection,
-                    previousLocalPort = previousLocalPort,
-                    previousScid = previousScid,
-                )
+                cleanupOldResources(previousConnection)
 
                 // 步骤 3: 生成 SCID 并设置 Forward
                 val scid = generateScid()
-                currentScid = scid
                 val socketName = "scrcpy_%08x".format(scid)
+                val attempt =
+                    ActiveScrcpyConnection(
+                        sessionId = session.sessionId,
+                        adbConnection = connection,
+                        localPort = prepared.localPort,
+                        scid = scid,
+                        socketName = socketName,
+                        tunnelMode = options.config.tunnelMode,
+                    )
+                activeConnection = attempt
                 setupForwardAndPushServer(
                     connection = connection,
                     socketName = socketName,
-                    useAdbForward = options.forceAdb,
+                    localPort = attempt.localPort,
+                    tunnelMode = attempt.tunnelMode,
                     onServerAvailable =
                         if (needsCodecDetection) {
                             {
@@ -158,9 +177,6 @@ class ConnectionLifecycle(
                         },
                 )
 
-                // 步骤 3.5: 设置 Socket 管理器的本地端口
-                socketManager.setLocalPort(localPort)
-
                 // 自动选择结果必须在正式启动命令读取会话配置前完成。
                 // 检测本身与端口等本地准备并行，但不能跨过 server 启动边界。
                 if (codecDetectionStarted) {
@@ -168,7 +184,8 @@ class ConnectionLifecycle(
                 }
 
                 // 步骤 4: 启动 scrcpy-server
-                val canProbeServerSocketDirectly = !options.forceAdb
+                val launchOptions = session.options
+                val canProbeServerSocketDirectly = attempt.tunnelMode == ScrcpyTunnelMode.DIRECT_ADB
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
                     if (canProbeServerSocketDirectly) {
@@ -180,14 +197,17 @@ class ConnectionLifecycle(
                 startScrcpyServer(
                     connection = connection,
                     scid = scid,
+                    options = launchOptions,
                     waitForReady = !canProbeServerSocketDirectly,
                 )
 
                 // 步骤 5: 连接 Socket
                 connectSockets(
-                    options = options,
+                    options = launchOptions,
                     connection = connection,
                     socketName = socketName,
+                    localPort = attempt.localPort,
+                    tunnelMode = attempt.tunnelMode,
                 )
 
                 if (canProbeServerSocketDirectly) {
@@ -197,7 +217,7 @@ class ConnectionLifecycle(
                 // 步骤 6: 先读取媒体头；远端可能用 audio codec id=0 明确关闭音频。
                 val (videoStream, audioStream) =
                     metadataReader.readMetadataAndCreateStreams(
-                        options.enableAudio,
+                        launchOptions.config.enableAudio,
                         session.onVideoResolution,
                     )
                 videoStream?.let { session.rememberNegotiatedVideoCodec(it.codec) }
@@ -227,6 +247,23 @@ class ConnectionLifecycle(
                 onAudioStreamReady(audioStream)
 
                 Result.success(Pair(videoStream, audioStream))
+            } catch (cancelled: CancellationException) {
+                // 用户取消必须保持协程取消语义，但已经创建的 scrcpy 资源仍需原子回收。
+                withContext(NonCancellable) {
+                    if (codecDetectionStarted) {
+                        codecDetectionJob?.cancelAndJoin()
+                        codecDetectionJob = null
+                    }
+                    if (ownsConnectionCleanup) {
+                        disconnectInternal().onFailure { cleanupError ->
+                            LogManager.w(
+                                LogTags.SCRCPY_CLIENT,
+                                "取消连接后的资源清理不完整: ${cleanupError.message}",
+                            )
+                        }
+                    }
+                }
+                throw cancelled
             } catch (e: Exception) {
                 if (codecDetectionStarted) {
                     codecDetectionJob?.cancelAndJoin()
@@ -235,7 +272,7 @@ class ConnectionLifecycle(
                 shellMonitor.dumpDiagnostics("connect-failed")
                 LogManager.e(LogTags.SCRCPY_CLIENT, "连接失败: ${e.message}")
                 if (ownsConnectionCleanup) {
-                    disconnect().onFailure { cleanupError ->
+                    disconnectInternal().onFailure { cleanupError ->
                         LogManager.w(
                             LogTags.SCRCPY_CLIENT,
                             "连接失败后的资源清理不完整: ${cleanupError.message}",
@@ -268,14 +305,15 @@ class ConnectionLifecycle(
      * 断开连接
      * 清理顺序：Shell监控 → Socket → Forward → Server → 事件总线
      */
-    suspend fun disconnect() =
-            withContext(Dispatchers.IO) {
+    suspend fun disconnect(): Result<Boolean> = lifecycleMutex.withLock { disconnectInternal() }
+
+    private suspend fun disconnectInternal(): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            val connectionSnapshot = activeConnection
             try {
                 codecDetectionJob?.cancelAndJoin()
                 codecDetectionJob = null
                 healthMonitor.stopMonitoring()
-                val session = sessionContext.currentSession()
-                val options = session?.options
 
                 // 1. 关闭所有 Socket（停止数据传输）
                 socketManager.closeAllSockets()
@@ -286,57 +324,50 @@ class ConnectionLifecycle(
                 shellMonitor.closeShellStream()
 
                 // 3. 移除 ADB Forward
-                if (options != null) {
-                    val deviceId = activeDeviceId ?: options.getDeviceIdentifier()
-                    val connection = adbConnectionManager.getConnection(deviceId)
-                    if (connection != null) {
-                        if (options.forceAdb) {
-                            try {
-                                connection.removeAdbForward(localPort, ForwardRemovalTrigger.Disconnect)
-                                LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.get())
-                            } catch (e: Exception) {
-                                LogManager.w(
-                                    LogTags.SCRCPY_CLIENT,
-                                    "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.get()}: ${e.message}",
-                                )
-                            }
-                        }
+                if (connectionSnapshot?.tunnelMode == ScrcpyTunnelMode.ADB_FORWARD) {
+                    try {
+                        connectionSnapshot.adbConnection
+                            .removeAdbForward(connectionSnapshot.localPort, ForwardRemovalTrigger.Disconnect)
+                        LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.get())
+                    } catch (e: Exception) {
+                        LogManager.w(
+                            LogTags.SCRCPY_CLIENT,
+                            "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.get()}: ${e.message}",
+                        )
                     }
                 }
 
                 // 4. 终止服务器进程
-                if (options != null && currentScid != null) {
-                    val deviceId = activeDeviceId ?: options.getDeviceIdentifier()
-                    val connection = adbConnectionManager.getConnection(deviceId)
-                    if (connection != null) {
-                        try {
-                            val scidHex = String.format("%08x", currentScid)
-                            killProcess(
-                                connection,
-                                "scrcpy.*scid=$scidHex",
-                            )
+                if (connectionSnapshot != null) {
+                    try {
+                        val scidHex = String.format("%08x", connectionSnapshot.scid)
+                        killProcess(
+                            connectionSnapshot.adbConnection,
+                            "scrcpy.*scid=$scidHex",
+                        )
 
-                            LogManager.d(
-                                LogTags.SCRCPY_CLIENT,
-                                "${RemoteTexts.SCRCPY_TERMINATED_SERVER_PROCESS.get()} (scid=$scidHex)",
-                            )
-                        } catch (e: Exception) {
-                            LogManager.w(
-                                LogTags.SCRCPY_CLIENT,
-                                "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.get()}: ${e.message}",
-                            )
-                        }
+                        LogManager.d(
+                            LogTags.SCRCPY_CLIENT,
+                            "${RemoteTexts.SCRCPY_TERMINATED_SERVER_PROCESS.get()} (scid=$scidHex)",
+                        )
+                    } catch (e: Exception) {
+                        LogManager.w(
+                            LogTags.SCRCPY_CLIENT,
+                            "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.get()}: ${e.message}",
+                        )
                     }
                 }
 
                 stateMachine.clearProgress()
-                currentScid = null
-                activeDeviceId = null
 
                 Result.success(true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "断开连接失败: ${e.message}", e)
                 Result.failure(e)
+            } finally {
+                if (activeConnection === connectionSnapshot) {
+                    activeConnection = null
+                }
             }
         }
 }

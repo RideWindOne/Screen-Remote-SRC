@@ -11,7 +11,7 @@ import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionStat
 import com.screen.remote.android.infrastructure.scrcpy.session.Session
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbConnectionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbIssue
-import com.screen.remote.android.infrastructure.scrcpy.session.model.CleanupContext
+import com.screen.remote.android.infrastructure.scrcpy.session.model.CleanupTrigger
 import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecDetectionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecDetectionSummary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecIssue
@@ -33,6 +33,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEven
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
+import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketConnectContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketConnectingContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketDisconnectContext
@@ -71,7 +72,7 @@ internal suspend fun Session.processEvent(event: SessionEvent) {
         is SessionEvent.DecoderStopped -> handleDecoderStopped(event.decoderType)
         is SessionEvent.DecoderError -> handleDecoderError(event.issue)
         is SessionEvent.RequestReconnect -> handleRequestReconnect(event.issue)
-        is SessionEvent.RequestCleanup -> handleRequestCleanup(event.context)
+        is SessionEvent.RequestCleanup -> handleRequestCleanup(event.trigger)
         is SessionEvent.VideoEncoderDetecting -> handleVideoEncoderDetecting(event.context)
         is SessionEvent.VideoEncoderDetected -> handleVideoEncoderDetected(event.summary)
         is SessionEvent.VideoEncoderDetectFailed -> handleVideoEncoderDetectFailed(event.issue)
@@ -85,8 +86,14 @@ internal suspend fun Session.processEvent(event: SessionEvent) {
     monitorBus?.consumeSessionEvent(event, runtime.sessionState.value)
 }
 
-fun Session.createMonitorBus() {
-    resources.replaceMonitorBus(deviceIdentifier)
+fun Session.createMonitorBus(deviceIdentifier: String = this.deviceIdentifier) {
+    if (monitorBus?.deviceId == deviceIdentifier) return
+    try {
+        monitorBus?.stop()
+    } catch (e: Exception) {
+        LogManager.w(LogTags.SDL, "停止旧 MonitorBus 失败: ${e.message}")
+    }
+    monitorBus = ScrcpyMonitorBus(deviceIdentifier).apply { start() }
 }
 
 fun Session.initMonitor(
@@ -245,8 +252,8 @@ internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
     runtime.invokeReconnectCallback()
 }
 
-internal fun Session.handleRequestCleanup(context: CleanupContext) {
-    LogManager.d(LogTags.SCRCPY_CLIENT, "请求清理会话: ${context.summary()}")
+internal fun Session.handleRequestCleanup(trigger: CleanupTrigger) {
+    LogManager.d(LogTags.SCRCPY_CLIENT, "请求清理会话: trigger=${trigger.logLabel}")
     runtime.updateSessionState(SessionState.Idle)
     runtime.updateSocketExpectation(
         expectedSocketCount = 3,
@@ -281,14 +288,14 @@ internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
         }
 
         val currentOptions = options
-        if (currentOptions.maxSize in 1..suggestedMaxSize) {
+        if (currentOptions.config.maxSize in 1..suggestedMaxSize) {
             LogManager.e(
                 LogTags.SCRCPY_CLIENT,
-                "建议降级尺寸未低于当前 maxSize，停止重试: current=${currentOptions.maxSize} suggested=$suggestedMaxSize",
+                "建议降级尺寸未低于当前 maxSize，停止重试: current=${currentOptions.config.maxSize} suggested=$suggestedMaxSize",
             )
             return
         }
-        setOptions(currentOptions.copy(maxSize = suggestedMaxSize))
+        setOptions(currentOptions.copy(config = currentOptions.config.copy(maxSize = suggestedMaxSize)))
         LogManager.w(
             LogTags.SCRCPY_CLIENT,
             "解码器不支持 ${issue.width}x${issue.height}，本次运行降级 maxSize=$suggestedMaxSize 后重连（不写入持久化配置）",

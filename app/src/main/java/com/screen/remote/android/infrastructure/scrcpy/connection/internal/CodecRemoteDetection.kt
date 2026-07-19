@@ -1,6 +1,5 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 
-import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
@@ -17,33 +16,14 @@ internal suspend fun ConnectionLifecycle.fetchRemoteEncoders(
 ): Pair<List<EncoderCapability>, List<EncoderCapability>>? {
     if (hasRequiredRemoteEncoderCache(options, needVideo, needAudio)) {
         LogManager.d(LogTags.SCRCPY_CLIENT, "本次所需的远程编码器列表已存在，跳过检测")
-        return Pair(options.remoteVideoEncoders, options.remoteAudioEncoders)
+        return Pair(options.capabilityCache.remoteVideoEncoders, options.capabilityCache.remoteAudioEncoders)
     }
 
     LogManager.d(LogTags.SCRCPY_CLIENT, "开始检测远程编码器（复用已上传的 server）...")
 
-    if (!copyServerForDetection(connection)) {
-        return null
-    }
-
     val detectionResult = detectEncodersFromRemote(connection) ?: return null
     return Pair(detectionResult.videoEncoders, detectionResult.audioEncoders)
 }
-
-internal suspend fun ConnectionLifecycle.copyServerForDetection(connection: AdbConnection): Boolean =
-    try {
-        connection
-            .executeShell(
-                "if cp -f ${AppConstants.SCRCPY_SERVER_PATH} ${AppConstants.SCRCPY_SERVER_2_PATH}; then " +
-                    "if [ -s ${AppConstants.SCRCPY_SERVER_2_PATH} ]; then echo 1; else echo 0; fi; " +
-                    "else echo 0; fi",
-                retryOnFailure = false,
-            ).getOrNull()
-            ?.trim() == "1"
-    } catch (e: Exception) {
-        LogManager.w(LogTags.SCRCPY_CLIENT, "复制 server 失败: ${e.message}")
-        false
-    }
 
 internal suspend fun ConnectionLifecycle.detectEncodersFromRemote(connection: AdbConnection): EncoderDetectionResult? {
     val result =
@@ -71,5 +51,5 @@ internal fun hasRequiredRemoteEncoderCache(
     needVideo: Boolean,
     needAudio: Boolean,
 ): Boolean =
-    (!needVideo || options.remoteVideoEncoders.isNotEmpty()) &&
-        (!needAudio || options.remoteAudioEncoders.isNotEmpty())
+    (!needVideo || options.capabilityCache.remoteVideoEncoders.isNotEmpty()) &&
+        (!needAudio || options.capabilityCache.remoteAudioEncoders.isNotEmpty())

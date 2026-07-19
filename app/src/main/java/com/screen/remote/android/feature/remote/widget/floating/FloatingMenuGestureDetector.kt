@@ -2,7 +2,6 @@ package com.screen.remote.android.feature.remote.widget.floating
 
 import android.content.Context
 import android.view.HapticFeedbackConstants
-import com.screen.remote.android.core.common.LogTags
 import kotlin.math.hypot
 
 /**
@@ -39,12 +38,10 @@ internal class FloatingMenuGestureDetector(
             return if (state.canEnterLongPress) {
                 // 300ms内没有移动，现在开始移动 → 长按模式
                 state.isLongPress = true
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "⏱️ 长按触发！按住300ms后开始移动，切换到转圈模式")
                 true
             } else {
                 // 300ms内已经移动了 → 普通拖动
                 state.isLongPress = false
-                FloatingDebugLog.d(LogTags.FLOATING_CONTROLLER, "📱 普通拖动模式（按住${duration}ms后开始移动，距离=${distance.toInt()}px）")
                 false
             }
         }
@@ -113,10 +110,6 @@ internal class FloatingMenuGestureDetector(
                 state.lastHapticDirection = null
                 state.directionEnterTime = 0L
                 state.hasTriggeredHapticInCurrentDirection = false
-                FloatingDebugLog.d(
-                    LogTags.FLOATING_CONTROLLER_MSG,
-                    "↩️ 回到圆心附近（距离=${distance.toInt()}px < ${directionThresholdPx.toInt()}px），重置扇形触感状态",
-                )
             }
             return false
         }
@@ -129,12 +122,6 @@ internal class FloatingMenuGestureDetector(
             state.lastHapticDirection = direction
             state.hasTriggeredHapticInCurrentDirection = false
 
-            val angleRad = kotlin.math.atan2(dy.toDouble(), dx.toDouble())
-            val angleDeg = Math.toDegrees(angleRad).toInt()
-            FloatingDebugLog.d(
-                LogTags.FLOATING_CONTROLLER_MSG,
-                "🎯 进入扇形区域: $direction → ${direction.actionName} (dx=${dx.toInt()}, dy=${dy.toInt()}, 角度=$angleDeg°, 距离=${distance.toInt()}px)",
-            )
             return false
         }
 
@@ -144,10 +131,6 @@ internal class FloatingMenuGestureDetector(
             if (timeInDirection >= DIRECTION_HAPTIC_DELAY_MS) {
                 performHapticFeedbackCompat(HapticFeedbackConstants.LONG_PRESS)
                 state.hasTriggeredHapticInCurrentDirection = true
-                FloatingDebugLog.d(
-                    LogTags.FLOATING_CONTROLLER_MSG,
-                    "🔔 扇形区域触感触发: $direction → ${direction.actionName} (停留${timeInDirection}ms)",
-                )
                 return true
             }
         }

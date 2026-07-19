@@ -8,8 +8,6 @@ import com.screen.remote.android.infrastructure.scrcpy.session.SessionManager
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.observeComponentSnapshot
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
-import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionRuntimeRegistry
-import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionRuntimeStore
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.createMonitorBus
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.initMonitor
 import kotlinx.coroutines.CoroutineScope
@@ -20,23 +18,18 @@ import kotlinx.coroutines.launch
 internal class ScrcpyClientSessionRuntime(
     private val context: Context,
 ) {
-    private val sessionStore = SessionRuntimeStore()
-    val sessionManager = SessionManager(sessionStore)
-    val sessionContext: SessionContext = sessionStore.createContext()
+    val sessionManager = SessionManager()
+    val sessionContext: SessionContext = sessionManager.createContext()
 
     private var sessionMonitorInitialized = false
     private var sessionStateObserverJob: Job? = null
     private var componentSnapshotObserverJob: Job? = null
 
-    init {
-        SessionRuntimeRegistry.install(sessionStore)
-    }
-
     suspend fun ensureSession(
         sessionId: String,
         options: ScrcpyOptions,
         onVideoResolution: (Int, Int) -> Unit,
-    ) = sessionManager.currentOrNull ?: run {
+    ) = sessionManager.currentOrNull?.takeIf { it.sessionId == sessionId } ?: run {
         val storage = SessionStorage(context)
         val sessionOptions = storage.getOptions(sessionId) ?: options
         sessionManager.start(
@@ -45,6 +38,8 @@ internal class ScrcpyClientSessionRuntime(
             onVideoResolution = onVideoResolution,
         )
     }
+
+    fun createBoundContext(): SessionContext = sessionContext.bindCurrent()
 
     fun ensureMonitor(
         stateMachine: ConnectionStateMachine,

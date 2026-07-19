@@ -2,9 +2,66 @@ package com.screen.remote.android.core.update
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
+import java.util.TimeZone
 
 class AppUpdateModelsTest {
+    @Test
+    fun fourPartReleaseVersionIsNewerThanThreePartAppVersion() {
+        val release =
+            GitHubReleaseInfo(
+                "4.4.3.3",
+                "4.4.3.3",
+                "release-url",
+                prerelease = false,
+                draft = false,
+            )
+
+        assertEquals(
+            "4.4.3.3",
+            selectLatestRelease(listOf(release), "4.4.3", UpdateChannel.STABLE)?.tagName,
+        )
+    }
+
+    @Test
+    fun automaticCheckIsDueOnlyOnAnotherLocalCalendarDay() {
+        val timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+        val previousNight =
+            Calendar.getInstance(timeZone).apply {
+                clear()
+                set(2026, Calendar.JULY, 20, 23, 50)
+            }.timeInMillis
+        val todayMorning =
+            Calendar.getInstance(timeZone).apply {
+                clear()
+                set(2026, Calendar.JULY, 21, 0, 10)
+            }.timeInMillis
+        val todayEvening =
+            Calendar.getInstance(timeZone).apply {
+                clear()
+                set(2026, Calendar.JULY, 21, 23, 50)
+            }.timeInMillis
+
+        assertTrue(isAutomaticUpdateCheckDue(UpdateCheckCache(), todayMorning, timeZone))
+        assertFalse(
+            isAutomaticUpdateCheckDue(
+                UpdateCheckCache(checkedAtEpochMillis = todayMorning),
+                todayEvening,
+                timeZone,
+            ),
+        )
+        assertTrue(
+            isAutomaticUpdateCheckDue(
+                UpdateCheckCache(checkedAtEpochMillis = previousNight),
+                todayMorning,
+                timeZone,
+            ),
+        )
+    }
+
     @Test
     fun stableChannelIgnoresPrereleases() {
         val releases =

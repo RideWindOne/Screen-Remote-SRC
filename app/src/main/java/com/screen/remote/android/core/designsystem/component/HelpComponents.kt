@@ -2,6 +2,7 @@ package com.screen.remote.android.core.designsystem.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppColors
@@ -87,11 +91,7 @@ private fun HelpDialog(
             )
         },
         text = {
-            Text(
-                text = helpText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            LinkifiedHelpText(helpText)
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
@@ -100,6 +100,42 @@ private fun HelpDialog(
                     color = AppColors.iOSBlue,
                 )
             }
+        },
+    )
+}
+
+@Suppress("DEPRECATION")
+@Composable
+private fun LinkifiedHelpText(helpText: String) {
+    val uriHandler = LocalUriHandler.current
+    val linkPattern = remember { Regex("https?://\\S+") }
+    val annotatedText =
+        remember(helpText) {
+            buildAnnotatedString {
+                var cursor = 0
+                linkPattern.findAll(helpText).forEach { match ->
+                    append(helpText.substring(cursor, match.range.first))
+                    pushStringAnnotation(tag = "URL", annotation = match.value)
+                    pushStyle(SpanStyle(color = AppColors.iOSBlue))
+                    append(match.value)
+                    pop()
+                    pop()
+                    cursor = match.range.last + 1
+                }
+                append(helpText.substring(cursor))
+            }
+        }
+    ClickableText(
+        text = annotatedText,
+        style =
+            MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+        onClick = { offset ->
+            annotatedText
+                .getStringAnnotations(tag = "URL", start = offset, end = offset)
+                .firstOrNull()
+                ?.let { annotation -> uriHandler.openUri(annotation.item) }
         },
     )
 }

@@ -1,12 +1,17 @@
 package com.screen.remote.android.infrastructure.scrcpy.client
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.event.ScrcpyError
 import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.event.StatusChanged
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.util.compat.ServiceApiCompat
 import com.screen.remote.android.core.domain.model.ConnectionProgress
@@ -37,12 +42,8 @@ class ScrcpyClient(
 ) {
     private val sessionRuntime = ScrcpyClientSessionRuntime(context)
     val sessionManager = sessionRuntime.sessionManager
+    private val issueTracker = SessionIssueTracker()
 
-    // 当前会话 ID（UUID）
-    private var currentSessionId: String? = null
-
-    // 当前设备 ID（ADB transport serial，例如 tcp:host:port、mdns:service 或 usb:serial）
-    private var currentDeviceId: String? = null
     private var protectedDeviceId: String? = null
 
     private val sessionContext: SessionContext = sessionRuntime.sessionContext
@@ -59,17 +60,18 @@ class ScrcpyClient(
     // 连接组件
     private val stateMachine = ConnectionStateMachine()
     private val socketManager = ConnectionSocketManager(sessionContext)
-    private val metadataReader = ConnectionMetadataReader(socketManager)
-    private val shellMonitor = ConnectionShellMonitor(sessionContext)
+    private val metadataReader = ConnectionMetadataReader(socketManager, issueTracker)
+    private val shellMonitor = ConnectionShellMonitor(sessionContext, issueTracker)
 
     // 控制器
     private val controller =
         ScrcpyController(
-            adbConnectionManager = adbConnectionManager,
-            getDeviceId = { currentDeviceId },
+            getDeviceId = ::getCurrentDeviceId,
             getControlSocket = { socketManager.controlSocket },
             clearControlSocket = { socketManager.dropControlSocket() },
             localPort = 27183,
+            onClipboardReceived = ::updateLocalClipboard,
+            issueTracker = issueTracker,
         )
 
     private val lifecycle =
@@ -81,6 +83,7 @@ class ScrcpyClient(
             socketManager,
             metadataReader,
             shellMonitor,
+            issueTracker,
             onVideoStreamReady = { _videoStreamState.value = it },
             onAudioStreamReady = { _audioStreamState.value = it },
         )
@@ -104,8 +107,8 @@ class ScrcpyClient(
     private val eventHandler =
         ScrcpyClientEventHandler(
             connectionState = _connectionState,
-            getCurrentSessionId = { currentSessionId },
-            getCurrentDeviceId = { currentDeviceId },
+            getCurrentSessionId = ::getCurrentSessionId,
+            getCurrentDeviceId = ::getCurrentDeviceId,
             updateConnectionStateOnError = { message -> stateCoordinator.updateConnectionStateOnError(message) },
         )
 
@@ -114,8 +117,7 @@ class ScrcpyClient(
         ScrcpyClientReconnect(
             adbConnectionManager = adbConnectionManager,
             connectionState = _connectionState,
-            getCurrentSessionId = { currentSessionId },
-            getCurrentDeviceId = { currentDeviceId },
+            getCurrentDeviceId = ::getCurrentDeviceId,
             connect = ::connect,
             sessionManager = sessionManager,
         )
@@ -125,7 +127,7 @@ class ScrcpyClient(
             connectionState = _connectionState,
             sessionManager = sessionManager,
             reconnectManager = reconnectManager,
-            getCurrentDeviceId = { currentDeviceId },
+            getCurrentDeviceId = ::getCurrentDeviceId,
         )
 
     private val connectionCoordinator =
@@ -137,15 +139,11 @@ class ScrcpyClient(
             videoResolution = _videoResolution,
             lifecycle = lifecycle,
             controller = controller,
-            shellMonitor = shellMonitor,
             healthMonitor = lifecycle.healthMonitor,
             sessionRuntime = sessionRuntime,
             reconnectManager = reconnectManager,
-            getCurrentDeviceId = { currentDeviceId },
-            setCurrentIds = { sessionId, deviceId ->
-                currentSessionId = sessionId
-                currentDeviceId = deviceId
-            },
+            issueTracker = issueTracker,
+            getCurrentDeviceId = ::getCurrentDeviceId,
             onSessionStateChanged = { state -> stateCoordinator.handleSessionStateChange(state) },
             startForegroundService = ::startForegroundService,
         )
@@ -205,6 +203,13 @@ class ScrcpyClient(
 
     suspend fun setClipboardAndPaste(text: String): Result<Boolean> = controller.setClipboardAndPaste(text)
 
+    private fun updateLocalClipboard(text: String) {
+        Handler(Looper.getMainLooper()).post {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            clipboard?.setPrimaryClip(ClipData.newPlainText("Screen Remote", text))
+        }
+    }
+
     suspend fun wakeUpScreen(): Result<Boolean> {
         val resolution = videoResolution.value
         return if (resolution != null) {
@@ -223,7 +228,7 @@ class ScrcpyClient(
         options: ScrcpyOptions,
     ) {
         try {
-            val deviceId = currentDeviceId ?: return
+            val deviceId = getCurrentDeviceId() ?: return
             protectedDeviceId
                 ?.takeIf { it != deviceId }
                 ?.let { previousDeviceId ->
@@ -245,14 +250,15 @@ class ScrcpyClient(
     /**
      * 获取当前会话 ID
      */
-    fun getCurrentSessionId(): String? = currentSessionId
+    fun getCurrentSessionId(): String? = sessionManager.currentOrNull?.sessionId
 
     /**
      * 获取当前设备 ID
      */
-    fun getCurrentDeviceId(): String? = currentDeviceId
+    fun getCurrentDeviceId(): String? =
+        lifecycle.activeDeviceId ?: sessionManager.currentOrNull?.adbConnection?.deviceId
 
     fun getCurrentSessionOptions(): ScrcpyOptions? = sessionManager.currentOrNull?.options
 
-    fun createSessionContext(): SessionContext = sessionContext
+    fun createSessionContext(): SessionContext = sessionRuntime.createBoundContext()
 }

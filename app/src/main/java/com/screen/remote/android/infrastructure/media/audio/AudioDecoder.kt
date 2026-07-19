@@ -6,6 +6,7 @@ import com.screen.remote.android.core.common.event.DemuxerError
 import com.screen.remote.android.core.common.event.DeviceDisconnected
 import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.infrastructure.scrcpy.connection.isExpectedConnectionClosure
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderType
@@ -136,9 +137,7 @@ class AudioDecoder(
 
     private fun handleDecoderFailure(error: Exception) {
         when {
-            error.isExpectedShutdown() -> {
-                LogManager.w(LogTags.AUDIO_DECODER, "音频解码结束: ${error.message}")
-            }
+            error.isExpectedShutdown() -> Unit
             else -> {
                 LogManager.e(LogTags.AUDIO_DECODER, "音频解码失败: ${error.message}", error)
             }
@@ -177,7 +176,7 @@ class AudioDecoder(
     }
 
     private fun Exception.isConnectionLost(): Boolean =
-        message?.contains("Socket closed") == true || message?.contains("Stream closed") == true
+        isExpectedConnectionClosure()
 
     private fun Exception.isExpectedShutdown(): Boolean =
         isConnectionLost() || message?.contains("Pending dequeue output buffer request cancelled") == true
