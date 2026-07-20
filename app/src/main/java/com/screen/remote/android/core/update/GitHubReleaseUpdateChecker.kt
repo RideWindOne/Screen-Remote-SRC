@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -70,6 +71,25 @@ class GitHubReleaseUpdateChecker(
                         htmlUrl = obj["html_url"]?.jsonPrimitive?.content.orEmpty(),
                         prerelease = obj["prerelease"]?.jsonPrimitive?.booleanOrNull == true,
                         draft = obj["draft"]?.jsonPrimitive?.booleanOrNull == true,
+                        assets =
+                            obj["assets"]?.jsonArray?.mapNotNull { assetElement ->
+                                val asset = assetElement.jsonObject
+                                val assetName = asset["name"]?.jsonPrimitive?.content.orEmpty()
+                                val downloadUrl = asset["browser_download_url"]?.jsonPrimitive?.content.orEmpty()
+                                if (assetName.isBlank() || downloadUrl.isBlank()) return@mapNotNull null
+                                GitHubReleaseAsset(
+                                    name = assetName,
+                                    downloadUrl = downloadUrl,
+                                    sizeBytes = asset["size"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0,
+                                    sha256 =
+                                        asset["digest"]
+                                            ?.jsonPrimitive
+                                            ?.contentOrNull
+                                            ?.removePrefix("sha256:")
+                                            ?.takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
+                                            ?.lowercase(),
+                                )
+                            }.orEmpty(),
                     )
                 }
             }

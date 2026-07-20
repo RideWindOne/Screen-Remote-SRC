@@ -62,6 +62,13 @@ object SettingsTexts {
     val ABOUT_UPDATE_CURRENT_VERSION = TextPair("当前版本：%s", "Current version: %s")
     val ABOUT_UPDATE_LATEST_VERSION = TextPair("最新版本：%s", "Latest version: %s")
     val ABOUT_UPDATE_OPEN_RELEASES = TextPair("查看发布页", "View release")
+    val ABOUT_UPDATE_DOWNLOAD_INSTALL = TextPair("下载并安装", "Download and install")
+    val ABOUT_UPDATE_DOWNLOADING = TextPair("正在下载 %s", "Downloading %s")
+    val ABOUT_UPDATE_CANCEL_DOWNLOAD = TextPair("取消下载", "Cancel download")
+    val ABOUT_UPDATE_NO_APK = TextPair("没有适用于当前设备的安装包", "No compatible APK is available")
+    val ABOUT_UPDATE_DOWNLOAD_FAILED = TextPair("下载更新失败，请稍后重试", "Update download failed. Please try again")
+    val ABOUT_UPDATE_INSTALL_PERMISSION =
+        TextPair("请允许 Screen Remote 安装应用后重试", "Allow Screen Remote to install apps, then try again")
     val ABOUT_UPDATE_LATER = TextPair("稍后", "Later")
     val ABOUT_UPDATE_LATEST = TextPair("当前已是最新版本", "You're up to date")
     val ABOUT_UPDATE_FAILED = TextPair("检查更新失败，请稍后重试", "Update check failed. Please try again later")

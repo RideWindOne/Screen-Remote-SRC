@@ -10,6 +10,18 @@ import java.util.TimeZone
 
 class AppUpdateModelsTest {
     @Test
+    fun apkAssetMatchesDeviceAbiBeforeUniversalFallback() {
+        val arm64 = GitHubReleaseAsset("Screen.Remote-arm64-v8a-4.4.3_3.apk", "arm64-url", 10, null)
+        val x86 = GitHubReleaseAsset("Screen.Remote-x86_64-4.4.3_3.apk", "x86-url", 10, null)
+        val universal = GitHubReleaseAsset("Screen.Remote-universal-4.4.3_3.apk", "universal-url", 20, null)
+        val release = GitHubReleaseInfo("4.4.3.3", "4.4.3.3", "url", false, false, listOf(universal, x86, arm64))
+
+        assertEquals(arm64, selectApkAsset(release, listOf("arm64-v8a", "armeabi-v7a")))
+        assertEquals(x86, selectApkAsset(release, listOf("x86_64", "x86")))
+        assertEquals(universal, selectApkAsset(release, listOf("riscv64")))
+    }
+
+    @Test
     fun fourPartReleaseVersionIsNewerThanThreePartAppVersion() {
         val release =
             GitHubReleaseInfo(

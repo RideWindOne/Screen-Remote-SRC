@@ -34,6 +34,14 @@ data class GitHubReleaseInfo(
     val htmlUrl: String,
     val prerelease: Boolean,
     val draft: Boolean,
+    val assets: List<GitHubReleaseAsset> = emptyList(),
+)
+
+data class GitHubReleaseAsset(
+    val name: String,
+    val downloadUrl: String,
+    val sizeBytes: Long,
+    val sha256: String?,
 )
 
 data class UpdateCheckCache(
@@ -86,4 +94,15 @@ fun selectLatestRelease(
         }
         .maxWithOrNull(compareBy<Pair<GitHubReleaseInfo, AppVersion>> { it.second })
         ?.first
+}
+
+fun selectApkAsset(
+    release: GitHubReleaseInfo,
+    supportedAbis: List<String>,
+): GitHubReleaseAsset? {
+    val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+    supportedAbis.forEach { abi ->
+        apkAssets.firstOrNull { it.name.contains("-$abi-", ignoreCase = true) }?.let { return it }
+    }
+    return apkAssets.firstOrNull { it.name.contains("-universal-", ignoreCase = true) }
 }

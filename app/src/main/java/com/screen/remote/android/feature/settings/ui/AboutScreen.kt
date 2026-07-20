@@ -10,6 +10,8 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -71,6 +73,11 @@ import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
+import com.screen.remote.android.core.update.AppUpdateDownloader
+import com.screen.remote.android.core.update.DownloadedUpdate
+import com.screen.remote.android.core.update.selectApkAsset
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -420,8 +427,61 @@ internal fun UpdateAvailableDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val downloader = remember(context) { AppUpdateDownloader(context.applicationContext) }
+    val asset = remember(release) { selectApkAsset(release, Build.SUPPORTED_ABIS.toList()) }
+    var downloadProgress by remember { mutableStateOf<Int?>(null) }
+    var downloadJob by remember { mutableStateOf<Job?>(null) }
+    var pendingUpdate by remember { mutableStateOf<DownloadedUpdate?>(null) }
+    val installPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            val update = pendingUpdate ?: return@rememberLauncherForActivityResult
+            if (AppUpdateDownloader.canInstallPackages(context)) {
+                AppUpdateDownloader.install(context, update)
+                pendingUpdate = null
+                onDismiss()
+            } else {
+                Toast.makeText(context, SettingsTexts.ABOUT_UPDATE_INSTALL_PERMISSION.get(), Toast.LENGTH_LONG).show()
+            }
+        }
+
+    fun installOrRequestPermission(update: DownloadedUpdate) {
+        if (AppUpdateDownloader.canInstallPackages(context)) {
+            AppUpdateDownloader.install(context, update)
+            onDismiss()
+        } else {
+            pendingUpdate = update
+            installPermissionLauncher.launch(AppUpdateDownloader.unknownSourcesSettingsIntent(context))
+        }
+    }
+
+    fun startDownload() {
+        if (downloadJob != null) return
+        if (asset == null) {
+            Toast.makeText(context, SettingsTexts.ABOUT_UPDATE_NO_APK.get(), Toast.LENGTH_LONG).show()
+            return
+        }
+        downloadJob =
+            scope.launch {
+                try {
+                    val update = downloader.download(asset) { downloadProgress = it }
+                    installOrRequestPermission(update)
+                } catch (_: CancellationException) {
+                    // The user explicitly cancelled the download.
+                } catch (_: Exception) {
+                    Toast.makeText(context, SettingsTexts.ABOUT_UPDATE_DOWNLOAD_FAILED.get(), Toast.LENGTH_LONG).show()
+                } finally {
+                    downloadJob = null
+                    downloadProgress = null
+                }
+            }
+    }
+
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            downloadJob?.cancel()
+            onDismiss()
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO),
         title = {
@@ -470,14 +530,18 @@ internal fun UpdateAvailableDialog(
             TextButton(
                 modifier = Modifier.height(36.dp),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                onClick = {
-                    val url = release.htmlUrl.ifBlank { RELEASES_URL }
-                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                    onDismiss()
-                },
+                enabled = downloadJob == null,
+                onClick = ::startDownload,
             ) {
                 Text(
-                    text = SettingsTexts.ABOUT_UPDATE_OPEN_RELEASES.get(),
+                    text =
+                        if (downloadJob != null) {
+                            SettingsTexts.ABOUT_UPDATE_DOWNLOADING.format(
+                                downloadProgress?.let { "$it%" } ?: "…",
+                            )
+                        } else {
+                            SettingsTexts.ABOUT_UPDATE_DOWNLOAD_INSTALL.get()
+                        },
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
@@ -486,10 +550,23 @@ internal fun UpdateAvailableDialog(
             TextButton(
                 modifier = Modifier.height(36.dp),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                onClick = onDismiss,
+                onClick = {
+                    if (downloadJob != null) {
+                        downloadJob?.cancel()
+                    } else {
+                        val url = release.htmlUrl.ifBlank { RELEASES_URL }
+                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                        onDismiss()
+                    }
+                },
             ) {
                 Text(
-                    text = SettingsTexts.ABOUT_UPDATE_LATER.get(),
+                    text =
+                        if (downloadJob != null) {
+                            SettingsTexts.ABOUT_UPDATE_CANCEL_DOWNLOAD.get()
+                        } else {
+                            SettingsTexts.ABOUT_UPDATE_OPEN_RELEASES.get()
+                        },
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
