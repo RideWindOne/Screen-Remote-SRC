@@ -8,6 +8,7 @@
 package com.screen.remote.android.core.common.util.compat
 
 import android.content.Context
+import android.graphics.Rect
 import android.os.Build
 import android.os.Vibrator
 import android.os.VibrationEffect
@@ -18,6 +19,20 @@ import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+
+/**
+ * 读取屏幕挖孔的安全边距。Android 9 以下没有 DisplayCutout，返回零边距。
+ */
+fun getDisplayCutoutSafeInsets(windowInsets: WindowInsets): Rect {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return Rect()
+    val cutout = windowInsets.displayCutout ?: return Rect()
+    return Rect(
+        cutout.safeInsetLeft,
+        cutout.safeInsetTop,
+        cutout.safeInsetRight,
+        cutout.safeInsetBottom,
+    )
+}
 
 /**
  * 设置窗口适配系统栏

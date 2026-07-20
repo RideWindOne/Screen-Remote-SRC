@@ -82,6 +82,32 @@ object SessionTexts {
             "Choose audio and video formats, plus the encoder on the device and decoder on this phone."
         )
 
+    val ONBOARDING_FLOATING_BALL_EYEBROW = TextPair("悬浮球手势", "FLOATING BALL GESTURES")
+    val ONBOARDING_FLOATING_BALL_TITLE = TextPair("常用操作，一划即达", "Quick controls, one gesture away")
+    val ONBOARDING_FLOATING_BALL_DESCRIPTION =
+        TextPair(
+            "在会话的连接选项中开启悬浮球，即可在远程控制时快速操作；游戏模式下同样遵循该开关。",
+            "Enable the floating ball in a session's connection options for quick controls while connected. Game Mode follows the same setting.",
+        )
+    val ONBOARDING_FLOATING_BALL_TAP_TITLE = TextPair("点击与拖动", "Tap and drag")
+    val ONBOARDING_FLOATING_BALL_TAP_BODY =
+        TextPair(
+            "点击打开快捷菜单，拖动可调整悬浮球位置。",
+            "Tap to open the quick menu, or drag to reposition the floating ball.",
+        )
+    val ONBOARDING_FLOATING_BALL_SWIPE_TITLE = TextPair("长按后向四周滑动", "Press and slide")
+    val ONBOARDING_FLOATING_BALL_SWIPE_BODY =
+        TextPair(
+            "向上回到桌面、向下展开通知栏、向左返回、向右打开后台任务。",
+            "Slide up for Home, down for notifications, left for Back, or right for Recents.",
+        )
+    val ONBOARDING_FLOATING_BALL_SCREENSHOT_TITLE = TextPair("持续长按", "Keep holding")
+    val ONBOARDING_FLOATING_BALL_SCREENSHOT_BODY =
+        TextPair(
+            "保持长按不移动，可截取远程设备屏幕。",
+            "Keep holding without moving to capture the remote screen.",
+        )
+
     val ONBOARDING_ADVANCED_EYEBROW = TextPair("进阶玩法", "ADVANCED FEATURES")
     val ONBOARDING_ADVANCED_TITLE = TextPair("更多场景，一台设备搞定", "Built for more ways to play and work")
     val ONBOARDING_ADVANCED_DESCRIPTION =
@@ -409,8 +435,8 @@ object SessionTexts {
     // 连接选项
     val HELP_GAME_MODE =
         TextPair(
-            "面向实时游戏优化触控与视频调度。开启后，最大尺寸、视频码率和最大帧率使用独立的低延迟档位；连接成功后暂停悬浮球、日志记录、性能面板和 mDNS 后台发现。",
-            "Optimize touch and video scheduling for real-time games. Max size, video bitrate, and max FPS use independent low-latency presets. Floating controls, logging, performance stats, and background mDNS discovery are paused after connection.",
+            "面向实时游戏优化触控与视频调度。开启后，最大尺寸、视频码率和最大帧率使用独立的低延迟档位；连接成功后暂停日志记录、性能面板和 mDNS 后台发现。",
+            "Optimize touch and video scheduling for real-time games. Max size, video bitrate, and max FPS use independent low-latency presets. Logging, performance stats, and background mDNS discovery are paused after connection.",
         )
     val HELP_GAME_MODE_FULL_SCREEN_DISABLED =
         TextPair(
@@ -424,8 +450,8 @@ object SessionTexts {
         )
     val HELP_SHOW_FLOATING_BALL =
         TextPair(
-            "在远程控制页面显示用于快捷操作的悬浮球。游戏模式下始终隐藏。",
-            "Show the floating ball for quick actions on the remote control screen. It is always hidden in Game Mode.",
+            "在远程控制页面显示悬浮球。点击打开快捷菜单；拖动可调整位置；长按后向上、下、左、右滑动，分别执行桌面、展开通知栏、返回、后台任务；持续长按可截取远程设备屏幕。",
+            "Show the floating ball on the remote control screen. Tap to open the quick menu; drag to reposition it; press and slide up, down, left, or right for Home, notifications, Back, or Recents; keep holding to capture the remote screen.",
         )
     val HELP_ENABLE_HARDWARE_DECODING =
         TextPair(
@@ -451,8 +477,8 @@ object SessionTexts {
         )
     val HELP_GAME_VIDEO_BITRATE =
         TextPair(
-            "游戏模式可选 1M、2M、4M。调整码率不会自动修改最大尺寸。",
-            "Game mode offers 1M, 2M, and 4M. Changing bitrate does not change max size.",
+            "游戏模式可选 1M、2M、4M、8M、12M、20M，为高帧率复杂画面保留码率余量。调整码率不会自动修改最大尺寸。",
+            "Game mode offers 1M、2M、4M、8M、12M、20M to preserve bitrate headroom for complex high-FPS scenes. Changing bitrate does not change max size.",
         )
     val HELP_GAME_MAX_FPS =
         TextPair(

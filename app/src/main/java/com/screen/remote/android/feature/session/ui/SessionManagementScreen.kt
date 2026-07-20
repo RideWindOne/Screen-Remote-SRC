@@ -44,7 +44,7 @@ fun SessionManagementScreen(
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val scope = rememberCoroutineScope()
-    remember(sessionData.id) {
+    LaunchedEffect(sessionData.id) {
         SessionManagementAppCache.selectScope(sessionData.id)
     }
     var selectedSection by remember(sessionData.id) {

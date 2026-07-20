@@ -2,6 +2,7 @@ package com.screen.remote.android.feature.settings.ui
 
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.AppSettings
+import com.screen.remote.android.feature.device.data.PairingEndpointMetadataBackup
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -10,6 +11,7 @@ internal data class BackupData(
     val sessions: List<SessionData>,
     val groups: List<BackupGroupData>,
     val settings: AppSettings,
+    val pairingEndpointMetadata: PairingEndpointMetadataBackup = PairingEndpointMetadataBackup(),
     val adbKeys: AdbKeysData,
 )
 

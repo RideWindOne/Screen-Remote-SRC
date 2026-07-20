@@ -28,6 +28,19 @@ data class PairingEndpointMetadata(
 )
 
 @Serializable
+data class PairingEndpointMetadataBackup(
+    val metadata: List<PairingEndpointMetadata> = emptyList(),
+    val mdnsPairings: List<MdnsPairingBackupRecord> = emptyList(),
+)
+
+@Serializable
+data class MdnsPairingBackupRecord(
+    val deviceKey: String,
+    val endpoint: String,
+    val updatedAtEpochMillis: Long = 0L,
+)
+
+@Serializable
 private data class MdnsPairingRecord(
     val deviceKey: String,
     val endpoint: String,
@@ -56,7 +69,58 @@ class PairingEndpointMetadataManager(
                     json.decodeFromString<List<PairingEndpointMetadata>>(raw)
                         .associateBy { it.endpoint.trim().lowercase() }
                 }.getOrDefault(emptyMap())
-                }.first()
+            }.first()
+
+    suspend fun exportBackup(): PairingEndpointMetadataBackup =
+        context.pairingEndpointMetadataDataStore.data
+            .map { preferences ->
+                PairingEndpointMetadataBackup(
+                    metadata = decode(preferences[Keys.METADATA]),
+                    mdnsPairings =
+                        decodeMdnsPairings(preferences[Keys.MDNS_PAIRINGS])
+                            .map { record ->
+                                MdnsPairingBackupRecord(
+                                    deviceKey = record.deviceKey,
+                                    endpoint = record.endpoint,
+                                    updatedAtEpochMillis = record.updatedAtEpochMillis,
+                                )
+                            },
+                )
+            }.first()
+
+    suspend fun importBackup(backup: PairingEndpointMetadataBackup) {
+        context.pairingEndpointMetadataDataStore.edit { preferences ->
+            preferences[Keys.METADATA] =
+                json.encodeToString(
+                    backup.metadata
+                        .mapNotNull { metadata ->
+                            val endpoint = normalizeEndpointHost(metadata.endpoint).lowercase()
+                            if (endpoint.isBlank()) {
+                                null
+                            } else {
+                                metadata.copy(endpoint = endpoint)
+                            }
+                        }.distinctBy { it.endpoint },
+                )
+            preferences[Keys.MDNS_PAIRINGS] =
+                json.encodeToString(
+                    backup.mdnsPairings
+                        .mapNotNull { record ->
+                            val deviceKey = DeviceTransportSerial.mdnsDeviceKey(record.deviceKey)
+                            val endpoint = normalizeEndpointHost(record.endpoint).lowercase()
+                            if (DeviceTransportSerial.mdnsDeviceSerial(deviceKey).isBlank() || endpoint.isBlank()) {
+                                null
+                            } else {
+                                MdnsPairingRecord(
+                                    deviceKey = deviceKey,
+                                    endpoint = endpoint,
+                                    updatedAtEpochMillis = record.updatedAtEpochMillis,
+                                )
+                            }
+                        }.distinctBy { it.deviceKey },
+                )
+        }
+    }
 
     suspend fun saveSuccessfulPairing(
         endpoint: String,

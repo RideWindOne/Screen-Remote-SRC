@@ -76,11 +76,11 @@ class SessionDialogState(
 
     // 视频配置
     var maxSize by mutableStateOf(initialConfig.maxSize.takeIf { it > 0 }?.toString().orEmpty())
-    var videoBitrate by mutableStateOf(initialConfig.videoBitRate.toString())
+    var videoBitrate by mutableStateOf(formatBitrateForEditor(initialConfig.videoBitRate))
     var maxFps by mutableStateOf(initialConfig.maxFps.toString())
 
     // 音频配置
-    var audioBitrate by mutableStateOf(initialConfig.audioBitRate.toString())
+    var audioBitrate by mutableStateOf(formatBitrateForEditor(initialConfig.audioBitRate))
     var audioVolume by mutableFloatStateOf(1.0f)
     private val tcpPortForwardRules = sessionData?.tcpPortForwardRules
     var newDisplayWidth by mutableStateOf(parseNewDisplay(initialConfig.newDisplay).width)
@@ -130,7 +130,7 @@ class SessionDialogState(
             closestGameOption(
                 parseBitrateBitsPerSecond(videoBitrate),
                 GAME_VIDEO_BITRATE_OPTIONS,
-                defaultValue = ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
+                defaultValue = GAME_VIDEO_BITRATE_OPTIONS.first(),
             ).toGameBitrateLabel()
         maxFps = closestGameOption(maxFps.toIntOrNull(), GAME_MAX_FPS_OPTIONS, defaultValue = 60).toString()
     }
@@ -309,7 +309,12 @@ class SessionDialogState(
 }
 
 internal val GAME_MAX_SIZE_OPTIONS = listOf(720, 1080, 1920)
-internal val GAME_VIDEO_BITRATE_OPTIONS = listOf(1_000_000, 2_000_000, 4_000_000)
+
+/**
+ * 高帧率游戏场景需要为复杂画面保留码率余量，避免编码器因缺少码率而持续抬高 QP。
+ * 建议来源：https://github.com/Genymobile/scrcpy/pull/6954#issuecomment-5022877392
+ */
+internal val GAME_VIDEO_BITRATE_OPTIONS = listOf(1_000_000, 2_000_000, 4_000_000, 8_000_000, 12_000_000, 20_000_000)
 internal val GAME_MAX_FPS_OPTIONS = listOf(60, 90, 120)
 
 internal fun closestGameOption(
@@ -332,6 +337,14 @@ private fun parseBitrateBitsPerSecond(value: String): Int? {
     val number = if (multiplier == 1) normalized else normalized.dropLast(1)
     return number.toDoubleOrNull()?.times(multiplier)?.toInt()
 }
+
+/** Convert stored bps values back to the compact units used by the session editor. */
+internal fun formatBitrateForEditor(bitsPerSecond: Int): String =
+    when {
+        bitsPerSecond > 0 && bitsPerSecond % 1_000_000 == 0 -> "${bitsPerSecond / 1_000_000}M"
+        bitsPerSecond > 0 && bitsPerSecond % 1_000 == 0 -> "${bitsPerSecond / 1_000}K"
+        else -> bitsPerSecond.toString()
+    }
 
 private fun Int.toGameBitrateLabel(): String = "${this / 1_000_000}M"
 

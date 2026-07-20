@@ -6,14 +6,13 @@ import org.junit.Test
 
 class GameModeRuntimePolicyTest {
     @Test
-    fun gameSessionDoesNotShowFloatingMenu() {
-        assertFalse(shouldShowFloatingMenu(videoAvailable = true, gameMode = true, showFloatingBall = true))
-        assertTrue(shouldShowFloatingMenu(videoAvailable = true, gameMode = false, showFloatingBall = true))
+    fun gameSessionCanShowFloatingMenu() {
+        assertTrue(shouldShowFloatingMenu(videoAvailable = true, showFloatingBall = true))
     }
 
     @Test
     fun sessionCanHideFloatingMenu() {
-        assertFalse(shouldShowFloatingMenu(videoAvailable = true, gameMode = false, showFloatingBall = false))
-        assertFalse(shouldShowFloatingMenu(videoAvailable = false, gameMode = false, showFloatingBall = true))
+        assertFalse(shouldShowFloatingMenu(videoAvailable = true, showFloatingBall = false))
+        assertFalse(shouldShowFloatingMenu(videoAvailable = false, showFloatingBall = true))
     }
 }

@@ -15,7 +15,7 @@ class SessionDialogGameVideoSettingsTest {
         state.updateGameMode(true)
 
         assertEquals("720", state.maxSize)
-        assertEquals("1M", state.videoBitrate)
+        assertEquals("8M", state.videoBitrate)
         assertEquals("60", state.maxFps)
     }
 
@@ -26,7 +26,7 @@ class SessionDialogGameVideoSettingsTest {
         state.updateGameMode(true)
 
         assertEquals("720", state.maxSize)
-        assertEquals("4M", state.videoBitrate)
+        assertEquals("8M", state.videoBitrate)
         assertEquals("60", state.maxFps)
     }
 

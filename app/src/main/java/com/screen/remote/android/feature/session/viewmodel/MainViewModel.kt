@@ -15,6 +15,7 @@ import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.domain.model.ScrcpyAction
+import com.screen.remote.android.core.update.parseAppVersion
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.data.repository.toData
@@ -75,6 +76,7 @@ internal fun resolveSessionOnboardingState(
 ): SessionOnboardingState =
     when {
         lastSeenVersion == null -> SessionOnboardingState.INTRODUCTION
+        parseAppVersion(lastSeenVersion) == null -> SessionOnboardingState.RECENT_UPDATES
         lastSeenVersion != currentVersion -> SessionOnboardingState.RECENT_UPDATES
         else -> SessionOnboardingState.HIDDEN
     }

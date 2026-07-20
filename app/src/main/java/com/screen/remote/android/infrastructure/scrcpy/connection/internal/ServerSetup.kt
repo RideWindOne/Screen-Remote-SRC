@@ -270,8 +270,11 @@ internal fun ConnectionLifecycle.buildScrcpyCommand(
         params.add("audio=false")
     }
 
-    // 关键帧间隔不再由应用层配置，遵循 scrcpy-server 默认行为。
-    buildVideoCodecOptions(config.codecOptions)?.let { codecOptions ->
+    buildVideoCodecOptions(
+        userCodecOptions = config.codecOptions,
+        videoEncoder = videoEncoder,
+        videoCodec = videoCodec,
+    )?.let { codecOptions ->
         params.add("video_codec_options=$codecOptions")
     }
 
@@ -315,10 +318,56 @@ internal fun resolveAudioCodec(
         ?: CodecSelector.inferAudioCodecFromName(audioEncoder).ifBlank { CodecCatalog.DEFAULT_AUDIO_CODEC }
 }
 
-private fun buildVideoCodecOptions(userCodecOptions: String): String? =
-    userCodecOptions
+internal fun buildVideoCodecOptions(
+    userCodecOptions: String,
+    videoEncoder: String,
+    videoCodec: String,
+): String? {
+    val userOptions =
+        userCodecOptions
         .split(',')
         .map { it.trim() }
         .filter { it.isNotEmpty() }
-        .takeIf { it.isNotEmpty() }
-        ?.joinToString(",")
+
+    if (!isMtkAvcEncoder(videoEncoder, videoCodec)) {
+        return userOptions.takeIf { it.isNotEmpty() }?.joinToString(",")
+    }
+
+    val userOptionKeys = userOptions.mapTo(mutableSetOf(), ::codecOptionKey)
+    val optimizedOptions =
+        MTK_AVC_CODEC_OPTIONS.filter { option ->
+            codecOptionKey(option) !in userOptionKeys
+        }
+
+    return (userOptions + optimizedOptions).joinToString(",")
+}
+
+internal fun isMtkAvcEncoder(
+    videoEncoder: String,
+    videoCodec: String,
+): Boolean {
+    val normalizedEncoder = videoEncoder.trim().lowercase()
+    return videoCodec.equals("h264", ignoreCase = true) &&
+        (normalizedEncoder.startsWith("c2.mtk.") || normalizedEncoder.startsWith("omx.mtk."))
+}
+
+private fun codecOptionKey(option: String): String =
+    option.substringBefore('=').substringBefore(':').trim().lowercase()
+
+/**
+ * MTK AVC 编码器的低延迟抗劣化参数。
+ *
+ * MTK 码控在高复杂度场景中可能将 QP 拉高后长时间不回落。QP 上限和较短 GOP
+ * 用于防止持续模糊，VBR 则为复杂帧保留码率突发空间。用户显式填写的同名选项优先。
+ *
+ * 参数来源：https://github.com/Genymobile/scrcpy/pull/6954#issuecomment-5022877392
+ */
+private val MTK_AVC_CODEC_OPTIONS =
+    listOf(
+        "profile=1",
+        "max-bframes=0",
+        "i-frame-interval=10",
+        "priority=0",
+        "bitrate-mode=1",
+        "video-qp-max=35",
+    )

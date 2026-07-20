@@ -79,12 +79,7 @@ object FilePickerHelper {
         override fun createIntent(
             context: Context,
             input: Array<String>,
-        ): Intent =
-            Intent(Intent.ACTION_GET_CONTENT)
-                .addCategory(Intent.CATEGORY_OPENABLE)
-                .setType(input.singleOrNull() ?: "*/*")
-                .apply { putExtra(Intent.EXTRA_MIME_TYPES, input) }
-                .withInitialDirectory(initialDirectoryUri)
+        ): Intent = super.createIntent(context, input).withInitialDirectory(initialDirectoryUri)
     }
 
     private fun Intent.withInitialDirectory(uri: Uri?): Intent =

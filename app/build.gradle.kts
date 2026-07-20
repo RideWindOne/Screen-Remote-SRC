@@ -29,6 +29,7 @@ fun requireStringProperty(key: String): String =
 val appVersionCode = requireStringProperty("VERSION_CODE")
 val appVersionName = requireStringProperty("VERSION_NAME")
 val appVersionCodeInt = appVersionCode.toInt()
+val appDisplayVersion = "$appVersionName.$appVersionCode"
 val appId = "com.screen.remote.android"
 val scrcpyServerVersion = "4.1"
 val scrcpyServerSha256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"
@@ -67,9 +68,9 @@ android {
         minSdk = 23
         targetSdk = 37
         versionCode = appVersionCodeInt
-        versionName = appVersionName
+        versionName = appDisplayVersion
 
-        buildConfigField("String", "APP_VERSION", "\"v$appVersionName\"")
+        buildConfigField("String", "APP_VERSION", "\"$appDisplayVersion\"")
         buildConfigField("String", "SCRCPY_VERSION", "\"$scrcpyServerVersion\"")
         buildConfigField("String", "SCRCPY_SERVER_SHA256", "\"$scrcpyServerSha256\"")
 

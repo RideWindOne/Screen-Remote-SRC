@@ -7,6 +7,7 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.CommonTexts
+import com.screen.remote.android.feature.device.data.PairingEndpointMetadataManager
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
 import com.screen.remote.android.infrastructure.adb.AdbEndpointTlsDataStore
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -38,11 +39,12 @@ internal object BackupManager {
             val sessions = viewModel.sessionRepository.sessionDataFlow.first()
             val groups = viewModel.groupViewModel.groups.first()
             val settings = viewModel.settingsViewModel.settings.first()
+            val pairingEndpointMetadata = PairingEndpointMetadataManager(context).exportBackup()
             val adbKeys = readAdbKeys(context)
 
             val backupData =
                 BackupData(
-                    version = 3,
+                    version = 4,
                     sessions = sessions,
                     groups =
                         groups.map {
@@ -57,6 +59,7 @@ internal object BackupManager {
                             )
                         },
                     settings = settings,
+                    pairingEndpointMetadata = pairingEndpointMetadata,
                     adbKeys = adbKeys,
                 )
 
@@ -91,6 +94,7 @@ internal object BackupManager {
             val backupData = importJson.decodeFromString(BackupData.serializer(), jsonString)
 
             restoreAdbKeys(context, backupData.adbKeys)
+            PairingEndpointMetadataManager(context).importBackup(backupData.pairingEndpointMetadata)
             viewModel.settingsViewModel.updateSettings(backupData.settings)
             restoreGroupsAndSessions(viewModel, backupData)
 

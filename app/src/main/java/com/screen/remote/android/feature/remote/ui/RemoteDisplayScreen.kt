@@ -709,7 +709,6 @@ private fun RemoteDisplayScreenContent(
             if (
                 shouldShowFloatingMenu(
                     videoAvailable = routeState.videoStream != null,
-                    gameMode = routeState.sessionData?.config?.gameMode,
                     showFloatingBall = routeState.sessionData?.config?.showFloatingBall,
                 )
             ) {
@@ -751,7 +750,7 @@ private fun RemoteDisplayScreenContent(
                         tonalElevation = 0.dp,
                     ) {
                         Text(
-                            text = "目标设备键盘已打开，可能影响底部按钮点击",
+                            text = RemoteTexts.REMOTE_TARGET_KEYBOARD_OPEN.get(),
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             color = Color.White,
                             style = MaterialTheme.typography.labelMedium,
@@ -796,6 +795,5 @@ private fun RemoteDisplayScreenContent(
 
 internal fun shouldShowFloatingMenu(
     videoAvailable: Boolean,
-    gameMode: Boolean?,
     showFloatingBall: Boolean?,
-): Boolean = videoAvailable && gameMode == false && showFloatingBall == true
+): Boolean = videoAvailable && showFloatingBall == true

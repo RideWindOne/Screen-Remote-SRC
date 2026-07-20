@@ -35,11 +35,13 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.ButtonDefaults
@@ -450,6 +452,7 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
                     WelcomeFeature(Icons.Default.Devices, onboardingText(SessionTexts.ONBOARDING_CODEC_TITLE), onboardingText(SessionTexts.ONBOARDING_CODEC_BODY)),
                 ),
         ),
+        floatingBallWelcomePage(isDark),
         WelcomePage(
             icon = Icons.Default.Wifi,
             eyebrow = onboardingText(SessionTexts.ONBOARDING_WIRELESS_EYEBROW),
@@ -516,5 +519,34 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
                     WelcomeFeature(Icons.Default.Restore, onboardingText(SessionTexts.ONBOARDING_RESTORE_TITLE), onboardingText(SessionTexts.ONBOARDING_RESTORE_BODY)),
                 ),
         ),
+    )
+}
+
+internal fun floatingBallWelcomePage(isDark: Boolean): WelcomePage {
+    val orange = if (isDark) Color(0xFFFF9F0A) else Color(0xFFFF9500)
+    return WelcomePage(
+        icon = Icons.Default.TouchApp,
+        eyebrow = onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_EYEBROW),
+        title = onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_TITLE),
+        description = onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_DESCRIPTION),
+        accent = orange,
+        features =
+            listOf(
+                WelcomeFeature(
+                    Icons.Default.TouchApp,
+                    onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_TAP_TITLE),
+                    onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_TAP_BODY),
+                ),
+                WelcomeFeature(
+                    Icons.AutoMirrored.Filled.AltRoute,
+                    onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_SWIPE_TITLE),
+                    onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_SWIPE_BODY),
+                ),
+                WelcomeFeature(
+                    Icons.Default.PhotoCamera,
+                    onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_SCREENSHOT_TITLE),
+                    onboardingText(SessionTexts.ONBOARDING_FLOATING_BALL_SCREENSHOT_BODY),
+                ),
+            ),
     )
 }

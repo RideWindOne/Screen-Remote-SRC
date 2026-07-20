@@ -56,9 +56,12 @@ private fun recentUpdatePages(isDark: Boolean): List<WelcomePage> {
     val purple = if (isDark) Color(0xFFBF5AF2) else Color(0xFFAF52DE)
 
     return listOf(
+        floatingBallWelcomePage(isDark).copy(
+            eyebrow = updateText("${AppConstants.APP_VERSION} · 悬浮球手势", "${AppConstants.APP_VERSION} · FLOATING BALL GESTURES"),
+        ),
         WelcomePage(
             icon = Icons.Default.Sensors,
-            eyebrow = updateText("${AppConstants.APP_VERSION} · 最近更新", "${AppConstants.APP_VERSION} · WHAT'S NEW"),
+            eyebrow = updateText("无线调试", "WIRELESS DEBUGGING"),
             title = updateText("无线调试，更快也更稳", "Wireless debugging, faster and steadier"),
             description =
                 updateText(

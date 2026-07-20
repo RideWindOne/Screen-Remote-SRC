@@ -64,7 +64,7 @@ fun isAutomaticUpdateCheckDue(
 }
 
 fun parseAppVersion(raw: String): AppVersion? {
-    val normalized = raw.trim().removePrefix("v")
+    val normalized = raw.trim()
     val core = normalized.substringBefore('-')
     val prerelease = normalized.substringAfter('-', "")
     val parts = core.split('.')

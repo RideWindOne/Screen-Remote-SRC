@@ -1343,9 +1343,27 @@ private fun VideoConfigSection(state: SessionDialogState) {
             value = state.videoBitrate,
             presets =
                 if (state.config.gameMode) {
-                    listOf("1M" to "1M", "2M" to "2M", "4M" to "4M")
+                    listOf(
+                        "1M" to "1M",
+                        "2M" to "2M",
+                        "4M" to "4M",
+                        "8M" to "8M",
+                        "12M" to "12M",
+                        "20M" to "20M",
+                    )
                 } else {
-                    listOf("700K" to "700K", "1M" to "1M", "2M" to "2M", "4M" to "4M", "8M" to "8M", "12M" to "12M")
+                    listOf(
+                        "700K" to "700K",
+                        "1M" to "1M",
+                        "2M" to "2M",
+                        "4M" to "4M",
+                        "8M" to "8M",
+                        "12M" to "12M",
+                        "20M" to "20M",
+                        "40M" to "40M",
+                        "80M" to "80M",
+                        "120M" to "120M"
+                    )
                 },
             customEnabled = !state.config.gameMode,
             customUnits = listOf("K", "M"),
@@ -2157,7 +2175,9 @@ private fun RemoteAppSelectionOverlay(
         when {
             loading -> {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2170,6 +2190,7 @@ private fun RemoteAppSelectionOverlay(
                     }
                 }
             }
+
             error != null -> {
                 Text(
                     text = "${SessionTexts.ERROR_REMOTE_APP_LIST.get()}: $error",
@@ -2177,6 +2198,7 @@ private fun RemoteAppSelectionOverlay(
                     modifier = Modifier.padding(vertical = 20.dp),
                 )
             }
+
             !hasSearched -> {
                 Text(
                     text = SessionTexts.STATUS_ENTER_REMOTE_APP_QUERY.get(),
@@ -2184,6 +2206,7 @@ private fun RemoteAppSelectionOverlay(
                     modifier = Modifier.padding(vertical = 20.dp),
                 )
             }
+
             apps.isEmpty() -> {
                 Text(
                     text = SessionTexts.STATUS_NO_REMOTE_APPS.get(),
@@ -2191,8 +2214,13 @@ private fun RemoteAppSelectionOverlay(
                     modifier = Modifier.padding(vertical = 20.dp),
                 )
             }
+
             else -> {
-                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                ) {
                     items(apps, key = RemoteLaunchableApp::packageName) { app ->
                         Surface(
                             modifier =

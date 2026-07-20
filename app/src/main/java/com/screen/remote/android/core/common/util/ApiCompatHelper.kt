@@ -87,6 +87,10 @@ object ApiCompatHelper {
     fun showSoftInput(view: android.view.View) =
         com.screen.remote.android.core.common.util.compat.showSoftInputCompat(view)
 
+    /** Android 9 以下返回零边距。 */
+    fun getDisplayCutoutSafeInsets(windowInsets: android.view.WindowInsets): android.graphics.Rect =
+        com.screen.remote.android.core.common.util.compat.getDisplayCutoutSafeInsets(windowInsets)
+
     // ============ 共享内存（ashmem）兼容说明 ============
 
     /**

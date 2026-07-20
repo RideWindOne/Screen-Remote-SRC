@@ -77,10 +77,13 @@ class ConnectionMetadataReader(
                                 LogManager.w(LogTags.SCRCPY_CLIENT, "远端设备已禁用音频，继续视频会话")
                                 audioSocket.close()
                             }
+
                             AudioStreamHeader.ConfigurationError ->
                                 throw IOException("远端音频编码器配置失败")
+
                             is AudioStreamHeader.Unsupported ->
                                 throw IOException("不支持的音频 codec ID: 0x${header.codecId.toString(16)}")
+
                             is AudioStreamHeader.Codec -> {
                                 audioStream = ScrcpyAudioStream(audioSocket, audioInput, header.codec, issueTracker)
                                 LogManager.d(
@@ -132,7 +135,9 @@ class ConnectionMetadataReader(
             VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Codec ID: 0x${codecId.toString(16).padStart(8, '0')}" }
             VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "${RemoteTexts.SCRCPY_VIDEO_RESOLUTION.get()}: ${width}x$height" }
             VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
-                "video session meta parsed: codec=0x${codecId.toString(16).padStart(8, '0')} flags=0x${sessionFlags.toString(16)} size=${width}x$height"
+                "video session meta parsed: codec=0x${
+                    codecId.toString(16).padStart(8, '0')
+                } flags=0x${sessionFlags.toString(16)} size=${width}x$height"
             }
 
             // 验证数据合法性

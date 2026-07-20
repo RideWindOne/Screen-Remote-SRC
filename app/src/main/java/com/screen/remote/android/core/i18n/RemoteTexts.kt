@@ -77,6 +77,11 @@ object RemoteTexts {
     val REMOTE_LAYOUT_RENDER_NODES = TextPair("节点数", "Nodes")
     val REMOTE_LAYOUT_RENDER_EMPTY = TextPair("当前页面没有可渲染的布局节点", "No renderable layout nodes found")
     val REMOTE_LAYOUT_RENDER_FAILED = TextPair("布局抓取失败", "Layout capture failed")
+    val REMOTE_TARGET_KEYBOARD_OPEN =
+        TextPair(
+            "目标设备键盘已打开，可能影响底部按钮点击",
+            "The target device keyboard is open and may interfere with the bottom buttons",
+        )
 
     // ScrcpyClient
     val SCRCPY_NATIVE_LIB_LOAD_FAILED = TextPair("Native 库加载失败", "Native library load failed")

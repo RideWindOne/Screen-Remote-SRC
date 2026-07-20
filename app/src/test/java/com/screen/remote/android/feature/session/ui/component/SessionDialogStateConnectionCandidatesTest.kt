@@ -27,6 +27,36 @@ class SessionDialogStateConnectionCandidatesTest {
     }
 
     @Test
+    fun storedBitratesAreShownWithCompactEditorUnits() {
+        val original =
+            SessionData(
+                id = "session",
+                name = "Device",
+                connectionCandidates = listOf(ConnectionCandidateData("TCP", "192.168.1.2", 5555)),
+                color = "BLUE",
+                config = ScrcpyConfig(videoBitRate = 2_000_000, audioBitRate = 128_000),
+            )
+
+        val state = SessionDialogState(original)
+
+        assertEquals("2M", state.videoBitrate)
+        assertEquals("128K", state.audioBitrate)
+    }
+
+    @Test
+    fun compactEditorBitratesRoundTripToBitsPerSecond() {
+        val state = SessionDialogState().apply {
+            videoBitrate = "2M"
+            audioBitrate = "192K"
+        }
+
+        val saved = state.toSessionData()
+
+        assertEquals(2_000_000, saved.config.videoBitRate)
+        assertEquals(192_000, saved.config.audioBitRate)
+    }
+
+    @Test
     fun floatingBallVisibilityIsSavedWithTheSession() {
         val state = SessionDialogState().apply { updateConfig { copy(showFloatingBall = false) } }
 

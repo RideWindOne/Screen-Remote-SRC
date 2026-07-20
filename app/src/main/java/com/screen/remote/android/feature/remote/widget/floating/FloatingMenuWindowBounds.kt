@@ -7,6 +7,7 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.view.WindowInsets
 import android.view.WindowManager
+import com.screen.remote.android.core.common.util.ApiCompatHelper
 
 internal data class FloatingMenuWindowBounds(
     val left: Int,
@@ -116,11 +117,11 @@ private fun WindowInsets?.safeFloatingInsets(): FloatingMenuInsets {
         )
     }
 
-    val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) displayCutout else null
+    val cutoutInsets = ApiCompatHelper.getDisplayCutoutSafeInsets(this)
     return FloatingMenuInsets(
-        left = maxOf(stableInsetLeft, cutout?.safeInsetLeft ?: 0),
-        right = maxOf(stableInsetRight, cutout?.safeInsetRight ?: 0),
-        bottom = maxOf(stableInsetBottom, cutout?.safeInsetBottom ?: 0),
+        left = maxOf(stableInsetLeft, cutoutInsets.left),
+        right = maxOf(stableInsetRight, cutoutInsets.right),
+        bottom = maxOf(stableInsetBottom, cutoutInsets.bottom),
     )
 }
 
@@ -129,8 +130,8 @@ private fun WindowInsets.applicationWindowTopInset(): Int {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         return getInsetsIgnoringVisibility(WindowInsets.Type.statusBars() or WindowInsets.Type.displayCutout()).top
     }
-    val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) displayCutout else null
-    return maxOf(stableInsetTop, cutout?.safeInsetTop ?: 0)
+    val cutoutInsets = ApiCompatHelper.getDisplayCutoutSafeInsets(this)
+    return maxOf(stableInsetTop, cutoutInsets.top)
 }
 
 private fun Context.findActivity(): Activity? {
