@@ -33,15 +33,15 @@ object LocalDecoderCache {
 
         return if (data.isValid(runtimeSignature) && data.videoDecoders.isNotEmpty()) {
             // 使用持久化数据
-            LogManager.d(LogTags.VIDEO_DECODER, "使用持久化的本地视频解码器列表 (${data.videoDecoders.size} 个)")
+            LogManager.d(LogTags.VIDEO_DECODER, "Use persistent list of local video decoders (${data.videoDecoders.size})")
             data.videoDecoders
         } else {
             // 重新检测并保存
-            LogManager.d(LogTags.VIDEO_DECODER, "检测本地视频解码器...")
+            LogManager.d(LogTags.VIDEO_DECODER, "Detect local video decoder...")
             val decoders = detectAllVideoDecoders()
             if (decoders.isNotEmpty()) {
                 manager.saveVideoDecoders(decoders)
-                LogManager.d(LogTags.VIDEO_DECODER, "已保存本地视频解码器列表 (${decoders.size} 个)")
+                LogManager.d(LogTags.VIDEO_DECODER, "Saved local video decoder list (${decoders.size})")
             }
             decoders
         }
@@ -56,15 +56,15 @@ object LocalDecoderCache {
 
         return if (data.isValid(runtimeSignature) && data.audioDecoders.isNotEmpty()) {
             // 使用持久化数据
-            LogManager.d(LogTags.AUDIO_DECODER, "使用持久化的本地音频解码器列表 (${data.audioDecoders.size} 个)")
+            LogManager.d(LogTags.AUDIO_DECODER, "Use a persistent list of local audio decoders (${data.audioDecoders.size})")
             data.audioDecoders
         } else {
             // 重新检测并保存
-            LogManager.d(LogTags.AUDIO_DECODER, "检测本地音频解码器...")
+            LogManager.d(LogTags.AUDIO_DECODER, "Detect local audio codec...")
             val decoders = detectAllAudioDecoders()
             if (decoders.isNotEmpty()) {
                 manager.saveAudioDecoders(decoders)
-                LogManager.d(LogTags.AUDIO_DECODER, "已保存本地音频解码器列表 (${decoders.size} 个)")
+                LogManager.d(LogTags.AUDIO_DECODER, "Saved local audio codec list (${decoders.size})")
             }
             decoders
         }
@@ -75,7 +75,7 @@ object LocalDecoderCache {
      */
     suspend fun clear() {
         manager.clearData()
-        LogManager.d(LogTags.VIDEO_DECODER, "已清空本地解码器数据")
+        LogManager.d(LogTags.VIDEO_DECODER, "Local decoder data cleared")
     }
 
     /**
@@ -92,7 +92,7 @@ object LocalDecoderCache {
                 }.map { it.toCapability(supportedMimes) }
                 .distinctBy { it.name }
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "检测本地视频解码器失败: ${e.message}", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to detect local video decoder: ${e.message}", e)
             emptyList()
         }
 
@@ -110,7 +110,7 @@ object LocalDecoderCache {
                 }.map { it.toCapability(supportedMimes) }
                 .distinctBy { it.name }
         } catch (e: Exception) {
-            LogManager.e(LogTags.AUDIO_DECODER, "检测本地音频解码器失败: ${e.message}", e)
+            LogManager.e(LogTags.AUDIO_DECODER, "Failed to detect local audio codec: ${e.message}", e)
             emptyList()
         }
 

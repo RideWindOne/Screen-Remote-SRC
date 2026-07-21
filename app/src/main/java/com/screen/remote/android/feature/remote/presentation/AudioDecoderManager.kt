@@ -43,7 +43,7 @@ class AudioDecoderManager(
             val options = connectionViewModel.getCurrentSessionOptions()
             val expectedDeviceSerial = options?.capabilityCache?.deviceSerial.orEmpty()
             val rejectionKey = "$expectedDeviceSerial|audio:$codec"
-            LogManager.d(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_START_AUDIO_DECODER.get()}: codec=$codec")
+            LogManager.d(LogTags.AUDIO_DECODER, "${RemoteTexts.REMOTE_START_AUDIO_DECODER.english}: codec=$codec")
 
             val decoder =
                 AudioDecoder(
@@ -69,7 +69,7 @@ class AudioDecoderManager(
                         connectionViewModel.rememberRuntimeRejectedDecoder(rejectionKey, decoder)
                     }
                     onConnectionLost = {
-                        LogManager.w(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.get())
+                        LogManager.w(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_CONNECTION_LOST.english)
                         scope.launch(Dispatchers.Main) {
                             connectionViewModel.handleConnectionLost()
                         }
@@ -81,12 +81,12 @@ class AudioDecoderManager(
                 try {
                     decoder.start(stream)
                 } catch (_: kotlinx.coroutines.CancellationException) {
-                    LogManager.d(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_DECODER_CANCELLED.get())
+                    LogManager.d(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_DECODER_CANCELLED.english)
                     stopDecoder(decoder)
                 } catch (e: Exception) {
                     LogManager.e(
                         LogTags.AUDIO_DECODER,
-                        "${RemoteTexts.REMOTE_AUDIO_DECODER_FAILED.get()}: ${e.message}",
+                        "${RemoteTexts.REMOTE_AUDIO_DECODER_FAILED.english}: ${e.message}",
                         e,
                     )
                     stopDecoder(decoder)
@@ -99,7 +99,7 @@ class AudioDecoderManager(
         } catch (e: Exception) {
             LogManager.e(
                 LogTags.AUDIO_DECODER,
-                "${RemoteTexts.REMOTE_INIT_AUDIO_DECODER_FAILED.get()}: ${e.message}",
+                "${RemoteTexts.REMOTE_INIT_AUDIO_DECODER_FAILED.english}: ${e.message}",
                 e,
             )
             audioDecoder = null
@@ -137,7 +137,7 @@ fun rememberAudioDecoderManager(
     LaunchedEffect(audioStream) {
         if (audioStream == null) {
             if (manager.audioDecoder != null) {
-                LogManager.d(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_STREAM_EMPTY.get())
+                LogManager.d(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_STREAM_EMPTY.english)
                 manager.stopCurrentDecoder()
             }
             return@LaunchedEffect
@@ -148,7 +148,7 @@ fun rememberAudioDecoderManager(
         }
 
         if (manager.audioDecoder != null) {
-            LogManager.i(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_STREAM_CHANGED.get())
+            LogManager.i(LogTags.AUDIO_DECODER, RemoteTexts.REMOTE_AUDIO_STREAM_CHANGED.english)
             manager.stopCurrentDecoder()
         }
 
@@ -162,7 +162,7 @@ fun rememberAudioDecoderManager(
             } catch (e: Exception) {
                 LogManager.e(
                     LogTags.AUDIO_DECODER,
-                    "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
+                    "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.english}: ${e.message}",
                     e,
                 )
             }

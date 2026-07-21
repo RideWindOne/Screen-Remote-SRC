@@ -32,7 +32,7 @@ internal class VideoDecoderConfigurator(
                 format = format,
                 surface = surface,
                 dummySurface = dummySurface,
-                codecLabel = "H.264 解码器",
+                codecLabel = "H.264 decoder",
                 onConfigured = onConfigured,
             )
         }
@@ -72,13 +72,13 @@ internal class VideoDecoderConfigurator(
                     format = combinedFormat,
                     surface = surface,
                     dummySurface = dummySurface,
-                    codecLabel = "H.265 解码器",
+                    codecLabel = "H.265 decoder",
                     onConfigured = null,
                 )
             } catch (standardError: VideoDecoderConfigurationException) {
                 LogManager.w(
                     LogTags.VIDEO_DECODER,
-                    "H.265 解码器单一 csd-0 配置失败，尝试拆分 csd-0/1/2: ${standardError.message}",
+                    "H.265 decoder single csd-0 configuration failed, try to split csd-0/1/2: ${standardError.message}",
                 )
                 candidate.reset()
 
@@ -91,7 +91,7 @@ internal class VideoDecoderConfigurator(
                     format = splitFormat,
                     surface = surface,
                     dummySurface = dummySurface,
-                    codecLabel = "H.265 解码器(拆分 CSD)",
+                    codecLabel = "H.265 decoder (split CSD)",
                     onConfigured = null,
                 )
             }
@@ -126,7 +126,7 @@ internal class VideoDecoderConfigurator(
                 format = format,
                 surface = surface,
                 dummySurface = dummySurface,
-                codecLabel = "AV1 解码器",
+                codecLabel = "AV1 decoder",
                 onConfigured = null,
             )
         }
@@ -157,7 +157,7 @@ internal class VideoDecoderConfigurator(
                 format = format,
                 surface = surface,
                 dummySurface = dummySurface,
-                codecLabel = "VPx 解码器",
+                codecLabel = "VPx decoder",
                 onConfigured = null,
             )
         }
@@ -186,8 +186,8 @@ internal class VideoDecoderConfigurator(
             applyLowLatencyConfig(format)
             val initialSurface = resolveSurface(surface, dummySurface)
             if (initialSurface == null) {
-                val reason = "没有可用的 Surface"
-                LogManager.e(LogTags.VIDEO_DECODER, "无法配置$codecLabel：$reason")
+                val reason = "No Surface is available"
+                LogManager.e(LogTags.VIDEO_DECODER, "Unable to configure $codecLabel: $reason")
                 throw VideoDecoderConfigurationException(codecLabel, reason)
             }
 
@@ -195,14 +195,14 @@ internal class VideoDecoderConfigurator(
             decoder.start()
 
             if (surface != null && surface.isValid) {
-                VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$codecLabel 配置完成（使用真实 Surface）" }
+                VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$codecLabel configuration completed (using real Surface)" }
             } else {
-                VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$codecLabel 配置完成（使用 dummy Surface）" }
+                VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$codecLabel configuration completed (using dummy Surface)" }
             }
 
             onConfigured?.invoke(decoder.outputFormat)
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "配置$codecLabel 失败: ${e.message}", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "Configuring $codecLabel failed: ${e.message}", e)
             if (e is VideoDecoderConfigurationException) {
                 throw e
             }
@@ -236,7 +236,7 @@ internal class VideoDecoderConfigurator(
                 configure(candidate)
                 codecManager.reportDecoderSelected(candidateName)
                 if (attemptedNames.size > 1) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "$codecLabel 已回退到 $candidateName")
+                    LogManager.w(LogTags.VIDEO_DECODER, "$codecLabel has fallen back to $candidateName")
                 }
                 return candidate
             } catch (error: Exception) {
@@ -294,14 +294,14 @@ internal class VideoDecoderConfigurator(
             try {
                 format.setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
             } catch (e: Exception) {
-                LogManager.w(LogTags.VIDEO_DECODER, "设置 OPERATING_RATE 失败: ${e.message}")
+                LogManager.w(LogTags.VIDEO_DECODER, "Failed to set OPERATING_RATE: ${e.message}")
             }
 
             // Remote control favors the newest frame. Let Surface decoders discard late output
             // instead of building an ever-growing presentation backlog.
             ApiCompatHelper.setAllowFrameDropIfSupported(format, 1)
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "应用低延迟配置失败: ${e.message}")
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to apply low latency configuration: ${e.message}")
         }
     }
 

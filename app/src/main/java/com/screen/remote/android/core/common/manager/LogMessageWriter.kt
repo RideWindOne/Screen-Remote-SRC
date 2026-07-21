@@ -32,7 +32,7 @@ internal class LogMessageWriter(
                     appendTrailingNewline = true,
                 )
             } catch (_: Exception) {
-                Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_WRITE_FAILED.get())
+                Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_WRITE_FAILED.english)
             }
         }
     }
@@ -55,7 +55,7 @@ internal class LogMessageWriter(
                     appendTrailingNewline = !message.endsWith("\n"),
                 )
             } catch (e: Exception) {
-                Log.e(LogTags.LOG_MANAGER, "${LogTexts.LOG_WRITE_RAW_FAILED.get()}: ${e.message}")
+                Log.e(LogTags.LOG_MANAGER, "${LogTexts.LOG_WRITE_RAW_FAILED.english}: ${e.message}")
             }
         }
     }

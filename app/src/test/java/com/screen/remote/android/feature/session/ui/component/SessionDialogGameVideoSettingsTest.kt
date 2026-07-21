@@ -15,18 +15,18 @@ class SessionDialogGameVideoSettingsTest {
         state.updateGameMode(true)
 
         assertEquals("720", state.maxSize)
-        assertEquals("8M", state.videoBitrate)
+        assertEquals("2M", state.videoBitrate)
         assertEquals("60", state.maxFps)
     }
 
     @Test
     fun enablingGameModeUsesCodeDefaultsForEmptyValues() {
-        val state = SessionDialogState()
+        val state = SessionDialogState().apply { videoBitrate = "" }
 
         state.updateGameMode(true)
 
         assertEquals("720", state.maxSize)
-        assertEquals("8M", state.videoBitrate)
+        assertEquals("2M", state.videoBitrate)
         assertEquals("60", state.maxFps)
     }
 

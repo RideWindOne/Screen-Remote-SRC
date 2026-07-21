@@ -51,7 +51,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -409,7 +408,7 @@ private fun SessionManagementProcessMemoryCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(ProcessPanelWidthFraction),
-        shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -538,7 +537,7 @@ private fun SessionManagementProcessListHeader(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(ProcessPanelWidthFraction),
-        shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -573,9 +572,9 @@ private fun SessionManagementProcessListHeader(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
+                        .height(SessionManagementControlHeight),
                 singleLine = true,
-                shape = RoundedCornerShape(18.dp),
+                shape = SessionManagementControlShape,
                 trailingIcon = {
                     IconButton(onClick = { onSearch(searchQuery) }) {
                         Icon(

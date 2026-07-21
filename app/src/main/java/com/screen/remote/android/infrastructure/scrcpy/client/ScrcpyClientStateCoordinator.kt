@@ -21,7 +21,7 @@ internal class ScrcpyClientStateCoordinator(
 ) {
     fun updateConnectionStateOnError(message: String) {
         if (connectionState.value is ConnectionState.Connected) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "连接错误: $message")
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Connection error: $message")
             getCurrentDeviceId()?.let {
                 sessionManager.currentOrNull?.handleEvent(
                     SessionEvent.RequestReconnect(
@@ -36,7 +36,7 @@ internal class ScrcpyClientStateCoordinator(
     }
 
     fun handleSessionStateChange(state: SessionState) {
-        LogManager.d(LogTags.SDL, "会话状态变化: $state")
+        LogManager.d(LogTags.SDL, "Session status change: $state")
 
         when (state) {
             is SessionState.Connected -> {

@@ -205,12 +205,12 @@ internal class VideoOutputFormatReporter {
                 realHeight = outputFormat.getInteger(MediaFormat.KEY_HEIGHT)
             }
 
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "视频尺寸: ${realWidth}x$realHeight" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Video size: ${realWidth}x$realHeight" }
 
             val rotation = if (realWidth > realHeight) 90 else 0
             onVideoSizeChanged?.invoke(realWidth, realHeight, rotation)
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "获取输出格式失败: ${e.message}")
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to get output format: ${e.message}")
         }
     }
 }

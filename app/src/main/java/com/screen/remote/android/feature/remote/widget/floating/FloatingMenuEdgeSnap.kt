@@ -410,7 +410,7 @@ internal class FloatingMenuEdgeAnimator(
                         windowManager.updateViewLayout(ballB, paramsB)
                         menuManager.syncMenuToBall()
                     } catch (e: Exception) {
-                        LogManager.e(LogTags.FLOATING_CONTROLLER, "贴边动画更新失败: ${e.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "Welt animation update failed: ${e.message}")
                         cancel()
                     }
                 }
@@ -443,7 +443,7 @@ internal class FloatingMenuEdgeAnimator(
                     try {
                         windowManager.updateViewLayout(ballA, paramsA)
                     } catch (e: Exception) {
-                        LogManager.e(LogTags.FLOATING_CONTROLLER, "归位动画更新失败: ${e.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "Home animation update failed: ${e.message}")
                         cancel()
                     }
                 }

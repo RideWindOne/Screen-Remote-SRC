@@ -329,7 +329,7 @@ internal class FloatingMenuMenuPositionController(
         try {
             windowManager.updateViewLayout(menuView, params)
         } catch (e: Exception) {
-            LogManager.e(LogTags.FLOATING_CONTROLLER, "更新菜单位置失败: ${e.message}")
+            LogManager.e(LogTags.FLOATING_CONTROLLER, "Failed to update menu location: ${e.message}")
         }
     }
 }
@@ -431,7 +431,7 @@ internal class FloatingMenuMenuInteractionBinder(
                         .onFailure { error ->
                             LogManager.e(
                                 LogTags.FLOATING_CONTROLLER_MSG,
-                                "切换目标设备分辨率失败: ${error.message}",
+                                "Failed to switch target device resolution: ${error.message}",
                                 error,
                             )
                         }
@@ -502,7 +502,7 @@ internal class FloatingMenuMenuInteractionBinder(
                 windowManager.removeView(ballB)
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
+            LogManager.e(LogTags.FLOATING_CONTROLLER, "Failed to remove sphere: ${e.message}")
         }
     }
 

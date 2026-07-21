@@ -42,7 +42,7 @@ class ScrcpyMonitorBus(
      */
     fun start() {
         if (monitorJob?.isActive == true) {
-            LogManager.w(LogTags.SCRCPY_EVENT_BUS, "事件总线已在运行: $deviceId")
+            LogManager.w(LogTags.SCRCPY_EVENT_BUS, "Event bus is already running: $deviceId")
             return
         }
 
@@ -54,7 +54,7 @@ class ScrcpyMonitorBus(
                     try {
                         handleEvent(event)
                     } catch (e: Exception) {
-                        LogManager.e(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 处理事件异常: ${e.message}", e)
+                        LogManager.e(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] Exception in handling event: ${e.message}", e)
                     }
                 }
             }
@@ -64,7 +64,7 @@ class ScrcpyMonitorBus(
      * 停止事件总线
      */
     fun stop() {
-        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 停止事件总线")
+        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] Stop event bus")
         monitorJob?.cancel()
         monitorJob = null
         eventChannel.close()

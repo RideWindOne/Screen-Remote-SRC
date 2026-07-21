@@ -103,14 +103,14 @@ class AudioFormatHandler(
      */
     private fun validateOpusConfig(data: ByteArray): Boolean {
         if (data.size < OpusConfigParser.OPUS_HEADER_SIZE) {
-            LogManager.e(LogTags.AUDIO_DECODER, "Opus 配置包大小错误: ${data.size}, 至少需要 19")
+            LogManager.e(LogTags.AUDIO_DECODER, "Opus configuration package size error: ${data.size}, at least 19 required")
             return false
         }
 
         val opusConfig = OpusConfigParser.parse(data)
         if (opusConfig == null) {
             val header = String(data.copyOfRange(0, 8), Charsets.US_ASCII)
-            LogManager.e(LogTags.AUDIO_DECODER, "Opus 配置包头错误: $header, 期望 OpusHead")
+            LogManager.e(LogTags.AUDIO_DECODER, "Opus configuration header error: $header, expected OpusHead")
             return false
         }
 
@@ -126,7 +126,7 @@ class AudioFormatHandler(
     private fun validateFlacConfig(data: ByteArray): Boolean {
         val streamInfo = FlacConfigParser.parseStreamInfo(data)
         if (streamInfo == null) {
-            LogManager.e(LogTags.AUDIO_DECODER, "FLAC 配置包错误: size=${data.size}, 无法解析 STREAMINFO")
+            LogManager.e(LogTags.AUDIO_DECODER, "FLAC configuration package error: size=${data.size}, cannot parse STREAMINFO")
             return false
         }
 
@@ -169,25 +169,25 @@ class AudioFormatHandler(
             val candidates = decoderCandidates(mime)
             for (info in candidates) {
                 val mediaCodec = runCatching { MediaCodec.createByCodecName(info.name) }.getOrElse { error ->
-                    LogManager.w(LogTags.AUDIO_DECODER, "创建音频解码器失败: ${info.name}: ${error.message}")
+                    LogManager.w(LogTags.AUDIO_DECODER, "Failed to create audio decoder: ${info.name}: ${error.message}")
                     continue
                 }
                 try {
                     mediaCodec.configure(format, null, null, 0)
                     mediaCodec.start()
                     onDecoderSelected?.invoke(mediaCodec.name)
-                    AudioDebugLog.d(LogTags.AUDIO_DECODER) { "音频解码器创建成功: ${mediaCodec.name}" }
+                    AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Audio decoder created successfully: ${mediaCodec.name}" }
                     return mediaCodec
                 } catch (e: Exception) {
-                    LogManager.w(LogTags.AUDIO_DECODER, "音频解码器配置失败，尝试下一候选: ${info.name}: ${e.message}")
+                    LogManager.w(LogTags.AUDIO_DECODER, "Audio decoder configuration failed, try next candidate: ${info.name}: ${e.message}")
                     runCatching { mediaCodec.stop() }
                     runCatching { mediaCodec.release() }
                 }
             }
-            LogManager.e(LogTags.AUDIO_DECODER, "没有可用的音频解码器: mime=$mime")
+            LogManager.e(LogTags.AUDIO_DECODER, "No audio codec available: mime=$mime")
             null
         } catch (e: Exception) {
-            LogManager.e(LogTags.AUDIO_DECODER, "创建解码器失败: ${e.message}", e)
+            LogManager.e(LogTags.AUDIO_DECODER, "Failed to create decoder: ${e.message}", e)
             null
         }
     }
@@ -198,7 +198,7 @@ class AudioFormatHandler(
     private fun getMediaMimeType(codec: String): String? =
         CodecCatalog.mimeType(CodecMediaType.AUDIO, codec).also { mime ->
             if (mime == null || mime == "audio/raw") {
-                LogManager.e(LogTags.AUDIO_DECODER, "不支持的压缩音频格式: $codec")
+                LogManager.e(LogTags.AUDIO_DECODER, "Unsupported compressed audio format: $codec")
             }
         }?.takeUnless { it == "audio/raw" }
 
@@ -230,7 +230,7 @@ class AudioFormatHandler(
         onDecoderRejected?.invoke(decoderName)
         LogManager.w(
             LogTags.AUDIO_DECODER,
-            "本次会话淘汰音频解码器: $decoderName, reason=${cause.message}",
+            "Audio codec eliminated in this session: $decoderName, reason=${cause.message}",
         )
         return true
     }
@@ -259,7 +259,7 @@ class AudioFormatHandler(
         configData: ByteArray?,
     ) {
         if (configData == null || configData.isEmpty()) {
-            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "无配置数据，让解码器自动处理" }
+            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "No configuration data, let the decoder handle it automatically" }
             return
         }
 
@@ -267,7 +267,7 @@ class AudioFormatHandler(
             "opus" -> {
                 val opusConfig = OpusConfigParser.parse(configData)
                 if (opusConfig == null) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "Opus 配置包无效，无法设置初始化数据")
+                    LogManager.e(LogTags.AUDIO_DECODER, "The Opus configuration package is invalid and the initialization data cannot be set.")
                     return
                 }
 
@@ -284,7 +284,7 @@ class AudioFormatHandler(
             "flac" -> {
                 val streamInfo = FlacConfigParser.parseStreamInfo(configData)
                 if (streamInfo == null) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "FLAC 配置包无效，无法设置初始化数据")
+                    LogManager.e(LogTags.AUDIO_DECODER, "The FLAC configuration package is invalid and the initialization data cannot be set.")
                     return
                 }
 
@@ -297,7 +297,7 @@ class AudioFormatHandler(
 
             else -> {
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(configData))
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "配置: csd-0=${configData.size}字节" }
+                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Configuration: csd-0=${configData.size} bytes" }
             }
         }
     }

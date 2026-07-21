@@ -37,7 +37,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
 
         heartbeatJob =
             serviceScope.launch {
-                LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 心跳检测已启动（间隔: ${HEARTBEAT_INTERVAL}ms）")
+                LogManager.d(LogTags.SCRCPY_SERVICE, "ADB heartbeat detection has started (interval: ${HEARTBEAT_INTERVAL}ms)")
 
                 while (isActive) {
                     delay(HEARTBEAT_INTERVAL)
@@ -86,18 +86,18 @@ internal class ScrcpyServiceHeartbeatMonitor(
                         val deviceId = failure.deviceId
                         val expectedDevice = failure.protectedDevice
                         if (!removeProtectedDeviceIfCurrent(protectedDevices, deviceId, expectedDevice)) {
-                            LogManager.d(LogTags.SCRCPY_SERVICE, "跳过已更新的心跳失败设备: $deviceId")
+                            LogManager.d(LogTags.SCRCPY_SERVICE, "Skip updated heartbeat failed device: $deviceId")
                             return@forEach
                         }
                         removedAny = true
-                        LogManager.d(LogTags.SCRCPY_SERVICE, "已移除失败设备: ${expectedDevice.deviceName} ($deviceId)")
+                        LogManager.d(LogTags.SCRCPY_SERVICE, "Failed device removed: ${expectedDevice.deviceName} ($deviceId)")
                         failure.expectedConnection?.let { expectedConnection ->
                             try {
                                 adbManager.disconnectDeviceIfCurrent(deviceId, expectedConnection)
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (e: Exception) {
-                                LogManager.e(LogTags.SCRCPY_SERVICE, "条件断开 ADB 连接失败: ${e.message}")
+                                LogManager.e(LogTags.SCRCPY_SERVICE, "Conditional disconnection of ADB connection failed: ${e.message}")
                             }
                         }
                     }
@@ -132,7 +132,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
             if (connection == null) {
                 LogManager.w(
                     LogTags.SCRCPY_SERVICE,
-                    "ADB 连接不存在: $deviceId，尝试按原连接重建 protected=${protectedDevices.keys.joinToString()}",
+                    "ADB connection does not exist: $deviceId, try to rebuild according to the original connection protected=${protectedDevices.keys.joinToString()}",
                 )
                 return tryReconnect(deviceId, protectedDevice, adbManager)
             }
@@ -143,7 +143,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
 
             LogManager.w(
                 LogTags.SCRCPY_SERVICE,
-                "ADB 心跳失败: $deviceId delayedAck=${connection.supportsDelayedAck()}，尝试按原连接重连",
+                "ADB heartbeat failure: $deviceId delayedAck=${connection.supportsDelayedAck()}, try to reconnect according to the original connection",
             )
             tryReconnect(deviceId, protectedDevice, adbManager)
         } catch (cancelled: CancellationException) {
@@ -151,7 +151,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
         } catch (e: Exception) {
             LogManager.e(
                 LogTags.SCRCPY_SERVICE,
-                "ADB 心跳异常 $deviceId: ${e.message}，尝试按原连接重连",
+                "ADB heartbeat abnormality $deviceId: ${e.message}, try to reconnect according to the original connection",
             )
             tryReconnect(deviceId, protectedDevice, adbManager)
         }
@@ -165,7 +165,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
             if (!isStillProtected(deviceId, protectedDevice)) {
                 return true
             }
-            LogManager.d(LogTags.SCRCPY_SERVICE, "开始按原连接重连 ADB: $deviceId")
+            LogManager.d(LogTags.SCRCPY_SERVICE, "Start reconnecting to ADB according to the original connection: $deviceId")
 
             reconnectExactDevice(
                 deviceId = deviceId,
@@ -175,7 +175,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_SERVICE, "✗ ADB 重连异常: $deviceId - ${e.message}")
+            LogManager.e(LogTags.SCRCPY_SERVICE, "✗ ADB reconnection exception: $deviceId - ${e.message}")
             false
         }
 
@@ -186,7 +186,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
     ): Boolean {
         val candidate = parseExactProtectedConnection(deviceId)
         if (candidate == null) {
-            LogManager.e(LogTags.SCRCPY_SERVICE, "无法解析受保护的精确 ADB 连接标识: $deviceId")
+            LogManager.e(LogTags.SCRCPY_SERVICE, "Unable to resolve protected exact ADB connection ID: $deviceId")
             return false
         }
         if (!isStillProtected(deviceId, protectedDevice)) return true
@@ -212,7 +212,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
 
         val connectedDeviceId = result.getOrNull()
         if (result.isSuccess && connectedDeviceId == deviceId) {
-            LogManager.d(LogTags.SCRCPY_SERVICE, "ADB 原连接重连成功: $deviceId")
+            LogManager.d(LogTags.SCRCPY_SERVICE, "ADB original connection reconnected successfully: $deviceId")
             return true
         }
 
@@ -221,7 +221,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
         }
         LogManager.e(
             LogTags.SCRCPY_SERVICE,
-            "✗ ADB 原连接重连失败: $deviceId result=$connectedDeviceId error=${result.exceptionOrNull()?.message}",
+            "✗ ADB original connection failed to reconnect: $deviceId result=$connectedDeviceId error=${result.exceptionOrNull()?.message}",
         )
         return false
     }

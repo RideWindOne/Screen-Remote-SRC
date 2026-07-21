@@ -72,12 +72,12 @@ class UsbAdbManager(
      */
     fun scanUsbDevices(): Result<List<UsbDeviceInfo>> =
         runCatching {
-            LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_SCANNING_DEVICES.get())
+            LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_SCANNING_DEVICES.english)
 
             val devices = mutableListOf<UsbDeviceInfo>()
             val deviceList = usbManager.deviceList
 
-            LogManager.d(LogTags.USB_CONNECTION, "${AdbTexts.USB_FOUND_DEVICES.get()}: ${deviceList.size}")
+            LogManager.d(LogTags.USB_CONNECTION, "${AdbTexts.USB_FOUND_DEVICES.english}: ${deviceList.size}")
 
             for ((_, device) in deviceList) {
                 try {
@@ -93,7 +93,7 @@ class UsbAdbManager(
                                 // 没有权限时无法获取序列号，使用设备名称作为标识
                                 LogManager.w(
                                     LogTags.USB_CONNECTION,
-                                    "${AdbTexts.USB_PERMISSION_DENIED.get()}: ${device.deviceName}",
+                                    "${AdbTexts.USB_PERMISSION_DENIED.english}: ${device.deviceName}",
                                 )
                                 ""
                             }
@@ -111,15 +111,15 @@ class UsbAdbManager(
 
                         LogManager.d(
                             LogTags.USB_CONNECTION,
-                            "${AdbTexts.USB_DEVICE_FOUND.get()}: ${deviceInfo.productName} " +
-                                "(${AdbTexts.USB_PERMISSION.get()}: $hasPermission)",
+                            "${AdbTexts.USB_DEVICE_FOUND.english}: ${deviceInfo.productName} " +
+                                "(${AdbTexts.USB_PERMISSION.english}: $hasPermission)",
                         )
                     }
                 } catch (e: SecurityException) {
                     // 单个设备权限错误不应该影响整个扫描
                     LogManager.w(
                         LogTags.USB_CONNECTION,
-                        "${AdbTexts.USB_PERMISSION_DENIED.get()}: ${device.deviceName} - ${e.message}",
+                        "${AdbTexts.USB_PERMISSION_DENIED.english}: ${device.deviceName} - ${e.message}",
                     )
 
                     // 即使没有权限，也添加到列表中，让用户知道有这个设备
@@ -147,7 +147,7 @@ class UsbAdbManager(
             _usbDevices.value = devices
             devices as List<UsbDeviceInfo>
         }.onFailure { e ->
-            LogManager.e(LogTags.USB_CONNECTION, "${AdbTexts.USB_SCAN_FAILED.get()}: ${e.message}", e)
+            LogManager.e(LogTags.USB_CONNECTION, "${AdbTexts.USB_SCAN_FAILED.english}: ${e.message}", e)
         }
 
     /**
@@ -174,12 +174,12 @@ class UsbAdbManager(
         suspendCancellableCoroutine { continuation ->
             // 检查是否已有权限
             if (usbManager.hasPermission(device)) {
-                LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_ALREADY_GRANTED.get())
+                LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_ALREADY_GRANTED.english)
                 continuation.resume(Result.success(true))
                 return@suspendCancellableCoroutine
             }
 
-            LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_REQUESTING_PERMISSION.get())
+            LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_REQUESTING_PERMISSION.english)
             LogManager.d(
                 LogTags.USB_CONNECTION,
                 "USB permission request start: device=${device.deviceName}, action=$permissionAction",
@@ -223,10 +223,10 @@ class UsbAdbManager(
                                             usbManager.hasPermission(device)
 
                                     if (granted) {
-                                        LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_GRANTED.get())
+                                        LogManager.d(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_GRANTED.english)
                                         finish(Result.success(true))
                                     } else {
-                                        LogManager.w(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_DENIED.get())
+                                        LogManager.w(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_DENIED.english)
                                         finish(Result.success(false))
                                     }
 
@@ -296,7 +296,7 @@ class UsbAdbManager(
                 usbManager.requestPermission(device, permissionIntent)
                 handler.postDelayed(pollPermissionState, PERMISSION_POLL_INTERVAL_MS)
             } catch (e: Exception) {
-                LogManager.e(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_REQUEST_FAILED.get(), e)
+                LogManager.e(LogTags.USB_CONNECTION, AdbTexts.USB_PERMISSION_REQUEST_FAILED.english, e)
                 try {
                     context.unregisterReceiver(receiver)
                 } catch (ignored: Exception) {

@@ -50,7 +50,7 @@ class Session(
                 try {
                     processEvent(queuedEvent.event)
                 } catch (e: Exception) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "处理事件异常: ${e.message}", e)
+                    LogManager.e(LogTags.SCRCPY_CLIENT, "Handling event exception: ${e.message}", e)
                 } finally {
                     queuedEvent.processed?.complete(Unit)
                 }
@@ -104,7 +104,7 @@ class Session(
             }.onFailure { error ->
                 LogManager.w(
                     LogTags.SCRCPY_CLIENT,
-                    "后台保存会话配置失败: sessionId=$targetSessionId, ${error.message}",
+                    "Failed to save session configuration in the background: sessionId=$targetSessionId, ${error.message}",
                 )
             }
         }
@@ -112,7 +112,7 @@ class Session(
 
     fun handleEvent(event: SessionEvent) {
         if (eventChannel.trySend(QueuedSessionEvent(event)).isFailure) {
-            LogManager.w(LogTags.SCRCPY_CLIENT, "会话已停止，忽略事件: ${event::class.simpleName}")
+            LogManager.w(LogTags.SCRCPY_CLIENT, "Session stopped, event ignored: ${event::class.simpleName}")
         }
     }
 
@@ -126,12 +126,12 @@ class Session(
         try {
             stopMonitor()
         } catch (e: Exception) {
-            LogManager.w(LogTags.SCRCPY_CLIENT, "停止监控器失败: ${e.message}")
+            LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to stop monitor: ${e.message}")
         }
         try {
             monitorBus?.stop()
         } catch (e: Exception) {
-            LogManager.w(LogTags.SCRCPY_CLIENT, "停止监控总线失败: ${e.message}")
+            LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to stop monitoring bus: ${e.message}")
         }
         monitorBus = null
         adbConnection = null

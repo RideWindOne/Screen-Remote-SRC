@@ -46,7 +46,7 @@ object NetworkUtils {
                 }
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.NETWORK, "获取本机 IP 地址失败: ${e.message}")
+            LogManager.e(LogTags.NETWORK, "Failed to obtain local IP address: ${e.message}")
         }
         return null
     }
@@ -75,7 +75,7 @@ object NetworkUtils {
                 }
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.NETWORK, "获取所有 IP 地址失败: ${e.message}")
+            LogManager.e(LogTags.NETWORK, "Failed to obtain all IP addresses: ${e.message}")
         }
         return ipList
     }

@@ -113,7 +113,7 @@ class ScrcpyForegroundService : Service() {
                         deviceName = deviceName,
                     )
                 } else {
-                    LogManager.e(LogTags.SCRCPY_SERVICE, "忽略无效的设备保护请求: deviceId=$deviceId")
+                    LogManager.e(LogTags.SCRCPY_SERVICE, "Ignore invalid device protection requests: deviceId=$deviceId")
                     reconcileProtectedDevices()
                 }
             }
@@ -145,7 +145,7 @@ class ScrcpyForegroundService : Service() {
         super.onDestroy()
         isDestroyed = true
         mainHandler.removeCallbacksAndMessages(null)
-        LogManager.d(LogTags.SCRCPY_SERVICE, "服务销毁")
+        LogManager.d(LogTags.SCRCPY_SERVICE, "Service destruction")
         heartbeatMonitor.destroy()
         releaseWakeLock()
         protectedDevices.clear()
@@ -163,7 +163,7 @@ class ScrcpyForegroundService : Service() {
             )
         LogManager.d(
             LogTags.SCRCPY_SERVICE,
-            "添加保护设备: $deviceName ($deviceId)",
+            "Add protection device: $deviceName ($deviceId)",
         )
 
         updateNotification()
@@ -174,10 +174,10 @@ class ScrcpyForegroundService : Service() {
         startId: Int,
     ) {
         val device = protectedDevices.remove(deviceId)
-        LogManager.d(LogTags.SCRCPY_SERVICE, "移除保护设备: ${device?.deviceName} ($deviceId)")
+        LogManager.d(LogTags.SCRCPY_SERVICE, "Remove protective device: ${device?.deviceName} ($deviceId)")
 
         if (protectedDevices.isEmpty()) {
-            LogManager.d(LogTags.SCRCPY_SERVICE, "无设备需要保护，停止服务")
+            LogManager.d(LogTags.SCRCPY_SERVICE, "No equipment needs protection, stop service")
             stopForegroundService(startId)
         } else {
             updateNotification()
@@ -192,7 +192,7 @@ class ScrcpyForegroundService : Service() {
             isRunning = false
             heartbeatMonitor.stop()
             stopSelfResult(startId)
-            LogManager.e(LogTags.SCRCPY_SERVICE, "启动前台服务失败: ${error.message}", error)
+            LogManager.e(LogTags.SCRCPY_SERVICE, "Failed to start foreground service: ${error.message}", error)
             return false
         }
 
@@ -201,7 +201,7 @@ class ScrcpyForegroundService : Service() {
             heartbeatMonitor.start()
         }
 
-        LogManager.d(LogTags.SCRCPY_SERVICE, "前台服务已启动，保护 ${protectedDevices.size} 个设备")
+        LogManager.d(LogTags.SCRCPY_SERVICE, "The foreground service has been started, protecting ${protectedDevices.size} devices")
         return true
     }
 
@@ -212,7 +212,7 @@ class ScrcpyForegroundService : Service() {
         }
         if (!stopped) {
             // 已存在更新的 start 请求；它仍依赖当前前台状态，不能被旧请求提前降级。
-            LogManager.d(LogTags.SCRCPY_SERVICE, "忽略过期的停止请求: startId=$startId latest=$lastStartId")
+            LogManager.d(LogTags.SCRCPY_SERVICE, "Ignore expired stop requests: startId=$startId latest=$lastStartId")
             return
         }
 
@@ -220,7 +220,7 @@ class ScrcpyForegroundService : Service() {
         isRunning = false
         heartbeatMonitor.stop()
         notificationController.stopForeground()
-        LogManager.d(LogTags.SCRCPY_SERVICE, "前台服务已停止: startId=$startId stopped=$stopped")
+        LogManager.d(LogTags.SCRCPY_SERVICE, "The front desk service has stopped: startId=$startId stopped=$stopped")
     }
 
     private fun updateNotification() {
@@ -253,9 +253,9 @@ class ScrcpyForegroundService : Service() {
                     ).apply {
                         acquire(10 * 60 * 60 * 1000L)
                     }
-            LogManager.d(LogTags.SCRCPY_SERVICE, "WakeLock 已获取")
+            LogManager.d(LogTags.SCRCPY_SERVICE, "WakeLock acquired")
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_SERVICE, "获取 WakeLock 失败: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_SERVICE, "Failed to get WakeLock: ${e.message}", e)
         }
     }
 
@@ -264,12 +264,12 @@ class ScrcpyForegroundService : Service() {
             wakeLock?.let {
                 if (it.isHeld) {
                     it.release()
-                    LogManager.d(LogTags.SCRCPY_SERVICE, "WakeLock 已释放")
+                    LogManager.d(LogTags.SCRCPY_SERVICE, "WakeLock released")
                 }
             }
             wakeLock = null
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_SERVICE, "释放 WakeLock 失败: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_SERVICE, "Failed to release WakeLock: ${e.message}", e)
         }
     }
 }

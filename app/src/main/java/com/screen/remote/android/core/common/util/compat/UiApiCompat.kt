@@ -124,7 +124,7 @@ fun vibrateCompat(
             vibrator.vibrate(duration)
         }
     } catch (e: Exception) {
-        LogManager.e(LogTags.APP, "震动失败: ${e.message}", e)
+        LogManager.e(LogTags.APP, "Vibration failure: ${e.message}", e)
     }
 }
 

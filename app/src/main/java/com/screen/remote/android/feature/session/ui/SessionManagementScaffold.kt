@@ -73,12 +73,15 @@ private val ManagementTopBarActionSize = 40.dp
 private val ManagementTopBarHorizontalInset = 4.dp
 private val ManagementDrawerWidth = 248.dp
 private val ManagementDrawerEdgeCornerRadius = 22.dp
-private val ManagementCardCornerRadius = AppDimens.cardCornerRadius
 private val ManagementDrawerPadding = 12.dp
 private val ManagementDrawerHeaderPadding = 18.dp
 private val ManagementDrawerSectionSpacing = 12.dp
 private val ManagementDrawerItemSpacing = 6.dp
 private val ManagementSurfaceElevation = 1.dp
+
+internal val SessionManagementCardShape = RoundedCornerShape(12.dp)
+internal val SessionManagementControlShape = RoundedCornerShape(18.dp)
+internal val SessionManagementControlHeight = 38.dp
 
 @Composable
 internal fun SessionManagementLoadingBar(modifier: Modifier = Modifier) {
@@ -230,7 +233,7 @@ internal fun SessionManagementNoteCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -408,7 +411,7 @@ internal fun SessionManagementDrawer(
                 ),
             ) {
                 Surface(
-                    shape = RoundedCornerShape(ManagementCardCornerRadius),
+                    shape = SessionManagementCardShape,
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
                     shadowElevation = 1.dp,
@@ -484,7 +487,7 @@ internal fun SessionManagementUtilityList(
             accent = MaterialTheme.colorScheme.primary,
         )
     Surface(
-        shape = RoundedCornerShape(ManagementCardCornerRadius),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -658,7 +661,7 @@ private fun SessionManagementDrawerItem(
             MaterialTheme.colorScheme.onSurface
         }
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = SessionManagementControlShape,
         color = containerColor,
     ) {
         Row(
@@ -695,7 +698,7 @@ private fun SessionManagementDrawerActionItem(
     onClick: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = SessionManagementControlShape,
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(

@@ -63,9 +63,9 @@ fun CodecOptionsSection(
                     contentDescription = null,
                     tint =
                         if (selectedCodec.isEmpty() && customCodecName.isEmpty()) {
-                            Color(0xFF007AFF)
+                            MaterialTheme.colorScheme.primary
                         } else {
-                            Color(0xFFE5E5EA)
+                            MaterialTheme.colorScheme.outlineVariant
                         },
                 )
             }

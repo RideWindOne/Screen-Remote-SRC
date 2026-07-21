@@ -47,7 +47,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.summary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.targetSummary
 
 internal suspend fun Session.processEvent(event: SessionEvent) {
-    LogManager.d(LogTags.SCRCPY_CLIENT, "处理事件: $event")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Handle event: $event")
 
     when (event) {
         is SessionEvent.AdbConnecting -> handleAdbConnecting()
@@ -91,7 +91,7 @@ fun Session.createMonitorBus(deviceIdentifier: String = this.deviceIdentifier) {
     try {
         monitorBus?.stop()
     } catch (e: Exception) {
-        LogManager.w(LogTags.SDL, "停止旧 MonitorBus 失败: ${e.message}")
+        LogManager.w(LogTags.SDL, "Failed to stop old MonitorBus: ${e.message}")
     }
     monitorBus = ScrcpyMonitorBus(deviceIdentifier).apply { start() }
 }
@@ -101,14 +101,14 @@ fun Session.initMonitor(
     onReconnect: () -> Unit,
 ) {
     runtime.bind(stateMachine, onReconnect)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "初始化会话监控器")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Initialize session monitor")
 }
 
 fun Session.stopMonitor() {
     runtime.bind(stateMachine = null, reconnectCallback = null)
     runtime.clearComponentStates()
     runtime.resetReconnectAttempts()
-    LogManager.d(LogTags.SCRCPY_CLIENT, "停止会话监控器: $deviceIdentifier")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Stop session monitor: $deviceIdentifier")
 }
 
 internal fun Session.handleAdbConnecting() {
@@ -124,7 +124,7 @@ internal fun Session.handleAdbConnected(context: AdbConnectionContext) {
     runtime.updateProgress(ConnectionStep.ADB_CONNECT, StepStatus.SUCCESS, AdbTexts.ADB_CONNECTED.get())
     runtime.updateSessionState(SessionState.AdbConnected(context))
     runtime.updateComponentState(SessionComponent.AdbConnection, ComponentState.Connected)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "ADB 已连接: deviceId=${context.deviceId}, serial=${context.serial}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "ADB connected: deviceId=${context.deviceId}, serial=${context.serial}")
 }
 
 internal fun Session.handleAdbDisconnected(issue: AdbIssue) {
@@ -135,12 +135,12 @@ internal fun Session.handleAdbDisconnected(issue: AdbIssue) {
 
 internal fun Session.handleServerPushing(context: ServerPushContext) {
     runtime.updateProgress(ConnectionStep.PUSH_SERVER, StepStatus.RUNNING, RemoteTexts.REMOTE_PUSHING_SERVER.get())
-    LogManager.d(LogTags.SCRCPY_CLIENT, "正在推送 scrcpy-server: ${context.startedSummary()}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Pushing scrcpy-server: ${context.startedSummary()}")
 }
 
 internal fun Session.handleServerPushed(context: ServerPushContext) {
     runtime.updateProgress(ConnectionStep.PUSH_SERVER, StepStatus.SUCCESS, RemoteTexts.REMOTE_SERVER_PUSHED.get())
-    LogManager.d(LogTags.SCRCPY_CLIENT, "scrcpy-server 推送完成: ${context.completedSummary()}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "scrcpy-server push completed: ${context.completedSummary()}")
 }
 
 internal fun Session.handleServerPushFailed(issue: ServerIssue) {
@@ -157,7 +157,7 @@ internal fun Session.handleServerStarted(context: ServerStartContext) {
     runtime.updateProgress(ConnectionStep.START_SERVER, StepStatus.SUCCESS, RemoteTexts.REMOTE_SERVER_STARTED.get())
     runtime.updateSessionState(SessionState.ServerStarted(context))
     runtime.updateComponentState(SessionComponent.ScrcpyServer, ComponentState.Running)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "scrcpy-server 已启动: scid=${context.scid}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "scrcpy-server started: scid=${context.scid}")
 }
 
 internal fun Session.handleServerFailed(issue: ServerIssue) {
@@ -180,23 +180,23 @@ internal fun Session.handleForwardSetup(
         StepStatus.SUCCESS,
         context.progressMessage(localPort, remoteSocket),
     )
-    LogManager.d(LogTags.SCRCPY_CLIENT, "Forward 已建立: ${context.logSummary(localPort, remoteSocket)}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Forward has been created: ${context.logSummary(localPort, remoteSocket)}")
 }
 
 internal fun Session.handleForwardRemoved(
     localPort: Int,
     context: ForwardRemovalContext,
 ) {
-    LogManager.d(LogTags.SCRCPY_CLIENT, "Forward 已移除: ${context.summary(localPort)}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Forward Removed: ${context.summary(localPort)}")
 }
 
 internal fun Session.handleForwardFailed(issue: ForwardIssue) {
     runtime.updateProgress(ConnectionStep.ADB_FORWARD, StepStatus.FAILED, issue.progressMessage())
-    LogManager.e(LogTags.SCRCPY_CLIENT, "Forward 建立失败: ${issue.summary()}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Forward creation failed: ${issue.summary()}")
 }
 
 internal fun Session.handleSessionError(issue: SessionIssue) {
-    LogManager.e(LogTags.SCRCPY_CLIENT, "会话错误: ${issue.message}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Session error: ${issue.message}")
     runtime.updateSessionState(SessionState.Failed(issue))
 }
 
@@ -206,14 +206,14 @@ internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
         is SessionState.Reconnecting -> {
             LogManager.d(
                 LogTags.SCRCPY_CLIENT,
-                "重连请求已存在，忽略重复触发: $reason",
+                "The reconnection request already exists, ignore the repeated trigger: $reason",
             )
             return
         }
         is SessionState.Failed -> {
             LogManager.d(
                 LogTags.SCRCPY_CLIENT,
-                "会话已失败，忽略重连请求: $reason",
+                "Session failed, reconnection request ignored: $reason",
             )
             return
         }
@@ -222,7 +222,7 @@ internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
 
     val currentAttempts = runtime.reconnectAttempts()
     if (currentAttempts >= ScrcpyConstants.MAX_RECONNECT_ATTEMPTS) {
-        LogManager.e(LogTags.SCRCPY_CLIENT, "重连次数已达上限，停止重连")
+        LogManager.e(LogTags.SCRCPY_CLIENT, "The number of reconnections has reached the upper limit, stop reconnecting.")
         runtime.updateSessionState(
             SessionState.Failed(
                 SessionIssue(
@@ -246,14 +246,14 @@ internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
     )
     LogManager.d(
         LogTags.SCRCPY_CLIENT,
-        "请求重连 (尝试 $newAttempts/${ScrcpyConstants.MAX_RECONNECT_ATTEMPTS}): $reason",
+        "Request to reconnect (try $newAttempts/${ScrcpyConstants.MAX_RECONNECT_ATTEMPTS}): $reason",
     )
 
     runtime.invokeReconnectCallback()
 }
 
 internal fun Session.handleRequestCleanup(trigger: CleanupTrigger) {
-    LogManager.d(LogTags.SCRCPY_CLIENT, "请求清理会话: trigger=${trigger.logLabel}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Request to clear session: trigger=${trigger.logLabel}")
     runtime.updateSessionState(SessionState.Idle)
     runtime.updateSocketExpectation(
         expectedSocketCount = 3,
@@ -265,12 +265,12 @@ internal fun Session.handleRequestCleanup(trigger: CleanupTrigger) {
 
 internal fun Session.handleDecoderStarted(decoderType: DecoderType) {
     runtime.updateComponentState(decoderType.toComponent(), ComponentState.Running)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "解码器已启动: ${decoderType.name}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Decoder started: ${decoderType.name}")
 }
 
 internal fun Session.handleDecoderStopped(decoderType: DecoderType) {
     runtime.updateComponentState(decoderType.toComponent(), ComponentState.Stopped)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "解码器已停止: ${decoderType.name}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Decoder stopped: ${decoderType.name}")
 }
 
 internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
@@ -279,11 +279,11 @@ internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
     if (issue.kind == DecoderIssueKind.UnsupportedSize) {
         val suggestedMaxSize = issue.suggestedMaxSize
         if (suggestedMaxSize == null) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "解码尺寸不受支持，且没有可用的自动降级尺寸")
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Decoding size is not supported and no auto-downgrade size is available")
             return
         }
         if (!runtime.tryConsumeDecoderRecoveryAttempt(MAX_DECODER_RECOVERY_ATTEMPTS)) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "解码自动降级已达到上限，停止重试")
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Decoding automatic downgrade has reached the upper limit, stop retrying")
             return
         }
 
@@ -291,14 +291,14 @@ internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
         if (currentOptions.config.maxSize in 1..suggestedMaxSize) {
             LogManager.e(
                 LogTags.SCRCPY_CLIENT,
-                "建议降级尺寸未低于当前 maxSize，停止重试: current=${currentOptions.config.maxSize} suggested=$suggestedMaxSize",
+                "The recommended downgrade size is not lower than the current maxSize, stop retrying: current=${currentOptions.config.maxSize} suggested=$suggestedMaxSize",
             )
             return
         }
         setOptions(currentOptions.copy(config = currentOptions.config.copy(maxSize = suggestedMaxSize)))
         LogManager.w(
             LogTags.SCRCPY_CLIENT,
-            "解码器不支持 ${issue.width}x${issue.height}，本次运行降级 maxSize=$suggestedMaxSize 后重连（不写入持久化配置）",
+            "The decoder does not support ${issue.width}x${issue.height}. This operation downgrades maxSize=$suggestedMaxSize and then reconnects (the persistent configuration is not written)",
         )
     }
 
@@ -311,45 +311,45 @@ internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
         )
     }
 
-    LogManager.e(LogTags.SCRCPY_CLIENT, "解码器错误详情: ${issue.summary()}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Decoder error details: ${issue.summary()}")
 }
 
 private const val MAX_DECODER_RECOVERY_ATTEMPTS = 2
 
 internal fun Session.handleVideoEncoderDetecting(context: CodecDetectionContext) {
     val source = if (context.reusedUploadedServer) "复用已上传 server" else "重新 push server"
-    LogManager.d(LogTags.SCRCPY_CLIENT, "正在检测视频编码器... source=$source")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Detecting video encoder... source=$source")
 }
 
 internal fun Session.handleVideoEncoderDetected(summary: CodecDetectionSummary) {
     LogManager.d(
         LogTags.SCRCPY_CLIENT,
-        "视频编码器检测完成: count=${summary.totalCount}, sample=${summary.sampleNames.joinToString()}, reusedServer=${summary.reusedUploadedServer}",
+        "Video encoder detection completed: count=${summary.totalCount}, sample=${summary.sampleNames.joinToString()}, reusedServer=${summary.reusedUploadedServer}",
     )
 }
 
 internal fun Session.handleVideoEncoderDetectFailed(issue: CodecIssue) {
-    LogManager.e(LogTags.SCRCPY_CLIENT, "视频编码器检测失败: ${issue.message}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Video encoder detection failed: ${issue.message}")
 }
 
 internal fun Session.handleVideoEncoderError(issue: CodecIssue) {
-    LogManager.e(LogTags.SCRCPY_CLIENT, "视频编码器错误: ${issue.message}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Video encoder error: ${issue.message}")
 }
 
 internal fun Session.handleAudioEncoderDetecting(context: CodecDetectionContext) {
     val source = if (context.reusedUploadedServer) "复用已上传 server" else "重新 push server"
-    LogManager.d(LogTags.SCRCPY_CLIENT, "正在检测音频编码器... source=$source")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Detecting audio encoder... source=$source")
 }
 
 internal fun Session.handleAudioEncoderDetected(summary: CodecDetectionSummary) {
     LogManager.d(
         LogTags.SCRCPY_CLIENT,
-        "音频编码器检测完成: count=${summary.totalCount}, sample=${summary.sampleNames.joinToString()}, reusedServer=${summary.reusedUploadedServer}",
+        "Audio encoder detection completed: count=${summary.totalCount}, sample=${summary.sampleNames.joinToString()}, reusedServer=${summary.reusedUploadedServer}",
     )
 }
 
 internal fun Session.handleAudioEncoderError(issue: CodecIssue) {
-    LogManager.e(LogTags.SCRCPY_CLIENT, "音频编码器错误: ${issue.message}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Audio encoder error: ${issue.message}")
 }
 
 internal fun DecoderType.toComponent(): SessionComponent =
@@ -364,7 +364,7 @@ internal fun Session.handleSocketConnecting(context: SocketConnectingContext) {
         audioEnabled = context.audioEnabled,
     )
     runtime.updateProgress(ConnectionStep.CONNECT_SOCKET, StepStatus.RUNNING, RemoteTexts.REMOTE_CONNECTING_SOCKET.get())
-    LogManager.d(LogTags.SCRCPY_CLIENT, "开始连接 socket: ${context.summary()}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Start connecting socket: ${context.summary()}")
 }
 
 internal fun Session.handleSocketConnected(
@@ -372,7 +372,7 @@ internal fun Session.handleSocketConnected(
     context: SocketConnectContext,
 ) {
     val componentSnapshot = runtime.updateComponentState(socketType.toComponent(), ComponentState.Connected)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "Socket 已连接: ${context.summary(socketType)}")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Socket connected: ${context.summary(socketType)}")
 
     val socketConnections = componentSnapshot.socketConnections
 
@@ -407,7 +407,7 @@ internal fun Session.handleSocketDisconnected(
 
 internal fun Session.handleSocketError(issue: SocketIssue) {
     runtime.updateProgress(ConnectionStep.CONNECT_SOCKET, StepStatus.FAILED, issue.progressMessage())
-    LogManager.e(LogTags.SCRCPY_CLIENT, "Socket 错误: ${issue.summary()}")
+    LogManager.e(LogTags.SCRCPY_CLIENT, "Socket error: ${issue.summary()}")
 }
 
 internal fun SocketType.toComponent(): SessionComponent =

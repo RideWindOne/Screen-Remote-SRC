@@ -51,7 +51,7 @@ internal suspend fun raceAdbConnections(
 
     LogManager.i(
         logTag,
-        "启动 $logLabel 多线路竞速 (${distinctCandidates.size}, purpose=$purpose): " +
+        "Start $logLabel multi-line racing (${distinctCandidates.size}, purpose=$purpose):" +
             distinctCandidates.joinToString { formatAdbRaceCandidate(it) },
     )
 
@@ -128,7 +128,7 @@ internal suspend fun raceAdbConnections(
                     decisionDeadlineNanos = outcome.completedAtNanos + ADB_CONNECTION_RACE_DECISION_WINDOW_NANOS
                     LogManager.d(
                         logTag,
-                        "$logLabel 网络候选已连接，最多等待 USB ${ADB_CONNECTION_RACE_DECISION_WINDOW_MILLIS}ms",
+                        "$logLabel network candidate is connected, waiting at most USB ${ADB_CONNECTION_RACE_DECISION_WINDOW_MILLIS}ms",
                     )
                 }
                 LogManager.i(
@@ -168,11 +168,11 @@ internal suspend fun raceAdbConnections(
                     return@forEach
                 }
                 if (!isCurrentRace()) {
-                    LogManager.d(logTag, "跳过过期 $logLabel 竞速清理")
+                    LogManager.d(logTag, "Skip Expired $logLabel Racing Cleanup")
                     return@launch
                 }
                 if (connectionManager.disconnectDeviceIfCurrent(deviceId, connection).getOrDefault(false)) {
-                    LogManager.d(logTag, "已关闭 $logLabel 竞速落选连接: $deviceId")
+                    LogManager.d(logTag, "Closed $logLabel Competition failed link: $deviceId")
                 }
             }
             outcomes.close()
@@ -183,7 +183,7 @@ internal suspend fun raceAdbConnections(
     val selectedConnection = selected.result.getOrThrow()
     LogManager.i(
         logTag,
-        "$logLabel 竞速胜出: ${formatAdbRaceCandidate(selected.candidate)} " +
+        "$logLabel Race winner: ${formatAdbRaceCandidate(selected.candidate)}" +
             "deviceId=${selectedConnection.deviceId} ${selected.elapsedMillis(startedAtNanos)}ms",
     )
     return selected

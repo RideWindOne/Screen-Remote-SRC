@@ -32,9 +32,9 @@ internal class AdbKeyManager(
     private fun initKeyPair() {
         try {
             keyPair = adbRuntime.loadOrCreateKeyPair()
-            LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_KEYPAIR_LOADED.get())
+            LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_KEYPAIR_LOADED.english)
         } catch (e: Exception) {
-            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_KEYPAIR_INIT_FAILED.get()}: ${e.message}", e)
+            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_KEYPAIR_INIT_FAILED.english}: ${e.message}", e)
         }
     }
 
@@ -57,7 +57,7 @@ internal class AdbKeyManager(
         try {
             adbRuntime.readIdentity().publicKey
         } catch (e: Exception) {
-            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_GET_PUBLIC_KEY_FAILED.get()}: ${e.message}", e)
+            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_GET_PUBLIC_KEY_FAILED.english}: ${e.message}", e)
             null
         }
 

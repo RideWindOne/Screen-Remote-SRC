@@ -54,7 +54,7 @@ class ConnectionHealthMonitor {
                             consecutiveFailureCount++
                             LogManager.w(
                                 LogTags.SDL_HM,
-                                "Socket 健康检查失败($consecutiveFailureCount/$SOCKET_FAILURE_STRIKES): video=$videoAlive, audio=$audioAlive, control=$controlAlive",
+                                "Socket health check failed ($consecutiveFailureCount/$SOCKET_FAILURE_STRIKES): video=$videoAlive, audio=$audioAlive, control=$controlAlive",
                             )
 
                             if (consecutiveFailureCount < SOCKET_FAILURE_STRIKES) {
@@ -72,7 +72,7 @@ class ConnectionHealthMonitor {
                     } catch (_: CancellationException) {
                         break
                     } catch (e: Exception) {
-                        LogManager.e(LogTags.SDL_HM, "健康检查异常: ${e.message}")
+                        LogManager.e(LogTags.SDL_HM, "Health check exception: ${e.message}")
                         if (!isActive) {
                             break
                         }

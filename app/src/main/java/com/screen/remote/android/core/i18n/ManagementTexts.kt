@@ -421,6 +421,12 @@ object ManagementTexts {
         val SHELL_NOT_CONNECTED = TextPair("# shell 尚未连接。\n", "# Shell is not connected.\n")
         val SHELL_WRITE_FAILED = TextPair("\n# 写入失败: %s\n", "\n# Write failed: %s\n")
         val SHELL_DISCONNECTED = TextPair("\n# 已断开。\n", "\n# Disconnected.\n")
+        val UNSUPPORTED_INTERACTIVE_COMMAND =
+            TextPair(
+                "# 已阻止 %s：当前 Shell 不支持交互式全屏程序，请使用 cat、sed、tail 等非交互命令。\n",
+                "# Blocked %s: this shell does not support interactive full-screen programs. Use a non-interactive command such as cat, sed, or tail.\n",
+            )
+        val INTERRUPT = TextPair("中断 (Ctrl+C)", "Interrupt (Ctrl+C)")
         val COMMAND_COMPLETED_NO_OUTPUT = TextPair("命令执行完成，无输出。", "Command completed with no output.")
         val COMMAND_FAILED = TextPair("命令执行失败。", "Command failed.")
         val OUTPUT_TRUNCATED = TextPair("...输出已截断，原始内容超过 %d 个字符。", "...Output truncated because the original exceeded %d characters.")

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Screen Remote Engineering"
+  short_description: "仅面向 Screen-Remote 子仓库的工程与知识同步"
+  default_prompt: "Use $screen-remote-engineering to make a scoped, verified change and keep project knowledge current."

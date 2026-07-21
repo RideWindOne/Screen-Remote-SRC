@@ -189,9 +189,9 @@ class ConnectionLifecycle(
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
                     if (canProbeServerSocketDirectly) {
-                        "Server 启动模式: direct localabstract，跳过日志 settle，探测首条 video socket"
+                        "Server startup mode: direct localabstract, skip log settle, detect the first video socket"
                     } else {
-                        "Server 启动模式: ADB forward，等待 server ready 后按协议顺序建链"
+                        "Server startup mode: ADB forward, wait for the server to be ready and then build the link according to the protocol sequence"
                     },
                 )
                 startScrcpyServer(
@@ -229,13 +229,13 @@ class ConnectionLifecycle(
                     audioSocket = socketManager.audioSocket.takeIf { audioStream != null },
                     controlSocket = socketManager.controlSocket,
                     onConnectionLostCallback = {
-                        LogManager.w(LogTags.SCRCPY_CLIENT, "健康监控检测到连接丢失")
+                        LogManager.w(LogTags.SCRCPY_CLIENT, "Health monitoring detects connection loss")
                         sessionContext.emit(
                             SessionEvent.SocketError(
                                 SocketIssue(
                                     kind = SocketIssueKind.HealthCheckFailed,
                                     socketType = SocketType.Video,
-                                    detail = "Socket 连接丢失",
+                                    detail = "Socket connection lost",
                                 ),
                             ),
                         )
@@ -258,7 +258,7 @@ class ConnectionLifecycle(
                         disconnectInternal().onFailure { cleanupError ->
                             LogManager.w(
                                 LogTags.SCRCPY_CLIENT,
-                                "取消连接后的资源清理不完整: ${cleanupError.message}",
+                                "Incomplete resource cleanup after canceling connection: ${cleanupError.message}",
                             )
                         }
                     }
@@ -270,12 +270,12 @@ class ConnectionLifecycle(
                     codecDetectionJob = null
                 }
                 shellMonitor.dumpDiagnostics("connect-failed")
-                LogManager.e(LogTags.SCRCPY_CLIENT, "连接失败: ${e.message}")
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Connection failed: ${e.message}")
                 if (ownsConnectionCleanup) {
                     disconnectInternal().onFailure { cleanupError ->
                         LogManager.w(
                             LogTags.SCRCPY_CLIENT,
-                            "连接失败后的资源清理不完整: ${cleanupError.message}",
+                            "Incomplete resource cleanup after connection failure: ${cleanupError.message}",
                         )
                     }
                 }
@@ -293,7 +293,7 @@ class ConnectionLifecycle(
                 runCatching {
                     detectRemoteEncodersAfterPush(connection, expectedSessionId)
                 }.onFailure { error ->
-                    LogManager.w(LogTags.SCRCPY_CLIENT, "后台检测远程编解码器失败: ${error.message}")
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "Background detection of remote codec failed: ${error.message}")
                 }
             }
     }
@@ -328,11 +328,11 @@ class ConnectionLifecycle(
                     try {
                         connectionSnapshot.adbConnection
                             .removeAdbForward(connectionSnapshot.localPort, ForwardRemovalTrigger.Disconnect)
-                        LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.get())
+                        LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.english)
                     } catch (e: Exception) {
                         LogManager.w(
                             LogTags.SCRCPY_CLIENT,
-                            "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.get()}: ${e.message}",
+                            "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.english}: ${e.message}",
                         )
                     }
                 }
@@ -348,12 +348,12 @@ class ConnectionLifecycle(
 
                         LogManager.d(
                             LogTags.SCRCPY_CLIENT,
-                            "${RemoteTexts.SCRCPY_TERMINATED_SERVER_PROCESS.get()} (scid=$scidHex)",
+                            "${RemoteTexts.SCRCPY_TERMINATED_SERVER_PROCESS.english} (scid=$scidHex)",
                         )
                     } catch (e: Exception) {
                         LogManager.w(
                             LogTags.SCRCPY_CLIENT,
-                            "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.get()}: ${e.message}",
+                            "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.english}: ${e.message}",
                         )
                     }
                 }
@@ -362,7 +362,7 @@ class ConnectionLifecycle(
 
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "断开连接失败: ${e.message}", e)
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to disconnect: ${e.message}", e)
                 Result.failure(e)
             } finally {
                 if (activeConnection === connectionSnapshot) {

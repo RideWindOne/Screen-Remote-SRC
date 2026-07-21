@@ -9,11 +9,29 @@ import androidx.compose.ui.graphics.Color
 object AppColors {
     // ========== 浅色模式 ==========
 
+    /** 浅色分组页面背景 */
+    val lightBackground = Color(0xFFF5F5F5)
+
+    /** 浅色卡片与顶栏表面 */
+    val lightSurface = Color(0xFFFFFFFF)
+
+    /** 浅色次级填充与选中背景 */
+    val lightSurfaceMuted = Color(0xFFE9E9EE)
+
+    /** 浅色主文字 */
+    val lightTextPrimary = Color(0xFF1C1C1E)
+
+    /** 浅色次文字 */
+    val lightTextSecondary = Color(0xFF6E6E73)
+
+    /** 浅色分隔线基色，由组件叠加透明度 */
+    val lightDivider = Color(0xFF3C3C43)
+
     /** iOS 蓝色 - 用于按钮、链接等 */
     val iOSBlue = Color(0xFF007AFF)
 
     /** 分隔线颜色 */
-    val divider = Color(0xFFBBBBBB)
+    val divider = lightDivider
 
     /** Dialog 背景色 */
     val dialogBackground = Color(0xFFECECEC)
@@ -80,7 +98,7 @@ object AppColors {
     val black = Color.Black
 
     /** 浅色模式 - DropdownMenu 背景（纯白，带阴影形成浮起效果） */
-    val lightDropdownBackground = Color(0xFFFFFFFF)
+    val lightDropdownBackground = lightSurface
 
     // ========== 深色模式 ==========
 
@@ -100,16 +118,16 @@ object AppColors {
     val darkDropdownBackground = Color(0xFF2C2C2E)
 
     /** 深色模式 - 主文字 */
-    val darkTextPrimary = Color(0xFFEDEDED)
+    val darkTextPrimary = Color(0xFFF2F2F7)
 
     /** 深色模式 - 副文字/说明 */
-    val darkTextSecondary = Color(0xFFB3B3B3)
+    val darkTextSecondary = Color(0xFFAEAEB2)
 
     /** 深色模式 - 禁用/次要信息 */
     val darkTextDisabled = Color(0x61FFFFFF) // rgba(255,255,255,0.38)
 
     /** 深色模式 - 分割线 */
-    val darkDivider = Color(0xFF2C2C2C)
+    val darkDivider = Color(0xFF545458)
 
     /** 深色模式 - 图标/箭头 */
     val darkIcon = Color(0xFF8A8A8A)
@@ -127,7 +145,7 @@ object AppColors {
     val darkIOSSelectedBackground = Color(0xFF3A3A3C)
 
     /** 深色模式 - 主按钮 */
-    val darkButtonPrimary = Color(0xFF1E88E5)
+    val darkButtonPrimary = Color(0xFF0A84FF)
 
     /** 深色模式 - 次按钮 */
     val darkButtonSecondary = Color(0xFF3A3A3A)

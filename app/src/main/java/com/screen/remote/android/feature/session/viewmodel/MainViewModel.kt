@@ -396,7 +396,7 @@ private class ManagementAdbSessionController(
 
     suspend fun connect(sessionId: String) {
         val generation = connectGeneration.incrementAndGet()
-        LogManager.i(LogTags.MANAGEMENT, "开始建立管理连接: sessionId=$sessionId generation=$generation")
+        LogManager.i(LogTags.MANAGEMENT, "Start establishing a management connection: sessionId=$sessionId generation=$generation")
         val existingStatus = _status.value
         val existingDeviceId = _deviceId.value
         val existingBridgeConnection = bridge.currentConnection()
@@ -414,7 +414,7 @@ private class ManagementAdbSessionController(
                 existingConnection.verifyWithoutSessionEvents().isSuccess
             ) {
                 if (connectGeneration.get() == generation) {
-                    LogManager.i(LogTags.MANAGEMENT, "复用已验证的管理连接: deviceId=$existingDeviceId")
+                    LogManager.i(LogTags.MANAGEMENT, "Reuse authenticated management connection: deviceId=$existingDeviceId")
                     _status.value = existingStatus
                 }
                 return
@@ -429,7 +429,7 @@ private class ManagementAdbSessionController(
         val sessionData = sessionRepository.getSessionData(sessionId)
         if (connectGeneration.get() != generation) return
         if (sessionData == null) {
-            LogManager.e(LogTags.MANAGEMENT, "管理连接失败: sessionId=$sessionId 会话不存在")
+            LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId session does not exist")
             _status.value = ManagementConnectStatus.Failed(sessionId, "会话不存在")
             return
         }
@@ -447,7 +447,7 @@ private class ManagementAdbSessionController(
                 existingConnection.verifyWithoutSessionEvents().isSuccess
             ) {
                 if (connectGeneration.get() == generation) {
-                    LogManager.i(LogTags.MANAGEMENT, "复用候选中的已有 ADB 连接: deviceId=$existingDeviceId")
+                    LogManager.i(LogTags.MANAGEMENT, "Reuse existing ADB connections in candidates: deviceId=$existingDeviceId")
                     activateConnection(sessionData, existingDeviceId, generation)
                 }
                 return
@@ -460,7 +460,7 @@ private class ManagementAdbSessionController(
             connectAdb(sessionData, generation)
                 .getOrElse { error ->
                     if (connectGeneration.get() != generation) return
-                    LogManager.e(LogTags.MANAGEMENT, "管理连接失败: sessionId=$sessionId ${error.message}", error)
+                    LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId ${error.message}", error)
                     _status.value =
                         ManagementConnectStatus.Failed(
                             sessionId,
@@ -495,7 +495,7 @@ private class ManagementAdbSessionController(
         )
         _deviceId.value = connectedDeviceId
         _status.value = ManagementConnectStatus.Connected(sessionData.id, connectedDeviceId)
-        LogManager.i(LogTags.MANAGEMENT, "管理连接已就绪: sessionId=${sessionData.id} deviceId=$connectedDeviceId")
+        LogManager.i(LogTags.MANAGEMENT, "Management connection is ready: sessionId=${sessionData.id} deviceId=$connectedDeviceId")
     }
 
     private suspend fun recordSuccessfulCandidate(
@@ -524,7 +524,7 @@ private class ManagementAdbSessionController(
 
     fun cancelConnect(sessionId: String) {
         val generation = connectGeneration.incrementAndGet()
-        LogManager.i(LogTags.MANAGEMENT, "取消管理连接: sessionId=$sessionId generation=$generation")
+        LogManager.i(LogTags.MANAGEMENT, "Cancel management connection: sessionId=$sessionId generation=$generation")
         val currentStatus = _status.value
         if (currentStatus is ManagementConnectStatus.Connecting && currentStatus.sessionId == sessionId) {
             _status.value = ManagementConnectStatus.Idle
@@ -571,7 +571,7 @@ private class ManagementAdbSessionController(
                     attemptScope = scope,
                     cleanupScope = scope,
                     logTag = LogTags.MANAGEMENT,
-                    logLabel = "管理 ADB",
+                    logLabel = "management ADB",
                     deviceName = sessionData.name.takeIf { it.isNotBlank() },
                     isCurrentRace = { connectGeneration.get() == generation },
                 )

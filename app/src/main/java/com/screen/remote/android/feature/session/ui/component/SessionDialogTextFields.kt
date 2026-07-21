@@ -14,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -244,9 +243,9 @@ private fun DialogFieldPlaceholder(
         style = MaterialTheme.typography.bodyMedium,
         color =
             if (isError) {
-                Color(0xFFFF3B30).copy(alpha = 0.6f)
+                MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
             } else {
-                Color(0xFF959595)
+                MaterialTheme.colorScheme.onSurfaceVariant
             },
         textAlign = textAlign,
         maxLines = 1,
@@ -262,7 +261,7 @@ private fun dialogFieldTextStyle(
     TextStyle(
         fontSize = 15.sp,
         lineHeight = 15.sp,
-        color = if (isError) Color(0xFFFF3B30) else MaterialTheme.colorScheme.onSurface,
+        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         textAlign = textAlign,
     )
 

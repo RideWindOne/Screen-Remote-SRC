@@ -26,7 +26,7 @@ object AppConstants {
     const val TELEGRAM_CHANNEL = "https://t.me/joinchat/I_HBlFpB27RkZTRl"
     const val GITHUB_REPO = "https://github.com/XRSec/Screen-Remote"
     const val GITHUB_ISSUES = "https://github.com/XRSec/Screen-Remote/issues"
-    const val GITHUB_USER_GUIDE = "https://github.com/XRSec/Screen-Remote/wiki/用户使用文档"
+    const val GITHUB_USER_GUIDE = "https://github.com/XRSec/Screen-Remote/wiki/User-Documentation"
     const val WAKELOCK_TIMEOUT_MS = 10L * 60 * 60 * 1000
     const val STATEFLOW_SUBSCRIBE_TIMEOUT_MS = 5000L
     const val PROCESS_ID_START = 10000

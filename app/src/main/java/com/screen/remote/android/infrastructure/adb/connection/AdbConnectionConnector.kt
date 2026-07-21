@@ -48,11 +48,11 @@ internal class AdbConnectionConnector(
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
                     existingConnection.bindSessionContext(sessionContext)
                     if (forceReconnect) {
-                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_FORCE_RECONNECT_CLEANUP.get())
+                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_FORCE_RECONNECT_CLEANUP.english)
                         runCatching { existingConnection.close() }
                         connectionRegistry.remove(deviceId)
                     } else {
-                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.get())
+                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_VERIFYING_CONNECTION.english)
                         val verifyResult = existingConnection.verify()
                         if (verifyResult.isSuccess) {
                             return@withContext Result.success(existingConnection)
@@ -61,8 +61,6 @@ internal class AdbConnectionConnector(
                         connectionRegistry.remove(deviceId)
                     }
                 }
-
-                val features = Dadb.connectFeatures(withDelayedAck = true)
 
                 val dadb =
                     try {
@@ -74,15 +72,15 @@ internal class AdbConnectionConnector(
                                 port,
                             )}",
                         )
-                        adbRuntime.connectNetworkDadb(
+                        adbRuntime.connectNetworkDadbSession(
                             host = normalizedHost,
                             port = port,
                             connectTimeout = 5000,
                             socketTimeout = 5000,
-                            features = features,
+                            warmStreaming = false,
                         )
                     } catch (e: java.net.ConnectException) {
-                        LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_REFUSED.get()}: ${e.message}")
+                        LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_REFUSED.english}: ${e.message}")
                         return@withContext Result.failure(Exception(AdbTexts.ADB_CONNECTION_REFUSED_DETAILS.get()))
                     } catch (cancelled: CancellationException) {
                         throw cancelled
@@ -119,15 +117,14 @@ internal class AdbConnectionConnector(
                     } else {
                         ConnectionType.TCP
                     }
-                val delayedAckEnabled = dadb.supportsFeature(Dadb.FEATURE_DELAYED_ACK)
                 val serialNumber = verifyResult.getOrDefault(deviceId)
+                dadb.warmStreaming()
                 val connection =
                     AdbConnection(
                         deviceId = deviceId,
                         host = normalizedHost,
                         port = port,
                         dadb = dadb,
-                        delayedAckEnabled = delayedAckEnabled,
                         deviceInfo =
                             DeviceInfo(
                                 deviceId = deviceId,
@@ -150,7 +147,7 @@ internal class AdbConnectionConnector(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -165,8 +162,8 @@ internal class AdbConnectionConnector(
                 val serialNumber = ApiCompatHelper.getUsbDeviceSerialNumber(usbDevice) ?: usbDevice.deviceName
                 val deviceId = DeviceTransportSerial.usb(serialNumber)
 
-                LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.USB_CONNECTING_DEVICE.get()} ==========")
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.USB_SERIAL_NUMBER.get()}: $serialNumber")
+                LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.USB_CONNECTING_DEVICE.english} ==========")
+                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.USB_SERIAL_NUMBER.english}: $serialNumber")
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
                     "USB connect request: deviceId=$deviceId requestedName=${deviceName ?: "<none>"} ${formatUsbDeviceDebug(
@@ -184,10 +181,10 @@ internal class AdbConnectionConnector(
                     )
                     val verifyResult = existingConnection.verify()
                     if (verifyResult.isSuccess) {
-                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFIED.get())
+                        LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFIED.english)
                         return@withContext Result.success(existingConnection)
                     }
-                    LogManager.w(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFY_FAILED.get())
+                    LogManager.w(LogTags.ADB_CONNECTION, AdbTexts.ADB_CONNECTION_VERIFY_FAILED.english)
                     runCatching { existingConnection.close() }
                     connectionRegistry.remove(deviceId)
                 }
@@ -233,7 +230,7 @@ internal class AdbConnectionConnector(
                                     activeUsbDevice,
                                 )}",
                             )
-                            adbRuntime.createUsbDadb(
+                            adbRuntime.createUsbDadbSession(
                                 usbManager = usbManager,
                                 usbDevice = activeUsbDevice,
                                 description = deviceId,
@@ -254,14 +251,12 @@ internal class AdbConnectionConnector(
                             LogTags.ADB_CONNECTION,
                             "USB Dadb verify success for $deviceId attempt=${attempt + 1} serial=$detectedSerial",
                         )
-                        val delayedAckEnabled = dadb.supportsFeature(Dadb.FEATURE_DELAYED_ACK)
                         val connection =
                             AdbConnection(
                                 deviceId = deviceId,
                                 host = "usb",
                                 port = 0,
                                 dadb = dadb,
-                                delayedAckEnabled = delayedAckEnabled,
                                 deviceInfo =
                                     DeviceInfo(
                                         deviceId = deviceId,
@@ -303,7 +298,7 @@ internal class AdbConnectionConnector(
                 if (lastError != null) {
                     LogManager.e(
                         LogTags.ADB_CONNECTION,
-                        "${AdbTexts.USB_CONNECT_FAILED.get()}: ${lastError.message}",
+                        "${AdbTexts.USB_CONNECT_FAILED.english}: ${lastError.message}",
                         lastError,
                     )
                     return@withContext Result.failure(
@@ -315,7 +310,7 @@ internal class AdbConnectionConnector(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${CommonTexts.ERROR_LABEL.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -496,7 +491,7 @@ internal class AdbConnectionConnector(
                 if (connectionType == ConnectionType.USB) {
                     LogManager.d(
                         LogTags.ADB_CONNECTION,
-                        "${SessionTexts.LABEL_DEVICE_INFO.get()}: ${detailedDeviceInfo.name} (${detailedDeviceInfo.model})",
+                        "${SessionTexts.LABEL_DEVICE_INFO.english}: ${detailedDeviceInfo.name} (${detailedDeviceInfo.model})",
                     )
                 }
             } catch (cancelled: CancellationException) {
@@ -504,7 +499,7 @@ internal class AdbConnectionConnector(
             } catch (e: Exception) {
                 LogManager.w(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED.get()}: ${e.message}",
+                    "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED.english}: ${e.message}",
                 )
             }
         }

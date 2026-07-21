@@ -435,8 +435,8 @@ object SessionTexts {
     // 连接选项
     val HELP_GAME_MODE =
         TextPair(
-            "面向实时游戏优化触控与视频调度。开启后，最大尺寸、视频码率和最大帧率使用独立的低延迟档位；连接成功后暂停日志记录、性能面板和 mDNS 后台发现。",
-            "Optimize touch and video scheduling for real-time games. Max size, video bitrate, and max FPS use independent low-latency presets. Logging, performance stats, and background mDNS discovery are paused after connection.",
+            "面向实时游戏优化触控与视频调度。开启后，最大尺寸、视频码率和最大帧率使用独立的低延迟档位；连接成功后暂停日志记录和 mDNS 后台发现。悬浮球与帧率面板仍按各自开关显示。",
+            "Optimize touch and video scheduling for real-time games. Max size, video bitrate, and max FPS use independent low-latency presets. Logging and background mDNS discovery are paused after connection. The floating ball and performance stats remain controlled by their own switches.",
         )
     val HELP_GAME_MODE_FULL_SCREEN_DISABLED =
         TextPair(
@@ -477,8 +477,8 @@ object SessionTexts {
         )
     val HELP_GAME_VIDEO_BITRATE =
         TextPair(
-            "游戏模式可选 1M、2M、4M、8M、12M、20M，为高帧率复杂画面保留码率余量。调整码率不会自动修改最大尺寸。",
-            "Game mode offers 1M、2M、4M、8M、12M、20M to preserve bitrate headroom for complex high-FPS scenes. Changing bitrate does not change max size.",
+            "游戏模式可选 1M、2M、4M、8M、12M、20M，空值默认 2M，为高帧率复杂画面保留码率余量。调整码率不会自动修改最大尺寸。",
+            "Game mode offers 1M, 2M, 4M, 8M, 12M, and 20M, with 2M as the empty-value default, to preserve bitrate headroom for complex high-FPS scenes. Changing bitrate does not change max size.",
         )
     val HELP_GAME_MAX_FPS =
         TextPair(

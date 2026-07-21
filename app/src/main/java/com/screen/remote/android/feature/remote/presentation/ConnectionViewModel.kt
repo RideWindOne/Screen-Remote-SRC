@@ -129,10 +129,10 @@ class ConnectionViewModel(
                         }
                     }
                 } catch (cancelled: CancellationException) {
-                    LogManager.d(LogTags.CONNECTION_VM, "连接任务已取消: $sessionId")
+                    LogManager.d(LogTags.CONNECTION_VM, "Connection task canceled: $sessionId")
                     throw cancelled
                 } catch (e: Exception) {
-                    LogManager.e(LogTags.CONNECTION_VM, "连接会话异常: ${e.message}")
+                    LogManager.e(LogTags.CONNECTION_VM, "Connection session exception: ${e.message}")
                     withContext(Dispatchers.Main) {
                         _connectStatus.value = ConnectStatus.Failed(sessionId, e.message ?: "连接失败")
                     }
@@ -153,7 +153,7 @@ class ConnectionViewModel(
                     _connectedSessionId.value = null
                 }
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONNECTION_VM, "取消连接异常: ${e.message}", e)
+                LogManager.e(LogTags.CONNECTION_VM, "Connection cancellation exception: ${e.message}", e)
             }
         }
     }
@@ -170,21 +170,21 @@ class ConnectionViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                LogManager.d(LogTags.CONNECTION_VM, "用户主动结束会话...")
+                LogManager.d(LogTags.CONNECTION_VM, "The user actively ends the session...")
                 disconnectRequested = true
 
                 // 1. 断开 scrcpy 连接
                 scrcpyClient.disconnect()
 
                 // 2. 保留 ADB 保活（不移除前台服务保护）
-                LogManager.d(LogTags.CONNECTION_VM, "scrcpy 已断开，ADB 连接保持保活")
+                LogManager.d(LogTags.CONNECTION_VM, "scrcpy is disconnected, ADB connection remains alive")
 
                 withContext(Dispatchers.Main) {
                     _connectStatus.value = ConnectStatus.Idle
                     _connectedSessionId.value = null
                 }
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONNECTION_VM, "结束会话异常: ${e.message}", e)
+                LogManager.e(LogTags.CONNECTION_VM, "End session exception: ${e.message}", e)
             } finally {
                 disconnectRequested = false
             }
@@ -198,16 +198,16 @@ class ConnectionViewModel(
      */
     fun handleConnectionLost() {
         if (disconnectRequested) {
-            LogManager.d(LogTags.CONNECTION_VM, "忽略连接丢失：当前处于用户主动断开流程")
+            LogManager.d(LogTags.CONNECTION_VM, "Ignore connection loss: currently in user active disconnection process")
             return
         }
 
-        LogManager.w(LogTags.CONNECTION_VM, "处理连接丢失：交由会话生命周期统一重连")
+        LogManager.w(LogTags.CONNECTION_VM, "Handle connection loss: leave it to session lifecycle for unified reconnection")
         createSessionContext().emit(
             SessionEvent.RequestReconnect(
                 ReconnectIssue(
                     kind = ReconnectIssueKind.SocketDisconnected,
-                    detail = "媒体流由远端结束",
+                    detail = "Media stream ended by remote peer",
                 ),
             ),
         )
@@ -219,10 +219,10 @@ class ConnectionViewModel(
     fun pauseConnection() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                LogManager.d(LogTags.CONNECTION_VM, "暂停连接...")
+                LogManager.d(LogTags.CONNECTION_VM, "Pause connection...")
                 scrcpyClient.disconnect()
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONNECTION_VM, "暂停连接异常: ${e.message}", e)
+                LogManager.e(LogTags.CONNECTION_VM, "Pause connection exception: ${e.message}", e)
             }
         }
     }

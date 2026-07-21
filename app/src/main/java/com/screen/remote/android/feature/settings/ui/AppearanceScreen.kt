@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.common.LogTags
@@ -70,7 +69,7 @@ fun AppearanceScreen(
                     onClick = {
                         LogManager.d(
                             LogTags.APP,
-                            "点击跟随系统，当前主题: ${settings.themeMode}",
+                            "Click to follow the system, current topic: ${settings.themeMode}",
                         )
                         viewModel.updateSettings(settings.copy(themeMode = ThemeMode.SYSTEM))
                     },
@@ -79,7 +78,7 @@ fun AppearanceScreen(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 ThemeOption(
@@ -88,7 +87,7 @@ fun AppearanceScreen(
                     onClick = {
                         LogManager.d(
                             LogTags.APP,
-                            "点击浅色模式，当前主题: ${settings.themeMode}",
+                            "Click on light mode, current theme: ${settings.themeMode}",
                         )
                         viewModel.updateSettings(settings.copy(themeMode = ThemeMode.LIGHT))
                     },
@@ -97,7 +96,7 @@ fun AppearanceScreen(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 ThemeOption(
@@ -106,7 +105,7 @@ fun AppearanceScreen(
                     onClick = {
                         LogManager.d(
                             LogTags.APP,
-                            "点击深色模式，当前主题: ${settings.themeMode}",
+                            "Click on dark mode, current theme: ${settings.themeMode}",
                         )
                         viewModel.updateSettings(settings.copy(themeMode = ThemeMode.DARK))
                     },
@@ -142,7 +141,7 @@ private fun ThemeOption(
             Icon(
                 imageVector = Icons.Filled.Check,
                 contentDescription = "已选择",
-                tint = AppColors.iOSBlue,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
         }

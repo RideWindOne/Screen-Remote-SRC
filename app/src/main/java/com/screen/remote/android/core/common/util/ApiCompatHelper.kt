@@ -161,7 +161,7 @@ object ApiCompatHelper {
     fun logApiInfo() {
         LogManager.i(
             LogTags.APP,
-            "设备 API 信息: SDK_INT=${Build.VERSION.SDK_INT}, " +
+            "Device API information: SDK_INT=${Build.VERSION.SDK_INT}," +
                 "RELEASE=${Build.VERSION.RELEASE}, " +
                 "CODENAME=${Build.VERSION.CODENAME}",
         )

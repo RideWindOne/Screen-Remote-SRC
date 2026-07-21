@@ -69,7 +69,7 @@ class AdbConnectionManager private constructor(
     }
 
     init {
-        LogManager.d(LogTags.ADB_CONNECTION, "ADB 连接管理器初始化")
+        LogManager.d(LogTags.ADB_CONNECTION, "ADB connection manager initialization")
         registerUsbDetachReceiver()
     }
 
@@ -223,7 +223,7 @@ class AdbConnectionManager private constructor(
 
     suspend fun disconnectAll() =
         withContext(Dispatchers.IO) {
-            LogManager.d(LogTags.ADB_CONNECTION, "断开所有 ADB 连接")
+            LogManager.d(LogTags.ADB_CONNECTION, "Disconnect all ADB connections")
             connectionRegistry.disconnectAll()
         }
 
@@ -373,14 +373,14 @@ internal class AdbConnectionRegistry {
                 refreshConnectedDevices()
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${CommonTexts.LABEL_DEVICE.get()} $deviceId ${AdbTexts.ADB_DEVICE_DISCONNECTED.get()}",
+                    "${CommonTexts.LABEL_DEVICE.english} $deviceId ${AdbTexts.ADB_DEVICE_DISCONNECTED.english}",
                 )
                 Result.success(true)
             } else {
                 Result.failure(Exception(AdbTexts.ADB_DEVICE_NOT_CONNECTED.get()))
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECT_FAILED.get()}: ${e.message}", e)
+            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECT_FAILED.english}: ${e.message}", e)
             Result.failure(e)
         }
 
@@ -394,10 +394,10 @@ internal class AdbConnectionRegistry {
             }
             expectedConnection.close()
             refreshConnectedDevices()
-            LogManager.d(LogTags.ADB_CONNECTION, "已清理指定的 ADB 连接对象: $deviceId")
+            LogManager.d(LogTags.ADB_CONNECTION, "The specified ADB connection object has been cleaned: $deviceId")
             Result.success(true)
         } catch (e: Exception) {
-            LogManager.e(LogTags.ADB_CONNECTION, "条件断开 ADB 连接失败 $deviceId: ${e.message}", e)
+            LogManager.e(LogTags.ADB_CONNECTION, "Conditional disconnection ADB connection failed $deviceId: ${e.message}", e)
             Result.failure(e)
         }
 
@@ -408,7 +408,7 @@ internal class AdbConnectionRegistry {
             } catch (e: Exception) {
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_CLOSE_CONNECTION_FAILED.get()}: ${e.message}",
+                    "${AdbTexts.ADB_CLOSE_CONNECTION_FAILED.english}: ${e.message}",
                     e,
                 )
             }

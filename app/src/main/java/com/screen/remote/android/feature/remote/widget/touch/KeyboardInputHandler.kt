@@ -214,7 +214,7 @@ fun KeyboardInputHandler(
             ApiCompatHelper.showSoftInput(hostView)
             keyboardController?.show()
         } catch (e: Exception) {
-            LogManager.e(LogTags.CONTROL_HANDLER, "${RemoteTexts.REMOTE_FOCUS_REQUEST_FAILED.get()}: ${e.message}")
+            LogManager.e(LogTags.CONTROL_HANDLER, "${RemoteTexts.REMOTE_FOCUS_REQUEST_FAILED.english}: ${e.message}")
         }
     }
 }

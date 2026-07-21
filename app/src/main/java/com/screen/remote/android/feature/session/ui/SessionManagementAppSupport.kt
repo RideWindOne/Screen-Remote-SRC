@@ -4,16 +4,21 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.util.compat.putIfAbsentCompat
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import dadb.helper.RemoteAppIconBatchRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -116,12 +121,15 @@ internal object SessionManagementAppCache {
     private var scopePrepared = false
     private var snapshot: AppInventorySnapshot? = null
     private val detailCache = mutableMapOf<String, AppDetailSnapshot>()
+    private val detailLoadMutexes = mutableMapOf<String, Mutex>()
     private val iconCache = mutableMapOf<String, Bitmap?>()
     private val iconGenerationCache = mutableMapOf<String, Int>()
     private val iconHashCache = mutableMapOf<String, String>()
     private val titleCache = mutableMapOf<String, String>()
     private var iconHelperUnavailableReason: String? = null
     private var iconHelperDiagnosticsCaptured = false
+    private var pipelineComplete = false
+    private val revisionState = mutableIntStateOf(0)
     private val json =
         Json {
             ignoreUnknownKeys = true
@@ -136,12 +144,35 @@ internal object SessionManagementAppCache {
             scopePrepared = false
             snapshot = null
             detailCache.clear()
+            detailLoadMutexes.clear()
             iconCache.clear()
             iconGenerationCache.clear()
             iconHashCache.clear()
             titleCache.clear()
             iconHelperUnavailableReason = null
             iconHelperDiagnosticsCaptured = false
+            pipelineComplete = false
+            bumpRevision()
+        }
+    }
+
+    fun releaseScope(scopeKey: String) {
+        synchronized(this) {
+            if (activeScopeKey != scopeKey) return
+            activeScopeKey = null
+            activeStorageScopeName = null
+            scopePrepared = false
+            snapshot = null
+            detailCache.clear()
+            detailLoadMutexes.clear()
+            iconCache.clear()
+            iconGenerationCache.clear()
+            iconHashCache.clear()
+            titleCache.clear()
+            iconHelperUnavailableReason = null
+            iconHelperDiagnosticsCaptured = false
+            pipelineComplete = false
+            bumpRevision()
         }
     }
 
@@ -178,12 +209,34 @@ internal object SessionManagementAppCache {
             snapshot
         }
 
+    fun revision(): Int = revisionState.intValue
+
+    fun isPipelineComplete(scopeKey: String): Boolean =
+        synchronized(this) {
+            activeScopeKey == scopeKey && pipelineComplete
+        }
+
+    fun isActiveScope(scopeKey: String): Boolean =
+        synchronized(this) {
+            activeScopeKey == scopeKey
+        }
+
+    fun markPipelineComplete(scopeKey: String) {
+        synchronized(this) {
+            if (activeScopeKey == scopeKey) {
+                pipelineComplete = true
+                bumpRevision()
+            }
+        }
+    }
+
     fun updateSnapshot(value: AppInventorySnapshot) {
         synchronized(this) {
             snapshot = value
             value.apps.forEach { entry ->
                 titleCache.putIfAbsentCompat(entry.packageName, entry.appTitle)
             }
+            bumpRevision()
         }
     }
 
@@ -191,6 +244,8 @@ internal object SessionManagementAppCache {
         synchronized(this) {
             snapshot = null
             detailCache.clear()
+            pipelineComplete = false
+            bumpRevision()
         }
     }
 
@@ -199,12 +254,18 @@ internal object SessionManagementAppCache {
             detailCache[packageName]
         }
 
+    fun detailLoadMutex(packageName: String): Mutex =
+        synchronized(this) {
+            detailLoadMutexes.getOrPut(packageName) { Mutex() }
+        }
+
     fun updateAppDetail(snapshot: AppDetailSnapshot) {
         synchronized(this) {
             detailCache[snapshot.packageName] = snapshot
             if (snapshot.appTitle.isNotBlank()) {
                 titleCache[snapshot.packageName] = snapshot.appTitle
             }
+            bumpRevision()
         }
     }
 
@@ -228,7 +289,14 @@ internal object SessionManagementAppCache {
         synchronized(this) {
             if (title.isNotBlank() && titleCache[packageName] != title) {
                 titleCache[packageName] = title
+                bumpRevision()
             }
+        }
+    }
+
+    private fun bumpRevision() {
+        Snapshot.withMutableSnapshot {
+            revisionState.intValue += 1
         }
     }
 
@@ -250,6 +318,7 @@ internal object SessionManagementAppCache {
         synchronized(this) {
             iconCache[packageName] = icon
             iconGenerationCache[packageName] = generation
+            bumpRevision()
         }
     }
 
@@ -410,7 +479,7 @@ internal suspend fun loadAppInventorySnapshot(
     forceRefresh: Boolean = false,
 ): AppInventorySnapshot {
     if (!forceRefresh) {
-        SessionManagementAppCache.snapshot()?.let { cached ->
+        SessionManagementAppCache.snapshot()?.takeIf { it.errorMessage == null }?.let { cached ->
             return if (includeSystemApps) {
                 cached
             } else {
@@ -436,6 +505,7 @@ internal suspend fun loadAppInventorySnapshot(
             includeSystemApps = includeSystemApps,
         )
     }.getOrElse { error ->
+        if (error is CancellationException) throw error
         AppInventorySnapshot.loading().copy(
             isLoading = false,
             errorMessage = error.message ?: ManagementTexts.Apps.APP_LIST_LOAD_FAILED.get(),
@@ -476,6 +546,96 @@ internal suspend fun loadAppApkSizes(entries: List<AppInventoryEntry>): Map<Stri
     }
 }
 
+private val sessionManagementAppPipelineMutex = Mutex()
+
+/**
+ * The single entry point for remote application data. It deliberately publishes useful data in
+ * stages: user applications first, then the complete inventory and sizes, followed by details and
+ * presentations. Callers only observe [SessionManagementAppCache]; filtering never performs ADB IO.
+ */
+internal suspend fun loadSessionManagementAppData(
+    context: Context,
+    scopeKey: String,
+    forceRefresh: Boolean = false,
+) {
+    sessionManagementAppPipelineMutex.withLock {
+        SessionManagementAppCache.prepareForSession(context, scopeKey)
+        if (!forceRefresh && SessionManagementAppCache.isPipelineComplete(scopeKey)) return@withLock
+        if (forceRefresh) SessionManagementAppCache.clearSnapshot()
+
+        val userSnapshot =
+            loadAppInventorySnapshot(
+                context = context,
+                includeSystemApps = false,
+                forceRefresh = forceRefresh,
+            )
+        if (userSnapshot.errorMessage != null) {
+            SessionManagementAppCache.updateSnapshot(userSnapshot.copy(isLoading = false))
+            return@withLock
+        }
+        SessionManagementAppCache.updateSnapshot(userSnapshot.copy(isLoading = false))
+        if (!SessionManagementAppCache.isActiveScope(scopeKey)) return@withLock
+
+        val fullResult =
+            runCatching {
+                loadAppInventorySnapshot(
+                    context = context,
+                    includeSystemApps = true,
+                    forceRefresh = true,
+                )
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+            }
+        val fullSnapshot = fullResult.getOrNull()?.takeIf { it.errorMessage == null }
+        var apps = fullSnapshot?.apps ?: userSnapshot.apps
+        if (!SessionManagementAppCache.isActiveScope(scopeKey)) return@withLock
+
+        val sizes =
+            runCatching { loadAppApkSizes(apps.filter { it.apkSizeBytes == null }) }
+                .onFailure { error -> if (error is CancellationException) throw error }
+                .getOrDefault(emptyMap())
+        if (sizes.isNotEmpty()) {
+            apps =
+                apps.map { entry ->
+                    sizes[entry.packageName]?.let { entry.copy(apkSizeBytes = it) } ?: entry
+                }
+        }
+        SessionManagementAppCache.updateSnapshot(
+            AppInventorySnapshot(
+                isLoading = false,
+                apps = apps,
+                shizukuInstalled = apps.any { it.packageName == "moe.shizuku.privileged.api" },
+                errorMessage = if (apps.isEmpty()) fullResult.exceptionOrNull()?.message else null,
+            ),
+        )
+
+        coroutineScope {
+            val detailsJob =
+                async {
+                    apps.chunked(6).forEach { chunk ->
+                        chunk.map { entry -> async { loadAppDetailSnapshot(entry) } }.awaitAll()
+                    }
+                }
+            val presentationsJob =
+                async {
+                    runCatching { warmCachedAppPresentations(context, apps, packageNameOnlyMode = false) }
+                        .onFailure { error -> if (error is CancellationException) throw error }
+                    val helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
+                    val connection = SessionManagementAdbConnection.current() ?: return@async
+                    if (connection.prepareAppIconHelper(helperJar).isSuccess) {
+                        runCatching { prefetchAppIconsWithHelper(context, apps, helperJar) }
+                            .onFailure { error -> if (error is CancellationException) throw error }
+                    }
+                }
+            detailsJob.await()
+            presentationsJob.await()
+        }
+        if (fullSnapshot != null) {
+            SessionManagementAppCache.markPipelineComplete(scopeKey)
+        }
+    }
+}
+
 private suspend fun loadAppInventorySnapshotWithShell(
     connection: com.screen.remote.android.infrastructure.adb.connection.AdbConnection,
     includeSystemApps: Boolean,
@@ -503,7 +663,6 @@ private suspend fun loadAppInventorySnapshotWithShell(
                     apps = apps,
                     shizukuInstalled = apps.any { it.packageName == "moe.shizuku.privileged.api" },
                 )
-            SessionManagementAppCache.updateSnapshot(snapshot)
             return@runCatching snapshot
         }
 
@@ -555,8 +714,6 @@ private suspend fun loadAppInventorySnapshotWithShell(
                 apps = apps,
                 shizukuInstalled = apps.any { it.packageName == "moe.shizuku.privileged.api" },
             )
-        SessionManagementAppCache.updateSnapshot(fullSnapshot)
-
         if (includeSystemApps) {
             fullSnapshot
         } else {
@@ -1042,7 +1199,7 @@ private suspend fun fetchAndSaveAppPresentationWithHelper(
         runCatching {
             com.screen.remote.android.core.common.manager.LogManager.w(
                 com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                "helper 获取应用图标失败 ${entry.packageName}: ${error.message}",
+                "Helper failed to obtain application icon ${entry.packageName}: ${error.message}",
             )
         }
         null
@@ -1080,7 +1237,7 @@ private suspend fun captureAppHelperDiagnostics(
             onFailure = { error ->
                 com.screen.remote.android.core.common.manager.LogManager.e(
                     com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                    "helper probe $command 执行失败: ${error.message}",
+                    "Helper probe $command failed to execute: ${error.message}",
                     error,
                 )
             },
@@ -1095,64 +1252,68 @@ internal fun sha256(bytes: ByteArray): String =
         .joinToString(separator = "") { byte -> "%02x".format(byte) }
 
 internal suspend fun loadAppDetailSnapshot(entry: AppInventoryEntry): AppDetailSnapshot {
-    SessionManagementAppCache.cachedAppDetail(entry.packageName)?.let { cached ->
-        return cached
-    }
-
-    val connection =
-        SessionManagementAdbConnection.current()
-            ?: return AppDetailSnapshot.loading(entry).copy(
-                isLoading = false,
-                errorMessage = ManagementTexts.Apps.NO_CONNECTION_FOR_APP_DETAILS.get(),
-            )
-
-    suspend fun shell(command: String): String =
-        connection
-            .executeShell(command, retryOnFailure = false)
-            .getOrNull()
-            ?.trim()
-            .orEmpty()
-
-    return runCatching {
-        coroutineScope {
-            val pathDeferred = async { shell("pm path ${entry.packageName} | head -n 1") }
-            val detailDeferred =
-                async {
-                    shell(
-                        "dumpsys package ${entry.packageName} | grep -E 'versionName=|minSdk=|targetSdk=|firstInstallTime=|lastUpdateTime='",
-                    )
-                }
-
-            val apkPath = pathDeferred.await().removePrefix("package:").trim()
-            val detailMap = parseAppDetailFields(detailDeferred.await())
-            val apkSize =
-                if (apkPath.isNotBlank()) {
-                    val sizeBytes =
-                        entry.apkSizeBytes
-                            ?: shell("stat -c %s \"$apkPath\" 2>/dev/null").toLongOrNull()
-                    sizeBytes?.let(::formatAppSize).orEmpty()
-                } else {
-                    ""
-                }
-
-            AppDetailSnapshot(
-                isLoading = false,
-                appTitle = SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle),
-                packageName = entry.packageName,
-                apkSize = apkSize,
-                versionName = detailMap["versionName"].orEmpty(),
-                isSystemApp = entry.isSystemApp,
-                minSdk = detailMap["minSdk"].orEmpty(),
-                targetSdk = detailMap["targetSdk"].orEmpty(),
-                firstInstallTime = detailMap["firstInstallTime"].orEmpty(),
-                lastUpdateTime = detailMap["lastUpdateTime"].orEmpty(),
-            ).also(SessionManagementAppCache::updateAppDetail)
+    val loadMutex = SessionManagementAppCache.detailLoadMutex(entry.packageName)
+    return loadMutex.withLock {
+        SessionManagementAppCache.cachedAppDetail(entry.packageName)?.let { cached ->
+            return@withLock cached
         }
-    }.getOrElse { error ->
-        AppDetailSnapshot.loading(entry).copy(
-            isLoading = false,
-            errorMessage = error.message ?: ManagementTexts.Apps.APP_DETAILS_LOAD_FAILED.get(),
-        )
+
+        val connection =
+            SessionManagementAdbConnection.current()
+                ?: return@withLock AppDetailSnapshot.loading(entry).copy(
+                    isLoading = false,
+                    errorMessage = ManagementTexts.Apps.NO_CONNECTION_FOR_APP_DETAILS.get(),
+                )
+
+        suspend fun shell(command: String): String =
+            connection
+                .executeShell(command, retryOnFailure = false)
+                .getOrNull()
+                ?.trim()
+                .orEmpty()
+
+        runCatching {
+            coroutineScope {
+                val pathDeferred = async { shell("pm path ${entry.packageName} | head -n 1") }
+                val detailDeferred =
+                    async {
+                        shell(
+                            "dumpsys package ${entry.packageName} | grep -E 'versionName=|minSdk=|targetSdk=|firstInstallTime=|lastUpdateTime='",
+                        )
+                    }
+
+                val apkPath = pathDeferred.await().removePrefix("package:").trim()
+                val detailMap = parseAppDetailFields(detailDeferred.await())
+                val apkSize =
+                    if (apkPath.isNotBlank()) {
+                        val sizeBytes =
+                            entry.apkSizeBytes
+                                ?: shell("stat -c %s \"$apkPath\" 2>/dev/null").toLongOrNull()
+                        sizeBytes?.let(::formatAppSize).orEmpty()
+                    } else {
+                        ""
+                    }
+
+                AppDetailSnapshot(
+                    isLoading = false,
+                    appTitle = SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle),
+                    packageName = entry.packageName,
+                    apkSize = apkSize,
+                    versionName = detailMap["versionName"].orEmpty(),
+                    isSystemApp = entry.isSystemApp,
+                    minSdk = detailMap["minSdk"].orEmpty(),
+                    targetSdk = detailMap["targetSdk"].orEmpty(),
+                    firstInstallTime = detailMap["firstInstallTime"].orEmpty(),
+                    lastUpdateTime = detailMap["lastUpdateTime"].orEmpty(),
+                ).also(SessionManagementAppCache::updateAppDetail)
+            }
+        }.getOrElse { error ->
+            if (error is CancellationException) throw error
+            AppDetailSnapshot.loading(entry).copy(
+                isLoading = false,
+                errorMessage = error.message ?: ManagementTexts.Apps.APP_DETAILS_LOAD_FAILED.get(),
+            )
+        }
     }
 }
 

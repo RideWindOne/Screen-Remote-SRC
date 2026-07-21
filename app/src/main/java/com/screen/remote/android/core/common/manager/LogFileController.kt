@@ -78,9 +78,9 @@ internal class LogFileController(
             if (file != currentLogFile && file.extension == "log") {
                 try {
                     file.delete()
-                    LogManager.i(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_SUCCESS.get()}: ${file.name}")
+                    LogManager.i(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_SUCCESS.english}: ${file.name}")
                 } catch (e: Exception) {
-                    LogManager.e(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_FAILED.get()}: ${file.name}", e)
+                    LogManager.e(LogTags.LOG_MANAGER, "${LogTexts.LOG_DELETE_FILE_FAILED.english}: ${file.name}", e)
                 }
             }
         }
@@ -99,7 +99,7 @@ internal class LogFileController(
                 file.delete()
             }
         } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_DELETE_FILE_FAILED.get(), e)
+            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_DELETE_FILE_FAILED.english, e)
             false
         }
 
@@ -107,7 +107,7 @@ internal class LogFileController(
         try {
             file.readText()
         } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_READ_FILE_FAILED.get(), e)
+            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_READ_FILE_FAILED.english, e)
             "${LogTexts.LOG_READ_FILE_ERROR.get()}: ${e.message}"
         }
 
@@ -133,7 +133,7 @@ internal class LogFileController(
             state.fileWriter = FileWriter(state.logFile, true)
             onInitSuccess(LogTexts.LOG_SYSTEM_INIT_SUCCESS.get())
         } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_INIT_FILE_FAILED.get(), e)
+            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_INIT_FILE_FAILED.english, e)
         }
     }
 
@@ -142,7 +142,7 @@ internal class LogFileController(
             state.fileWriter?.close()
             state.fileWriter = null
         } catch (e: Exception) {
-            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_CLOSE_FILE_FAILED.get(), e)
+            Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_CLOSE_FILE_FAILED.english, e)
         }
     }
 

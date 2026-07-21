@@ -311,7 +311,6 @@ fun AboutScreen(onBack: () -> Unit) {
                         Modifier
                             .fillMaxWidth()
                             .height(AppDimens.listItemHeight)
-                            // 临时禁用 Telegram 频道功能
                             .clickable {
                                 val intent = Intent(Intent.ACTION_VIEW, AppConstants.TELEGRAM_CHANNEL.toUri())
                                 context.startActivity(intent)

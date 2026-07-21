@@ -27,16 +27,16 @@ object AdbBridge {
 
     fun clearConnection() {
         state.currentConnection = null
-        dManagement(LogTags.ADB_BRIDGE) { "清除当前连接" }
+        dManagement(LogTags.ADB_BRIDGE) { "Clear current connection" }
     }
 
     @JvmStatic
     fun executeAdbCommand(args: Array<String>): Int {
         val pid = processRegistry.createPid()
 
-        dManagement(LogTags.ADB_BRIDGE) { "========== 执行 ADB 命令 ==========" }
+        dManagement(LogTags.ADB_BRIDGE) { "========== Execute ADB command ==========" }
         dManagement(LogTags.ADB_BRIDGE) { "PID: $pid" }
-        dManagement(LogTags.ADB_BRIDGE) { "命令: adb ${args.joinToString(" ")}" }
+        dManagement(LogTags.ADB_BRIDGE) { "Command: adb ${args.joinToString(" ")}" }
 
         processRegistry.startProcess(pid) {
             try {
@@ -44,10 +44,10 @@ object AdbBridge {
                 val result = commandExecutor.execute(args)
                 processRegistry.completeProcess(pid, result)
 
-                dManagement(LogTags.ADB_BRIDGE) { "PID $pid 执行完成: success=${result.success}" }
-                dManagement(LogTags.ADB_BRIDGE) { "输出: ${result.output}" }
+                dManagement(LogTags.ADB_BRIDGE) { "PID $pid execution completed: success=${result.success}" }
+                dManagement(LogTags.ADB_BRIDGE) { "Output: ${result.output}" }
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_BRIDGE, "PID $pid 执行失败: ${e.message}", e)
+                LogManager.e(LogTags.ADB_BRIDGE, "PID $pid execution failed: ${e.message}", e)
                 processRegistry.failProcess(pid, e.message ?: "")
             }
         }
@@ -57,9 +57,9 @@ object AdbBridge {
 
     @JvmStatic
     fun waitProcess(pid: Int): Int {
-        dManagement(LogTags.ADB_BRIDGE) { "等待进程 $pid 完成..." }
+        dManagement(LogTags.ADB_BRIDGE) { "Waiting for process $pid to complete..." }
         val success = processRegistry.waitProcess(pid)
-        dManagement(LogTags.ADB_BRIDGE) { "进程 $pid 完成: success=$success" }
+        dManagement(LogTags.ADB_BRIDGE) { "Process $pid completed: success=$success" }
         return if (success) 0 else 1
     }
 
@@ -67,20 +67,20 @@ object AdbBridge {
     fun readProcessOutput(pid: Int): String {
         waitProcess(pid)
         val output = processRegistry.readOutput(pid)
-        dManagement(LogTags.ADB_BRIDGE) { "读取进程 $pid 输出: ${output.length} 字节" }
+        dManagement(LogTags.ADB_BRIDGE) { "Reading process $pid output: ${output.length} bytes" }
         return output
     }
 
     @JvmStatic
     fun terminateProcess(pid: Int): Boolean {
-        dManagement(LogTags.ADB_BRIDGE) { "终止进程 $pid" }
+        dManagement(LogTags.ADB_BRIDGE) { "Kill process $pid" }
         return processRegistry.terminateProcess(pid)
     }
 
     @JvmStatic
     fun cleanupProcess(pid: Int) {
         processRegistry.cleanupProcess(pid)
-        dManagement(LogTags.ADB_BRIDGE) { "清理进程 $pid 资源" }
+        dManagement(LogTags.ADB_BRIDGE) { "Clean up process $pid resources" }
     }
 }
 
@@ -134,7 +134,7 @@ internal class AdbBridgeProcessRegistry {
             try {
                 thread.join()
             } catch (e: InterruptedException) {
-                LogManager.e(LogTags.ADB_BRIDGE, "等待进程 $pid 被中断", e)
+                LogManager.e(LogTags.ADB_BRIDGE, "Waiting process $pid was interrupted", e)
             }
         }
         return processStatus[pid] ?: false

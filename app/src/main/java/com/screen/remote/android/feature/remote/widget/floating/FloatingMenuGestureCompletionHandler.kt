@@ -76,7 +76,7 @@ internal class FloatingMenuGestureCompletionHandler(
             if (result.isFailure) {
                 LogManager.e(
                     LogTags.FLOATING_CONTROLLER_MSG,
-                    "目标设备截图失败: ${result.exceptionOrNull()?.message}",
+                    "Target device screenshot failed: ${result.exceptionOrNull()?.message}",
                 )
             }
         }

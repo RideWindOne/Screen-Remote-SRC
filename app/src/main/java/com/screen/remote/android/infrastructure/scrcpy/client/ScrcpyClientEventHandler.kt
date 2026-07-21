@@ -27,7 +27,7 @@ internal class ScrcpyClientEventHandler(
 
         LogManager.d(
             LogTags.SCRCPY_CLIENT,
-            "Native 状态变化: status=${event.status}, sessionId=$sessionId, error=${event.errorMessage}",
+            "Native status changes: status=${event.status}, sessionId=$sessionId, error=${event.errorMessage}",
         )
 
         when (event.status) {
@@ -47,14 +47,14 @@ internal class ScrcpyClientEventHandler(
 
             ScrcpyStatus.DISCONNECTED -> {
                 if (connectionState.value is ConnectionState.Connected) {
-                    LogManager.w(LogTags.SCRCPY_CLIENT, "Native 层检测到断开连接")
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "Native layer detects disconnection")
                     updateConnectionStateOnError(event.errorMessage ?: "设备断开连接")
                 }
             }
 
             ScrcpyStatus.CONNECTION_FAILED -> {
                 val errorMsg = event.errorMessage ?: "连接失败"
-                LogManager.e(LogTags.SCRCPY_CLIENT, "Native 层连接失败: $errorMsg")
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Native layer connection failed: $errorMsg")
                 connectionState.value = ConnectionState.Error(errorMsg)
             }
         }
@@ -69,7 +69,7 @@ internal class ScrcpyClientEventHandler(
 
         LogManager.e(
             LogTags.SCRCPY_CLIENT,
-            "Native 错误事件: type=${event.eventType}, sessionId=$sessionId, error=$errorMsg",
+            "Native error event: type=${event.eventType}, sessionId=$sessionId, error=$errorMsg",
         )
 
         when (event.eventType) {
@@ -90,15 +90,15 @@ internal class ScrcpyClientEventHandler(
             }
 
             ScrcpyEventType.CONTROLLER_ERROR -> {
-                LogManager.w(LogTags.SCRCPY_CLIENT, "控制器错误: $errorMsg")
+                LogManager.w(LogTags.SCRCPY_CLIENT, "Controller error: $errorMsg")
             }
 
             ScrcpyEventType.RECORDER_ERROR -> {
-                LogManager.w(LogTags.SCRCPY_CLIENT, "录制器错误: $errorMsg")
+                LogManager.w(LogTags.SCRCPY_CLIENT, "Recorder error: $errorMsg")
             }
 
             ScrcpyEventType.SERVER_CONNECTED -> {
-                LogManager.d(LogTags.SCRCPY_CLIENT, "服务器连接成功")
+                LogManager.d(LogTags.SCRCPY_CLIENT, "Server connection successful")
             }
         }
     }

@@ -122,14 +122,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-private val SessionDialogSectionShape = RoundedCornerShape(8.dp)
+private val SessionDialogSectionShape = RoundedCornerShape(12.dp)
 private val AudioVolumeRowHorizontalPadding = 10.dp
 private val AudioVolumeLabelMinWidth = 30.dp
 private val AudioVolumeLabelMaxWidth = 120.dp
 private val AudioVolumeLabelSpacing = 6.dp
 private val AudioVolumeValueWidth = 50.dp
-private val SessionDialogAccentColor = Color(0xFF007AFF)
-private val SessionDialogDividerColor = Color(0xFFE5E5EA)
 private val AudioVolumeSliderTrackHeight = 4.dp
 private val AudioVolumeSliderThumbSize = 14.dp
 private val AudioVolumeSliderThumbHaloSize = 22.dp
@@ -1238,7 +1236,7 @@ private fun MdnsServiceItem(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
-                    tint = AppColors.iOSBlue,
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -1565,7 +1563,7 @@ private fun VerticalOptionPicker(
                                 .border(
                                     width = 1.dp,
                                     color =
-                                        SessionDialogAccentColor.copy(
+                                        MaterialTheme.colorScheme.primary.copy(
                                             alpha = if (isDragging) 0.55f else 0.22f,
                                         ),
                                     shape = RoundedCornerShape(6.dp),
@@ -1647,13 +1645,13 @@ private fun VerticalOptionPicker(
                                     editorUnit = customUnits[(currentUnitIndex + 1) % customUnits.size]
                                 },
                         shape = RoundedCornerShape(8.dp),
-                        color = SessionDialogAccentColor.copy(alpha = 0.14f),
-                        border = BorderStroke(1.dp, SessionDialogAccentColor),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = editorUnit,
-                                color = SessionDialogAccentColor,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
@@ -1762,7 +1760,7 @@ private fun AudioConfigSection(state: SessionDialogState) {
                                 Modifier
                                     .size(AudioVolumeSliderThumbHaloSize)
                                     .background(
-                                        color = SessionDialogAccentColor.copy(alpha = 0.12f),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                         shape = CircleShape,
                                     ),
                             contentAlignment = Alignment.Center,
@@ -1772,7 +1770,7 @@ private fun AudioConfigSection(state: SessionDialogState) {
                                     Modifier
                                         .size(AudioVolumeSliderThumbSize)
                                         .background(
-                                            color = SessionDialogAccentColor,
+                                            color = MaterialTheme.colorScheme.primary,
                                             shape = CircleShape,
                                         ),
                             )
@@ -1784,8 +1782,8 @@ private fun AudioConfigSection(state: SessionDialogState) {
                             modifier = Modifier.height(AudioVolumeSliderTrackHeight),
                             colors =
                                 SliderDefaults.colors(
-                                    activeTrackColor = SessionDialogAccentColor.copy(alpha = 0.82f),
-                                    inactiveTrackColor = SessionDialogDividerColor.copy(alpha = 0.72f),
+                                    activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
                                 ),
                             drawStopIndicator = null,
                             thumbTrackGapSize = 0.dp,
@@ -1795,8 +1793,8 @@ private fun AudioConfigSection(state: SessionDialogState) {
                     colors =
                         SliderDefaults.colors(
                             thumbColor = Color.Transparent,
-                            activeTrackColor = SessionDialogAccentColor.copy(alpha = 0.82f),
-                            inactiveTrackColor = SessionDialogDividerColor.copy(alpha = 0.72f),
+                            activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
                         ),
                 )
                 Text(

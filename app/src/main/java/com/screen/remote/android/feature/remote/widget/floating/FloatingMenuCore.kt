@@ -109,7 +109,7 @@ fun showDualBallSystem(
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
                     if (result.isFailure) {
-                        LogManager.e(LogTags.FLOATING_CONTROLLER, "发送返回键失败: ${result.exceptionOrNull()?.message}")
+                        LogManager.e(LogTags.FLOATING_CONTROLLER, "Failed to send return key: ${result.exceptionOrNull()?.message}")
                     }
                 }
             }
@@ -139,7 +139,7 @@ fun hideDualBallSystem(reference: BallSystemReference?) {
                 windowManager.removeView(ballB)
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.FLOATING_CONTROLLER, "移除球体失败: ${e.message}")
+            LogManager.e(LogTags.FLOATING_CONTROLLER, "Failed to remove sphere: ${e.message}")
         }
     }
 }

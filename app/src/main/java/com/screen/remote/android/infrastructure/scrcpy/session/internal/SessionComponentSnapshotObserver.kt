@@ -22,21 +22,21 @@ internal fun Session.observeComponentSnapshot(observerScope: CoroutineScope): Jo
             if (previous == null || previous.infrastructureConnection != snapshot.infrastructureConnection) {
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
-                    "组件快照[infrastructure]: ${snapshot.infrastructureConnection.infrastructureSummary()}",
+                    "Component snapshot[infrastructure]: ${snapshot.infrastructureConnection.infrastructureSummary()}",
                 )
             }
 
             if (previous == null || previous.socketConnections != snapshot.socketConnections) {
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
-                    "组件快照[sockets]: ${snapshot.socketConnections.socketSummary()}",
+                    "Component snapshot [sockets]: ${snapshot.socketConnections.socketSummary()}",
                 )
             }
 
             if (previous == null || previous.decoderConnection != snapshot.decoderConnection) {
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
-                    "组件快照[decoders]: ${snapshot.decoderConnection.decoderSummary()}",
+                    "Component snapshot [decoders]: ${snapshot.decoderConnection.decoderSummary()}",
                 )
             }
 

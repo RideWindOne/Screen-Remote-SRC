@@ -242,7 +242,7 @@ suspend fun testAudioDecoder(
             runCatching { decoder.release() }
         }
     } catch (e: Exception) {
-        LogManager.e(LogTags.CODEC_TEST_SCREEN, "测试失败: $mimeType - ${e.message}", e)
+        LogManager.e(LogTags.CODEC_TEST_SCREEN, "Test failed: $mimeType - ${e.message}", e)
         false
     }
 }

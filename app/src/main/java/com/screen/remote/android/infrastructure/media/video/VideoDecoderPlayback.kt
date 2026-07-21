@@ -31,6 +31,16 @@ internal class VideoDecoderPlayback(
         const val FIRST_OUTPUT_WATCHDOG_INPUT_FRAMES = 120
     }
 
+    private val outputDrainer =
+        VideoDecoderOutputDrainer(
+            surfaceController = surfaceController,
+            formatHandler = formatHandler,
+            getDecoder = getDecoder,
+            isStopped = isStopped,
+            onOutputFrame = performanceCounters::recordDecodedFrame,
+            gameMode = gameMode,
+        )
+    private val replayBufferInfo = MediaCodec.BufferInfo()
     private val packetProcessor =
         VideoDecoderPacketProcessor(
             videoCodec = videoCodec,
@@ -41,16 +51,8 @@ internal class VideoDecoderPlayback(
             getDecoder = getDecoder,
             setDecoder = setDecoder,
             isStopped = isStopped,
+            drainDecoderOutput = { outputDrainer.drainOutputBuffers(replayBufferInfo) },
             onVideoStateChanged = onVideoStateChanged,
-        )
-    private val outputDrainer =
-        VideoDecoderOutputDrainer(
-            surfaceController = surfaceController,
-            formatHandler = formatHandler,
-            getDecoder = getDecoder,
-            isStopped = isStopped,
-            onOutputFrame = performanceCounters::recordDecodedFrame,
-            gameMode = gameMode,
         )
 
     fun decodeLoop(videoStream: VideoStream) {
@@ -62,7 +64,7 @@ internal class VideoDecoderPlayback(
         var inputsWithoutOutput = 0
         var lastRenderedFrameCount = 0
 
-        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码循环开始: ${packetProcessor.videoCodec}" }
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Decoding cycle starts: ${packetProcessor.videoCodec}" }
 
         while (isRunning()) {
             try {
@@ -104,7 +106,7 @@ internal class VideoDecoderPlayback(
 
                     is dadb.AdbShellPacket.Exit -> {
                         if (isRunning() && shouldReportConnectionLost()) {
-                            LogManager.w(LogTags.VIDEO_DECODER, "视频流由远端结束，触发重连")
+                            LogManager.w(LogTags.VIDEO_DECODER, "The video stream is terminated by the remote end and triggers reconnection.")
                             onConnectionLost()
                             ScrcpyEventBus.pushEvent(DeviceDisconnected)
                         }
@@ -129,7 +131,7 @@ internal class VideoDecoderPlayback(
                     val recovered =
                         runCatching { packetProcessor.recoverAfterRuntimeFailure(e) }
                             .onFailure { fallbackError ->
-                                LogManager.e(LogTags.VIDEO_DECODER, "视频解码器运行时回退失败: ${fallbackError.message}", fallbackError)
+                                LogManager.e(LogTags.VIDEO_DECODER, "Video decoder runtime fallback failed: ${fallbackError.message}", fallbackError)
                             }.getOrDefault(false)
                     if (recovered) {
                         outputDrainer.resetAfterDecoderFallback()
@@ -146,27 +148,27 @@ internal class VideoDecoderPlayback(
             }
         }
 
-        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码结束，共 $frameCount 帧" }
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Decoding ends, total $frameCount frames" }
     }
 
     private fun handleDecodeError(error: Exception) {
         when {
             error.isExpectedConnectionClosure() -> {
                 if (shouldReportConnectionLost()) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "视频连接已断开，触发重连: ${error.message}")
+                    LogManager.w(LogTags.VIDEO_DECODER, "The video connection has been disconnected, triggering reconnection: ${error.message}")
                     onConnectionLost()
                     ScrcpyEventBus.pushEvent(DeviceDisconnected)
                 } else {
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "视频流在清理过程中关闭，忽略连接丢失回调" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Video stream closed during cleanup, connection loss callback ignored" }
                 }
             }
 
             error.message?.contains("Read timed out") == true -> {
-                LogManager.w(LogTags.VIDEO_DECODER, "视频流超时（设备息屏），继续等待...")
+                LogManager.w(LogTags.VIDEO_DECODER, "Video stream timed out (device screen paused), continue waiting...")
             }
 
             else -> {
-                LogManager.e(LogTags.VIDEO_DECODER, "解码错误: ${error.message}", error)
+                LogManager.e(LogTags.VIDEO_DECODER, "Decoding error: ${error.message}", error)
                 onConnectionLost()
                 ScrcpyEventBus.pushEvent(DemuxerError(error.message ?: "Unknown error"))
             }

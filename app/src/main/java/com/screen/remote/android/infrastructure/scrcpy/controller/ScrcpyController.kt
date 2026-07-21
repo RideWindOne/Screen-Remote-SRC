@@ -74,7 +74,7 @@ class ScrcpyController(
                 pressure = pressure,
             )
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "发送触摸事件失败: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send touch event: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -106,7 +106,7 @@ class ScrcpyController(
                     sendSingleKeyEvent(keyCode, action, repeat, metaState)
                 }
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "发送按键事件失败: ${e.message}", e)
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send key event: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -117,12 +117,12 @@ class ScrcpyController(
                 Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
             )
 
-            dControl(LogTags.SCRCPY_CLIENT) { "发送文本: '$text'" }
+            dControl(LogTags.SCRCPY_CLIENT) { "Send text: '$text'" }
 
             try {
                 transport.enqueueText(text)
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "发送文本失败: ${e.message}", e)
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send text: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -144,7 +144,7 @@ class ScrcpyController(
             try {
                 transport.enqueueClipboard(text, paste = true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "注入文本失败: ${e.message}", e)
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to inject text: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -162,7 +162,7 @@ class ScrcpyController(
             try {
                 transport.enqueueDisplayPower(on)
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "发送屏幕电源控制失败: ${e.message}", e)
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send screen power control: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -181,7 +181,7 @@ class ScrcpyController(
             try {
                 transport.enqueueStartApp(normalizedName)
             } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "启动远端 App 消息发送失败: ${e.message}", e)
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send message when starting remote App: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -193,7 +193,7 @@ class ScrcpyController(
         withContext(Dispatchers.IO) {
             try {
                 if (!transport.hasReadySocket()) {
-                    LogManager.w(LogTags.SCRCPY_CLIENT, RemoteTexts.ERROR_CONTROL_NOT_READY.get())
+                    LogManager.w(LogTags.SCRCPY_CLIENT, RemoteTexts.ERROR_CONTROL_NOT_READY.english)
                     return@withContext Result.failure(Exception(RemoteTexts.ERROR_CONTROL_NOT_READY.get()))
                 }
 
@@ -202,19 +202,19 @@ class ScrcpyController(
                 sendTouchEvent(2, 0, 200, 200, screenWidth, screenHeight, 1.0f)
                 delay(10)
                 sendTouchEvent(1, 0, 200, 200, screenWidth, screenHeight, 0f)
-                dControl(LogTags.SCRCPY_CLIENT) { "已发送滑动事件触发画面刷新" }
+                dControl(LogTags.SCRCPY_CLIENT) { "A sliding event has been sent to trigger a screen refresh" }
                 Result.success(true)
             } catch (e: Exception) {
                 try {
                     delay(50)
                     sendKeyEvent(224)
                     delay(50)
-                    dControl(LogTags.SCRCPY_CLIENT) { RemoteTexts.SCRCPY_SCREEN_WAKE_SIGNAL_SENT.get() }
+                    dControl(LogTags.SCRCPY_CLIENT) { RemoteTexts.SCRCPY_SCREEN_WAKE_SIGNAL_SENT.english }
                     Result.success(true)
                 } catch (wakeError: Exception) {
                     LogManager.w(
                         LogTags.SCRCPY_CLIENT,
-                        "${RemoteTexts.SCRCPY_WAKE_SCREEN_FAILED.get()}: ${wakeError.message}",
+                        "${RemoteTexts.SCRCPY_WAKE_SCREEN_FAILED.english}: ${wakeError.message}",
                     )
                     Result.failure(wakeError)
                 }
@@ -235,7 +235,7 @@ class ScrcpyController(
                 metaState = metaState,
             )
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "发送按键事件失败: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send key event: ${e.message}", e)
             Result.failure(e)
         }
 
@@ -247,7 +247,7 @@ class ScrcpyController(
             "发送按键 socket=${socket != null}, closed=${socket?.isClosed}, connected=${socket?.isConnected}"
         }
         if (socket == null || socket.isClosed || !socket.isConnected) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, RemoteTexts.ERROR_CONTROL_NOT_READY.get())
+            LogManager.e(LogTags.SCRCPY_CLIENT, RemoteTexts.ERROR_CONTROL_NOT_READY.english)
             return null
         }
         return socket

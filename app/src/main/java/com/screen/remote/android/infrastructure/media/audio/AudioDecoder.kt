@@ -74,7 +74,7 @@ class AudioDecoder(
                 val sampleRate = audioStream.sampleRate
                 val channelCount = audioStream.channelCount
 
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "开始音频解码: codec=$codec, rate=$sampleRate, channels=$channelCount" }
+                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Start audio decoding: codec=$codec, rate=$sampleRate, channels=$channelCount" }
 
                 runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO) }
 
@@ -104,11 +104,11 @@ class AudioDecoder(
     fun stop() {
         synchronized(decoderLock) {
             if (isStopped) {
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "stop() 被调用，但已经停止" }
+                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "stop() is called, but is already stopped" }
                 return
             }
 
-            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "stop() 被调用，开始停止解码器" }
+            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "stop() is called to start stopping the decoder" }
 
             isRunning = false
             isStopped = true
@@ -116,7 +116,7 @@ class AudioDecoder(
             trackManager.release()
             releaseDecoder()
 
-            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "音频解码器已停止" }
+            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Audio decoder stopped" }
             if (lifecycleReportedStarted) {
                 sessionContext.emit(SessionEvent.DecoderStopped(DecoderType.Audio))
                 lifecycleReportedStarted = false
@@ -139,16 +139,16 @@ class AudioDecoder(
         when {
             error.isExpectedShutdown() -> Unit
             else -> {
-                LogManager.e(LogTags.AUDIO_DECODER, "音频解码失败: ${error.message}", error)
+                LogManager.e(LogTags.AUDIO_DECODER, "Audio decoding failed: ${error.message}", error)
             }
         }
         if (error.isConnectionLost()) {
             if (shouldReportConnectionLost()) {
-                LogManager.w(LogTags.AUDIO_DECODER, "音频连接丢失，触发回调")
+                LogManager.w(LogTags.AUDIO_DECODER, "Audio connection lost, triggering callback")
                 onConnectionLost?.invoke()
                 ScrcpyEventBus.pushEvent(DeviceDisconnected)
             } else {
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "音频流在清理过程中关闭，忽略连接丢失回调" }
+                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Audio stream closed during cleanup, connection loss callback ignored" }
             }
         } else {
             ScrcpyEventBus.pushEvent(DemuxerError(error.message ?: "Audio decode error"))

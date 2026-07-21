@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
 
@@ -67,7 +66,7 @@ fun DialogHeader(
             Modifier
                 .fillMaxWidth()
                 .height(IosDesignTokens.dialogHeaderHeight)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = IosDesignTokens.dialogHeaderBackgroundAlpha))
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(horizontal = IosDesignTokens.dialogHeaderHorizontalPadding)
 
         if (centerTitleInWindow) {
@@ -415,30 +414,12 @@ fun IOSAlertDialog(
 
 @Composable
 private fun iosAlertDialogContainerColor(): Color =
-    if (isAppDarkTheme()) {
-        AppColors.darkDialogBackground
-    } else {
-        AppColors.white
-    }
+    MaterialTheme.colorScheme.surfaceContainerHigh
 
 @Composable
 private fun iosAlertDialogTitleColor(): Color =
-    if (isAppDarkTheme()) {
-        MaterialTheme.colorScheme.onSurface
-    } else {
-        Color(0xFF2D2D31)
-    }
+    MaterialTheme.colorScheme.onSurface
 
 @Composable
 private fun iosAlertDialogTextColor(): Color =
-    if (isAppDarkTheme()) {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    } else {
-        Color(0xFF6E6E73)
-    }
-
-@Composable
-private fun isAppDarkTheme(): Boolean =
-    MaterialTheme.colorScheme.surface.let { color ->
-        0.299f * color.red + 0.587f * color.green + 0.114f * color.blue < 0.5f
-    }
+    MaterialTheme.colorScheme.onSurfaceVariant

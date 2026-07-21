@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,6 +28,7 @@ import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.domain.model.SessionColor
 import com.screen.remote.android.core.i18n.SessionTexts
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel

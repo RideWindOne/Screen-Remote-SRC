@@ -24,7 +24,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -84,13 +83,13 @@ fun ErrorCard(error: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
-        color = Color(0xFFFFEBEE),
+        color = MaterialTheme.colorScheme.errorContainer,
     ) {
         Text(
             text = error,
             modifier = Modifier.padding(16.dp),
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFC62828),
+            color = MaterialTheme.colorScheme.onErrorContainer,
         )
     }
 }
@@ -152,9 +151,9 @@ fun EncoderOptionsSection(
                 contentDescription = null,
                 tint =
                     if (selectedEncoder.isEmpty() && customEncoderName.isEmpty()) {
-                        Color(0xFF007AFF)
+                        MaterialTheme.colorScheme.primary
                     } else {
-                        Color(0xFFE5E5EA)
+                        MaterialTheme.colorScheme.outlineVariant
                     },
                 modifier = Modifier.size(22.dp),
             )
@@ -303,7 +302,7 @@ fun EncoderListSection(
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = null,
-                                    tint = Color(0xFF007AFF),
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(22.dp),
                                 )
                             }

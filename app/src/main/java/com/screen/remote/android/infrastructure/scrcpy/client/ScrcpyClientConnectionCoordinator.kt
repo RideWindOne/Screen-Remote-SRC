@@ -63,7 +63,7 @@ internal class ScrcpyClientConnectionCoordinator(
                     options = options,
                     onVideoResolution = { width, height ->
                         videoResolution.value = Pair(width, height)
-                        LogManager.d(LogTags.SCRCPY_CLIENT, "视频分辨率已设置: ${width}x$height")
+                        LogManager.d(LogTags.SCRCPY_CLIENT, "Video resolution is set: ${width}x$height")
                     },
                 )
 
@@ -86,7 +86,7 @@ internal class ScrcpyClientConnectionCoordinator(
                 if (activeDeviceId != deviceId) {
                     LogManager.d(
                         LogTags.SCRCPY_CLIENT,
-                        "实际连接候选已更新: prepared=$deviceId active=$activeDeviceId",
+                        "The actual connection candidate has been updated: prepared=$deviceId active=$activeDeviceId",
                     )
                 }
                 issueTracker.updateDeviceId(activeDeviceId)
@@ -98,14 +98,14 @@ internal class ScrcpyClientConnectionCoordinator(
                 options.config.startApp.trim().takeIf(String::isNotEmpty)?.let { startApp ->
                     controller.startApp(startApp)
                         .onFailure { error ->
-                            LogManager.w(LogTags.SCRCPY_CLIENT, "请求在虚拟显示器启动 App 失败: ${error.message}")
+                            LogManager.w(LogTags.SCRCPY_CLIENT, "Request to launch app on virtual display failed: ${error.message}")
                         }
                 }
 
                 if (options.config.turnScreenOff) {
                     controller.setDisplayPower(on = false)
                         .onFailure { error ->
-                            LogManager.w(LogTags.SCRCPY_CLIENT, "请求关闭设备屏幕失败: ${error.message}")
+                            LogManager.w(LogTags.SCRCPY_CLIENT, "Request to close device screen failed: ${error.message}")
                         }
                 }
 
@@ -142,11 +142,11 @@ internal class ScrcpyClientConnectionCoordinator(
                     issueTracker.clear(trigger.logLabel)
 
                     if (trigger == CleanupTrigger.CancelConnect) {
-                        LogManager.d(LogTags.SCRCPY_CLIENT, "连接已取消")
+                        LogManager.d(LogTags.SCRCPY_CLIENT, "Connection canceled")
                     }
                     Result.success(true)
                 } catch (error: Exception) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "${trigger.logLabel} 清理失败: ${error.message}", error)
+                    LogManager.e(LogTags.SCRCPY_CLIENT, "${trigger.logLabel} Cleanup failed: ${error.message}", error)
                     Result.failure(error)
                 }
             }

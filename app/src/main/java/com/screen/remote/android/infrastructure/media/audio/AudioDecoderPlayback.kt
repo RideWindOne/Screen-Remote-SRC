@@ -37,7 +37,7 @@ internal class AudioDecoderPlayback(
         onPlaybackReady()
 
         var packetCount = 0
-        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "开始播放 RAW 音频" }
+        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Start playing RAW audio" }
 
         while (isRunning()) {
             try {
@@ -51,7 +51,7 @@ internal class AudioDecoderPlayback(
                         val written = trackManager.writeRawData(packet.payload)
 
                         if (written < 0) {
-                            LogManager.e(LogTags.AUDIO_DECODER, "AudioTrack 写入失败: $written")
+                            LogManager.e(LogTags.AUDIO_DECODER, "AudioTrack write failure: $written")
                         }
                     }
 
@@ -60,12 +60,12 @@ internal class AudioDecoderPlayback(
                 }
             } catch (e: Exception) {
                 if (!isRunning() || isStopped()) break
-                LogManager.e(LogTags.AUDIO_DECODER, "RAW 音频播放错误: ${e.message}", e)
+                LogManager.e(LogTags.AUDIO_DECODER, "RAW audio playback error: ${e.message}", e)
                 throw e
             }
         }
 
-        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "RAW 音频播放结束，共 $packetCount 包" }
+        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "RAW audio playback ends, total $packetCount packets" }
     }
 
     fun decodeAndPlay(
@@ -110,7 +110,7 @@ internal class AudioDecoderPlayback(
         trackManager.play()
         onPlaybackReady()
 
-        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "开始解码循环" }
+        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Start decoding loop" }
         var firstAudioPacket = bootstrap.firstAudioPacket
         var firstAudioPts = bootstrap.firstAudioPts
         while (isRunning() && !isStopped()) {
@@ -154,7 +154,7 @@ internal class AudioDecoderPlayback(
                 outputDrainer.resetAfterDecoderFallback()
                 firstAudioPacket = null
                 firstAudioPts = null
-                LogManager.w(LogTags.AUDIO_DECODER, "音频解码器运行失败，已切换到 ${fallbackDecoder.name}")
+                LogManager.w(LogTags.AUDIO_DECODER, "Audio decoder failed, switched to ${fallbackDecoder.name}")
             }
         }
     }
@@ -172,7 +172,7 @@ internal class AudioDecoderPlayback(
         var inputsWithoutOutput = 0
         var lastObservedOutputCount = outputDrainer.outputCount()
 
-        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "解码循环开始" }
+        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Decoding cycle starts" }
 
         inputCount += queueFirstAudioPacket(firstAudioPacket, lastPts)
         if (inputCount > 0) {
@@ -252,7 +252,7 @@ internal class AudioDecoderPlayback(
                 throw e
             } catch (e: Exception) {
                 if (!isRunning() || isStopped()) break
-                if (!e.isExpectedShutdown()) LogManager.e(LogTags.AUDIO_DECODER, "解码错误: ${e.message}", e)
+                if (!e.isExpectedShutdown()) LogManager.e(LogTags.AUDIO_DECODER, "Decoding error: ${e.message}", e)
                 throw e
             }
         }
@@ -261,7 +261,7 @@ internal class AudioDecoderPlayback(
         while (outputDrainer.drainOutputBuffers(bufferInfo) > 0 && finalDrainCount < 50) {
             finalDrainCount++
         }
-        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "解码结束，共 $frameCount 帧输入，$outputCount 个缓冲区输出" }
+        AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Decoding ends, a total of $frameCount frames are input and $outputCount buffers are output." }
     }
 
     private fun queueFirstAudioPacket(
@@ -274,7 +274,7 @@ internal class AudioDecoderPlayback(
         while (isRunning() && !isStopped()) {
             when (queuePacketIntoDecoder(currentDecoder, packet, 1, 0, pts, 0)) {
                 QueuePacketResult.Queued -> {
-                    AudioDebugLog.d(LogTags.AUDIO_DECODER) { "已处理第一个音频包: size=${packet.size}, pts=$pts" }
+                    AudioDebugLog.d(LogTags.AUDIO_DECODER) { "The first audio packet has been processed: size=${packet.size}, pts=$pts" }
                     return 1
                 }
                 QueuePacketResult.Break -> return 0

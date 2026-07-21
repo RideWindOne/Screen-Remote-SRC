@@ -8,7 +8,7 @@ object Quit : ScrcpyEvent() {
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "应用退出"
+    override fun getDescription() = "Application exited"
 }
 
 object ServerConnected : ScrcpyEvent() {
@@ -16,7 +16,7 @@ object ServerConnected : ScrcpyEvent() {
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "服务器连接成功"
+    override fun getDescription() = "Server connected"
 }
 
 object ServerConnectionFailed : ScrcpyEvent() {
@@ -24,7 +24,7 @@ object ServerConnectionFailed : ScrcpyEvent() {
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "服务器连接失败"
+    override fun getDescription() = "Server connection failed"
 }
 
 object DeviceDisconnected : ScrcpyEvent() {
@@ -32,7 +32,7 @@ object DeviceDisconnected : ScrcpyEvent() {
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "设备断开连接"
+    override fun getDescription() = "Device disconnected"
 }
 
 object UsbDeviceDisconnected : ScrcpyEvent() {
@@ -40,7 +40,7 @@ object UsbDeviceDisconnected : ScrcpyEvent() {
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "USB 设备断开"
+    override fun getDescription() = "USB device disconnected"
 }
 
 data class ConnectionEstablished(
@@ -50,7 +50,7 @@ data class ConnectionEstablished(
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "[$deviceId] 连接建立"
+    override fun getDescription() = "[$deviceId] Connection established"
 }
 
 data class ConnectionLost(
@@ -61,7 +61,7 @@ data class ConnectionLost(
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "[$deviceId] 连接丢失: $reason"
+    override fun getDescription() = "[$deviceId] Connection lost: $reason"
 }
 
 data class StatusChanged(
@@ -71,7 +71,7 @@ data class StatusChanged(
 
     override fun getCategory() = Category.LIFECYCLE
 
-    override fun getDescription() = "状态变化: ${event.status}"
+    override fun getDescription() = "Status changed: ${event.status}"
 }
 
 data class ScrcpyError(
@@ -81,7 +81,7 @@ data class ScrcpyError(
 
     override fun getCategory() = Category.SYSTEM
 
-    override fun getDescription() = "错误: ${event.errorMessage}"
+    override fun getDescription() = "Error: ${event.errorMessage}"
 }
 
 data class KeyDown(
@@ -93,7 +93,7 @@ data class KeyDown(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "键盘按下: keycode=$keycode"
+    override fun getDescription() = "Key pressed: keycode=$keycode"
 }
 
 data class KeyUp(
@@ -105,7 +105,7 @@ data class KeyUp(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "键盘抬起: keycode=$keycode"
+    override fun getDescription() = "Key released: keycode=$keycode"
 }
 
 data class TouchDown(
@@ -118,7 +118,7 @@ data class TouchDown(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "触摸按下: pointer=$pointerId ($x, $y)"
+    override fun getDescription() = "Touch down: pointer=$pointerId ($x, $y)"
 }
 
 data class TouchMove(
@@ -131,7 +131,7 @@ data class TouchMove(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "触摸移动: pointer=$pointerId ($x, $y)"
+    override fun getDescription() = "Touch move: pointer=$pointerId ($x, $y)"
 
     override fun needsSampling() = true
 }
@@ -145,7 +145,7 @@ data class TouchUp(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "触摸抬起: pointer=$pointerId ($x, $y)"
+    override fun getDescription() = "Touch up: pointer=$pointerId ($x, $y)"
 }
 
 data class Scroll(
@@ -158,7 +158,7 @@ data class Scroll(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "滚动: ($x, $y) h=$hScroll v=$vScroll"
+    override fun getDescription() = "Scroll: ($x, $y) h=$hScroll v=$vScroll"
 }
 
 data class ClipboardUpdate(
@@ -168,7 +168,7 @@ data class ClipboardUpdate(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "剪贴板更新: ${content.take(20)}..."
+    override fun getDescription() = "Clipboard updated: ${content.take(20)}..."
 }
 
 data class NewFrame(
@@ -178,7 +178,7 @@ data class NewFrame(
 
     override fun getCategory() = Category.MEDIA
 
-    override fun getDescription() = "新视频帧: ${frameData.size} bytes"
+    override fun getDescription() = "New video frame: ${frameData.size} bytes"
 
     override fun needsSampling() = true
 
@@ -200,7 +200,7 @@ data class ScreenInitSize(
 
     override fun getCategory() = Category.MEDIA
 
-    override fun getDescription() = "屏幕尺寸: ${width}x$height"
+    override fun getDescription() = "Screen size: ${width}x$height"
 }
 
 data class VideoFrameDecoded(
@@ -213,7 +213,7 @@ data class VideoFrameDecoded(
 
     override fun getCategory() = Category.MEDIA
 
-    override fun getDescription() = "[$deviceId] 视频帧解码: ${width}x$height pts=$pts"
+    override fun getDescription() = "[$deviceId] Video frame decoded: ${width}x$height pts=$pts"
 
     override fun needsSampling() = true
 }
@@ -227,7 +227,7 @@ data class AudioFrameDecoded(
 
     override fun getCategory() = Category.MEDIA
 
-    override fun getDescription() = "[$deviceId] 音频帧解码: ${sampleRate}Hz ${channels}ch"
+    override fun getDescription() = "[$deviceId] Audio frame decoded: ${sampleRate}Hz ${channels}ch"
 
     override fun needsSampling() = true
 }
@@ -240,7 +240,7 @@ data class VideoDecoderStalled(
 
     override fun getCategory() = Category.MEDIA
 
-    override fun getDescription() = "[$deviceId] 视频解码器停滞: $reason"
+    override fun getDescription() = "[$deviceId] Video decoder stalled: $reason"
 }
 
 data class AudioDecoderStalled(
@@ -251,7 +251,7 @@ data class AudioDecoderStalled(
 
     override fun getCategory() = Category.MEDIA
 
-    override fun getDescription() = "[$deviceId] 音频解码器停滞: $reason"
+    override fun getDescription() = "[$deviceId] Audio decoder stalled: $reason"
 }
 
 data class DemuxerError(
@@ -261,7 +261,7 @@ data class DemuxerError(
 
     override fun getCategory() = Category.SYSTEM
 
-    override fun getDescription() = "Demuxer 错误: $message"
+    override fun getDescription() = "Demuxer error: $message"
 }
 
 data class RecorderError(
@@ -271,7 +271,7 @@ data class RecorderError(
 
     override fun getCategory() = Category.SYSTEM
 
-    override fun getDescription() = "Recorder 错误: $message"
+    override fun getDescription() = "Recorder error: $message"
 }
 
 data class AoaOpenError(
@@ -281,7 +281,7 @@ data class AoaOpenError(
 
     override fun getCategory() = Category.SYSTEM
 
-    override fun getDescription() = "AOA 打开错误: $message"
+    override fun getDescription() = "AOA open error: $message"
 }
 
 data class TimeLimitReached(
@@ -291,7 +291,7 @@ data class TimeLimitReached(
 
     override fun getCategory() = Category.SYSTEM
 
-    override fun getDescription() = "时间限制到达: ${duration}ms"
+    override fun getDescription() = "Time limit reached: ${duration}ms"
 }
 
 data class RunOnMainThread(
@@ -301,5 +301,5 @@ data class RunOnMainThread(
 
     override fun getCategory() = Category.SYSTEM
 
-    override fun getDescription() = "主线程任务执行"
+    override fun getDescription() = "Main-thread task executed"
 }

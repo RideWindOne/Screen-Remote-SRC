@@ -32,7 +32,7 @@ class SessionManager {
     ): Session {
         activeSession?.let { previous ->
             val previousDeviceId = previous.deviceIdentifier
-            LogManager.w(LogTags.SCRCPY_CLIENT, "会话已存在，先清理: $previousDeviceId")
+            LogManager.w(LogTags.SCRCPY_CLIENT, "The session already exists, clean it up first: $previousDeviceId")
             stop()
             ScrcpyEventBus.clearDeviceState(previousDeviceId)
         }
@@ -43,7 +43,7 @@ class SessionManager {
     fun stop() {
         val session = activeSession ?: return
         activeSession = null
-        LogManager.d(LogTags.SCRCPY_CLIENT, "停止会话: ${session.deviceIdentifier}, sessionId=${session.sessionId}")
+        LogManager.d(LogTags.SCRCPY_CLIENT, "Stop session: ${session.deviceIdentifier}, sessionId=${session.sessionId}")
         session.cleanup()
     }
 }

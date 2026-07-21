@@ -59,7 +59,7 @@ object TTSManager {
                         ).show()
                     }
                 } else {
-                    LogManager.w(LogTags.TTS_MANAGER, "TTS 初始化失败，可能未安装 TTS 引擎")
+                    LogManager.w(LogTags.TTS_MANAGER, "TTS initialization failed, TTS engine may not be installed")
                     ttsInstance = null
                     
                     if (showToast) {
@@ -73,7 +73,7 @@ object TTSManager {
                 isInitializing = false
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.TTS_MANAGER, "TTS 初始化异常: ${e.message}", e)
+            LogManager.e(LogTags.TTS_MANAGER, "TTS initialization exception: ${e.message}", e)
             isInitializing = false
             ttsInstance = null
             
@@ -112,7 +112,7 @@ object TTSManager {
             ttsInstance = null
             isInitialized = false
         } catch (e: Exception) {
-            LogManager.e(LogTags.TTS_MANAGER, "TTS 释放失败: ${e.message}", e)
+            LogManager.e(LogTags.TTS_MANAGER, "TTS release failed: ${e.message}", e)
         }
     }
     

@@ -101,13 +101,13 @@ class VideoDecoder(
     ) = withContext(decoderDispatcher) {
         try {
             configureDecoderThreadPriority()
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "开始解码 $videoCodec: ${width}x$height" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Start decoding $videoCodec: ${width}x$height" }
 
             surfaceController.createDummySurface(width, height)
             markStarted(width, height)
 
             decoder = codecManager.createDecoder(width, height) ?: run {
-                LogManager.e(LogTags.VIDEO_DECODER, "无法创建解码器")
+                LogManager.e(LogTags.VIDEO_DECODER, "Unable to create decoder")
                 val sizeFailure = codecManager.lastSizeFailure
                 sessionContext.emit(
                     SessionEvent.DecoderError(
@@ -129,7 +129,7 @@ class VideoDecoder(
                 return@withContext
             }
 
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器: ${decoder?.name}" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Decoder: ${decoder?.name}" }
             surfaceController.applyPendingSurface(decoder, isStopped)
             sessionContext.emit(SessionEvent.DecoderStarted(DecoderType.Video))
             lifecycleReportedStarted = true
@@ -137,7 +137,7 @@ class VideoDecoder(
             isRunning = true
             playback.decodeLoop(videoStream)
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "解码失败: ${e.message}", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "Decoding failed: ${e.message}", e)
             sessionContext.emit(
                 SessionEvent.DecoderError(
                     DecoderIssue(
@@ -156,7 +156,7 @@ class VideoDecoder(
     fun stop() {
         if (isStopped) {
             closeDecoderDispatcher()
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器已停止，跳过" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Decoder stopped, skipping" }
             return
         }
 
@@ -168,7 +168,7 @@ class VideoDecoder(
             decoder?.release()
             decoder = null
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "停止解码器失败: ${e.message}")
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to stop decoder: ${e.message}")
         }
 
         surfaceController.releaseDummySurface()
@@ -196,7 +196,7 @@ class VideoDecoder(
             }
         runCatching { Process.setThreadPriority(priority) }
             .onFailure { error ->
-                LogManager.w(LogTags.VIDEO_DECODER, "设置视频解码线程优先级失败: ${error.message}")
+                LogManager.w(LogTags.VIDEO_DECODER, "Failed to set video decoding thread priority: ${error.message}")
             }
     }
 

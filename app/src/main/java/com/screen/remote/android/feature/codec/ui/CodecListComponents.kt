@@ -60,7 +60,7 @@ fun CodecListItem(
                 Text(
                     text = codec.capabilities,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF666666),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -74,13 +74,13 @@ fun CodecListItem(
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = Color(0xFF007AFF),
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 } else {
                     Text(
                         text = CodecTexts.CODEC_TEST_BUTTON.get(),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF007AFF),
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.clickable(onClick = onTest),
                     )
                 }
@@ -90,7 +90,7 @@ fun CodecListItem(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = Color(0xFF007AFF),
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
                 )
             }

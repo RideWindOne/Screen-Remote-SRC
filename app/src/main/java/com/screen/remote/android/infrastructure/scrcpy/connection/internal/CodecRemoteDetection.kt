@@ -15,11 +15,11 @@ internal suspend fun ConnectionLifecycle.fetchRemoteEncoders(
     needAudio: Boolean,
 ): Pair<List<EncoderCapability>, List<EncoderCapability>>? {
     if (hasRequiredRemoteEncoderCache(options, needVideo, needAudio)) {
-        LogManager.d(LogTags.SCRCPY_CLIENT, "本次所需的远程编码器列表已存在，跳过检测")
+        LogManager.d(LogTags.SCRCPY_CLIENT, "The required remote encoder list already exists, skip detection")
         return Pair(options.capabilityCache.remoteVideoEncoders, options.capabilityCache.remoteAudioEncoders)
     }
 
-    LogManager.d(LogTags.SCRCPY_CLIENT, "开始检测远程编码器（复用已上传的 server）...")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Start detecting the remote encoder (reusing the uploaded server)...")
 
     val detectionResult = detectEncodersFromRemote(connection) ?: return null
     return Pair(detectionResult.videoEncoders, detectionResult.audioEncoders)
@@ -34,12 +34,12 @@ internal suspend fun ConnectionLifecycle.detectEncodersFromRemote(connection: Ad
                 persistToBoundSession = false,
             )
         } catch (e: Exception) {
-            LogManager.w(LogTags.SCRCPY_CLIENT, "获取编码器异常: ${e.message}")
+            LogManager.w(LogTags.SCRCPY_CLIENT, "Get encoder exception: ${e.message}")
             return null
         }
 
     if (result.isFailure) {
-        LogManager.w(LogTags.SCRCPY_CLIENT, "获取编码器失败: ${result.exceptionOrNull()?.message}")
+        LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to get encoder: ${result.exceptionOrNull()?.message}")
         return null
     }
 

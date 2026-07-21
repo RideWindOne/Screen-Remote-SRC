@@ -65,7 +65,7 @@ data class ShellCommandExecuted(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.DEBUG
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Shell 执行: $command (${durationMs}ms)"
+    override fun getDescription() = "[$deviceId] Shell executed: $command (${durationMs}ms)"
 }
 
 data class ShellCommandFailed(
@@ -76,7 +76,7 @@ data class ShellCommandFailed(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.WARN
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Shell 失败: $command - $error (${durationMs}ms)"
+    override fun getDescription() = "[$deviceId] Shell failed: $command - $error (${durationMs}ms)"
 }
 
 data class ForwardSetup(
@@ -90,7 +90,7 @@ data class ForwardSetup(
     override fun getLogLevel() = if (success) LogLevel.INFO else LogLevel.ERROR
     override fun getCategory() = Category.MONITOR
     override fun getDescription() =
-        "[$deviceId] Forward ${if (success) "成功" else "失败"}: $localPort -> $remoteSocket (${durationMs}ms)"
+        "[$deviceId] Forward ${if (success) "succeeded" else "failed"}: $localPort -> $remoteSocket (${durationMs}ms)"
 }
 
 data class ForwardRemoved(
@@ -99,7 +99,7 @@ data class ForwardRemoved(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Forward 移除: $localPort"
+    override fun getDescription() = "[$deviceId] Forward removed: $localPort"
 }
 
 data class FilePushSuccess(
@@ -112,7 +112,7 @@ data class FilePushSuccess(
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
     override fun getDescription() =
-        "[$deviceId] 文件推送成功: $localPath -> $remotePath (${fileSize / 1024}KB, ${durationMs}ms)"
+        "[$deviceId] File push succeeded: $localPath -> $remotePath (${fileSize / 1024}KB, ${durationMs}ms)"
 }
 
 data class FilePushFailed(
@@ -124,7 +124,7 @@ data class FilePushFailed(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.ERROR
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] 文件推送失败: $localPath -> $remotePath - $error (${durationMs}ms)"
+    override fun getDescription() = "[$deviceId] File push failed: $localPath -> $remotePath - $error (${durationMs}ms)"
 }
 
 data class AdbVerifying(
@@ -133,7 +133,7 @@ data class AdbVerifying(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.DEBUG
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] ADB 授权验证中: $deviceName"
+    override fun getDescription() = "[$deviceId] Verifying ADB authorization: $deviceName"
 }
 
 data class AdbVerifySuccess(
@@ -143,7 +143,7 @@ data class AdbVerifySuccess(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] ADB 授权验证成功: $deviceName (${durationMs}ms)"
+    override fun getDescription() = "[$deviceId] ADB authorization verified: $deviceName (${durationMs}ms)"
 }
 
 data class AdbVerifyFailed(
@@ -153,7 +153,7 @@ data class AdbVerifyFailed(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.ERROR
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] ADB 授权验证失败: $error (${durationMs}ms)"
+    override fun getDescription() = "[$deviceId] ADB authorization verification failed: $error (${durationMs}ms)"
 }
 
 data class DeviceScreenLocked(
@@ -161,7 +161,7 @@ data class DeviceScreenLocked(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] 设备锁屏"
+    override fun getDescription() = "[$deviceId] Device screen locked"
 }
 
 data class DeviceScreenUnlocked(
@@ -169,7 +169,7 @@ data class DeviceScreenUnlocked(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] 设备解锁"
+    override fun getDescription() = "[$deviceId] Device screen unlocked"
 }
 
 data class DeviceScreenOff(
@@ -177,7 +177,7 @@ data class DeviceScreenOff(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] 设备息屏"
+    override fun getDescription() = "[$deviceId] Device screen turned off"
 }
 
 data class DeviceScreenOn(
@@ -185,7 +185,7 @@ data class DeviceScreenOn(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.INFO
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] 设备亮屏"
+    override fun getDescription() = "[$deviceId] Device screen turned on"
 }
 
 data class MonitorException(
@@ -196,7 +196,7 @@ data class MonitorException(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.ERROR
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] 异常[$type]: $message"
+    override fun getDescription() = "[$deviceId] Exception[$type]: $message"
 }
 
 data class ServerLog(
@@ -215,7 +215,7 @@ data class SocketDataReceived(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.VERBOSE
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Socket[$socketType] 接收: ${bytesCount}B"
+    override fun getDescription() = "[$deviceId] Socket[$socketType] received: ${bytesCount}B"
     override fun needsSampling() = true
 }
 
@@ -226,7 +226,7 @@ data class SocketDataSent(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.VERBOSE
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Socket[$socketType] 发送: ${bytesCount}B"
+    override fun getDescription() = "[$deviceId] Socket[$socketType] sent: ${bytesCount}B"
     override fun needsSampling() = true
 }
 
@@ -237,5 +237,5 @@ data class SocketIdle(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.WARN
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Socket[$socketType] 空闲 ${idleDurationMs}ms"
+    override fun getDescription() = "[$deviceId] Socket[$socketType] idle for ${idleDurationMs}ms"
 }

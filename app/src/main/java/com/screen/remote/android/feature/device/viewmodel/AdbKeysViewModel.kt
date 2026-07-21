@@ -40,10 +40,10 @@ class AdbKeysViewModel(
 
                 adbConnectionManager.refreshRuntimeIdentity()
 
-                LogManager.d(LogTags.ADB_KEYS_VM, "新的 ADB 密钥对生成成功")
+                LogManager.d(LogTags.ADB_KEYS_VM, "New ADB key pair generated successfully")
                 Result.success(Unit)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_KEYS_VM, "生成 ADB 密钥失败: ${e.message}", e)
+                LogManager.e(LogTags.ADB_KEYS_VM, "Failed to generate ADB key: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -100,10 +100,10 @@ class AdbKeysViewModel(
                     output.write(publicKey.toByteArray())
                 }
 
-                LogManager.d(LogTags.ADB_KEYS_VM, "ADB 密钥导出成功")
+                LogManager.d(LogTags.ADB_KEYS_VM, "ADB key export successful")
                 Result.success(Unit)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_KEYS_VM, "导出 ADB 密钥失败: ${e.message}", e)
+                LogManager.e(LogTags.ADB_KEYS_VM, "Failed to export ADB key: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -152,7 +152,7 @@ class AdbKeysViewModel(
 
                 persistIdentity(privateKey, publicKey)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_KEYS_VM, "导入 ADB 密钥失败: ${e.message}", e)
+                LogManager.e(LogTags.ADB_KEYS_VM, "Failed to import ADB key: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -190,12 +190,12 @@ class AdbKeysViewModel(
 
             adbConnectionManager.refreshRuntimeIdentity()
 
-            LogManager.d(LogTags.ADB_KEYS_VM, "ADB 密钥保存成功")
-            LogManager.d(LogTags.ADB_KEYS_VM, "ADB 运行时目录: ${storageRoot.absolutePath}")
+            LogManager.d(LogTags.ADB_KEYS_VM, "ADB key saved successfully")
+            LogManager.d(LogTags.ADB_KEYS_VM, "ADB runtime directory: ${storageRoot.absolutePath}")
         }.fold(
             onSuccess = { Result.success(Unit) },
             onFailure = { error ->
-                LogManager.e(LogTags.ADB_KEYS_VM, "保存 ADB 密钥失败: ${error.message}", error)
+                LogManager.e(LogTags.ADB_KEYS_VM, "Failed to save ADB key: ${error.message}", error)
                 Result.failure(error)
             },
         )

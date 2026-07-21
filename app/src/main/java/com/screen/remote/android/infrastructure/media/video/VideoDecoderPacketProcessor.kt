@@ -14,8 +14,10 @@ internal class VideoDecoderPacketProcessor(
     private val getDecoder: () -> MediaCodec?,
     private val setDecoder: (MediaCodec?) -> Unit,
     private val isStopped: () -> Boolean,
+    private val drainDecoderOutput: () -> Unit,
     private val onVideoStateChanged: (width: Int, height: Int, rotation: Int) -> Unit,
 ) {
+    private val bootstrapCache = VideoDecoderBootstrapCache()
     private var queuedFrameCount = 0
     private var observedPacketCount = 0
     private var consecutiveInputDrops = 0
@@ -40,6 +42,7 @@ internal class VideoDecoderPacketProcessor(
         configured: Boolean,
     ): Boolean {
         if (width == runtimeState.currentWidth && height == runtimeState.currentHeight) return configured
+        bootstrapCache.resetFrames()
         onVideoStateChanged(width, height, runtimeState.currentRotation)
         surfaceController.resizeDummySurface(width, height)
         if (!configured) return false
@@ -63,7 +66,7 @@ internal class VideoDecoderPacketProcessor(
         setDecoder(newDecoder)
         decoderConfigured = true
         surfaceController.applyPendingSurface(newDecoder, isStopped())
-        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$videoCodec 已按 session meta 重配为 ${width}x$height" }
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "$videoCodec has been reconfigured to ${width}x$height according to session meta." }
         return true
     }
 
@@ -77,12 +80,13 @@ internal class VideoDecoderPacketProcessor(
         packetIsKeyFrame: Boolean,
     ): Boolean {
         if (payload.isEmpty()) {
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "收到空视频包: configured=${configured || decoderConfigured}" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Empty video packet received: configured=${configured || decoderConfigured}" }
             return configured || decoderConfigured
         }
 
         val effectiveConfigured = configured || decoderConfigured
         observedPacketCount++
+        bootstrapCache.record(payload, pts, packetIsConfig, packetIsKeyFrame)
 
         if (effectiveConfigured && !packetIsConfig) {
             if (waitingForKeyFrameAfterFallback && !packetIsKeyFrame) {
@@ -186,13 +190,42 @@ internal class VideoDecoderPacketProcessor(
                 throw IllegalStateException("AV1 fallback 解码器无法接收缓存配置")
             }
         }
-        waitingForKeyFrameAfterFallback = true
         surfaceController.applyPendingSurface(newDecoder, isStopped())
-        LogManager.w(LogTags.VIDEO_DECODER, "视频解码器运行失败，已切换候选并等待关键帧: ${cause.message}")
+        replayBootstrapAfterFallback(cause)
         return true
     }
 
     fun queuedFrameCount(): Int = queuedFrameCount
+
+    private fun replayBootstrapAfterFallback(cause: IllegalStateException) {
+        val snapshot = bootstrapCache.snapshot()
+        if (!snapshot.isReplayable) {
+            waitingForKeyFrameAfterFallback = true
+            LogManager.w(
+                LogTags.VIDEO_DECODER,
+                "Video decoder failed, switched candidates and waiting for a key frame: ${cause.message}",
+            )
+            return
+        }
+
+        for ((index, packet) in snapshot.frames.withIndex()) {
+            if (!decodeFrame(packet.data, packet.ptsUs, packet.isKeyFrame)) {
+                waitingForKeyFrameAfterFallback = true
+                LogManager.w(
+                    LogTags.VIDEO_DECODER,
+                    "Decoder bootstrap replay stalled at packet ${index + 1}/${snapshot.frames.size}; waiting for a key frame",
+                )
+                return
+            }
+            drainDecoderOutput()
+        }
+
+        waitingForKeyFrameAfterFallback = false
+        LogManager.w(
+            LogTags.VIDEO_DECODER,
+            "Video decoder failed, switched candidates and replayed ${snapshot.frames.size} cached GOP packets: ${cause.message}",
+        )
+    }
 
     private fun drainH264(
         nalBuffer: ByteBuffer,
@@ -285,7 +318,7 @@ internal class VideoDecoderPacketProcessor(
         lastH264Sps = sps
         lastH264Pps = pps
         surfaceController.applyPendingSurface(newDecoder, isStopped())
-        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H264 CSD 已累积并完成配置: sps=${sps.size} pps=${pps.size}" }
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H264 CSD has been accumulated and configured: sps=${sps.size} pps=${pps.size}" }
         return true
     }
 
@@ -391,7 +424,7 @@ internal class VideoDecoderPacketProcessor(
             }
             setDecoder(newDecoder)
             decoderConfigured = true
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "AV1 解码器已完成配置" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "AV1 decoder has been configured" }
             surfaceController.applyPendingSurface(newDecoder, isStopped())
         }
 
@@ -444,11 +477,15 @@ internal class VideoDecoderPacketProcessor(
         }
 
         try {
-            val timeoutUs = if (isKeyFrame || isCodecConfig) CRITICAL_INPUT_TIMEOUT_US else INPUT_TIMEOUT_US
-            val inputIndex = decoder.dequeueInputBuffer(timeoutUs)
+            val isCritical = isKeyFrame || isCodecConfig
+            var inputIndex = decoder.dequeueInputBuffer(INPUT_TIMEOUT_US)
+            if (inputIndex < 0 && isCritical) {
+                drainDecoderOutput()
+                inputIndex = decoder.dequeueInputBuffer(CRITICAL_INPUT_TIMEOUT_US)
+            }
             if (inputIndex < 0) {
                 consecutiveInputDrops++
-                if (isKeyFrame || consecutiveInputDrops >= MAX_CONSECUTIVE_INPUT_DROPS) {
+                if (isCritical || consecutiveInputDrops >= MAX_CONSECUTIVE_INPUT_DROPS) {
                     throw IllegalStateException(
                         "视频解码器输入持续阻塞: drops=$consecutiveInputDrops keyFrame=$isKeyFrame",
                     )
@@ -477,7 +514,7 @@ internal class VideoDecoderPacketProcessor(
             return true
         } catch (e: Exception) {
             if (isStopped()) return false
-            LogManager.e(LogTags.VIDEO_DECODER, "解码帧失败: ${e.message}", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "Decoding frame failed: ${e.message}", e)
             throw e
         }
     }

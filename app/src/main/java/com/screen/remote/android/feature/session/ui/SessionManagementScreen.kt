@@ -23,6 +23,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.i18n.ManagementTexts
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,16 +46,14 @@ fun SessionManagementScreen(
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val scope = rememberCoroutineScope()
-    LaunchedEffect(sessionData.id) {
-        SessionManagementAppCache.selectScope(sessionData.id)
-    }
     var selectedSection by remember(sessionData.id) {
         mutableStateOf(SessionManagementSection.DeviceInfo)
     }
     var drawerOpen by remember(sessionData.id) { mutableStateOf(false) }
     var dashboardRefreshTick by remember(sessionData.id) { mutableIntStateOf(0) }
-    var contentRefreshTick by remember(sessionData.id) { mutableIntStateOf(0) }
+    val contentRefreshTicks = remember(sessionData.id) { mutableStateMapOf<SessionManagementSection, Int>() }
     val appOptionsState = remember(sessionData.id) { SessionManagementAppOptionsState() }
+    val fileBrowserState = remember(sessionData.id) { SessionManagementFileBrowserState() }
     var progressDialog by remember(sessionData.id) { mutableStateOf<ManagementProgressDialogState?>(null) }
     var resultDialog by remember(sessionData.id) { mutableStateOf<ManagementResultDialogState?>(null) }
     var exitConfirmOpen by remember(sessionData.id) { mutableStateOf(false) }
@@ -82,6 +82,22 @@ fun SessionManagementScreen(
     DisposableEffect(commandTerminalSession) {
         onDispose {
             commandTerminalSession.close()
+            SessionManagementAppCache.releaseScope(sessionData.id)
+        }
+    }
+
+
+    LaunchedEffect(sessionData.id) {
+        coroutineScope {
+            launch {
+                fileBrowserState.loadSnapshot("/sdcard")
+            }
+            launch {
+                loadSessionManagementAppData(
+                    context = context,
+                    scopeKey = sessionData.id,
+                )
+            }
         }
     }
 
@@ -125,7 +141,10 @@ fun SessionManagementScreen(
                 selectedSection == SessionManagementSection.Files ||
                     selectedSection == SessionManagementSection.Process ||
                     selectedSection == SessionManagementSection.PortForward -> {
-                    { contentRefreshTick += 1 }
+                    {
+                        contentRefreshTicks[selectedSection] =
+                            (contentRefreshTicks[selectedSection] ?: 0) + 1
+                    }
                 }
 
                 else -> {
@@ -179,7 +198,7 @@ fun SessionManagementScreen(
         commandExecuting = true
         scope.launch {
             val record = executeManagementShellCommand(normalizedCommand)
-            commandHistory = (listOf(record) + commandHistory).take(SESSION_MANAGEMENT_COMMAND_HISTORY_MAX_SIZE)
+            commandHistory = listOf(record) + commandHistory
             commandExecuting = false
         }
     }
@@ -241,8 +260,9 @@ fun SessionManagementScreen(
                     selectedSection = selectedSection,
                     snapshot = snapshot,
                     snapshotRefreshing = snapshotRefreshing,
-                    refreshToken = contentRefreshTick,
+                    refreshToken = contentRefreshTicks[selectedSection] ?: 0,
                     appOptionsState = appOptionsState,
+                    fileBrowserState = fileBrowserState,
                     fileAddMenuOpenTick = fileAddMenuOpenTick,
                     appAddMenuOpenTick = appAddMenuOpenTick,
                     commandInput = commandInput,
@@ -604,6 +624,7 @@ private fun SessionManagementDetailPane(
     snapshotRefreshing: Boolean,
     refreshToken: Int,
     appOptionsState: SessionManagementAppOptionsState,
+    fileBrowserState: SessionManagementFileBrowserState,
     fileAddMenuOpenTick: Int,
     appAddMenuOpenTick: Int,
     commandInput: String,
@@ -688,6 +709,7 @@ private fun SessionManagementDetailPane(
                 item {
                     SessionManagementFileBrowser(
                         modifier = Modifier.fillParentMaxHeight(),
+                        state = fileBrowserState,
                         refreshToken = refreshToken,
                         externalAddMenuRequestTick = fileAddMenuOpenTick,
                         onSelectionModeChanged = onFileSelectionModeChanged,

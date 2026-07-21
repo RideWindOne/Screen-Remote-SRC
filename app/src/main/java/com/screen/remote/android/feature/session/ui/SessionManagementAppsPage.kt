@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -32,7 +31,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,7 +42,6 @@ import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.FilePickerHelper
 import com.screen.remote.android.infrastructure.adb.connection.installApkFromUri
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -61,11 +58,6 @@ private data class AppListProjectionRequest(
 private data class AppListProjection(
     val request: AppListProjectionRequest? = null,
     val apps: List<AppInventoryEntry> = emptyList(),
-)
-
-private data class AppSizeLoadRequest(
-    val enabled: Boolean,
-    val candidatePackageNames: Set<String>,
 )
 
 @Stable
@@ -91,23 +83,12 @@ internal fun SessionManagementAppsPage(
     cacheScopeKey: String,
 ) {
     val context = LocalContext.current
-    var helperJar by remember(context) { mutableStateOf<java.io.File?>(null) }
-    var cacheReady by remember(cacheScopeKey) { mutableStateOf(false) }
-    LaunchedEffect(context, cacheScopeKey) {
-        SessionManagementAppCache.prepareForSession(context, cacheScopeKey)
-        cacheReady = true
-        helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
-    }
     val scope = rememberCoroutineScope()
-    val appSizeLoadRequests = remember(cacheScopeKey) { Channel<AppSizeLoadRequest>(Channel.CONFLATED) }
     var listRefreshTick by remember { mutableIntStateOf(0) }
-    val appPresentationVersions = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
-    var appPresentationGeneration by remember { mutableIntStateOf(0) }
     var forceRefreshPending by remember { mutableStateOf(false) }
     var inventoryApps by remember { mutableStateOf<List<AppInventoryEntry>>(emptyList()) }
     var inventoryLoading by remember { mutableStateOf(true) }
     var inventoryRefreshing by remember { mutableStateOf(true) }
-    var appSizesLoading by remember { mutableStateOf(false) }
     var inventoryError by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var submittedSearchQuery by remember { mutableStateOf("") }
@@ -120,17 +101,13 @@ internal fun SessionManagementAppsPage(
     var uninstallAppState by remember { mutableStateOf<AppInventoryEntry?>(null) }
     var appActionProgress by remember { mutableStateOf<String?>(null) }
     var appActionResult by remember { mutableStateOf<String?>(null) }
-    var appLoadToken by remember { mutableIntStateOf(0) }
     var appAddDialogOpen by remember { mutableStateOf(false) }
     var localAppPickerOpen by remember { mutableStateOf(false) }
     var localAppsLoading by remember { mutableStateOf(false) }
     var localApps by remember { mutableStateOf<List<LocalInstalledApp>>(emptyList()) }
     var localAppsError by remember { mutableStateOf<String?>(null) }
-    var helperReady by remember { mutableStateOf(false) }
+    val appCacheRevision = SessionManagementAppCache.revision()
     val inventoryAppList = inventoryApps
-    val inventoryPackageNames by remember {
-        derivedStateOf { inventoryApps.map { it.packageName } }
-    }
     val shizukuInstalled by remember {
         derivedStateOf { inventoryApps.any { it.packageName == "moe.shizuku.privileged.api" } }
     }
@@ -142,70 +119,30 @@ internal fun SessionManagementAppsPage(
             errorMessage = inventoryError,
         )
 
-    LaunchedEffect(helperJar) {
-        val readyHelperJar = helperJar ?: return@LaunchedEffect
-        val connection = SessionManagementAdbConnection.current()
-        if (connection == null) {
-            return@LaunchedEffect
-        }
-        val result = connection.prepareAppIconHelper(readyHelperJar)
-        helperReady = result.isSuccess
-    }
-
-    LaunchedEffect(cacheReady, refreshToken, listRefreshTick) {
-        if (!cacheReady) return@LaunchedEffect
+    LaunchedEffect(cacheScopeKey, refreshToken, listRefreshTick) {
         inventoryRefreshing = true
-        appLoadToken += 1
-        val currentLoadToken = appLoadToken
         val manualRefresh = forceRefreshPending
         forceRefreshPending = false
         inventoryError = null
-
-        if (manualRefresh) {
-            SessionManagementAppCache.clearSnapshot()
-        } else {
-            SessionManagementAppCache.snapshot()?.let { cached ->
-                inventoryApps = cached.apps
-            }
-        }
-
-        inventoryLoading = inventoryApps.isEmpty()
-
-        if (!manualRefresh && inventoryApps.isNotEmpty()) {
-            inventoryRefreshing = false
-            return@LaunchedEffect
-        }
-
-        val result = loadAppInventorySnapshot(context, includeSystemApps = false, forceRefresh = manualRefresh)
-        inventoryLoading = false
+        loadSessionManagementAppData(
+            context = context,
+            scopeKey = cacheScopeKey,
+            forceRefresh = manualRefresh,
+        )
+        val result = SessionManagementAppCache.snapshot()
+        inventoryApps = result?.apps.orEmpty()
+        inventoryLoading = result == null
         inventoryRefreshing = false
-        if (result.errorMessage != null) {
-            if (inventoryApps.isEmpty()) {
-                inventoryError = result.errorMessage
-            }
-            return@LaunchedEffect
-        }
+        inventoryError = result?.errorMessage
+    }
 
-        inventoryApps = result.apps
-        SessionManagementAppCache.updateSnapshot(result.copy(isLoading = false))
-
-        launch {
-            runCatching {
-                loadAppInventorySnapshot(context, includeSystemApps = true, forceRefresh = true)
-            }.onSuccess { fullSnapshot ->
-                if (currentLoadToken == appLoadToken) {
-                    inventoryApps = fullSnapshot.apps
-                    SessionManagementAppCache.updateSnapshot(fullSnapshot.copy(isLoading = false))
-                }
-            }.onFailure { error ->
-                runCatching {
-                    com.screen.remote.android.core.common.manager.LogManager.w(
-                        com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                        "后台补全全量应用列表失败: ${error.message}",
-                    )
-                }
-            }
+    LaunchedEffect(appCacheRevision) {
+        SessionManagementAppCache.snapshot()?.let { cached ->
+            inventoryApps = cached.apps
+            inventoryLoading = cached.isLoading
+            inventoryError = cached.errorMessage
         }
+        inventoryRefreshing = !SessionManagementAppCache.isPipelineComplete(cacheScopeKey)
     }
 
     LaunchedEffect(addMenuRequestTick) {
@@ -218,113 +155,15 @@ internal fun SessionManagementAppsPage(
         derivedStateOf { submittedSearchQuery.trim().lowercase(Locale.getDefault()) }
     }
 
-    LaunchedEffect(
-        sort,
-        appLoadToken,
-        inventoryPackageNames,
-        selectedFilters,
-        packageNameOnlyMode,
-        normalizedSearchQuery,
-    ) {
-        val candidatePackageNames =
-            if (sort == AppListSort.Size) {
-                inventoryApps
-                    .asSequence()
-                    .filter { entry -> matchesSelectedAppFilters(entry, selectedFilters) }
-                    .filter { entry -> matchesAppSearch(entry, packageNameOnlyMode, normalizedSearchQuery) }
-                    .map { entry -> entry.packageName }
-                    .toSet()
-            } else {
-                emptySet()
-            }
-        appSizeLoadRequests.trySend(
-            AppSizeLoadRequest(
-                enabled = sort == AppListSort.Size,
-                candidatePackageNames = candidatePackageNames,
-            ),
-        )
-    }
-
-    LaunchedEffect(appSizeLoadRequests) {
-        for (request in appSizeLoadRequests) {
-            if (!request.enabled) continue
-            val missingSizes =
-                inventoryApps.filter { entry ->
-                    entry.packageName in request.candidatePackageNames && entry.apkSizeBytes == null
-                }
-            if (missingSizes.isEmpty()) continue
-
-            appSizesLoading = true
-            try {
-                val sizes = loadAppApkSizes(missingSizes)
-                if (sizes.isNotEmpty()) {
-                    inventoryApps =
-                        inventoryApps.map { entry ->
-                            sizes[entry.packageName]?.let { size -> entry.copy(apkSizeBytes = size) } ?: entry
-                        }
-                    SessionManagementAppCache.updateSnapshot(
-                        AppInventorySnapshot(
-                            isLoading = false,
-                            apps = inventoryApps,
-                            shizukuInstalled = inventoryApps.any { it.packageName == "moe.shizuku.privileged.api" },
-                            errorMessage = inventoryError,
-                        ),
-                    )
-                }
-            } finally {
-                appSizesLoading = false
-            }
-        }
-    }
-
-    LaunchedEffect(helperReady, packageNameOnlyMode, appLoadToken, inventoryPackageNames) {
-        if (packageNameOnlyMode || inventoryApps.isEmpty()) {
-            return@LaunchedEffect
-        }
-        try {
-            val warmedPackages = warmCachedAppPresentations(context, inventoryAppList, packageNameOnlyMode)
-            if (warmedPackages.isNotEmpty()) {
-                Snapshot.withMutableSnapshot {
-                    warmedPackages.forEach { packageName ->
-                        appPresentationVersions[packageName] = (appPresentationVersions[packageName] ?: 0) + 1
-                    }
-                }
-            }
-            val readyHelperJar = helperJar
-            if (!helperReady || readyHelperJar == null) {
-                return@LaunchedEffect
-            }
-            var presentationUpdated = false
-            prefetchAppIconsWithHelper(context, inventoryAppList, readyHelperJar) { updatedPackages ->
-                presentationUpdated = presentationUpdated || updatedPackages.isNotEmpty()
-                Snapshot.withMutableSnapshot {
-                    updatedPackages.forEach { packageName ->
-                        appPresentationVersions[packageName] = (appPresentationVersions[packageName] ?: 0) + 1
-                    }
-                }
-            }
-            if (presentationUpdated) {
-                appPresentationGeneration += 1
-            }
-        } catch (error: Throwable) {
-            runCatching {
-                com.screen.remote.android.core.common.manager.LogManager.w(
-                    com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                    "helper 就绪后预取图标失败: ${error.message}",
-                )
-            }
-        }
-    }
-
     val projectionRequest =
-        remember(inventoryAppList, selectedFilters, sort, packageNameOnlyMode, normalizedSearchQuery, appPresentationGeneration) {
+        remember(inventoryAppList, selectedFilters, sort, packageNameOnlyMode, normalizedSearchQuery, appCacheRevision) {
             AppListProjectionRequest(
                 apps = inventoryAppList,
                 selectedFilters = selectedFilters,
                 sort = sort,
                 packageNameOnlyMode = packageNameOnlyMode,
                 normalizedSearchQuery = normalizedSearchQuery,
-                presentationGeneration = appPresentationGeneration,
+                presentationGeneration = appCacheRevision,
             )
         }
     val projection by produceState(
@@ -409,7 +248,7 @@ internal fun SessionManagementAppsPage(
         ) {
             item {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = SessionManagementCardShape,
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
                     shadowElevation = 1.dp,
@@ -438,9 +277,9 @@ internal fun SessionManagementAppsPage(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp),
+                                    .height(SessionManagementControlHeight),
                             singleLine = true,
-                            shape = RoundedCornerShape(18.dp),
+                            shape = SessionManagementControlShape,
                             trailingIcon = {
                                 IconButton(onClick = { submittedSearchQuery = searchQuery.trim() }) {
                                     Icon(
@@ -535,7 +374,7 @@ internal fun SessionManagementAppsPage(
                                 SessionManagementAppRow(
                                     entry = entry,
                                     packageNameOnlyMode = packageNameOnlyMode,
-                                    presentationVersion = appPresentationVersions[entry.packageName] ?: 0,
+                                    presentationVersion = appCacheRevision,
                                     onClick = { selectedAppForActions = entry },
                                 )
                             }
@@ -545,7 +384,7 @@ internal fun SessionManagementAppsPage(
             }
         }
 
-        if (inventoryRefreshing || appSizesLoading || !visibleAppsReady) {
+        if (inventoryRefreshing || !visibleAppsReady) {
             SessionManagementLoadingBar(modifier = Modifier.align(Alignment.TopCenter))
         }
 

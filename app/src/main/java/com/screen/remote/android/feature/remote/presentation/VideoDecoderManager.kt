@@ -52,17 +52,17 @@ class VideoDecoderManager(
             performanceCounters.reset()
             LogManager.d(
                 LogTags.VIDEO_DECODER,
-                "${RemoteTexts.REMOTE_PREPARE_VIDEO_DECODER.get()} (surface=${surface != null && surface.isValid})",
+                "${RemoteTexts.REMOTE_PREPARE_VIDEO_DECODER.english} (surface=${surface != null && surface.isValid})",
             )
 
             val resolution = connectionViewModel.getVideoResolution().value
             if (resolution == null) {
-                LogManager.e(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_CANNOT_GET_VIDEO_RESOLUTION.get())
+                LogManager.e(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_CANNOT_GET_VIDEO_RESOLUTION.english)
                 return
             }
             val (width, height) = resolution
 
-            LogManager.d(LogTags.VIDEO_DECODER, "${RemoteTexts.REMOTE_VIDEO_RESOLUTION.get()}: ${width}x$height")
+            LogManager.d(LogTags.VIDEO_DECODER, "${RemoteTexts.REMOTE_VIDEO_RESOLUTION.english}: ${width}x$height")
 
             val options = connectionViewModel.getCurrentSessionOptions()
             val videoCodec = stream.codec
@@ -71,7 +71,7 @@ class VideoDecoderManager(
             val decoderName = options?.getFinalVideoDecoder()?.ifBlank { null }
             LogManager.d(
                 LogTags.VIDEO_DECODER,
-                "视频 socket 协商格式: $videoCodec, 首选解码器: ${decoderName ?: "自动"}",
+                "Video socket negotiation format: $videoCodec, preferred decoder: ${decoderName ?: "auto"}",
             )
 
             videoDecoder =
@@ -100,7 +100,7 @@ class VideoDecoderManager(
                         if (w > 0 && h > 0) {
                             LogManager.d(
                                 LogTags.VIDEO_DECODER,
-                                "🎬 ${RemoteTexts.REMOTE_RECEIVED_VIDEO_SIZE.get()}: ${w}x$h, rotation=$rotation°",
+                                "🎬 ${RemoteTexts.REMOTE_RECEIVED_VIDEO_SIZE.english}: ${w}x$h, rotation=$rotation°",
                             )
 
                             val aspectRatio = w.toFloat() / h.toFloat()
@@ -108,13 +108,13 @@ class VideoDecoderManager(
                         } else {
                             LogManager.e(
                                 LogTags.VIDEO_DECODER,
-                                "${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.get()}: ${w}x$h",
+                                "${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.english}: ${w}x$h",
                             )
                         }
                     }
 
                     onConnectionLost = {
-                        LogManager.w(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_CONNECTION_LOST_CLEANUP.get())
+                        LogManager.w(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_CONNECTION_LOST_CLEANUP.english)
                         scope.launch(Dispatchers.Main) {
                             connectionViewModel.handleConnectionLost()
                         }
@@ -125,12 +125,12 @@ class VideoDecoderManager(
                 try {
                     videoDecoder?.start(stream, width, height)
                 } catch (_: kotlinx.coroutines.CancellationException) {
-                    LogManager.d(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_DECODER_CANCELLED_UI_CLOSED.get())
+                    LogManager.d(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_DECODER_CANCELLED_UI_CLOSED.english)
                     stopDecoder()
                 } catch (e: Exception) {
                     LogManager.e(
                         LogTags.VIDEO_DECODER,
-                        "${RemoteTexts.REMOTE_DECODER_START_FAILED.get()}: ${e.message}",
+                        "${RemoteTexts.REMOTE_DECODER_START_FAILED.english}: ${e.message}",
                         e,
                     )
                     stopDecoder()
@@ -139,7 +139,7 @@ class VideoDecoderManager(
 
             currentStream = stream
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "${RemoteTexts.REMOTE_INIT_DECODER_FAILED.get()}: ${e.message}", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "${RemoteTexts.REMOTE_INIT_DECODER_FAILED.english}: ${e.message}", e)
             videoDecoder = null
         }
     }
@@ -166,35 +166,35 @@ class VideoDecoderManager(
 
         when (lifecycleState) {
             Lifecycle.Event.ON_PAUSE -> {
-                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_SWITCH_TO_BACKGROUND.get())
+                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_SWITCH_TO_BACKGROUND.english)
                 if (usePersistentSurface) {
                     if (activeSurface != null && activeSurface.isValid) {
                         decoder.setSurface(activeSurface)
-                        LogManager.d(LogTags.REMOTE_DISPLAY, "全屏模式保持 Texture Surface，跳过 dummy Surface 切换")
+                        LogManager.d(LogTags.REMOTE_DISPLAY, "Full screen mode keeps Texture Surface, skips dummy Surface switching")
                     } else {
-                        LogManager.w(LogTags.REMOTE_DISPLAY, "全屏模式 Surface 不可用，暂不切换到 dummy Surface")
+                        LogManager.w(LogTags.REMOTE_DISPLAY, "Full screen mode Surface is not available, do not switch to dummy Surface yet")
                     }
                 } else {
                     decoder.setSurface(null)
-                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_DECODER_CONTINUE_RUNNING.get())
+                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_DECODER_CONTINUE_RUNNING.english)
                 }
             }
 
             Lifecycle.Event.ON_RESUME -> {
                 if (activeSurface != null && activeSurface.isValid) {
-                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_RESUME_TO_FOREGROUND.get())
+                    LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_RESUME_TO_FOREGROUND.english)
                     decoder.setSurface(activeSurface)
                     kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                         try {
                             connectionViewModel.wakeUpScreen()
                         } catch (e: Exception) {
-                            LogManager.w(LogTags.REMOTE_DISPLAY, "唤醒屏幕失败: ${e.message}")
+                            LogManager.w(LogTags.REMOTE_DISPLAY, "Failed to wake up screen: ${e.message}")
                         }
                     }
                 } else {
                     LogManager.w(
                         LogTags.REMOTE_DISPLAY,
-                        RemoteTexts.REMOTE_FOREGROUND_RESUME_INVALID_SURFACE.get(),
+                        RemoteTexts.REMOTE_FOREGROUND_RESUME_INVALID_SURFACE.english,
                     )
                 }
             }
@@ -245,11 +245,11 @@ fun rememberVideoDecoderManager(
     LaunchedEffect(videoStream) {
         LogManager.d(
             LogTags.VIDEO_DECODER,
-            "LaunchedEffect 触发: stream=${videoStream != null}, currentStream=${manager.currentStream != null}, videoDecoder=${manager.videoDecoder != null}",
+            "LaunchedEffect trigger: stream=${videoStream != null}, currentStream=${manager.currentStream != null}, videoDecoder=${manager.videoDecoder != null}",
         )
 
         if (videoStream != manager.currentStream && manager.videoDecoder != null) {
-            LogManager.i(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_VIDEO_STREAM_CHANGED.get())
+            LogManager.i(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_VIDEO_STREAM_CHANGED.english)
             manager.stopDecoder()
         }
 
@@ -276,13 +276,13 @@ fun rememberVideoDecoderManager(
     DisposableEffect(Unit) {
         onDispose {
             try {
-                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_START_CLEANUP_RESOURCES.get())
+                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_START_CLEANUP_RESOURCES.english)
                 manager.stopDecoder()
-                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_CLEANUP_COMPLETE.get())
+                LogManager.d(LogTags.REMOTE_DISPLAY, RemoteTexts.REMOTE_CLEANUP_COMPLETE.english)
             } catch (e: Exception) {
                 LogManager.e(
                     LogTags.REMOTE_DISPLAY,
-                    "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.get()}: ${e.message}",
+                    "${RemoteTexts.REMOTE_CLEANUP_EXCEPTION.english}: ${e.message}",
                     e,
                 )
             }

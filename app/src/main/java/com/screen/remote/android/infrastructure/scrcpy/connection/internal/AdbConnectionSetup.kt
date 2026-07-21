@@ -145,7 +145,7 @@ internal suspend fun ConnectionLifecycle.cleanupOldResources(
                 killProcess(previous.adbConnection, "scrcpy.*scid=$oldScidHex")
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
-                    "${RemoteTexts.SCRCPY_CLEANED_OLD_SERVER_PROCESS.get()} (scid=$oldScidHex)",
+                    "${RemoteTexts.SCRCPY_CLEANED_OLD_SERVER_PROCESS.english} (scid=$oldScidHex)",
                 )
             }.onFailure(::logOldResourceCleanupFailure)
         }
@@ -155,6 +155,6 @@ internal suspend fun ConnectionLifecycle.cleanupOldResources(
 private fun logOldResourceCleanupFailure(error: Throwable) {
     LogManager.w(
         LogTags.SCRCPY_CLIENT,
-        "${RemoteTexts.SCRCPY_CLEANUP_OLD_RESOURCES_FAILED.get()}: ${error.message}",
+        "${RemoteTexts.SCRCPY_CLEANUP_OLD_RESOURCES_FAILED.english}: ${error.message}",
     )
 }

@@ -51,7 +51,7 @@ class ScreenRemoteApp : Application() {
         adbConnectionManager = AdbConnectionManager.getInstance(this)
         MdnsSessionDiscoveryManager.initialize(this)
 
-        LogManager.i(LogTags.SCREEN_REMOTE_APP, "开始连接")
+        LogManager.i(LogTags.SCREEN_REMOTE_APP, "Start connecting")
     }
 
     companion object {

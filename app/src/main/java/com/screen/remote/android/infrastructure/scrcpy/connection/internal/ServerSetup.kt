@@ -149,9 +149,9 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
 
     val command = buildScrcpyCommand(scid, options)
 
-    LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
+    LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.english}: $command")
     val stream =
-        connection.openShellStream(command) ?: run {
+        connection.openStreamingShellStream(command) ?: run {
             sessionContext.emit(
                 SessionEvent.ServerFailed(
                     ServerIssue(
@@ -175,7 +175,7 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
             SessionEvent.ServerFailed(
                 ServerIssue(
                     kind = ServerIssueKind.StartupTimeout,
-                    detail = "scrcpy-server 启动超时或失败",
+                    detail = "scrcpy-server startup timed out or failed",
                 ),
             ),
         )

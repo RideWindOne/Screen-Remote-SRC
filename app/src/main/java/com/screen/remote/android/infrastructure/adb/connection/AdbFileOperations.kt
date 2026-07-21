@@ -36,11 +36,11 @@ object AdbFileOperations {
                 }
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_FILE_PUSH_SUCCESS.get()}: $localPath -> $remotePath",
+                    "${AdbTexts.ADB_FILE_PUSH_SUCCESS.english}: $localPath -> $remotePath",
                 )
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FILE_PUSH_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FILE_PUSH_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -62,11 +62,11 @@ object AdbFileOperations {
                 }
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_FILE_PULL_SUCCESS.get()}: $remotePath -> $localPath",
+                    "${AdbTexts.ADB_FILE_PULL_SUCCESS.english}: $remotePath -> $localPath",
                 )
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FILE_PULL_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FILE_PULL_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -85,10 +85,10 @@ object AdbFileOperations {
                     InstallResult.Success -> Unit
                     is InstallResult.Failure -> throw AdbOperationFailedException(operation.reason)
                 }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.get()}: $apkPath")
+                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.english}: $apkPath")
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -114,10 +114,10 @@ object AdbFileOperations {
                     InstallResult.Success -> Unit
                     is InstallResult.Failure -> throw AdbOperationFailedException(operation.reason)
                 }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.get()}: ${apkFiles.joinToString()}")
+                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.english}: ${apkFiles.joinToString()}")
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -137,10 +137,10 @@ object AdbFileOperations {
                         throw AdbOperationFailedException(operation.reason, operation.exitCode)
                     }
                 }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_SUCCESS.get()}: $packageName")
+                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_SUCCESS.english}: $packageName")
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -177,7 +177,7 @@ object AdbFileOperations {
 
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_PUSH_SCRCPY_SERVER_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_PUSH_SCRCPY_SERVER_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }

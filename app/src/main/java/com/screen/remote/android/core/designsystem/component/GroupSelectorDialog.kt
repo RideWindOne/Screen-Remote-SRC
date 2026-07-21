@@ -60,7 +60,7 @@ private fun GroupSelectorDialogActions(
         Text(
             text = CommonTexts.BUTTON_SAVE.get(),
             style = MaterialTheme.typography.bodyMedium,
-            color = AppColors.iOSBlue,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }

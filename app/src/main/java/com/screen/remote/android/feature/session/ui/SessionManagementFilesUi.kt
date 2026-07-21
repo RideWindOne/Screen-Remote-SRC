@@ -126,7 +126,7 @@ internal fun SessionManagementFileRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(SessionManagementCardShape)
                 .background(
                     if (selected) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)

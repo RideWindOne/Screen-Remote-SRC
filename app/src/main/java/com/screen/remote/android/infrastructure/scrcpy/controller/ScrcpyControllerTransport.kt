@@ -232,7 +232,7 @@ internal class ScrcpyControllerTransport(
     ) {
         touchTiming.configureGameMode(gameMode)
         if (senderJob?.isActive == true) {
-            dControl(LogTags.SCRCPY_CLIENT) { "控制消息发送线程已在运行: $deviceId" }
+            dControl(LogTags.SCRCPY_CLIENT) { "The control message sending thread is already running: $deviceId" }
             return
         }
 
@@ -242,7 +242,7 @@ internal class ScrcpyControllerTransport(
         senderJob =
             controlScope.launch {
                 configureSenderThreadPriority(gameMode)
-                dControl(LogTags.SDL) { "控制消息发送线程已启动" }
+                dControl(LogTags.SDL) { "The control message sending thread has been started" }
                 while (isActive) {
                     try {
                         drainReadyMessages()
@@ -263,11 +263,11 @@ internal class ScrcpyControllerTransport(
                         }
                     } catch (e: Exception) {
                         if (isActive) {
-                            LogManager.e(LogTags.SCRCPY_CLIENT, "控制消息发送异常: ${e.message}")
+                            LogManager.e(LogTags.SCRCPY_CLIENT, "Control message sending exception: ${e.message}")
                         }
                     }
                 }
-                dControl(LogTags.SDL) { "控制消息发送线程已停止: $deviceId" }
+                dControl(LogTags.SDL) { "The control message sending thread has stopped: $deviceId" }
             }
 
         receiverJob =
@@ -294,7 +294,7 @@ internal class ScrcpyControllerTransport(
         lastControlActivityAtMs = 0L
         keepaliveSentCount = 0
         touchTiming.clear()
-        dControl(LogTags.SDL) { "控制消息发送线程已取消" }
+        dControl(LogTags.SDL) { "The control message sending thread has been canceled" }
     }
 
     fun destroy() {
@@ -384,7 +384,7 @@ internal class ScrcpyControllerTransport(
             wakeSignal.trySend(Unit)
             Result.success(true)
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "消息入队失败: ${e.message}")
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Message enqueue failed: ${e.message}")
             Result.failure(e)
         }
 
@@ -453,7 +453,7 @@ internal class ScrcpyControllerTransport(
         val out = ensureOutput()
         if (out == null) {
             if (!isKeepalive) {
-                LogManager.w(LogTags.SCRCPY_CLIENT, "控制 Socket 未就绪，消息已丢弃")
+                LogManager.w(LogTags.SCRCPY_CLIENT, "Control Socket is not ready, message has been discarded")
             }
             return
         }
@@ -485,7 +485,7 @@ internal class ScrcpyControllerTransport(
             if (isKeepalive) {
                 keepaliveSentCount++
                 if (keepaliveSentCount == 1 || keepaliveSentCount % 10 == 0) {
-                    dControl(LogTags.SCRCPY_CLIENT) { "控制流保活已发送: count=$keepaliveSentCount, port=$localPort" }
+                    dControl(LogTags.SCRCPY_CLIENT) { "Control flow keepalive sent: count=$keepaliveSentCount, port=$localPort" }
                 }
             }
         } catch (e: CancellationException) {
@@ -557,12 +557,12 @@ internal class ScrcpyControllerTransport(
                 throw e
             } catch (e: EOFException) {
                 if (currentCoroutineContext().isActive && getControlSocket() === socket) {
-                    LogManager.w(LogTags.SCRCPY_CLIENT, "控制消息接收流已关闭: $deviceId")
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "The control message receiving stream is closed: $deviceId")
                     clearControlSocket()
                 }
             } catch (e: Exception) {
                 if (currentCoroutineContext().isActive && getControlSocket() === socket) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "控制消息接收失败: ${e.message}")
+                    LogManager.e(LogTags.SCRCPY_CLIENT, "Control message reception failed: ${e.message}")
                     issueTracker.record("control.read", e.message ?: "Unknown control socket read error")
                     clearControlSocket()
                 }
@@ -579,7 +579,7 @@ internal class ScrcpyControllerTransport(
             }
         runCatching { Process.setThreadPriority(priority) }
             .onFailure { error ->
-                LogManager.w(LogTags.SCRCPY_CLIENT, "设置控制流线程优先级失败: ${error.message}")
+                LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to set control flow thread priority: ${error.message}")
             }
     }
 

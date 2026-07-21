@@ -75,7 +75,7 @@ internal object BackupManager {
 
             "导出成功"
         } catch (e: Exception) {
-            LogManager.e(LogTags.BACKUP_RESTORE, "导出备份失败: uri=$uri", e)
+            LogManager.e(LogTags.BACKUP_RESTORE, "Failed to export backup: uri=$uri", e)
             throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
         }
 
@@ -100,7 +100,7 @@ internal object BackupManager {
 
             "导入成功"
         } catch (e: Exception) {
-            LogManager.e(LogTags.BACKUP_RESTORE, "导入备份失败: uri=$uri", e)
+            LogManager.e(LogTags.BACKUP_RESTORE, "Failed to import backup: uri=$uri", e)
             throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
         }
 

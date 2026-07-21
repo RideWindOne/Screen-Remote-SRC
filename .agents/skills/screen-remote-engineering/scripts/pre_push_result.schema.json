@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Structured result for the Screen-Remote subrepository pre-push hook.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "commit_subject",
+    "commit_body",
+    "wiki_action",
+    "wiki_pages",
+    "wiki_reason",
+    "change_summary"
+  ],
+  "properties": {
+    "commit_subject": {
+      "type": "string",
+      "description": "An imperative English commit subject.",
+      "minLength": 1,
+      "maxLength": 72
+    },
+    "commit_body": {
+      "type": "string",
+      "description": "A concrete English commit body; use bullet points when useful."
+    },
+    "wiki_action": {
+      "type": "string",
+      "enum": ["updated", "no_update", "blocked"]
+    },
+    "wiki_pages": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "wiki_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

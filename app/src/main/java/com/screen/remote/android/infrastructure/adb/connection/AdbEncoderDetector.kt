@@ -33,7 +33,7 @@ object AdbEncoderDetector {
     ): Result<EncoderDetectionResult> =
         withContext(Dispatchers.IO) {
             try {
-                LogManager.d(LogTags.ADB_CONNECTION, "检测远程编码器...")
+                LogManager.d(LogTags.ADB_CONNECTION, "Detect remote encoder...")
 
                 val launcher =
                     AdbEncoderDetectionLauncher(
@@ -46,14 +46,14 @@ object AdbEncoderDetector {
 
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "检测到编码器: 视频=${result.videoEncoders.size}, 音频=${result.audioEncoders.size}",
+                    "Encoder detected: video=${result.videoEncoders.size}, audio=${result.audioEncoders.size}",
                 )
 
                 Result.success(result)
             } catch (e: Exception) {
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "检测编码器失败: ${e.javaClass.simpleName} - ${e.message ?: "未知错误"}",
+                    "Failed to detect encoder: ${e.javaClass.simpleName} - ${e.message ?: "unknown error"}",
                     e,
                 )
                 Result.failure(e)
@@ -69,11 +69,11 @@ internal class AdbEncoderDetectionLauncher(
     suspend fun loadEncoderOutput(skipPush: Boolean): String {
         ensureScrcpyServer(skipPush = skipPush)
         val command = buildEncoderDetectionCommand()
-        LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.get()}: $command")
+        LogManager.d(LogTags.ADB_CONNECTION, "${SessionTexts.LABEL_EXECUTE_COMMAND.english}: $command")
 
         val shellStream = openShellStream(command)
         if (shellStream == null) {
-            LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_CANNOT_OPEN_SHELL_STREAM.get())
+            LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_CANNOT_OPEN_SHELL_STREAM.english)
             throw Exception(AdbTexts.ADB_CANNOT_OPEN_SHELL_STREAM.get())
         }
 
@@ -87,7 +87,7 @@ internal class AdbEncoderDetectionLauncher(
 
         val pushResult = AdbFileOperations.pushScrcpyServer(dadb, context, AppConstants.SCRCPY_SERVER_PATH)
         if (pushResult.isFailure) {
-            LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_PUSH_SERVER_FAILED_CANNOT_DETECT.get())
+            LogManager.e(LogTags.ADB_CONNECTION, AdbTexts.ADB_PUSH_SERVER_FAILED_CANNOT_DETECT.english)
             throw pushResult.exceptionOrNull() ?: Exception(AdbTexts.ADB_PUSH_FAILED.get())
         }
     }
@@ -147,7 +147,7 @@ internal object AdbEncoderShellStreamReader {
                         dShell(LogTags.ADB_CONNECTION) { "encoder shell packet type=exit exitCode=$exitCode" }
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
-                            "${AdbTexts.ADB_SHELL_STREAM_EXIT.get()}, exitCode: $exitCode",
+                            "${AdbTexts.ADB_SHELL_STREAM_EXIT.english}, exitCode: $exitCode",
                         )
                         if (exitCode != 0) {
                             throw Exception(
@@ -168,7 +168,7 @@ internal object AdbEncoderShellStreamReader {
             }
             LogManager.w(
                 LogTags.ADB_CONNECTION,
-                "${AdbTexts.ADB_READ_OUTPUT_ERROR.get()}: ${e.javaClass.simpleName} - ${e.message ?: "未知错误"}",
+                "${AdbTexts.ADB_READ_OUTPUT_ERROR.english}: ${e.javaClass.simpleName} - ${e.message ?: "unknown error"}",
                 e,
             )
             throw e
@@ -176,7 +176,7 @@ internal object AdbEncoderShellStreamReader {
             try {
                 shellStream.close()
             } catch (e: Exception) {
-                LogManager.w(LogTags.ADB_CONNECTION, "关闭 shell stream 失败: ${e.message}")
+                LogManager.w(LogTags.ADB_CONNECTION, "Failed to close shell stream: ${e.message}")
             }
         }
 
@@ -191,7 +191,7 @@ internal object AdbEncoderShellStreamReader {
         if (!hasReceivedData) {
             LogManager.w(
                 LogTags.ADB_CONNECTION,
-                "${AdbTexts.ADB_READ_OUTPUT_ERROR.get()}: scrcpy-server 立即退出，未输出任何内容",
+                "${AdbTexts.ADB_READ_OUTPUT_ERROR.english}: scrcpy-server exited immediately without outputting anything.",
             )
             throw Exception(
                 "scrcpy-server 启动失败：进程立即退出，未输出任何内容。可能原因：\n" +
@@ -209,7 +209,7 @@ internal object AdbEncoderShellStreamReader {
             } else {
                 "scrcpy-server 启动失败，未收到任何输出"
             }
-        LogManager.w(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_READ_OUTPUT_ERROR.get()}: $errorMessage")
+        LogManager.w(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_READ_OUTPUT_ERROR.english}: $errorMessage")
         throw Exception(errorMessage)
     }
 

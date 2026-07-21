@@ -58,7 +58,7 @@ fun VideoTextureView(
                         ) {
                             LogManager.d(
                                 LogTags.REMOTE_DISPLAY,
-                                "TextureView ${RemoteTexts.REMOTE_SURFACE_READY.get()}: ${width}x$height",
+                                "TextureView ${RemoteTexts.REMOTE_SURFACE_READY.english}: ${width}x$height",
                             )
                             onSurfaceTextureAvailable(surface)
                         }
@@ -77,7 +77,7 @@ fun VideoTextureView(
                         override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
                             LogManager.d(
                                 LogTags.REMOTE_DISPLAY,
-                                "TextureView ${RemoteTexts.REMOTE_SURFACE_DESTROYED.get()}",
+                                "TextureView ${RemoteTexts.REMOTE_SURFACE_DESTROYED.english}",
                             )
                             onSurfaceTextureDestroyed()
                             return true

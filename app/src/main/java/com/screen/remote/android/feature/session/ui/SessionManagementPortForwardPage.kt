@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -56,7 +55,7 @@ import com.screen.remote.android.feature.session.ui.component.LabeledTextField
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val PortForwardRuleCardShape = RoundedCornerShape(8.dp)
+private val PortForwardRuleCardShape = SessionManagementCardShape
 
 private class EditablePortForwardRule(rule: TcpPortForwardRule) {
     var targetHost by mutableStateOf(rule.targetHost)
@@ -365,7 +364,7 @@ private fun PortForwardOverviewCard(
     onStop: () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -466,14 +465,14 @@ private fun PortForwardRuleButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = SessionManagementControlShape
     Surface(
         modifier = modifier.clip(shape).clickable(onClick = onClick),
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 10.dp),
+            modifier = Modifier.fillMaxWidth().height(SessionManagementControlHeight).padding(horizontal = 10.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
@@ -500,9 +499,9 @@ private fun CompactPortForwardAction(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(38.dp),
+        modifier = modifier.height(SessionManagementControlHeight),
         enabled = enabled,
-        shape = RoundedCornerShape(10.dp),
+        shape = SessionManagementControlShape,
         color = containerColor,
         contentColor = contentColor,
     ) {
@@ -526,7 +525,7 @@ private fun PortForwardLogCard(
 ) {
     val terminalPalette = sessionManagementTerminalPalette()
     Surface(
-        shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -556,7 +555,7 @@ private fun PortForwardLogCard(
                         .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
                         .fillMaxWidth()
                         .heightIn(min = 210.dp, max = 340.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = SessionManagementCardShape,
                 color = terminalPalette.background,
             ) {
                 val scrollState = rememberScrollState()

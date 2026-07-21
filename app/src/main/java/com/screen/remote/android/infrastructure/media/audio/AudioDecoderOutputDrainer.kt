@@ -38,7 +38,7 @@ internal class AudioDecoderOutputDrainer(
                 when {
                     outputIndex >= 0 -> {
                         if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "跳过配置缓冲区" }
+                            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Skip configuration buffer" }
                             codec.releaseOutputBuffer(outputIndex, false)
                             outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
                             continue
@@ -73,7 +73,7 @@ internal class AudioDecoderOutputDrainer(
                         } else {
                             LogManager.w(
                                 LogTags.AUDIO_DECODER,
-                                "输出缓冲区为空或大小为0: buffer=$outputBuffer, size=${bufferInfo.size}",
+                                "The output buffer is empty or has size 0: buffer=$outputBuffer, size=${bufferInfo.size}",
                             )
                         }
 
@@ -105,7 +105,7 @@ internal class AudioDecoderOutputDrainer(
                 }
 
                 if (loopCount > 100) {
-                    LogManager.w(LogTags.AUDIO_DECODER, "drainOutputBuffers 循环过多，可能有问题")
+                    LogManager.w(LogTags.AUDIO_DECODER, "drainOutputBuffers loops too much, there may be a problem")
                     break
                 }
             }
@@ -119,7 +119,7 @@ internal class AudioDecoderOutputDrainer(
             }
             throw e
         } catch (e: Exception) {
-            LogManager.e(LogTags.AUDIO_DECODER, "输出数据异常: ${e.message}", e)
+            LogManager.e(LogTags.AUDIO_DECODER, "Output data exception: ${e.message}", e)
             if (isStopped()) return 0
             throw e
         }

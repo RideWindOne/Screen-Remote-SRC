@@ -53,7 +53,7 @@ fun VideoSurfaceView(
                 holder.addCallback(
                     object : SurfaceHolder.Callback {
                         override fun surfaceCreated(holder: SurfaceHolder) {
-                            // LogManager.d(LogTags.REMOTE_DISPLAY, "${RemoteTexts.REMOTE_SURFACE_READY.get()} (created)",)
+                            // LogManager.d(LogTags.REMOTE_DISPLAY, "${RemoteTexts.REMOTE_SURFACE_READY.english} (created)",)
                             onSurfaceCreated(holder)
                         }
 
@@ -66,7 +66,7 @@ fun VideoSurfaceView(
                             if (width > 0 && height > 0) {
                                 LogManager.d(
                                     LogTags.REMOTE_DISPLAY,
-                                    "${RemoteTexts.REMOTE_SURFACE_READY.get()}: ${width}x$height",
+                                    "${RemoteTexts.REMOTE_SURFACE_READY.english}: ${width}x$height",
                                 )
                                 onSurfaceChanged(holder, width, height)
                             }
@@ -75,7 +75,7 @@ fun VideoSurfaceView(
                         override fun surfaceDestroyed(holder: SurfaceHolder) {
                             LogManager.d(
                                 LogTags.REMOTE_DISPLAY,
-                                RemoteTexts.REMOTE_SURFACE_DESTROYED.get(),
+                                RemoteTexts.REMOTE_SURFACE_DESTROYED.english,
                             )
                             onSurfaceDestroyed(holder)
                         }
@@ -97,7 +97,7 @@ fun VideoSurfaceView(
             if (surface != null && surface.isValid) {
                 LogManager.d(
                     LogTags.REMOTE_DISPLAY,
-                    "update: ${RemoteTexts.REMOTE_SURFACE_RESTORED.get()}",
+                    "update: ${RemoteTexts.REMOTE_SURFACE_RESTORED.english}",
                 )
                 // 立即通知外部 Surface 已恢复
                 val rect = holder.surfaceFrame
@@ -105,7 +105,7 @@ fun VideoSurfaceView(
             } else {
                 LogManager.w(
                     LogTags.REMOTE_DISPLAY,
-                    "update: ${RemoteTexts.REMOTE_SURFACE_UNAVAILABLE.get()}",
+                    "update: ${RemoteTexts.REMOTE_SURFACE_UNAVAILABLE.english}",
                 )
             }
         },

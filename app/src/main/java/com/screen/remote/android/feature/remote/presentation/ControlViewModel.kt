@@ -124,7 +124,7 @@ class ControlViewModel(
 
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "发送滑动手势失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "Failed to send swipe gesture: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -162,7 +162,7 @@ class ControlViewModel(
                     command,
                 )
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "执行 Shell 命令失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "Failed to execute Shell command: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -235,7 +235,7 @@ class ControlViewModel(
                 if (systemResult.isSuccess) {
                     LogManager.d(
                         LogTags.CONTROL_VM,
-                        "已触发系统截图: key=$systemScreenshotKeyName, sdk=${sdkInt ?: "unknown"}",
+                        "Triggered system screenshot: key=$systemScreenshotKeyName, sdk=${sdkInt ?:"unknown"}",
                     )
                     return@withContext Result.success(systemScreenshotKeyName)
                 }
@@ -245,7 +245,7 @@ class ControlViewModel(
                     ),
                 )
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "目标设备截图失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "Target device screenshot failed: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -296,7 +296,7 @@ class ControlViewModel(
                     }
                 }
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "发送文件到目标设备失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "Failed to send file to target device: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -359,11 +359,11 @@ class ControlViewModel(
                     }
                 LogManager.d(
                     LogTags.CONTROL_VM,
-                    "布局抓取完成: nodes=${snapshot.nodes.size}, viewport=${snapshot.viewportBounds.width}x${snapshot.viewportBounds.height}",
+                    "Layout capture completed: nodes=${snapshot.nodes.size}, viewport=${snapshot.viewportBounds.width}x${snapshot.viewportBounds.height}",
                 )
                 Result.success(snapshot)
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "抓取当前页面布局失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "Failed to capture current page layout: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -397,7 +397,7 @@ class ControlViewModel(
 
                 Result.success(isVisible)
             } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "检查目标设备键盘可见性失败: ${e.message}", e)
+                LogManager.e(LogTags.CONTROL_VM, "Failed to check target device keyboard visibility: ${e.message}", e)
                 Result.failure(e)
             }
         }

@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.common.LogTags
@@ -76,7 +75,7 @@ fun LanguageScreen(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 LanguageOption(
@@ -91,7 +90,7 @@ fun LanguageScreen(
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = IosDesignTokens.standardHorizontalPadding),
                     thickness = 0.5.dp,
-                    color = AppColors.divider.copy(alpha = IosDesignTokens.dividerAlpha),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = IosDesignTokens.dividerAlpha),
                 )
 
                 LanguageOption(
@@ -133,7 +132,7 @@ private fun LanguageOption(
             Icon(
                 imageVector = Icons.Filled.Check,
                 contentDescription = "Selected",
-                tint = AppColors.iOSBlue,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
             )
         }

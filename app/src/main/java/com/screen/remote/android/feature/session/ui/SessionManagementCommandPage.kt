@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -42,6 +43,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,9 +57,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
@@ -72,16 +85,45 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-internal const val SESSION_MANAGEMENT_COMMAND_HISTORY_MAX_SIZE = 12
-
 private const val SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT = 16_000
 private const val SESSION_MANAGEMENT_SHELL_KEEPALIVE_INTERVAL_MS = 20_000L
 private const val SESSION_MANAGEMENT_SHELL_RECONNECT_DELAY_MS = 1_200L
 private const val SESSION_MANAGEMENT_SHELL_MAX_RECONNECT_ATTEMPTS = 3
 private const val SESSION_MANAGEMENT_TERMINAL_MIN_TEXT_SCALE = 0.7f
 private const val SESSION_MANAGEMENT_TERMINAL_MAX_TEXT_SCALE = 2.2f
+private const val SESSION_MANAGEMENT_SHELL_INTERRUPT = "\u0003"
+private val SESSION_MANAGEMENT_UNSUPPORTED_INTERACTIVE_COMMANDS =
+    setOf("vi", "vim", "view", "ex", "vimdiff", "nvim", "nano", "emacs", "less", "more", "man", "watch", "screen", "tmux")
+private val SESSION_MANAGEMENT_SHELL_SEGMENT_PATTERN = Regex("""&&|\|\||[|;]""")
+private val SESSION_MANAGEMENT_SHELL_ASSIGNMENT_PATTERN = Regex("""[A-Za-z_][A-Za-z0-9_]*=.*""")
 private val SESSION_MANAGEMENT_ANSI_PATTERN =
     Regex("""\u001B(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\)|[PX^_].*?\u001B\\|[@-Z\\-_])""")
+private val SESSION_MANAGEMENT_TERMINAL_ERROR_PATTERN =
+    Regex(
+        """\b(error|failed|failure|fatal|exception|denied|not found|cannot|can't|invalid|unable|timed? out|no such file|permission denied)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+private val SESSION_MANAGEMENT_TERMINAL_WARNING_PATTERN =
+    Regex("""\b(warn(?:ing)?|deprecated|retry|retrying|reconnect(?:ing)?)\b""", RegexOption.IGNORE_CASE)
+private val SESSION_MANAGEMENT_TERMINAL_SUCCESS_PATTERN =
+    Regex("""\b(connected|success|succeeded|complete|completed|ready|enabled|ok|done)\b""", RegexOption.IGNORE_CASE)
+private val SESSION_MANAGEMENT_GREP_COMMAND_PATTERN = Regex("""(?:^|[|;&])\s*(?:grep|egrep|fgrep|rg)\b""")
+private val SESSION_MANAGEMENT_SHELL_TOKEN_PATTERN = Regex("""'(?:[^']*)'|\"(?:[^\"\\]|\\.)*\"|\S+""")
+private val SESSION_MANAGEMENT_TERMINAL_TIMESTAMP_PATTERN =
+    Regex("""\b(?:\d{4}-\d{2}-\d{2}[ T])?\d{2}:\d{2}:\d{2}(?:\.\d+)?\b""")
+private val SESSION_MANAGEMENT_TERMINAL_ENDPOINT_PATTERN =
+    Regex("""\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b|\[[0-9A-Fa-f:]+](?::\d{1,5})?""")
+private val SESSION_MANAGEMENT_TERMINAL_PATH_PATTERN =
+    Regex("""(?<![\w.])/(?:[^\s/:]+/)*[^\s]*""")
+private val SESSION_MANAGEMENT_TERMINAL_KEY_PATTERN =
+    Regex("""\b[A-Za-z_][A-Za-z0-9_.-]*(?=\s*[:=])""")
+private val SESSION_MANAGEMENT_TERMINAL_NUMBER_PATTERN =
+    Regex("""(?<![\w.])[-+]?(?:0x[0-9A-Fa-f]+|\d+(?:\.\d+)?)(?:\s?(?:%|ms|s|KB|MB|GB|KiB|MiB|GiB|GHz|MHz|DPI))?\b""")
+private val SESSION_MANAGEMENT_TERMINAL_BOOLEAN_PATTERN =
+    Regex("""\b(true|false|on|off|yes|no|enabled|disabled|running|stopped)\b""", RegexOption.IGNORE_CASE)
+private val SESSION_MANAGEMENT_TERMINAL_QUOTED_STRING_PATTERN =
+    Regex("""'(?:[^']*)'|\"(?:[^\"\\]|\\.)*\"""")
+private val SESSION_MANAGEMENT_TERMINAL_FLAG_PATTERN = Regex("""(?<!\S)--?[A-Za-z0-9][A-Za-z0-9_-]*""")
 
 private val SessionManagementCommandTextColor
     @Composable
@@ -104,6 +146,25 @@ data class ManagementCommandRecord(
     val durationMs: Long,
 )
 
+internal enum class TerminalOutputTone {
+    PROMPT,
+    NORMAL,
+    SUCCESS,
+    WARNING,
+    ERROR,
+}
+
+internal data class TerminalTextRange(
+    val start: Int,
+    val endExclusive: Int,
+)
+
+internal data class TerminalOutputLine(
+    val text: String,
+    val tone: TerminalOutputTone,
+    val grepMatches: List<TerminalTextRange> = emptyList(),
+)
+
 private data class ManagementCommandPreset(
     val title: String,
     val description: String,
@@ -124,16 +185,17 @@ internal fun SessionManagementCommandPage(
     showPresetDialog: Boolean,
     onShowPresetDialogChange: (Boolean) -> Unit,
 ) {
-    var enteredCommands by remember(terminalSession) { mutableStateOf<List<String>>(emptyList()) }
     var historyCursor by remember(terminalSession) { mutableStateOf<Int?>(null) }
     var inputBeforeHistory by remember(terminalSession) { mutableStateOf("") }
-    val availableHistory = remember(enteredCommands, history) { (enteredCommands + history.map { it.command }).distinct() }
+    val availableHistory =
+        remember(terminalSession.commandHistory, history) {
+            (terminalSession.commandHistory + history.map { it.command }).distinct()
+        }
 
     fun sendCommand(command: String) {
         val normalized = command.trim()
         if (normalized.isBlank()) return
         terminalSession.sendLine(normalized)
-        enteredCommands = (listOf(normalized) + enteredCommands).take(SESSION_MANAGEMENT_COMMAND_HISTORY_MAX_SIZE)
         historyCursor = null
         inputBeforeHistory = ""
         onCommandInputChange("")
@@ -160,6 +222,7 @@ internal fun SessionManagementCommandPage(
         onExecuteCommand = ::sendCommand,
         historyPreviousEnabled = availableHistory.isNotEmpty() && (historyCursor == null || historyCursor!! < availableHistory.lastIndex),
         historyNextEnabled = historyCursor != null,
+        onInterrupt = terminalSession::interrupt,
         onHistoryPrevious = {
             if (historyCursor == null) inputBeforeHistory = commandInput
             val nextIndex = ((historyCursor ?: -1) + 1).coerceAtMost(availableHistory.lastIndex)
@@ -204,6 +267,7 @@ private fun SessionManagementTerminalDisplay(
     onExecuteCommand: (String) -> Unit,
     historyPreviousEnabled: Boolean,
     historyNextEnabled: Boolean,
+    onInterrupt: () -> Unit,
     onHistoryPrevious: () -> Unit,
     onHistoryNext: () -> Unit,
     onClear: () -> Unit,
@@ -215,14 +279,14 @@ private fun SessionManagementTerminalDisplay(
     val inputFontSize = SessionManagementTerminalTextTokens.inputFontSize * textScale
     val inputLineHeight = SessionManagementTerminalTextTokens.inputLineHeight * textScale
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         modifier = modifier,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = SessionManagementCardShape,
             color = terminalPalette.background,
             modifier =
                 Modifier
@@ -260,8 +324,10 @@ private fun SessionManagementTerminalDisplay(
                 )
 
                 SessionManagementTerminalHistoryActions(
+                    interruptEnabled = inputEnabled,
                     previousEnabled = historyPreviousEnabled,
                     nextEnabled = historyNextEnabled,
+                    onInterrupt = onInterrupt,
                     onPrevious = onHistoryPrevious,
                     onNext = onHistoryNext,
                 )
@@ -273,6 +339,9 @@ private fun SessionManagementTerminalDisplay(
                     lineHeight = inputLineHeight,
                     onCommandInputChange = onCommandInputChange,
                     onExecuteCommand = onExecuteCommand,
+                    onInterrupt = onInterrupt,
+                    onHistoryPrevious = onHistoryPrevious,
+                    onHistoryNext = onHistoryNext,
                 )
             }
         }
@@ -299,8 +368,10 @@ private fun Modifier.terminalPinchZoom(onZoom: (Float) -> Unit): Modifier =
 
 @Composable
 private fun SessionManagementTerminalHistoryActions(
+    interruptEnabled: Boolean,
     previousEnabled: Boolean,
     nextEnabled: Boolean,
+    onInterrupt: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
 ) {
@@ -309,6 +380,25 @@ private fun SessionManagementTerminalHistoryActions(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        TextButton(
+            onClick = onInterrupt,
+            enabled = interruptEnabled,
+            modifier = Modifier.heightIn(min = 30.dp),
+        ) {
+            Text(
+                text = "Ctrl+C",
+                color =
+                    if (interruptEnabled) {
+                        SessionManagementCommandErrorColor
+                    } else {
+                        SessionManagementCommandHintColor.copy(alpha = 0.32f)
+                    },
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = SessionManagementTerminalTextTokens.monospace,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
         IconButton(
             onClick = onPrevious,
             enabled = previousEnabled,
@@ -346,6 +436,7 @@ private fun SessionManagementTerminalContent(
     onClear: () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val terminalPalette = sessionManagementTerminalPalette()
     val displayLines =
         rememberTerminalOutputLines(
             output = output,
@@ -376,14 +467,14 @@ private fun SessionManagementTerminalContent(
                     key = { index, _ -> index },
                 ) { _, line ->
                     Text(
-                        text = line,
+                        text = terminalLineText(line, terminalPalette),
                         style =
                             MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = SessionManagementTerminalTextTokens.monospace,
                                 fontSize = fontSize,
                                 lineHeight = lineHeight,
                             ),
-                        color = SessionManagementCommandTextColor,
+                        color = terminalLineColor(line.tone, terminalPalette),
                     )
                 }
             }
@@ -413,7 +504,7 @@ private fun SessionManagementTerminalContent(
 private fun rememberTerminalOutputLines(
     output: String,
     isConnected: Boolean,
-): List<String> =
+): List<TerminalOutputLine> =
     androidx.compose.runtime.remember(output, isConnected) {
         val displayOutput =
             output.ifBlank {
@@ -423,7 +514,211 @@ private fun rememberTerminalOutputLines(
                     ManagementTexts.Commands.OPENING_INTERACTIVE_SHELL.get()
                 }
             }
-        displayOutput.lineSequence().toList()
+        parseTerminalOutputLines(displayOutput)
+    }
+
+internal fun parseTerminalOutputLines(output: String): List<TerminalOutputLine> {
+    var activeGrepPattern: Regex? = null
+    return output.lineSequence().map { line ->
+        if (line.startsWith("$ ")) {
+            activeGrepPattern = extractGrepPattern(line.removePrefix("$ "))
+            TerminalOutputLine(
+                text = line,
+                tone = TerminalOutputTone.PROMPT,
+            )
+        } else {
+            val tone = terminalOutputTone(line)
+            val matches =
+                activeGrepPattern
+                    ?.findAll(line)
+                    ?.map { match -> TerminalTextRange(match.range.first, match.range.last + 1) }
+                    ?.filter { range -> range.endExclusive > range.start }
+                    ?.toList()
+                    .orEmpty()
+            TerminalOutputLine(
+                text = line,
+                tone = tone,
+                grepMatches = matches,
+            )
+        }
+    }.toList()
+}
+
+private fun terminalOutputTone(line: String): TerminalOutputTone =
+    when {
+        SESSION_MANAGEMENT_TERMINAL_ERROR_PATTERN.containsMatchIn(line) -> TerminalOutputTone.ERROR
+        SESSION_MANAGEMENT_TERMINAL_WARNING_PATTERN.containsMatchIn(line) -> TerminalOutputTone.WARNING
+        SESSION_MANAGEMENT_TERMINAL_SUCCESS_PATTERN.containsMatchIn(line) -> TerminalOutputTone.SUCCESS
+        else -> TerminalOutputTone.NORMAL
+    }
+
+internal fun extractGrepPattern(command: String): Regex? {
+    val grepStart = SESSION_MANAGEMENT_GREP_COMMAND_PATTERN.findAll(command).lastOrNull() ?: return null
+    val arguments = command.substring(grepStart.range.last + 1).trim()
+    val tokens = SESSION_MANAGEMENT_SHELL_TOKEN_PATTERN.findAll(arguments).map { it.value }.toList()
+    var ignoreCase = false
+    var pattern: String? = null
+    var index = 0
+
+    while (index < tokens.size) {
+        val token = tokens[index]
+        when {
+            token == "-e" || token == "--regexp" -> {
+                pattern = tokens.getOrNull(index + 1)?.unquoteShellToken()
+                break
+            }
+
+            token.startsWith("--regexp=") -> {
+                pattern = token.substringAfter('=').unquoteShellToken()
+                break
+            }
+
+            token.startsWith("-") -> {
+                if ('i' in token) ignoreCase = true
+            }
+
+            else -> {
+                pattern = token.unquoteShellToken()
+                break
+            }
+        }
+        index += 1
+    }
+
+    val normalizedPattern = pattern?.takeIf(String::isNotBlank) ?: return null
+    val options = if (ignoreCase) setOf(RegexOption.IGNORE_CASE) else emptySet()
+    return runCatching { Regex(normalizedPattern, options) }
+        .getOrElse { Regex(Regex.escape(normalizedPattern), options) }
+}
+
+internal fun unsupportedInteractiveCommand(command: String): String? =
+    unsupportedInteractiveCommand(command, depth = 0)
+
+private fun unsupportedInteractiveCommand(
+    command: String,
+    depth: Int,
+): String? {
+    if (depth > 2) return null
+    return SESSION_MANAGEMENT_SHELL_SEGMENT_PATTERN.split(command).firstNotNullOfOrNull { segment ->
+        val tokens =
+            SESSION_MANAGEMENT_SHELL_TOKEN_PATTERN
+                .findAll(segment)
+                .map { it.value.unquoteShellToken() }
+                .toList()
+        var index = 0
+
+        while (index < tokens.size && SESSION_MANAGEMENT_SHELL_ASSIGNMENT_PATTERN.matches(tokens[index])) index += 1
+        if (tokens.getOrNull(index) == "env") {
+            index += 1
+            while (
+                index < tokens.size &&
+                (tokens[index].startsWith("-") || SESSION_MANAGEMENT_SHELL_ASSIGNMENT_PATTERN.matches(tokens[index]))
+            ) {
+                index += 1
+            }
+        }
+        if (tokens.getOrNull(index) == "command") index += 1
+        if (tokens.getOrNull(index) in setOf("busybox", "toybox")) index += 1
+
+        val executable = tokens.getOrNull(index)?.substringAfterLast('/')?.lowercase() ?: return@firstNotNullOfOrNull null
+        when {
+            executable in SESSION_MANAGEMENT_UNSUPPORTED_INTERACTIVE_COMMANDS -> executable
+            executable in setOf("sh", "bash", "zsh") && tokens.getOrNull(index + 1) == "-c" ->
+                tokens.getOrNull(index + 2)?.let { nested -> unsupportedInteractiveCommand(nested, depth + 1) }
+            else -> null
+        }
+    }
+}
+
+private fun String.unquoteShellToken(): String =
+    if (length >= 2 && ((first() == '\'' && last() == '\'') || (first() == '"' && last() == '"'))) {
+        substring(1, lastIndex)
+    } else {
+        this
+    }
+
+private fun terminalLineColor(
+    tone: TerminalOutputTone,
+    palette: SessionManagementTerminalPalette,
+) =
+    when (tone) {
+        TerminalOutputTone.SUCCESS -> palette.success
+        TerminalOutputTone.WARNING -> palette.warning
+        TerminalOutputTone.ERROR -> palette.error
+        else -> palette.text
+    }
+
+private fun terminalLineText(
+    line: TerminalOutputLine,
+    palette: SessionManagementTerminalPalette,
+): AnnotatedString =
+    buildAnnotatedString {
+        append(line.text)
+        if (line.tone == TerminalOutputTone.PROMPT && line.text.startsWith("$")) {
+            addStyle(
+                SpanStyle(color = palette.accent, fontWeight = FontWeight.Bold),
+                start = 0,
+                end = 1,
+            )
+        }
+        if (line.tone == TerminalOutputTone.NORMAL || line.tone == TerminalOutputTone.PROMPT) {
+            SESSION_MANAGEMENT_TERMINAL_TIMESTAMP_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(SpanStyle(color = palette.hint), match.range.first, match.range.last + 1)
+            }
+            SESSION_MANAGEMENT_TERMINAL_KEY_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(
+                    SpanStyle(color = palette.accent, fontWeight = FontWeight.Medium),
+                    match.range.first,
+                    match.range.last + 1,
+                )
+            }
+            SESSION_MANAGEMENT_TERMINAL_NUMBER_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(SpanStyle(color = palette.number), match.range.first, match.range.last + 1)
+            }
+            SESSION_MANAGEMENT_TERMINAL_PATH_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(SpanStyle(color = palette.path), match.range.first, match.range.last + 1)
+            }
+            SESSION_MANAGEMENT_TERMINAL_ENDPOINT_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(
+                    SpanStyle(color = palette.match, fontWeight = FontWeight.Medium),
+                    match.range.first,
+                    match.range.last + 1,
+                )
+            }
+            SESSION_MANAGEMENT_TERMINAL_QUOTED_STRING_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(SpanStyle(color = palette.string), match.range.first, match.range.last + 1)
+            }
+            SESSION_MANAGEMENT_TERMINAL_FLAG_PATTERN.findAll(line.text).forEach { match ->
+                addStyle(SpanStyle(color = palette.path), match.range.first, match.range.last + 1)
+            }
+            SESSION_MANAGEMENT_TERMINAL_BOOLEAN_PATTERN.findAll(line.text).forEach { match ->
+                val positive =
+                    match.value.lowercase() in setOf("true", "on", "yes", "enabled", "running")
+                addStyle(
+                    SpanStyle(
+                        color = if (positive) palette.success else palette.error,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    match.range.first,
+                    match.range.last + 1,
+                )
+            }
+        }
+        line.grepMatches.forEach { range ->
+            addStyle(
+                SpanStyle(
+                    color =
+                        when (line.tone) {
+                            TerminalOutputTone.ERROR -> palette.error
+                            TerminalOutputTone.WARNING -> palette.warning
+                            else -> palette.match
+                        },
+                    fontWeight = FontWeight.Bold,
+                ),
+                start = range.start,
+                end = range.endExclusive,
+            )
+        }
     }
 
 @Composable
@@ -495,9 +790,30 @@ private fun SessionManagementTerminalInputLine(
     lineHeight: TextUnit,
     onCommandInputChange: (String) -> Unit,
     onExecuteCommand: (String) -> Unit,
+    onInterrupt: () -> Unit,
+    onHistoryPrevious: () -> Unit,
+    onHistoryNext: () -> Unit,
 ) {
     val normalizedCommand = commandInput.trim()
     val inputScrollState = rememberScrollState()
+    var fieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = commandInput,
+                selection = TextRange(commandInput.length),
+            ),
+        )
+    }
+
+    LaunchedEffect(commandInput) {
+        if (commandInput != fieldValue.text) {
+            fieldValue =
+                TextFieldValue(
+                    text = commandInput,
+                    selection = TextRange(commandInput.length),
+                )
+        }
+    }
 
     Row(
         modifier =
@@ -522,14 +838,37 @@ private fun SessionManagementTerminalInputLine(
         )
 
         BasicTextField(
-            value = commandInput,
-            onValueChange = onCommandInputChange,
+            value = fieldValue,
+            onValueChange = { value ->
+                fieldValue = value
+                onCommandInputChange(value.text)
+            },
             enabled = inputEnabled,
             modifier =
                 Modifier
                     .weight(1f)
-                    .heightIn(min = 44.dp, max = 132.dp)
+                    .heightIn(min = SessionManagementControlHeight, max = 132.dp)
                     .verticalScroll(inputScrollState)
+                    .onPreviewKeyEvent { event ->
+                        when {
+                            event.isCtrlPressed && event.key == Key.C -> {
+                                if (event.type == KeyEventType.KeyDown) onInterrupt()
+                                true
+                            }
+
+                            event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp -> {
+                                onHistoryPrevious()
+                                true
+                            }
+
+                            event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown -> {
+                                onHistoryNext()
+                                true
+                            }
+
+                            else -> false
+                        }
+                    }
                     .padding(top = 8.dp, bottom = 8.dp),
             textStyle =
                 TextStyle(
@@ -556,7 +895,7 @@ private fun SessionManagementTerminalInputLine(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.TopStart,
                 ) {
-                    if (commandInput.isEmpty()) {
+                    if (fieldValue.text.isEmpty()) {
                         Text(
                             text =
                                 if (inputEnabled) {
@@ -581,7 +920,7 @@ private fun SessionManagementTerminalInputLine(
         IconButton(
             onClick = { onExecuteCommand(normalizedCommand) },
             enabled = normalizedCommand.isNotBlank() && inputEnabled,
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(SessionManagementControlHeight),
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
@@ -641,7 +980,7 @@ private fun SessionManagementCommandPresetCard(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
@@ -651,7 +990,7 @@ private fun SessionManagementCommandPresetCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(SessionManagementCardShape)
                     .clickable(enabled = !isExecuting) { onExecuteCommand(preset.command) }
                     .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -706,6 +1045,8 @@ internal class ManagementTerminalSession(
         private set
     var isConnected by mutableStateOf(false)
         private set
+    var commandHistory by mutableStateOf<List<String>>(emptyList())
+        private set
 
     private var shellStream: ManagementShellStream? = null
     private var readJob: Job? = null
@@ -724,6 +1065,7 @@ internal class ManagementTerminalSession(
         }
 
         closeRequested = false
+        userRequestedExit = false
         if (!hasEverConnected) {
             append(ManagementTexts.Commands.SHELL_CONNECTING.get())
         }
@@ -789,9 +1131,16 @@ internal class ManagementTerminalSession(
         if (line.isBlank()) {
             return
         }
+        commandHistory = nextTerminalCommandHistory(commandHistory, line)
 
         if (line.trim() == "clear") {
             clear()
+            return
+        }
+
+        unsupportedInteractiveCommand(line)?.let { blockedCommand ->
+            append("$ $line\n")
+            append(ManagementTexts.Commands.UNSUPPORTED_INTERACTIVE_COMMAND.format(blockedCommand))
             return
         }
 
@@ -813,7 +1162,24 @@ internal class ManagementTerminalSession(
             } catch (error: Exception) {
                 withContext(Dispatchers.Main) {
                     append(ManagementTexts.Commands.SHELL_WRITE_FAILED.format(error.message.orEmpty()))
-                    close()
+                    close(clearHistory = false)
+                }
+            }
+        }
+    }
+
+    fun interrupt() {
+        val stream =
+            shellStream ?: run {
+                append(ManagementTexts.Commands.SHELL_NOT_CONNECTED.get())
+                return
+            }
+        scope.launch(Dispatchers.IO) {
+            try {
+                stream.write(SESSION_MANAGEMENT_SHELL_INTERRUPT)
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main) {
+                    append(ManagementTexts.Commands.SHELL_WRITE_FAILED.format(error.message.orEmpty()))
                 }
             }
         }
@@ -823,7 +1189,7 @@ internal class ManagementTerminalSession(
         output = ""
     }
 
-    fun close() {
+    fun close(clearHistory: Boolean = true) {
         closeRequested = true
         keepAliveJob?.cancel()
         keepAliveJob = null
@@ -835,6 +1201,9 @@ internal class ManagementTerminalSession(
             runCatching { stream.close() }
         }
         shellStream = null
+        if (clearHistory) {
+            commandHistory = emptyList()
+        }
     }
 
     private fun startKeepAlive(stream: ManagementShellStream) {
@@ -897,6 +1266,12 @@ internal class ManagementTerminalSession(
         }
     }
 }
+
+internal fun nextTerminalCommandHistory(
+    history: List<String>,
+    command: String,
+): List<String> =
+    (listOf(command) + history.filterNot { it == command })
 
 internal suspend fun executeManagementShellCommand(command: String): ManagementCommandRecord {
     val normalizedCommand = command.trim()

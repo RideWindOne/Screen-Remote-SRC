@@ -35,7 +35,7 @@ class AudioTrackManager(
             if (minBufferSize <= 0) {
                 LogManager.e(
                     LogTags.AUDIO_DECODER,
-                    "AudioTrack 最小缓冲区获取失败: rate=$sampleRate, channels=$channelCount, " +
+                    "AudioTrack minimum buffer acquisition failed: rate=$sampleRate, channels=$channelCount," +
                         "encoding=${encodingName(encoding)}, minBufferSize=$minBufferSize",
                 )
                 return null
@@ -75,7 +75,7 @@ class AudioTrackManager(
             }
             track
         } catch (e: Exception) {
-            LogManager.e(LogTags.AUDIO_DECODER, "创建 AudioTrack 失败: ${e.message}", e)
+            LogManager.e(LogTags.AUDIO_DECODER, "Failed to create AudioTrack: ${e.message}", e)
             null
         }
 
@@ -170,7 +170,7 @@ class AudioTrackManager(
             nonPcm16ScalingWarningLogged = true
             LogManager.w(
                 LogTags.AUDIO_DECODER,
-                "当前输出编码=${encodingName(config.encoding)}，跳过非 PCM16 的音量缩放",
+                "Current output encoding=${encodingName(config.encoding)}, skip non-PCM16 volume scaling",
             )
         }
 

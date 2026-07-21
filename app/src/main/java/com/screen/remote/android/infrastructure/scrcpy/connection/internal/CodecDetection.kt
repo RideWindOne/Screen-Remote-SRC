@@ -43,7 +43,7 @@ internal suspend fun ConnectionLifecycle.detectRemoteEncodersAfterPush(
     if (!options.config.enableAudio) {
         val remoteVideoOnlyNeedDetect = shouldDetectVideoCodec(options)
         if (!remoteVideoOnlyNeedDetect) {
-            LogManager.d(LogTags.SCRCPY_CLIENT, "编解码器配置完整且未启用音频，跳过检测")
+            LogManager.d(LogTags.SCRCPY_CLIENT, "Codec configuration complete and audio not enabled, detection skipped")
             return
         }
     }
@@ -52,7 +52,7 @@ internal suspend fun ConnectionLifecycle.detectRemoteEncodersAfterPush(
     val needDetectAudio = shouldDetectAudioCodec(options)
 
     if (!needDetectVideo && !needDetectAudio) {
-        LogManager.d(LogTags.SCRCPY_CLIENT, "所有编解码器已配置，跳过检测")
+        LogManager.d(LogTags.SCRCPY_CLIENT, "All codecs configured, detection skipped")
         return
     }
 
@@ -119,7 +119,7 @@ internal suspend fun ConnectionLifecycle.processCodecSelection(
         clearUserAudioSelection = audioResult?.ignoredUserSelection == true,
     )
 
-    LogManager.d(LogTags.SCRCPY_CLIENT, "已保存编解码器检测结果到会话 $expectedSessionId")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Codec detection results saved to session $expectedSessionId")
 }
 
 internal fun ConnectionLifecycle.shouldDetectVideoCodec(options: ScrcpyOptions): Boolean =
@@ -203,7 +203,7 @@ internal fun ConnectionLifecycle.validateCodecSelection(
     audioResult: CodecSelectionResult?,
 ): Boolean {
     if ((needDetectVideo && videoResult == null) || (needDetectAudio && audioResult == null)) {
-        LogManager.w(LogTags.SCRCPY_CLIENT, "编解码器自动选择失败，将继续使用当前配置或 scrcpy 默认值")
+        LogManager.w(LogTags.SCRCPY_CLIENT, "Codec automatic selection failed, will continue to use current configuration or scrcpy defaults")
         return false
     }
     return true

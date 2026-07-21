@@ -36,7 +36,7 @@ object HapticFeedbackManager {
                 isEnabled = settings.enableFloatingHapticFeedback
 
             } catch (e: Exception) {
-                LogManager.e(LogTags.APP, "触感反馈管理器初始化失败: ${e.message}", e)
+                LogManager.e(LogTags.APP, "Haptic feedback manager initialization failed: ${e.message}", e)
                 // 初始化失败时使用默认值（开启）
                 isEnabled = true
             }

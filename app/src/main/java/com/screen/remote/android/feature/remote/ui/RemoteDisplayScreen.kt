@@ -533,7 +533,7 @@ private fun RemoteDisplayScreenEffects(
             activity?.requestedOrientation = targetOrientation
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
-                "跟随目标设备方向: ${routeState.videoWidth}x${routeState.videoHeight}, requestedOrientation=$targetOrientation",
+                "Follow the target device orientation: ${routeState.videoWidth}x${routeState.videoHeight}, requestedOrientation=$targetOrientation",
             )
         }
     }
@@ -625,18 +625,18 @@ private fun RemoteDisplayScreenEffects(
 
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
-                "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.get()}: A${if (isALandscape) {
-                    RemoteTexts.REMOTE_LANDSCAPE.get()
+                "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.english}: A${if (isALandscape) {
+                    RemoteTexts.REMOTE_LANDSCAPE.english
                 } else {
-                    RemoteTexts.REMOTE_PORTRAIT.get()
+                    RemoteTexts.REMOTE_PORTRAIT.english
                 }}, B${if (isBLandscape) {
-                    RemoteTexts.REMOTE_LANDSCAPE.get()
+                    RemoteTexts.REMOTE_LANDSCAPE.english
                 } else {
-                    RemoteTexts.REMOTE_PORTRAIT.get()
-                }}, ${RemoteTexts.REMOTE_ASPECT_RATIO.get()}=$aspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.get()}: ${if (matchHeightFirst) {
-                    RemoteTexts.REMOTE_FILL_HEIGHT.get()
+                    RemoteTexts.REMOTE_PORTRAIT.english
+                }}, ${RemoteTexts.REMOTE_ASPECT_RATIO.english}=$aspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.english}: ${if (matchHeightFirst) {
+                    RemoteTexts.REMOTE_FILL_HEIGHT.english
                 } else {
-                    RemoteTexts.REMOTE_FILL_WIDTH.get()
+                    RemoteTexts.REMOTE_FILL_WIDTH.english
                 }}",
             )
         }
@@ -645,9 +645,9 @@ private fun RemoteDisplayScreenEffects(
     BackHandler(
         enabled = shouldInterceptRemoteBack(routeState.connectionState, routeState.connectStatus),
     ) {
-        LogManager.d(LogTags.REMOTE_DISPLAY, "返回键被触发，当前状态: ${routeState.connectionState}")
+        LogManager.d(LogTags.REMOTE_DISPLAY, "The return key is triggered, current status: ${routeState.connectionState}")
         if (shouldCancelConnectionOnBack(routeState.connectionState, routeState.connectStatus)) {
-            LogManager.d(LogTags.REMOTE_DISPLAY, "连接中/重连中，取消连接")
+            LogManager.d(LogTags.REMOTE_DISPLAY, "Connecting/reconnecting, canceling connection")
             connectionViewModel.cancelConnect()
         } else when (routeState.connectionState) {
             is ConnectionState.Connected -> {
@@ -656,10 +656,10 @@ private fun RemoteDisplayScreenEffects(
                     if (result.isFailure) {
                         LogManager.e(
                             LogTags.REMOTE_DISPLAY,
-                            "发送返回键失败: ${result.exceptionOrNull()?.message}",
+                            "Failed to send return key: ${result.exceptionOrNull()?.message}",
                         )
                     } else {
-                        LogManager.d(LogTags.REMOTE_DISPLAY, "返回键发送成功")
+                        LogManager.d(LogTags.REMOTE_DISPLAY, "Return key sent successfully")
                     }
                 }
             }
@@ -761,8 +761,8 @@ private fun RemoteDisplayScreenContent(
 
             if (
                 routeState.settings.showPerformanceStats &&
-                routeState.videoStream != null &&
-                routeState.sessionData?.config?.gameMode != true
+                routeState.videoStream != null
+                // && routeState.sessionData?.config?.gameMode != true // 游戏模式禁用帧率显示和网络速率
             ) {
                 RemotePerformanceStatsOverlay(
                     videoDecoderManager = routeState.videoDecoderManager,

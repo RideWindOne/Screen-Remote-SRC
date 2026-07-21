@@ -187,7 +187,7 @@ fun AddGroupDialog(
                     },
                 onClick = { showPathSelector = true },
                 leadingIcon = if (parentPath == "/") Icons.Default.Home else null,
-                leadingIconTint = AppColors.iOSBlue,
+                leadingIconTint = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -273,7 +273,7 @@ private fun AddGroupInputRow(
                 TextStyle(
                     fontSize = 15.sp,
                     lineHeight = 15.sp,
-                    color = if (isError) Color(0xFFFF3B30) else MaterialTheme.colorScheme.onSurface,
+                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.End,
                 ),
             singleLine = true,
@@ -296,7 +296,7 @@ private fun AddGroupInputRow(
                                     lineHeight = 15.sp,
                                     color =
                                         if (isError) {
-                                            Color(0xFFFF3B30).copy(alpha = 0.6f)
+                                            MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
                                         } else {
                                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                         },
@@ -354,7 +354,7 @@ private fun AddGroupClickableRow(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFFE5E5EA),
+                tint = MaterialTheme.colorScheme.outlineVariant,
                 modifier = Modifier.size(20.dp),
             )
         }

@@ -74,7 +74,7 @@ class ConnectionMetadataReader(
                         val codecId = DataInputStream(audioInput).readInt()
                         when (val header = parseAudioStreamHeader(codecId)) {
                             AudioStreamHeader.Disabled -> {
-                                LogManager.w(LogTags.SCRCPY_CLIENT, "远端设备已禁用音频，继续视频会话")
+                                LogManager.w(LogTags.SCRCPY_CLIENT, "The remote device has disabled audio, continue the video session")
                                 audioSocket.close()
                             }
 
@@ -88,7 +88,7 @@ class ConnectionMetadataReader(
                                 audioStream = ScrcpyAudioStream(audioSocket, audioInput, header.codec, issueTracker)
                                 LogManager.d(
                                     LogTags.SCRCPY_CLIENT,
-                                    "${RemoteTexts.SCRCPY_AUDIO_METADATA_READ.get()}: codec=${header.codec}",
+                                    "${RemoteTexts.SCRCPY_AUDIO_METADATA_READ.english}: codec=${header.codec}",
                                 )
                             }
                         }
@@ -119,7 +119,7 @@ class ConnectionMetadataReader(
             // 4. video socket 发送 session meta (flags + width + height, 12 bytes)
             val deviceNameBytes = readExact(dis, DEVICE_NAME_FIELD_LENGTH, "video:device_meta")
             val deviceName = String(deviceNameBytes, Charsets.UTF_8).trim('\u0000')
-            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "设备名称: $deviceName" }
+            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Device name: $deviceName" }
             VideoDebugLog.d(LogTags.SCRCPY_PACKET) { "video device meta: ${hex(deviceNameBytes, limit = 32)}" }
 
             val codecId = dis.readInt().also {
@@ -133,7 +133,7 @@ class ConnectionMetadataReader(
             val height = dis.readInt()
 
             VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Codec ID: 0x${codecId.toString(16).padStart(8, '0')}" }
-            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "${RemoteTexts.SCRCPY_VIDEO_RESOLUTION.get()}: ${width}x$height" }
+            VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "${RemoteTexts.SCRCPY_VIDEO_RESOLUTION.english}: ${width}x$height" }
             VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
                 "video session meta parsed: codec=0x${
                     codecId.toString(16).padStart(8, '0')
@@ -156,7 +156,7 @@ class ConnectionMetadataReader(
 
             return VideoMetadata(codec = codec, width = width, height = height)
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "读取视频元数据失败: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to read video metadata: ${e.message}", e)
             throw IOException("${RemoteTexts.SCRCPY_METADATA_READ_FAILED.get()}: ${e.message}", e)
         }
     }

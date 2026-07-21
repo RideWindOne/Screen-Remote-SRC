@@ -56,7 +56,7 @@ internal fun playRawAudio(
 internal suspend fun generateTTSAudio(tts: TextToSpeech?): Triple<ByteArray, Int, Int>? =
     withContext(Dispatchers.IO) {
         if (tts == null) {
-            LogManager.w(LogTags.CODEC_TEST_SCREEN, "TTS 实例为 null")
+            LogManager.w(LogTags.CODEC_TEST_SCREEN, "TTS instance is null")
             return@withContext null
         }
 
@@ -69,16 +69,16 @@ internal suspend fun generateTTSAudio(tts: TextToSpeech?): Triple<ByteArray, Int
             tts.setOnUtteranceProgressListener(
                 object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
-                        LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS 开始合成")
+                        LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS starts synthesis")
                     }
 
                     override fun onDone(utteranceId: String?) {
-                        LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS 合成完成")
+                        LogManager.d(LogTags.CODEC_TEST_SCREEN, "TTS synthesis completed")
                         done = true
                     }
 
                     override fun onError(utteranceId: String?) {
-                        LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 合成出错")
+                        LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS synthesis error")
                         done = true
                         hasError = true
                     }
@@ -108,7 +108,7 @@ internal suspend fun generateTTSAudio(tts: TextToSpeech?): Triple<ByteArray, Int
                 return@withContext Triple(pcmData, sampleRate, channels)
             }
         } catch (e: Exception) {
-            LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS 异常: ${e.message}", e)
+            LogManager.e(LogTags.CODEC_TEST_SCREEN, "TTS exception: ${e.message}", e)
         } finally {
             file.delete()
         }

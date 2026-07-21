@@ -1,33 +1,38 @@
 package com.screen.remote.android.feature.session.ui
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
-import com.screen.remote.android.core.designsystem.theme.DarkColorScheme
-import com.screen.remote.android.core.designsystem.theme.LightColorScheme
 
 internal data class SessionManagementTerminalPalette(
     val background: Color,
     val text: Color,
     val hint: Color,
     val accent: Color,
+    val match: Color,
+    val number: Color,
+    val string: Color,
+    val path: Color,
+    val success: Color,
+    val warning: Color,
     val error: Color,
     val separator: Color,
 )
 
-@Composable
 internal fun sessionManagementTerminalPalette(): SessionManagementTerminalPalette {
-    val currentThemeIsDark = MaterialTheme.colorScheme.surface == DarkColorScheme.surface
-    val oppositeScheme = if (currentThemeIsDark) LightColorScheme else DarkColorScheme
     return SessionManagementTerminalPalette(
-        background = if (currentThemeIsDark) LightColorScheme.background else DarkColorScheme.surface,
-        text = oppositeScheme.onSurface,
-        hint = oppositeScheme.onSurfaceVariant,
-        accent = oppositeScheme.primary,
-        error = oppositeScheme.error,
-        separator = oppositeScheme.outline,
+        background = Color(0xFF18181A),
+        text = Color(0xFFF2F2F7),
+        hint = Color(0xFF9A9AA0),
+        accent = Color(0xFF64A8FF),
+        match = Color(0xFF7DD3FC),
+        number = Color(0xFFFFB86C),
+        string = Color(0xFFA8E6A3),
+        path = Color(0xFFC4A7E7),
+        success = Color(0xFF5BD66F),
+        warning = Color(0xFFFFD166),
+        error = Color(0xFFFF6961),
+        separator = Color(0xFF38383A),
     )
 }
 

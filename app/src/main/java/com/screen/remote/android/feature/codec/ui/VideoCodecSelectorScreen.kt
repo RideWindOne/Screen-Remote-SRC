@@ -4,11 +4,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.data.datastore.LocalDecoderCache
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.i18n.CodecTexts
@@ -56,7 +56,7 @@ fun VideoCodecSelectorScreen(
                 Icon(
                     Icons.Filled.Refresh,
                     contentDescription = "刷新",
-                    tint = AppColors.iOSBlue,
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         },

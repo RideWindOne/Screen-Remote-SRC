@@ -162,7 +162,7 @@ internal class ScrcpyMonitorEventLogger(
             is ScrcpyMonitorEvent.SocketIdle -> {
                 LogManager.w(
                     LogTags.SCRCPY_EVENT_BUS,
-                    "[$deviceId] Socket[${event.socketType}] 空闲超过 ${event.idleDurationMs}ms",
+                    "[$deviceId] Socket[${event.socketType}] idle for more than ${event.idleDurationMs}ms",
                 )
             }
 
@@ -171,33 +171,33 @@ internal class ScrcpyMonitorEventLogger(
             is ScrcpyMonitorEvent.AudioFrameDecoded -> Unit
 
             is ScrcpyMonitorEvent.DeviceScreenLocked -> {
-                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 🔒 设备锁屏")
+                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 🔒 Device lock screen")
             }
 
             is ScrcpyMonitorEvent.DeviceScreenUnlocked -> {
-                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 🔓 设备解锁")
+                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 🔓 Device Unlock")
             }
 
             is ScrcpyMonitorEvent.DeviceScreenOff -> {
-                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 📴 设备息屏")
+                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 📴 Device screen")
             }
 
             is ScrcpyMonitorEvent.DeviceScreenOn -> {
-                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 📱 设备亮屏")
+                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 📱 The device screen lights up")
             }
 
             is ScrcpyMonitorEvent.ConnectionEstablished -> {
-                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] ✅ 连接建立")
+                LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] ✅ Connection established")
             }
 
             is ScrcpyMonitorEvent.ConnectionLost -> {
-                LogManager.w(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] ❌ 连接丢失: ${event.reason}")
+                LogManager.w(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] ❌ Connection lost: ${event.reason}")
             }
 
             is ScrcpyMonitorEvent.Exception -> {
                 LogManager.e(
                     LogTags.SCRCPY_EVENT_BUS,
-                    "[$deviceId] ⚠️ 异常[${event.type}]: ${event.message}",
+                    "[$deviceId] ⚠️ Exception [${event.type}]: ${event.message}",
                 )
             }
         }
@@ -216,7 +216,7 @@ internal class ScrcpyMonitorAnomalyDetector(
             if (timeSinceLock > 5000) {
                 LogManager.w(
                     LogTags.SCRCPY_EVENT_BUS,
-                    "[$deviceId] 异常：锁屏后仍有视频输出（${timeSinceLock}ms）",
+                    "[$deviceId] Exception: There is still video output after locking the screen (${timeSinceLock}ms)",
                 )
             }
         }
@@ -228,7 +228,7 @@ internal class ScrcpyMonitorAnomalyDetector(
             if (timeSinceConnection > 10000 && timeSinceLastVideo > 10000 && state.videoFrameCount == 0L) {
                 LogManager.w(
                     LogTags.SCRCPY_EVENT_BUS,
-                    "[$deviceId] 异常：连接后 ${timeSinceConnection}ms 无视频数据",
+                    "[$deviceId] Exception: No video data for ${timeSinceConnection}ms after connection",
                 )
             }
         }
@@ -238,7 +238,7 @@ internal class ScrcpyMonitorAnomalyDetector(
             if (idleTime > 30000 && state.isConnected) {
                 LogManager.w(
                     LogTags.SCRCPY_EVENT_BUS,
-                    "[$deviceId] 异常：Socket[$type] 空闲 ${idleTime}ms",
+                    "[$deviceId] Exception: Socket[$type] idle ${idleTime}ms",
                 )
             }
         }

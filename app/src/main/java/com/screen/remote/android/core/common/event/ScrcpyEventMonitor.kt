@@ -27,7 +27,7 @@ object ScrcpyEventMonitor {
         // 注册监控事件处理器
         registerMonitorHandlers()
         
-        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "事件监控器已启动")
+        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "Event monitor started")
     }
 
     /**
@@ -35,7 +35,7 @@ object ScrcpyEventMonitor {
      */
     fun stop() {
         isMonitoring = false
-        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "事件监控器已停止")
+        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "Event monitor stopped")
     }
 
     /**
@@ -223,12 +223,12 @@ object ScrcpyEventLogger {
 
     fun setMinLogLevel(level: ScrcpyEvent.LogLevel) {
         minLogLevel = level
-        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "事件日志级别设置为: $level")
+        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "The event log level is set to: $level")
     }
 
     fun setVerboseEnabled(enabled: Boolean) {
         enableVerbose = enabled
-        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "详细日志${if (enabled) "已启用" else "已禁用"}")
+        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "Verbose logging ${if (enabled) "enabled" else "disabled"}")
     }
 
     fun setStatsEnabled(enabled: Boolean) {
@@ -291,7 +291,7 @@ object ScrcpyEventLogger {
         if (event.needsSampling()) {
             val counter = eventCounters[eventClass]
             val count = counter?.get() ?: 0
-            return "$baseMessage (累计: $count)"
+            return "$baseMessage (cumulative: $count)"
         }
 
         return baseMessage
@@ -342,17 +342,17 @@ object ScrcpyEventLogger {
 
     fun getStatsSummary(): String =
         buildString {
-            appendLine("=== 事件统计摘要 ===")
-            appendLine("总事件类型: ${eventStats.size}")
+            appendLine("=== Event Statistics Summary ===")
+            appendLine("Total event types: ${eventStats.size}")
             appendLine()
 
             eventStats.entries
                 .sortedByDescending { it.value.totalCount }
                 .forEach { (eventClass, stats) ->
                     appendLine("[$eventClass]")
-                    appendLine("  总计: ${stats.totalCount}")
-                    appendLine("  已记录: ${stats.loggedCount}")
-                    appendLine("  采样: ${stats.sampledCount}")
+                    appendLine("  Total: ${stats.totalCount}")
+                    appendLine("  Logged: ${stats.loggedCount}")
+                    appendLine("  Sampled: ${stats.sampledCount}")
                     appendLine()
                 }
         }
@@ -360,7 +360,7 @@ object ScrcpyEventLogger {
     fun resetStats() {
         eventCounters.clear()
         eventStats.clear()
-        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "事件统计已重置")
+        LogManager.i(LogTags.SCRCPY_EVENT_BUS, "Event statistics have been reset")
     }
 
     fun getEventStats(eventClass: String): EventStats? = eventStats[eventClass]

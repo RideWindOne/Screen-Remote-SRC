@@ -75,7 +75,7 @@ object CodecSelector {
                     ignoredUserSelection = requestedEncoder.isNotEmpty() || requestedDecoder.isNotEmpty(),
                 )
             }
-            LogManager.w(logTag, "编解码能力不完整: remote=${remote.size}, local=${eligibleDecoders.size}")
+            LogManager.w(logTag, "Incomplete encoding and decoding capabilities: remote=${remote.size}, local=${eligibleDecoders.size}")
             return null
         }
 
@@ -93,7 +93,7 @@ object CodecSelector {
 
         LogManager.d(
             logTag,
-            "用户指定的编解码器无法组成兼容组合，忽略手动选择并自动重选: " +
+            "User-specified codecs cannot form a compatible combination, manual selection is ignored and automatically reselected:" +
                 "encoder=${requestedEncoder.ifBlank { "auto" }} decoder=${requestedDecoder.ifBlank { "auto" }}",
         )
         return selectBestCodecAttempt(
@@ -120,7 +120,7 @@ object CodecSelector {
                 eligibleDecoders.firstOrNull { it.name == name }
             }
         if (requestedDecoder.isNotEmpty() && fixedDecoder == null) {
-            LogManager.d(logTag, "用户指定的解码器不存在: $requestedDecoder")
+            LogManager.d(logTag, "The user-specified decoder does not exist: $requestedDecoder")
             return null
         }
 
@@ -171,7 +171,7 @@ object CodecSelector {
                 )
             LogManager.i(
                 logTag,
-                "选择 ${spec.name}: encoder=${result.encoder}(${encoder.acceleration}), " +
+                "Select ${spec.name}: encoder=${result.encoder}(${encoder.acceleration})," +
                     "decoder=${result.decoder}(${decoder.acceleration})",
             )
             return result
@@ -179,7 +179,7 @@ object CodecSelector {
 
         LogManager.d(
             logTag,
-            "未找到匹配组合: encoder=${requestedEncoder.ifBlank { "auto" }} " +
+            "No matching combination found: encoder=${requestedEncoder.ifBlank {"auto" }} " +
                 "decoder=${requestedDecoder.ifBlank { "auto" }}",
         )
         return null

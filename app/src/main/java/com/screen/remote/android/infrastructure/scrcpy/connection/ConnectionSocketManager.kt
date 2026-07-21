@@ -76,7 +76,7 @@ class ConnectionSocketManager(
                 tunnelMode = tunnelMode,
                 shouldAbortDirectProbe = shouldAbortDirectProbe,
             )
-            LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.get())
+            LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_VIDEO_SOCKET_CONNECTED.english)
             sessionContext.emit(
                 SessionEvent.SocketConnected(
                     socketType = SocketType.Video,
@@ -234,7 +234,7 @@ class ConnectionSocketManager(
                     val durationMs = (System.nanoTime() - startedAtNanos) / 1_000_000L
                     LogManager.i(
                         LogTags.SCRCPY_CLIENT,
-                        "Direct localabstract 已建立: $socketName channel=video attempts=$attemptCount durationMs=$durationMs",
+                        "Direct localabstract has been created: $socketName channel=video attempts=$attemptCount durationMs=$durationMs",
                     )
                     return socket.also(::configureSocket)
                 }.onFailure { error ->
@@ -296,21 +296,21 @@ class ConnectionSocketManager(
                 if (dummyByte != 0x00) {
                     LogManager.w(
                         LogTags.SCRCPY_CLIENT,
-                        "$socketType socket: 收到非预期的 dummy byte: 0x${dummyByte.toString(16).padStart(2, '0')}",
+                        "$socketType socket: Received unexpected dummy byte: 0x${dummyByte.toString(16).padStart(2, '0')}",
                     )
                     return DummyReadResult.Invalid(dummyByte)
                 }
 
                 LogManager.d(
                     LogTags.SCRCPY_CLIENT,
-                    "$socketType socket: Dummy byte 验证通过 (0x${dummyByte.toString(16).padStart(2, '0')})",
+                    "$socketType socket: Dummy byte verified (0x${dummyByte.toString(16).padStart(2, '0')})",
                 )
                 return DummyReadResult.Success(dummyByte)
             } catch (e: java.net.SocketTimeoutException) {
                 if (logRetries && retryIndex < maxRetries - 1) {
                     LogManager.w(
                         LogTags.SCRCPY_CLIENT,
-                        "$socketType socket: 读取 dummy byte 超时，重试 ${retryIndex + 1}/$maxRetries",
+                        "$socketType socket: Reading dummy byte timed out, try again ${retryIndex + 1}/$maxRetries",
                     )
                 }
                 if (retryIndex < maxRetries - 1) {

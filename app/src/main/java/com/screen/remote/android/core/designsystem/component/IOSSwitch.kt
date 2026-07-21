@@ -45,8 +45,6 @@ fun IOSSwitch(
     height: Dp = 31.dp,
     thumbPadding: Dp = 2.dp,
 ) {
-    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-
     // 动画：滑块位置（0.0 = 左侧，1.0 = 右侧）
     val thumbPosition by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
@@ -58,19 +56,16 @@ fun IOSSwitch(
     val trackColor by animateColorAsState(
         targetValue =
             when {
-                !enabled -> if (isDarkTheme) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
-
-                checked -> Color(0xFF34C759)
-
-                // iOS 绿色（深浅色通用）
-                else -> if (isDarkTheme) Color(0xFF39393D) else Color(0xFFE9E9EB) // 关闭状态
+                !enabled -> MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
+                checked -> MaterialTheme.colorScheme.secondary
+                else -> MaterialTheme.colorScheme.surfaceVariant
             },
         animationSpec = tween(durationMillis = 250),
         label = "trackColor",
     )
 
     // 滑块颜色（始终为白色）
-    val thumbColor = if (enabled) Color.White else Color(0xFFBDBDBD)
+    val thumbColor = if (enabled) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
     val density = LocalDensity.current
     val widthPx = with(density) { width.toPx() }
@@ -119,8 +114,3 @@ fun IOSSwitch(
         }
     }
 }
-
-/**
- * 获取颜色的亮度
- */
-private fun Color.luminance(): Float = 0.299f * red + 0.587f * green + 0.114f * blue

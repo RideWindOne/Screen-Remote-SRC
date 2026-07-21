@@ -45,7 +45,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -444,7 +443,7 @@ private fun AdbKeyStatusSection(
                 style = MaterialTheme.typography.bodyLarge,
                 color =
                     if (isSuccess) {
-                        Color(0xFF34C759)
+                        MaterialTheme.colorScheme.secondary
                     } else {
                         MaterialTheme.colorScheme.error
                     },
@@ -480,7 +479,7 @@ private fun KeyActionItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF007AFF),
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -551,13 +550,13 @@ private fun KeyEditItem(
                 Text(
                     if (isVisible) txtHide else txtShow,
                     fontSize = 13.sp,
-                    color = Color(0xFF007AFF),
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Icon(
                     if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     contentDescription = if (isVisible) txtHide else txtShow,
                     modifier = Modifier.size(16.dp),
-                    tint = Color(0xFF007AFF),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }

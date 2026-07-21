@@ -69,19 +69,19 @@ class VideoCodecManager(
                             violatesHardwarePolicy -> "不符合纯软件解码策略"
                             else -> "本次会话已失败"
                         }
-                    LogManager.w(LogTags.VIDEO_DECODER, "首选解码器$detail，降级到重新选择: $cachedName")
+                    LogManager.w(LogTags.VIDEO_DECODER, "Preferred decoder $detail, downgrade to reselect: $cachedName")
                     if (decoderSelectionPinned) {
-                        LogManager.e(LogTags.VIDEO_DECODER, "用户固定的视频解码器不可用，不执行自动降级: $cachedName")
+                        LogManager.e(LogTags.VIDEO_DECODER, "User fixed video decoder is unavailable and does not perform automatic downgrade: $cachedName")
                         return null
                     }
                     selectedDecoderName = null
                 } else {
                     hasSizeCompatibleCandidate = true
                     try {
-                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "使用缓存解码器: $cachedName" }
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Use cache decoder: $cachedName" }
                         return MediaCodec.createByCodecName(cachedName)
                     } catch (error: Exception) {
-                        LogManager.w(LogTags.VIDEO_DECODER, "缓存解码器失效: $cachedName, 重新检测")
+                        LogManager.w(LogTags.VIDEO_DECODER, "Cache decoder invalid: $cachedName, recheck")
                         rejectDecoder(cachedName, error)
                         if (decoderSelectionPinned) {
                             return null
@@ -92,7 +92,7 @@ class VideoCodecManager(
             }
 
             if (decoderSelectionPinned) {
-                LogManager.e(LogTags.VIDEO_DECODER, "用户固定的视频解码器未提供或不可创建")
+                LogManager.e(LogTags.VIDEO_DECODER, "User fixed video codec not provided or cannot be created")
                 return null
             }
 
@@ -104,7 +104,7 @@ class VideoCodecManager(
                     hasSizeCompatibleCandidate = true
                     try {
                         selectedDecoderName = name
-                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "系统推荐: $name" }
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "System recommendation: $name" }
                         return MediaCodec.createByCodecName(name)
                     } catch (error: Exception) {
                         rejectDecoder(name, error)
@@ -121,7 +121,7 @@ class VideoCodecManager(
                 try {
                     hasSizeCompatibleCandidate = true
                     selectedDecoderName = info.name
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "硬件解码: ${info.name}" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Hardware decoding: ${info.name}" }
                     return MediaCodec.createByCodecName(info.name)
                 } catch (error: Exception) {
                     rejectDecoder(info.name, error)
@@ -137,7 +137,7 @@ class VideoCodecManager(
                 try {
                     hasSizeCompatibleCandidate = true
                     selectedDecoderName = info.name
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "软件解码: ${info.name}" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Software decoding: ${info.name}" }
                     return MediaCodec.createByCodecName(info.name)
                 } catch (error: Exception) {
                     rejectDecoder(info.name, error)
@@ -152,7 +152,7 @@ class VideoCodecManager(
                 try {
                     hasSizeCompatibleCandidate = true
                     selectedDecoderName = info.name
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "软件解码: ${info.name}" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Software decoding: ${info.name}" }
                     return MediaCodec.createByCodecName(info.name)
                 } catch (error: Exception) {
                     rejectDecoder(info.name, error)
@@ -167,7 +167,7 @@ class VideoCodecManager(
                 try {
                     hasSizeCompatibleCandidate = true
                     selectedDecoderName = info.name
-                    LogManager.w(LogTags.VIDEO_DECODER, "最后软件兜底使用 c2.android 解码器: ${info.name}")
+                    LogManager.w(LogTags.VIDEO_DECODER, "Finally, the software uses c2.android decoder: ${info.name}")
                     return MediaCodec.createByCodecName(info.name)
                 } catch (error: Exception) {
                     rejectDecoder(info.name, error)
@@ -183,7 +183,7 @@ class VideoCodecManager(
                 try {
                     hasSizeCompatibleCandidate = true
                     selectedDecoderName = info.name
-                    LogManager.w(LogTags.VIDEO_DECODER, "最后兜底使用 goldfish 解码器: ${info.name}")
+                    LogManager.w(LogTags.VIDEO_DECODER, "Finally, use the goldfish decoder: ${info.name}")
                     return MediaCodec.createByCodecName(info.name)
                 } catch (error: Exception) {
                     rejectDecoder(info.name, error)
@@ -201,20 +201,20 @@ class VideoCodecManager(
                     )
                 LogManager.e(
                     LogTags.VIDEO_DECODER,
-                    "没有解码器支持 ${width}x$height mime=$mimeType suggestedMaxSize=${suggestedMaxSize ?: "none"}",
+                    "No codec supports ${width}x$height mime=$mimeType suggestedMaxSize=${suggestedMaxSize ?:"none"}",
                 )
                 return null
             }
 
             if (!allowHardwareDecoders) {
-                LogManager.e(LogTags.VIDEO_DECODER, "纯软件解码策略下没有可用解码器")
+                LogManager.e(LogTags.VIDEO_DECODER, "There is no decoder available under the software-only decoding strategy")
                 return null
             }
 
-            LogManager.e(LogTags.VIDEO_DECODER, "所有 $mimeType 解码器候选均已失败")
+            LogManager.e(LogTags.VIDEO_DECODER, "All $mimeType decoder candidates have failed")
             return null
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "创建解码器失败", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to create decoder", e)
             return null
         }
     }
@@ -232,7 +232,7 @@ class VideoCodecManager(
         }
         LogManager.w(
             LogTags.VIDEO_DECODER,
-            "本次会话淘汰解码器: $decoderName${cause?.message?.let { ", reason=$it" }.orEmpty()}",
+            "Decoder eliminated in this session: $decoderName${cause?.message?.let {", reason=$it" }.orEmpty()}",
         )
     }
 

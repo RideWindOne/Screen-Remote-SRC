@@ -247,7 +247,7 @@ internal class LogViewerActions(
 
             context.startActivity(Intent.createChooser(shareIntent, LogTexts.LOG_SHARE_BUTTON.get()))
         } catch (e: Exception) {
-            LogManager.e("LogViewerDialog", "分享日志文件失败: ${e.message}")
+            LogManager.e("LogViewerDialog", "Failed to share log file: ${e.message}")
         }
     }
 
@@ -340,7 +340,7 @@ internal fun LogViewerToolbar(
             Icon(
                 imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
                 contentDescription = LogTexts.LOG_SEARCH_PLACEHOLDER.get(),
-                tint = Color(0xFF007AFF),
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -357,7 +357,7 @@ internal fun LogViewerToolbar(
                 Icon(
                     imageVector = Icons.Default.FilterList,
                     contentDescription = LogTexts.LOG_FILTER_BY_TAG.get(),
-                    tint = if (selectedTags.isNotEmpty()) MaterialTheme.colorScheme.primary else AppColors.iOSBlue,
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }
@@ -366,7 +366,7 @@ internal fun LogViewerToolbar(
             Icon(
                 imageVector = Icons.Default.Share,
                 contentDescription = LogTexts.LOG_SHARE_BUTTON.get(),
-                tint = Color(0xFF007AFF),
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -374,7 +374,7 @@ internal fun LogViewerToolbar(
             Icon(
                 imageVector = Icons.Default.Refresh,
                 contentDescription = CommonTexts.BUTTON_DONE.get(),
-                tint = Color(0xFF007AFF),
+                tint = MaterialTheme.colorScheme.primary,
             )
         }
     }

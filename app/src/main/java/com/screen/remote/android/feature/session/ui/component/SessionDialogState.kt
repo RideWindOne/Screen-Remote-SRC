@@ -126,11 +126,12 @@ class SessionDialogState(
 
     private fun normalizeGameVideoSettings() {
         maxSize = closestGameOption(maxSize.toIntOrNull(), GAME_MAX_SIZE_OPTIONS, defaultValue = 720).toString()
+        val parsedVideoBitrate = parseBitrateBitsPerSecond(videoBitrate)
         videoBitrate =
             closestGameOption(
-                parseBitrateBitsPerSecond(videoBitrate),
+                parsedVideoBitrate?.takeIf { it >= GAME_VIDEO_BITRATE_OPTIONS.first() },
                 GAME_VIDEO_BITRATE_OPTIONS,
-                defaultValue = GAME_VIDEO_BITRATE_OPTIONS.first(),
+                defaultValue = GAME_VIDEO_BITRATE_DEFAULT,
             ).toGameBitrateLabel()
         maxFps = closestGameOption(maxFps.toIntOrNull(), GAME_MAX_FPS_OPTIONS, defaultValue = 60).toString()
     }
@@ -315,6 +316,7 @@ internal val GAME_MAX_SIZE_OPTIONS = listOf(720, 1080, 1920)
  * 建议来源：https://github.com/Genymobile/scrcpy/pull/6954#issuecomment-5022877392
  */
 internal val GAME_VIDEO_BITRATE_OPTIONS = listOf(1_000_000, 2_000_000, 4_000_000, 8_000_000, 12_000_000, 20_000_000)
+internal const val GAME_VIDEO_BITRATE_DEFAULT = 2_000_000
 internal val GAME_MAX_FPS_OPTIONS = listOf(60, 90, 120)
 
 internal fun closestGameOption(

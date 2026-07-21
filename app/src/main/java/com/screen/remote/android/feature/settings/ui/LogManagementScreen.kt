@@ -26,9 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
+import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.designsystem.component.AppDivider
@@ -90,7 +90,7 @@ fun LogManagementScreen(onDismiss: () -> Unit) {
                 Text(
                     LogTexts.LOG_REFRESH_BUTTON.get(),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF007AFF),
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         },
@@ -140,12 +140,12 @@ fun LogManagementScreen(onDismiss: () -> Unit) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = null,
-                        tint = Color(0xFFFFCC00),
+                        tint = AppColors.warning,
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
                         text = LogTexts.LOG_CLEAR_OLD_LOGS.get(),
-                        color = Color(0xFFFFCC00),
+                        color = AppColors.warning,
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }

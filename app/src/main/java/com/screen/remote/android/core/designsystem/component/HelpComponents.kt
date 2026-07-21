@@ -55,7 +55,7 @@ fun HelpIcon(
         Icon(
             imageVector = Icons.Outlined.Info,
             contentDescription = CommonTexts.HELP_ICON_DESCRIPTION.get(),
-            tint = AppColors.iOSBlue,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(16.dp),
         )
     }
@@ -97,7 +97,7 @@ private fun HelpDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = CommonTexts.BUTTON_CLOSE.get(),
-                    color = AppColors.iOSBlue,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         },
@@ -108,15 +108,16 @@ private fun HelpDialog(
 @Composable
 private fun LinkifiedHelpText(helpText: String) {
     val uriHandler = LocalUriHandler.current
+    val linkColor = MaterialTheme.colorScheme.primary
     val linkPattern = remember { Regex("https?://\\S+") }
     val annotatedText =
-        remember(helpText) {
+        remember(helpText, linkColor) {
             buildAnnotatedString {
                 var cursor = 0
                 linkPattern.findAll(helpText).forEach { match ->
                     append(helpText.substring(cursor, match.range.first))
                     pushStringAnnotation(tag = "URL", annotation = match.value)
-                    pushStyle(SpanStyle(color = AppColors.iOSBlue))
+                    pushStyle(SpanStyle(color = linkColor))
                     append(match.value)
                     pop()
                     pop()

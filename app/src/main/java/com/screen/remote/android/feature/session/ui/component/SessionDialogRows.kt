@@ -277,7 +277,7 @@ private fun DialogTrailingAction(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFFE5E5EA),
+                tint = MaterialTheme.colorScheme.outlineVariant,
                 modifier = Modifier.size(20.dp),
             )
         }

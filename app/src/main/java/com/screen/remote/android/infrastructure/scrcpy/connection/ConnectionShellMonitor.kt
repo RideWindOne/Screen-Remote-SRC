@@ -117,7 +117,7 @@ class ConnectionShellMonitor(
                 delay(10)
             }
 
-            LogManager.w(LogTags.SCRCPY_SERVER, "等待 scrcpy-server 启动超时")
+            LogManager.w(LogTags.SCRCPY_SERVER, "Timeout waiting for scrcpy-server to start")
             dumpRecentShellLines("startup-timeout")
             false
         }
@@ -340,7 +340,7 @@ class ConnectionShellMonitor(
                 SessionEvent.ServerFailed(
                     ServerIssue(
                         kind = ServerIssueKind.ProcessExited,
-                        detail = "Server 进程退出",
+                        detail = "Server process exited",
                         exitCode = exitCode,
                     ),
                 ),
@@ -351,7 +351,7 @@ class ConnectionShellMonitor(
         recordStartupFailure(
             ServerIssue(
                 kind = ServerIssueKind.ProcessExited,
-                detail = "进程意外退出",
+                detail = "Process exited unexpectedly",
                 exitCode = exitCode,
             ),
         )
@@ -378,7 +378,7 @@ class ConnectionShellMonitor(
 
         if (isRuntimeMonitoringEnabled()) {
             if (expectedConnectionClosure) {
-                LogManager.w(LogTags.SCRCPY_SERVER, "Shell 流随 ADB 连接断开: $errorMsg")
+                LogManager.w(LogTags.SCRCPY_SERVER, "Shell stream lost with ADB connection: $errorMsg")
                 issueTracker.record("server.connection_closed", errorMsg)
                 sessionContext.emit(
                     SessionEvent.RequestReconnect(
@@ -391,7 +391,7 @@ class ConnectionShellMonitor(
                 return
             }
             if (error !is java.io.EOFException) {
-                LogManager.e(LogTags.SCRCPY_SERVER, "Shell 监控异常 -> $errorMsg", error)
+                LogManager.e(LogTags.SCRCPY_SERVER, "Shell monitoring exception -> $errorMsg", error)
             }
             dumpRecentShellLines("monitor-exception")
             issueTracker.record("server.monitor", errorMsg)
@@ -399,7 +399,7 @@ class ConnectionShellMonitor(
                 SessionEvent.ServerFailed(
                     ServerIssue(
                         kind = ServerIssueKind.MonitorException,
-                        detail = "Shell 监控异常 -> $errorMsg",
+                        detail = "Shell monitor exception -> $errorMsg",
                     ),
                 ),
             )
@@ -407,15 +407,15 @@ class ConnectionShellMonitor(
         }
 
         if (expectedConnectionClosure) {
-            LogManager.w(LogTags.SCRCPY_SERVER, "等待 scrcpy-server 启动时 ADB 连接断开: $errorMsg")
+            LogManager.w(LogTags.SCRCPY_SERVER, "ADB connection lost while waiting for scrcpy-server to start: $errorMsg")
         } else if (error !is java.io.EOFException) {
             dumpRecentShellLines("startup-exception")
-            LogManager.e(LogTags.SCRCPY_SERVER, "等待 scrcpy-server 启动时出错: ${error.message}", error)
+            LogManager.e(LogTags.SCRCPY_SERVER, "Error while waiting for scrcpy-server to start: ${error.message}", error)
         }
         recordStartupFailure(
             ServerIssue(
                 kind = ServerIssueKind.MonitorException,
-                detail = "Shell 监控异常 -> $errorMsg",
+                detail = "Shell monitor exception -> $errorMsg",
             ),
         )
     }
@@ -451,7 +451,7 @@ class ConnectionShellMonitor(
             return
         }
 
-        LogManager.e(LogTags.SCRCPY_SERVER, "✗ scrcpy-server 启动失败")
+        LogManager.e(LogTags.SCRCPY_SERVER, "✗ scrcpy-server failed to start")
         sessionContext.emit(SessionEvent.ServerFailed(issue))
     }
 

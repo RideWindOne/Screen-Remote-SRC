@@ -69,7 +69,7 @@ private fun ActionRow(action: ScrcpyAction) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(AppDimens.cardCornerRadius),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        color = MaterialTheme.colorScheme.surface,
         tonalElevation = 1.dp,
     ) {
         Row(

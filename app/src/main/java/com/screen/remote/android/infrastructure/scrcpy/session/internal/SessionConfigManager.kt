@@ -27,7 +27,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.Session
 internal suspend fun Session.updateOptions(update: (ScrcpyOptions) -> ScrcpyOptions) {
     updateOptionsInMemory(update)
     storage.updateOptions(sessionId, update)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "更新配置: sessionId=$sessionId")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "Update configuration: sessionId=$sessionId")
 }
 
 /**
@@ -94,7 +94,7 @@ internal fun Session.saveCodecDetectionResult(
 
     updateOptionsInMemory(applyDetectionResult)
     persistOptionsInBackground(applyDetectionResult)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "编解码器检测结果已更新到内存，后台保存: sessionId=$sessionId")
+    LogManager.d(LogTags.SCRCPY_CLIENT, "The codec detection results have been updated to the memory and saved in the background: sessionId=$sessionId")
 }
 
 internal fun ScrcpyOptions.clearIgnoredUserCodecSelections(

@@ -51,7 +51,7 @@ class ScrcpyAudioStream(
         // 停止或断连时通过关闭 socket 中断阻塞读取。
         socket.soTimeout = 0
 
-        AudioDebugLog.d("ScrcpyAudioStream") { "音频配置: codec=$codec, rate=$sampleRate, channels=$channelCount" }
+        AudioDebugLog.d("ScrcpyAudioStream") { "Audio configuration: codec=$codec, rate=$sampleRate, channels=$channelCount" }
     }
 
     private var packetCount = 0
@@ -65,7 +65,7 @@ class ScrcpyAudioStream(
             val packetSize = dataInputStream.readInt() // uint32 size (big-endian)
 
             if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
-                LogManager.e("AudioDecoder", "音频包大小异常: $packetSize, pts=$ptsAndFlags")
+                LogManager.e("AudioDecoder", "Audio packet size abnormality: $packetSize, pts=$ptsAndFlags")
                 return AdbShellPacket.Exit(byteArrayOf(0))
             }
 
@@ -83,14 +83,14 @@ class ScrcpyAudioStream(
             return AdbShellPacket.StdOut(packet)
         } catch (_: java.io.EOFException) {
             frameInfo = null
-            AudioDebugLog.d("AudioDecoder") { "音频流结束，共接收 $packetCount 个包" }
+            AudioDebugLog.d("AudioDecoder") { "The audio stream ends and a total of $packetCount packets are received." }
             issueTracker.record("audio.eof", "Audio stream closed by peer")
             // 推送设备断开事件
             ScrcpyEventBus.pushEvent(DeviceDisconnected)
             return AdbShellPacket.Exit(byteArrayOf(0))
         } catch (e: IOException) {
             if (!e.isExpectedConnectionClosure()) {
-                LogManager.e("AudioDecoder", "音频流读取错误: ${e.message}", e)
+                LogManager.e("AudioDecoder", "Audio stream read error: ${e.message}", e)
             }
             issueTracker.record("audio.io", e.message ?: "Audio stream IO error")
             // 推送解复用器错误事件
@@ -105,7 +105,7 @@ class ScrcpyAudioStream(
         try {
             socket.close()
         } catch (e: IOException) {
-            LogManager.w("ScrcpyAudioStream", "关闭 Socket 失败: ${e.message}")
+            LogManager.w("ScrcpyAudioStream", "Failed to close Socket: ${e.message}")
         }
     }
 }
@@ -163,7 +163,7 @@ class ScrcpySocketStream(
                     val height = packetSize
 
                     if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
-                        LogManager.e("ScrcpySocketStream", "Session meta 视频尺寸异常: ${width}x$height")
+                        LogManager.e("ScrcpySocketStream", "Session meta video size abnormality: ${width}x$height")
                         onError("Session meta 视频尺寸异常")
                         ScrcpyEventBus.pushEvent(DemuxerError("Invalid session size: ${width}x$height"))
                         return AdbShellPacket.Exit(byteArrayOf(0))
@@ -180,7 +180,7 @@ class ScrcpySocketStream(
 
                 // 高分辨率关键帧可能显著大于 4 MiB；仍保留硬上限防止恶意分配。
                 if (packetSize <= 0 || packetSize > MAX_VIDEO_PACKET_SIZE) {
-                    LogManager.e("ScrcpySocketStream", "数据包大小异常: $packetSize")
+                    LogManager.e("ScrcpySocketStream", "Packet size exception: $packetSize")
                     onError("数据包大小异常")
                     // 推送解复用器错误事件
                     ScrcpyEventBus.pushEvent(DemuxerError("Invalid packet size: $packetSize"))
@@ -226,7 +226,7 @@ class ScrcpySocketStream(
         try {
             socket.close()
         } catch (e: IOException) {
-            LogManager.w("ScrcpySocketStream", "关闭 Socket 失败: ${e.message}")
+            LogManager.w("ScrcpySocketStream", "Failed to close Socket: ${e.message}")
         }
     }
 

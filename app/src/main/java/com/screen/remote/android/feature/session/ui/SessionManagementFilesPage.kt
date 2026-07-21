@@ -52,6 +52,8 @@ import com.screen.remote.android.core.designsystem.component.ClickableBreadcrumb
 import com.screen.remote.android.core.designsystem.component.ClickableBreadcrumbItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private val BuiltInEditorUnsupportedFileKinds =
@@ -67,18 +69,62 @@ private data class RemoteFileClipboard(
     val entries: List<RemoteFileEntry>,
 )
 
+internal class SessionManagementFileBrowserState {
+    val currentPathState = mutableStateOf("/sdcard")
+    val selectedPathsState = mutableStateOf<Set<String>>(emptySet())
+    val snapshotState = mutableStateOf(FileBrowserSnapshot.loading("/sdcard"))
+    val snapshotPathState = mutableStateOf("/sdcard")
+    val localRefreshTickState = mutableIntStateOf(0)
+    var lastExternalRefreshToken: Int? = null
+    var lastLocalRefreshTick: Int = 0
+    private val directorySnapshots = mutableMapOf<String, FileBrowserSnapshot>()
+    private val loadMutex = Mutex()
+
+    fun cachedSnapshot(path: String): FileBrowserSnapshot? = directorySnapshots[path]
+
+    fun cacheSnapshot(snapshot: FileBrowserSnapshot) {
+        if (!snapshot.isLoading && snapshot.errorMessage == null) {
+            directorySnapshots[snapshot.currentPath] = snapshot
+        }
+    }
+
+    fun applyPrefetchedSnapshot(snapshot: FileBrowserSnapshot) {
+        cacheSnapshot(snapshot)
+        if (
+            snapshot.errorMessage == null &&
+            currentPathState.value == snapshot.currentPath &&
+            (snapshotState.value.isLoading || snapshotState.value.entries.isEmpty())
+        ) {
+            snapshotState.value = snapshot
+            snapshotPathState.value = snapshot.currentPath
+        }
+    }
+
+    suspend fun loadSnapshot(
+        path: String,
+        forceRefresh: Boolean = false,
+    ): FileBrowserSnapshot =
+        loadMutex.withLock {
+            if (!forceRefresh) {
+                cachedSnapshot(path)?.let { return@withLock it }
+            }
+            loadFileBrowserSnapshot(path).also(::applyPrefetchedSnapshot)
+        }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SessionManagementFileBrowser(
     modifier: Modifier = Modifier,
+    state: SessionManagementFileBrowserState,
     refreshToken: Int,
     externalAddMenuRequestTick: Int,
     onSelectionModeChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var localRefreshTick by remember { mutableIntStateOf(0) }
-    var currentPath by remember { mutableStateOf("/sdcard") }
+    var localRefreshTick by state.localRefreshTickState
+    var currentPath by state.currentPathState
     var selectedFile by remember { mutableStateOf<RemoteFileEntry?>(null) }
     var fileDetailEntry by remember { mutableStateOf<RemoteFileEntry?>(null) }
     var textEditorState by remember { mutableStateOf<RemoteTextEditorState?>(null) }
@@ -91,7 +137,7 @@ internal fun SessionManagementFileBrowser(
     var fileClipboard by remember { mutableStateOf<RemoteFileClipboard?>(null) }
     var pendingDownloadEntries by remember { mutableStateOf<List<RemoteFileEntry>>(emptyList()) }
     var pendingUploadTargetDirectory by remember { mutableStateOf<String?>(null) }
-    var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+    var selectedPaths by state.selectedPathsState
     var addMenuOpen by remember { mutableStateOf(false) }
     var handledAddMenuRequestTick by remember { mutableIntStateOf(externalAddMenuRequestTick) }
     var createFolderDialogOpen by remember { mutableStateOf(false) }
@@ -100,8 +146,8 @@ internal fun SessionManagementFileBrowser(
     var deleteTargets by remember { mutableStateOf<List<RemoteFileEntry>>(emptyList()) }
     var fileActionMessage by remember { mutableStateOf<String?>(null) }
     var fileActionProgress by remember { mutableStateOf<String?>(null) }
-    var fileSnapshot by remember { mutableStateOf(FileBrowserSnapshot.loading(currentPath)) }
-    var fileSnapshotPath by remember { mutableStateOf(currentPath) }
+    var fileSnapshot by state.snapshotState
+    var fileSnapshotPath by state.snapshotPathState
     var fileRefreshing by remember { mutableStateOf(true) }
     val isSelectionMode by remember {
         derivedStateOf { selectedPaths.isNotEmpty() }
@@ -133,20 +179,36 @@ internal fun SessionManagementFileBrowser(
     }
 
     LaunchedEffect(currentPath, refreshToken, localRefreshTick) {
+        val refreshRequested =
+            state.lastExternalRefreshToken?.let { it != refreshToken } == true ||
+                state.lastLocalRefreshTick != localRefreshTick
+        state.lastExternalRefreshToken = refreshToken
+        state.lastLocalRefreshTick = localRefreshTick
         val pathChanged = fileSnapshotPath != currentPath
         val canKeepCurrentContent = !pathChanged && fileSnapshot.entries.isNotEmpty() && fileSnapshot.errorMessage == null
         if (pathChanged) {
             fileSnapshotPath = currentPath
-            fileSnapshot = FileBrowserSnapshot.loading(currentPath)
             selectedPaths = emptySet()
+            if (!refreshRequested) {
+                state.cachedSnapshot(currentPath)?.let { cached ->
+                    fileSnapshot = cached
+                    fileRefreshing = false
+                    return@LaunchedEffect
+                }
+            }
+            fileSnapshot = FileBrowserSnapshot.loading(currentPath)
+        } else if (!refreshRequested && !fileSnapshot.isLoading && fileSnapshot.errorMessage == null) {
+            fileRefreshing = false
+            return@LaunchedEffect
         }
         fileRefreshing = true
-        val nextSnapshot = loadFileBrowserSnapshot(currentPath)
+        val nextSnapshot = state.loadSnapshot(currentPath, forceRefresh = refreshRequested)
         fileRefreshing = false
         if (nextSnapshot.errorMessage != null && canKeepCurrentContent) {
             fileActionMessage = nextSnapshot.errorMessage
         } else {
             fileSnapshot = nextSnapshot
+            state.cacheSnapshot(nextSnapshot)
         }
     }
 
@@ -247,7 +309,7 @@ internal fun SessionManagementFileBrowser(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = SessionManagementCardShape,
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 1.dp,
@@ -294,7 +356,7 @@ internal fun SessionManagementFileBrowser(
 
             Surface(
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(20.dp),
+                shape = SessionManagementCardShape,
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
                 shadowElevation = 1.dp,

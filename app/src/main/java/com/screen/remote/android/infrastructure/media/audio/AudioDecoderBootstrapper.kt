@@ -26,7 +26,7 @@ internal class AudioDecoderBootstrapper(
                 else -> Unit
             }
         }
-        LogManager.e(LogTags.AUDIO_DECODER, "无法读取第一个音频包")
+        LogManager.e(LogTags.AUDIO_DECODER, "Unable to read first audio packet")
         return null
     }
 
@@ -39,13 +39,13 @@ internal class AudioDecoderBootstrapper(
         if (codec.lowercase() == "opus") {
             return if (announcedConfig || formatHandler.isOpusHead(firstData)) {
                 if (!formatHandler.validateConfigPacket(codec, firstData)) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "Opus 配置包格式错误")
+                    LogManager.e(LogTags.AUDIO_DECODER, "Opus configuration package format error")
                     return null
                 }
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "检测到 OpusHead 配置包" }
+                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "OpusHead configuration package detected" }
                 DecodeBootstrap(configData = firstData, firstAudioPacket = null, firstAudioPts = null)
             } else {
-                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "检测到裸 Opus 帧，跳过配置包" }
+                AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Naked Opus frame detected, configuration packet skipped" }
                 DecodeBootstrap(configData = null, firstAudioPacket = firstData, firstAudioPts = frameInfo?.pts)
             }
         }
@@ -56,7 +56,7 @@ internal class AudioDecoderBootstrapper(
             codec.equals("flac", ignoreCase = true) && formatHandler.validateConfigPacket(codec, firstData)
         return if (announcedConfig) {
             if (!formatHandler.validateConfigPacket(codec, firstData)) {
-                LogManager.e(LogTags.AUDIO_DECODER, "$codec 配置包格式错误")
+                LogManager.e(LogTags.AUDIO_DECODER, "$codec Configuration package format error")
                 null
             } else {
                 DecodeBootstrap(configData = firstData, firstAudioPacket = null, firstAudioPts = null)
@@ -64,7 +64,7 @@ internal class AudioDecoderBootstrapper(
         } else if (looksLikeConfig) {
             DecodeBootstrap(configData = firstData, firstAudioPacket = null, firstAudioPts = null)
         } else {
-            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "未收到配置包，直接使用首个 $codec 音频帧" }
+            AudioDebugLog.d(LogTags.AUDIO_DECODER) { "No configuration package is received, and the first $codec audio frame is used directly." }
             DecodeBootstrap(configData = null, firstAudioPacket = firstData, firstAudioPts = frameInfo?.pts)
         }
     }

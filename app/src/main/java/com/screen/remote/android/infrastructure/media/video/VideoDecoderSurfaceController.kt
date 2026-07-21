@@ -41,9 +41,9 @@ internal class VideoDecoderSurfaceController(
                     setDefaultBufferSize(width, height)
                 }
             dummySurface = Surface(dummySurfaceTexture)
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Dummy Surface 已创建: ${width}x$height" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Dummy Surface Created: ${width}x$height" }
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "创建 dummy Surface 失败: ${e.message}")
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to create dummy Surface: ${e.message}")
         }
     }
 
@@ -57,7 +57,7 @@ internal class VideoDecoderSurfaceController(
             dummySurfaceTexture?.release()
             dummySurfaceTexture = null
         } catch (e: Exception) {
-            LogManager.e(LogTags.VIDEO_DECODER, "释放 dummy Surface 失败: ${e.message}")
+            LogManager.e(LogTags.VIDEO_DECODER, "Failed to release dummy Surface: ${e.message}")
         }
     }
 
@@ -68,7 +68,7 @@ internal class VideoDecoderSurfaceController(
         synchronized(surfaceLock) {
             runCatching { dummySurfaceTexture?.setDefaultBufferSize(width, height) }
                 .onFailure { error ->
-                    LogManager.w(LogTags.VIDEO_DECODER, "调整 dummy Surface 尺寸失败: ${error.message}")
+                    LogManager.w(LogTags.VIDEO_DECODER, "Failed to resize dummy Surface: ${error.message}")
                 }
         }
     }
@@ -85,7 +85,7 @@ internal class VideoDecoderSurfaceController(
                 val codec = decoder
                 if (codec == null || isStopped) {
                     pendingSurface = targetSurface
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器未运行，已保存待应用 Surface" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Codec not running, saved for application Surface" }
                     return
                 }
 
@@ -99,24 +99,24 @@ internal class VideoDecoderSurfaceController(
                     pendingSurface = null
 
                     if (newSurface != null) {
-                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Surface 已切换（恢复渲染）" }
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Surface switched (resume rendering)" }
                     } else {
-                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "已切换到 dummy Surface（后台模式）" }
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Switched to dummy Surface (background mode)" }
                     }
                 } else {
                     pendingSurface = null
-                    LogManager.e(LogTags.VIDEO_DECODER, "无法切换 Surface：dummy Surface 不可用")
+                    LogManager.e(LogTags.VIDEO_DECODER, "Unable to switch Surface: dummy Surface is unavailable")
                 }
             } catch (e: IllegalStateException) {
                 if (e.message?.contains("during start()") == true ||
                     e.message?.contains("not configured for an output surface") == true
                 ) {
-                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "解码器尚未完成 Surface 配置，稍后会自动使用新 Surface" }
+                    VideoDebugLog.d(LogTags.VIDEO_DECODER) { "The decoder has not yet completed Surface configuration and will automatically use the new Surface later" }
                 } else {
-                    LogManager.w(LogTags.VIDEO_DECODER, "切换 Surface 失败（状态异常）: ${e.message}")
+                    LogManager.w(LogTags.VIDEO_DECODER, "Failed to switch Surface (abnormal status): ${e.message}")
                 }
             } catch (e: Exception) {
-                LogManager.e(LogTags.VIDEO_DECODER, "切换 Surface 失败: ${e.message}", e)
+                LogManager.e(LogTags.VIDEO_DECODER, "Failed to switch Surface: ${e.message}", e)
             }
         }
     }
@@ -136,9 +136,9 @@ internal class VideoDecoderSurfaceController(
                 codec.setOutputSurface(targetSurface)
                 appliedSurface = targetSurface
                 pendingSurface = null
-                VideoDebugLog.d(LogTags.VIDEO_DECODER) { "已应用延迟的 Surface 切换" }
+                VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Delayed Surface switching applied" }
             }.onFailure { error ->
-                LogManager.w(LogTags.VIDEO_DECODER, "应用延迟 Surface 切换失败: ${error.message}")
+                LogManager.w(LogTags.VIDEO_DECODER, "Application delay Surface switching failed: ${error.message}")
             }
         }
     }

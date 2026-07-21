@@ -49,7 +49,7 @@ fun IOSStyledDropdownMenu(
                     .widthIn(min = 30.dp, max = 160.dp)
                     .wrapContentSize(),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(IosDesignTokens.cardCornerRadius),
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shadowElevation = 8.dp,
         ) {
             Column(

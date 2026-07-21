@@ -30,11 +30,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Usb
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,13 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.AppTextSizes
 import com.screen.remote.android.core.designsystem.component.DialogContainer
@@ -96,7 +92,36 @@ fun UsbDeviceDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        DialogContainer(maxHeightRatio = 0.7f) {
+        DialogContainer {
+            DialogHeader(
+                title = AdbTexts.USB_DEVICE_LIST_TITLE.get(),
+                onDismiss = onDismiss,
+                showBackButton = false,
+                leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
+                trailingContent = {
+                    IconButton(
+                        onClick = { scope.launch { onScanDevices() } },
+                        enabled = !isScanning && !isConnecting,
+                    ) {
+                        if (isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = LogTexts.LOG_REFRESH_BUTTON.get(),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                },
+            )
+
+            DialogHeaderSpacer()
+
             Column(
                 modifier =
                     Modifier
@@ -107,83 +132,35 @@ fun UsbDeviceDialog(
                             bottom = AppDimens.paddingStandard,
                         ),
             ) {
-                // 标题栏
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = AppDimens.paddingStandard),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = AdbTexts.USB_DEVICE_LIST_TITLE.get(),
-                        fontSize = AppTextSizes.title,
-                        fontWeight = FontWeight.Bold,
-                    )
-
-                    TextButton(
-                        onClick = onDismiss,
-                        enabled = !isConnecting,
-                    ) {
-                        Text(CommonTexts.BUTTON_CLOSE.get())
-                    }
-                }
-
-                HorizontalDivider()
-
-                Spacer(modifier = Modifier.height(AppDimens.spacingStandard))
-
-                // 扫描按钮
-                Button(
-                    onClick = {
-                        scope.launch {
-                            onScanDevices()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isScanning && !isConnecting,
-                ) {
-                    if (isScanning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(
-                        if (isScanning) {
-                            AdbTexts.USB_SCANNING_DEVICES.get()
-                        } else {
-                            AdbTexts.USB_SCAN_BUTTON.get()
-                        },
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(AppDimens.spacingStandard))
-
                 // 设备列表
-                if (usbDevices.isEmpty() && !isScanning) {
+                if (usbDevices.isEmpty()) {
                     Box(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .weight(1f),
+                                .height(150.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = AppTextSizes.body,
-                        )
+                        if (isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Text(
+                                text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = AppTextSizes.body,
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .weight(1f),
+                                .heightIn(max = 300.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(usbDevices.size) { index ->
@@ -273,7 +250,7 @@ fun UsbDeviceSelectionDialog(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = LogTexts.LOG_REFRESH_BUTTON.get(),
-                                tint = AppColors.iOSBlue,
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
@@ -292,7 +269,7 @@ fun UsbDeviceSelectionDialog(
                             bottom = AppDimens.paddingStandard,
                         ),
             ) {
-                if (usbDevices.isEmpty() && !isScanning) {
+                if (usbDevices.isEmpty()) {
                     Box(
                         modifier =
                             Modifier
@@ -300,11 +277,19 @@ fun UsbDeviceSelectionDialog(
                                 .height(150.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = AppTextSizes.body,
-                        )
+                        if (isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else {
+                            Text(
+                                text = AdbTexts.USB_NO_DEVICES_FOUND.get(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = AppTextSizes.body,
+                            )
+                        }
                     }
                 } else {
                     Column(
@@ -441,12 +426,12 @@ fun UsbDeviceItem(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = Color(0xFF4CAF50),
+                                tint = MaterialTheme.colorScheme.secondary,
                             )
                             Text(
                                 text = AdbTexts.USB_PERMISSION_GRANTED_STATUS.get(),
                                 fontSize = AppTextSizes.caption,
-                                color = Color(0xFF4CAF50),
+                                color = MaterialTheme.colorScheme.secondary,
                             )
                         } else {
                             Text(
@@ -473,7 +458,7 @@ fun UsbDeviceItem(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
-                    tint = AppColors.iOSBlue,
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }

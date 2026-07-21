@@ -53,7 +53,7 @@ class ScrcpyClient(
         try {
             System.loadLibrary("scrcpy_adb_bridge")
         } catch (e: UnsatisfiedLinkError) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_NATIVE_LIB_LOAD_FAILED.get()}: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_NATIVE_LIB_LOAD_FAILED.english}: ${e.message}", e)
         }
     }
 
@@ -241,9 +241,9 @@ class ScrcpyClient(
             )
             protectedDeviceId = deviceId
 
-            LogManager.d(LogTags.SCRCPY_CLIENT, "已添加设备到保活列表: $deviceName")
+            LogManager.d(LogTags.SCRCPY_CLIENT, "Device added to keepalive list: $deviceName")
         } catch (e: Exception) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "添加设备到保活列表失败: ${e.message}", e)
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to add device to keepalive list: ${e.message}", e)
         }
     }
 

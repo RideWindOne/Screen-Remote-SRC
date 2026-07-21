@@ -30,6 +30,8 @@ import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionCo
 import com.screen.remote.android.infrastructure.scrcpy.connection.AdbStreamSocket
 import dadb.AdbShellStream
 import dadb.Dadb
+import dadb.DadbRoute
+import dadb.DadbSession
 import dadb.PortForwarder
 import dadb.helper.RemoteAppIconBatchData
 import dadb.helper.RemoteAppIconBatchRequest
@@ -49,6 +51,8 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
@@ -70,12 +74,15 @@ class AdbConnection(
     val deviceId: String,
     val host: String,
     val port: Int,
-    private val dadb: Dadb,
-    private val delayedAckEnabled: Boolean = false,
+    private val dadb: DadbSession,
     var deviceInfo: DeviceInfo,
     private var sessionContext: SessionContext? = null,
 ) {
     private val transportDisconnectNotified = AtomicBoolean(false)
+    private val streamingForwardRegistryMutex = Mutex()
+
+    @Volatile
+    private var streamingForwardRegistry: AdbConnectionForwardRegistry? = null
 
     @Volatile
     private var cachedDisplayInfo: AdbDisplayInfo? = null
@@ -102,7 +109,8 @@ class AdbConnection(
     suspend fun verifyWithoutSessionEvents(): Result<String> =
         AdbConnectionVerifier.verifyDadb(dadb, deviceId, sessionContext = null)
 
-    fun supportsDelayedAck(): Boolean = delayedAckEnabled
+    fun supportsDelayedAck(): Boolean =
+        dadb.routeIfReady(DadbRoute.STREAMING)?.supportsFeature(Dadb.FEATURE_DELAYED_ACK) == true
 
     fun bindSessionContext(sessionContext: SessionContext?) {
         this.sessionContext = sessionContext
@@ -192,13 +200,22 @@ class AdbConnection(
 
     suspend fun openShellStream(command: String): AdbShellStream? = shellExecutor.openStream(command)
 
+    suspend fun openStreamingShellStream(command: String): AdbShellStream? {
+        val streamingDadb = runCatching { streamingDadb() }.getOrElse { error ->
+            LogManager.e(LogTags.ADB_CONNECTION, "Waiting for ADB delayed-ACK secondary link failed: ${error.message}", error)
+            return null
+        }
+        return AdbConnectionShellExecutor(streamingDadb, deviceId).openStream(command)
+    }
+
     suspend fun openPtyShellStream(command: String = ""): AdbShellStream? = shellExecutor.openPtyStream(command)
 
     suspend fun openLocalAbstractSocket(socketName: String): Result<Socket> =
         withContext(Dispatchers.IO) {
             runCatching {
+                val streamingDadb = streamingDadb()
                 AdbStreamSocket(
-                    adbStream = dadb.open("localabstract:$socketName"),
+                    adbStream = streamingDadb.open("localabstract:$socketName"),
                     streamLabel = socketName,
                 )
             }
@@ -223,16 +240,19 @@ class AdbConnection(
     suspend fun setupAdbForward(
         localPort: Int,
         socketName: String,
-    ): Result<Boolean> = forwardRegistry.setupAdbForward(localPort, socketName)
+    ): Result<Boolean> = streamingForwardRegistry().setupAdbForward(localPort, socketName)
 
-    suspend fun checkAdbForward(localPort: Int): Boolean = forwardRegistry.checkAdbForward(localPort)
+    suspend fun checkAdbForward(localPort: Int): Boolean =
+        streamingForwardRegistry?.checkAdbForward(localPort) ?: false
 
-    fun isAdbForwardRunning(localPort: Int): Boolean = forwardRegistry.isAdbForwardRunning(localPort)
+    fun isAdbForwardRunning(localPort: Int): Boolean =
+        streamingForwardRegistry?.isAdbForwardRunning(localPort) == true
 
     suspend fun removeAdbForward(
         localPort: Int,
         trigger: ForwardRemovalTrigger = ForwardRemovalTrigger.Unknown,
-    ): Result<Boolean> = forwardRegistry.removeAdbForward(localPort, trigger)
+    ): Result<Boolean> =
+        streamingForwardRegistry?.removeAdbForward(localPort, trigger) ?: Result.success(true)
 
     suspend fun pushFile(
         localPath: String,
@@ -254,17 +274,24 @@ class AdbConnection(
     suspend fun pushScrcpyServer(
         context: Context,
         scrcpyServerPath: String = "/data/local/tmp/scrcpy-server.jar",
-    ): Result<Boolean> = AdbFileOperations.pushScrcpyServer(dadb, context, scrcpyServerPath)
+    ): Result<Boolean> =
+        runCatching { streamingDadb() }
+            .fold(
+                onSuccess = { streamingDadb ->
+                    AdbFileOperations.pushScrcpyServer(streamingDadb, context, scrcpyServerPath)
+                },
+                onFailure = { error -> Result.failure(error) },
+            )
 
     suspend fun prepareAppIconHelper(localHelperJar: File): Result<RemoteHelperFileState> =
         withContext(Dispatchers.IO) {
-            dManagement(LogTags.ADB_CONNECTION) { "helper 准备 jar=${localHelperJar.absolutePath}" }
+            dManagement(LogTags.ADB_CONNECTION) { "helper preparation jar=${localHelperJar.absolutePath}" }
             runCatching {
                 dadb.prepareRemoteAppIconHelper(localHelperJar)
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "helper 准备失败: ${error.message}",
+                    "Helper preparation failed: ${error.message}",
                     error,
                 )
             }
@@ -288,7 +315,7 @@ class AdbConnection(
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "helper 图标请求失败 package=$packageName: ${error.message}",
+                    "Helper icon request failed package=$packageName: ${error.message}",
                     error,
                 )
             }
@@ -314,7 +341,7 @@ class AdbConnection(
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "helper 列表请求失败 offset=$offset limit=$limit includeSystem=$includeSystem: ${error.message}",
+                    "Helper list request failed offset=$offset limit=$limit includeSystem=$includeSystem: ${error.message}",
                     error,
                 )
             }
@@ -336,7 +363,7 @@ class AdbConnection(
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "helper 批量图标请求失败 count=${requests.size}: ${error.message}",
+                    "Helper batch icon request failed count=${requests.size}: ${error.message}",
                     error,
                 )
             }
@@ -360,7 +387,7 @@ class AdbConnection(
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "helper probe 失败 command=$command: ${error.message}",
+                    "Helper probe failed command=$command: ${error.message}",
                     error,
                 )
             }
@@ -376,7 +403,18 @@ class AdbConnection(
             sessionContext?.emit(SessionEvent.VideoEncoderDetecting(detectionContext))
             sessionContext?.emit(SessionEvent.AudioEncoderDetecting(detectionContext))
         }
-        val result = AdbEncoderDetector.detectEncoders(dadb, context, ::openShellStream, skipPush)
+        val streamingDadb =
+            runCatching { streamingDadb() }.getOrElse { error ->
+                return Result.failure(error)
+            }
+        val streamingShellExecutor = AdbConnectionShellExecutor(streamingDadb, deviceId)
+        val result =
+            AdbEncoderDetector.detectEncoders(
+                streamingDadb,
+                context,
+                streamingShellExecutor::openStream,
+                skipPush,
+            )
 
         if (result.isSuccess && persistToBoundSession) {
             withContext(Dispatchers.IO) {
@@ -436,11 +474,11 @@ class AdbConnection(
 
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
-                            "已保存编解码器到会话 ${session.sessionId}: 视频=${videoEncoders.size}, 音频=${audioEncoders.size}",
+                            "Codec saved to session ${session.sessionId}: video=${videoEncoders.size}, audio=${audioEncoders.size}",
                         )
                     }
                 } catch (e: Exception) {
-                    LogManager.w(LogTags.ADB_CONNECTION, "异步保存编码器列表失败: ${e.message}")
+                    LogManager.w(LogTags.ADB_CONNECTION, "Asynchronous saving of encoder list failed: ${e.message}")
                 }
             }
         } else if (result.isFailure && persistToBoundSession) {
@@ -467,18 +505,38 @@ class AdbConnection(
     }
 
     fun close() {
-        try {
-            forwardRegistry.closeAll()
-            dadb.close()
-            LogManager.d(LogTags.ADB_CONNECTION, "ADB 连接已关闭: $deviceId")
-        } catch (e: Exception) {
+        val failures =
+            listOfNotNull(
+                runCatching { forwardRegistry.closeAll() }.exceptionOrNull(),
+                runCatching { streamingForwardRegistry?.closeAll() }.exceptionOrNull(),
+                runCatching { dadb.close() }.exceptionOrNull(),
+            )
+        if (failures.isEmpty()) {
+            LogManager.d(LogTags.ADB_CONNECTION, "ADB connection closed: $deviceId")
+        } else {
+            val first = failures.first()
             LogManager.e(
                 LogTags.ADB_CONNECTION,
-                "关闭 ADB 连接失败: ${e.message}",
-                e,
+                "${failures.size} resource release failed when closing ADB connection: ${first.message}",
+                first,
             )
         }
     }
+
+    private suspend fun streamingForwardRegistry(): AdbConnectionForwardRegistry =
+        streamingForwardRegistryMutex.withLock {
+            streamingForwardRegistry
+                ?: AdbConnectionForwardRegistry(
+                    dadb = streamingDadb(),
+                    deviceId = deviceId,
+                    sessionContextProvider = { sessionContext },
+                ).also { streamingForwardRegistry = it }
+        }
+
+    private suspend fun streamingDadb(): Dadb =
+        withContext(Dispatchers.IO) {
+            dadb.route(DadbRoute.STREAMING)
+        }
 }
 
 internal class AdbConnectionShellExecutor(
@@ -505,7 +563,7 @@ internal class AdbConnectionShellExecutor(
                 logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.get()} (ECONNREFUSED)，${AdbTexts.ADB_CANNOT_EXECUTE_COMMAND.get()}: $command - ${e.message}",
+                    "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.english} (ECONNREFUSED)，${AdbTexts.ADB_CANNOT_EXECUTE_COMMAND.english}: $command - ${e.message}",
                 )
                 Result.failure(Exception(AdbTexts.ERROR_ADB_CONNECTION_DISCONNECTED.get(), e))
             } catch (e: EOFException) {
@@ -516,7 +574,7 @@ internal class AdbConnectionShellExecutor(
                 if (e.message?.contains("ECONNREFUSED", ignoreCase = true) == true) {
                     LogManager.d(
                         LogTags.ADB_CONNECTION,
-                        "${AdbTexts.ADB_SOCKET_EXCEPTION.get()} (ECONNREFUSED): $command - ${e.message}",
+                        "${AdbTexts.ADB_SOCKET_EXCEPTION.english} (ECONNREFUSED): $command - ${e.message}",
                     )
                     Result.failure(Exception(AdbTexts.ERROR_ADB_CONNECTION_DISCONNECTED.get(), e))
                 } else {
@@ -526,7 +584,7 @@ internal class AdbConnectionShellExecutor(
                 logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_EXECUTE_COMMAND_FAILED.get()}: device=$deviceId, msg=${e.message}",
+                    "${AdbTexts.ADB_EXECUTE_COMMAND_FAILED.english}: device=$deviceId, msg=${e.message}",
                     e,
                 )
                 Result.failure(e)
@@ -541,7 +599,7 @@ internal class AdbConnectionShellExecutor(
                 logShellStreamReady(LogTags.ADB_CONNECTION, command)
             } catch (e: Exception) {
                 logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_ASYNC_EXECUTE_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_ASYNC_EXECUTE_FAILED.english}: ${e.message}", e)
             }
         }
 
@@ -554,7 +612,7 @@ internal class AdbConnectionShellExecutor(
                 }
             } catch (e: Exception) {
                 logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_OPEN_SHELL_STREAM_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_OPEN_SHELL_STREAM_FAILED.english}: ${e.message}", e)
                 null
             }
         }
@@ -568,7 +626,7 @@ internal class AdbConnectionShellExecutor(
                 }
             } catch (e: Exception) {
                 logShellCommandFailure(LogTags.ADB_CONNECTION, command.ifBlank { "<interactive pty>" }, e)
-                LogManager.w(LogTags.ADB_CONNECTION, "PTY shell 打开失败，回退到 raw shell: ${e.message}")
+                LogManager.w(LogTags.ADB_CONNECTION, "PTY shell failed to open and fell back to raw shell: ${e.message}")
                 runCatching {
                     dadb.openShell(command).also {
                         logShellStreamReady(LogTags.ADB_CONNECTION, command.ifBlank { "<interactive raw>" })
@@ -576,7 +634,7 @@ internal class AdbConnectionShellExecutor(
                 }.getOrElse { fallbackError ->
                     LogManager.e(
                         LogTags.ADB_CONNECTION,
-                        "${AdbTexts.ADB_OPEN_SHELL_STREAM_FAILED.get()}: ${fallbackError.message}",
+                        "${AdbTexts.ADB_OPEN_SHELL_STREAM_FAILED.english}: ${fallbackError.message}",
                         fallbackError,
                     )
                     null
@@ -592,12 +650,12 @@ internal class AdbConnectionShellExecutor(
         if (!retryOnFailure) {
             LogManager.d(
                 LogTags.ADB_CONNECTION,
-                "${AdbTexts.ADB_CONNECTION_CLOSED.get()}，${AdbTexts.ADB_CANNOT_EXECUTE_COMMAND.get()}: $command",
+                "${AdbTexts.ADB_CONNECTION_CLOSED.english}，${AdbTexts.ADB_CANNOT_EXECUTE_COMMAND.english}: $command",
             )
             return Result.failure(originalError)
         }
 
-        LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_AUTO_RECONNECT_RETRY.get()}: $command")
+        LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_AUTO_RECONNECT_RETRY.english}: $command")
         return try {
             delay(100)
             val retryResponse = dadb.shell(command)
@@ -608,13 +666,13 @@ internal class AdbConnectionShellExecutor(
                 output = retryResponse.output,
                 errorOutput = retryResponse.errorOutput,
             )
-            LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_AUTO_RECONNECT_SUCCESS.get())
+            LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_AUTO_RECONNECT_SUCCESS.english)
             Result.success(retryResponse.output)
         } catch (retryException: Exception) {
             logShellCommandFailure(LogTags.ADB_CONNECTION, command, retryException)
             LogManager.d(
                 LogTags.ADB_CONNECTION,
-                "${AdbTexts.ADB_AUTO_RECONNECT_STILL_FAILED.get()}: ${retryException.message}",
+                "${AdbTexts.ADB_AUTO_RECONNECT_STILL_FAILED.english}: ${retryException.message}",
             )
             Result.failure(retryException)
         }
@@ -644,11 +702,11 @@ internal class AdbConnectionForwardRegistry(
 
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_PORT_FORWARD_SUCCESS.get()}: $localPort -> $remotePort",
+                    "${AdbTexts.ADB_PORT_FORWARD_SUCCESS.english}: $localPort -> $remotePort",
                 )
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_PORT_FORWARD_FAILED.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_PORT_FORWARD_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -691,7 +749,7 @@ internal class AdbConnectionForwardRegistry(
 
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_SOCKET_FORWARDER_FAILED.get()}: ${e.message}",
+                    "${AdbTexts.ADB_SOCKET_FORWARDER_FAILED.english}: ${e.message}",
                     e,
                 )
 
@@ -768,7 +826,7 @@ internal class AdbConnectionForwardRegistry(
                 )
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FORWARD_REMOVE_EXCEPTION.get()}: ${e.message}", e)
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FORWARD_REMOVE_EXCEPTION.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -888,7 +946,7 @@ internal object AdbConnectionVerifier {
                 } catch (closeException: Exception) {
                     LogManager.w(
                         LogTags.ADB_CONNECTION,
-                        "${AdbTexts.ADB_CLOSE_DADB_ERROR.get()}: ${closeException.message}",
+                        "${AdbTexts.ADB_CLOSE_DADB_ERROR.english}: ${closeException.message}",
                     )
                 }
             }

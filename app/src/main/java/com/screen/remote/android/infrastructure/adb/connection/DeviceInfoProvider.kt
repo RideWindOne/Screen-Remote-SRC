@@ -51,24 +51,24 @@ internal object DeviceInfoProvider {
                     connectionType = connectionType,
                 )
             } catch (e: java.net.ConnectException) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.get()}: ${e.message}")
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.english}: ${e.message}")
                 throw Exception(AdbTexts.ADB_RECONNECT_DEVICE.get(), e)
             } catch (e: java.io.EOFException) {
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_HANDSHAKE_FAILED_OR_INTERRUPTED.get()}: ${e.message}",
+                    "${AdbTexts.ADB_HANDSHAKE_FAILED_OR_INTERRUPTED.english}: ${e.message}",
                 )
                 throw Exception(AdbTexts.ADB_COMMUNICATION_FAILED.get(), e)
             } catch (e: IllegalStateException) {
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "连接已断开",
+                    "The connection has been lost",
                 )
                 throw e
             } catch (e: Exception) {
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED_DETAIL.get()}: ${e.message}",
+                    "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED_DETAIL.english}: ${e.message}",
                     e,
                 )
                 throw Exception("${AdbTexts.ADB_CANNOT_GET_DEVICE_INFO.get()}: ${e.message}", e)

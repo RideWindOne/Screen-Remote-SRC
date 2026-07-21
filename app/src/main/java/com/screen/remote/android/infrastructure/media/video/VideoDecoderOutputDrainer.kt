@@ -44,7 +44,7 @@ internal class VideoDecoderOutputDrainer(
             }
         } catch (e: Exception) {
             if (isStopped()) return
-            LogManager.e(LogTags.VIDEO_DECODER, "输出缓冲区处理异常: ${e.message}", e)
+            LogManager.e(LogTags.VIDEO_DECODER, "Output buffer handling exception: ${e.message}", e)
             throw e
         }
     }
@@ -91,7 +91,7 @@ internal class VideoDecoderOutputDrainer(
         outputStatus: Int,
     ) {
         if (outputStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "输出格式变化" }
+            VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Output format changes" }
             formatHandler.updateVideoSizeFromOutputFormat(codec.outputFormat)
         }
     }
