@@ -14,13 +14,13 @@
   "properties": {
     "commit_subject": {
       "type": "string",
-      "description": "An imperative English commit subject.",
+      "description": "An imperative English commit subject without the Screen-Remote-Review trailer.",
       "minLength": 1,
       "maxLength": 72
     },
     "commit_body": {
       "type": "string",
-      "description": "A concrete English commit body; use bullet points when useful."
+      "description": "A concrete English commit body; use bullet points when useful. Do not include the Screen-Remote-Review trailer because the hook appends it."
     },
     "wiki_action": {
       "type": "string",

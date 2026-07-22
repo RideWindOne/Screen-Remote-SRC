@@ -138,7 +138,7 @@ class ScrcpyController(
             )
 
             dControl(LogTags.SCRCPY_CLIENT) {
-                "通过剪贴板注入文本: utf8Bytes=${text.toByteArray(Charsets.UTF_8).size}"
+                "Injecting text via clipboard: utf8Bytes=${text.toByteArray(Charsets.UTF_8).size}"
             }
 
             try {
@@ -244,7 +244,7 @@ class ScrcpyController(
     private fun ensureControlSocketReady(): Socket? {
         val socket = transport.currentSocket()
         dControl(LogTags.SCRCPY_CLIENT) {
-            "发送按键 socket=${socket != null}, closed=${socket?.isClosed}, connected=${socket?.isConnected}"
+            "Sending key event: socket=${socket != null}, closed=${socket?.isClosed}, connected=${socket?.isConnected}"
         }
         if (socket == null || socket.isClosed || !socket.isConnected) {
             LogManager.e(LogTags.SCRCPY_CLIENT, RemoteTexts.ERROR_CONTROL_NOT_READY.english)

@@ -162,7 +162,7 @@ internal class AdbBridgeCommandExecutor(
     private val state: AdbBridgeState,
 ) {
     fun execute(args: Array<String>): AdbBridgeCommandResult {
-        val connection = state.currentConnection ?: return AdbBridgeCommandResult(false, "ADB 未连接")
+        val connection = state.currentConnection ?: return AdbBridgeCommandResult(false, "ADB is not connected")
 
         return when {
             args.size >= 2 && args[0] == "shell" -> {
@@ -190,7 +190,7 @@ internal class AdbBridgeCommandExecutor(
             }
 
             else -> {
-                AdbBridgeCommandResult(false, "不支持的 ADB 命令: ${args.joinToString(" ")}")
+                AdbBridgeCommandResult(false, "Unsupported ADB command: ${args.joinToString(" ")}")
             }
         }
     }
@@ -201,7 +201,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.executeShell(command)
-            result.toCommandResult(failureMessage = "执行失败")
+            result.toCommandResult(failureMessage = "Execution failed")
         }
 
     private fun executePushCommand(
@@ -211,7 +211,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.pushFile(local, remote)
-            result.toCommandResult(failureMessage = "推送失败", successOutput = "")
+            result.toCommandResult(failureMessage = "Push failed", successOutput = "")
         }
 
     private fun executePullCommand(
@@ -221,7 +221,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.pullFile(remote, local)
-            result.toCommandResult(failureMessage = "拉取失败", successOutput = "")
+            result.toCommandResult(failureMessage = "Pull failed", successOutput = "")
         }
 
     private fun executeForwardCommand(
@@ -233,12 +233,12 @@ internal class AdbBridgeCommandExecutor(
         val remotePort = remote.substringAfter("tcp:").toIntOrNull()
 
         if (localPort == null || remotePort == null) {
-            return AdbBridgeCommandResult(false, "无效的端口格式")
+            return AdbBridgeCommandResult(false, "Invalid port format")
         }
 
         return runBlocking {
             val result = connection.setupPortForward(localPort, remotePort)
-            result.toCommandResult(failureMessage = "端口转发失败", successOutput = "")
+            result.toCommandResult(failureMessage = "Port forwarding failed", successOutput = "")
         }
     }
 
@@ -248,7 +248,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.installApk(apkPath)
-            result.toCommandResult(failureMessage = "安装失败", successOutput = "")
+            result.toCommandResult(failureMessage = "Installation failed", successOutput = "")
         }
 
     private fun executeUninstallCommand(
@@ -257,7 +257,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.uninstallPackage(packageName)
-            result.toCommandResult(failureMessage = "卸载失败", successOutput = "")
+            result.toCommandResult(failureMessage = "Uninstallation failed", successOutput = "")
         }
 }
 

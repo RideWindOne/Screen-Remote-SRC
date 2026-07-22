@@ -7,7 +7,7 @@ data class AdbDisplayInfo(
 )
 
 internal fun parseAdbDisplayInfo(output: String): AdbDisplayInfo {
-    val currentSize = DISPLAY_SIZE_REGEX.findAll(output).lastOrNull() ?: error("无法读取设备当前分辨率")
+    val currentSize = DISPLAY_SIZE_REGEX.findAll(output).lastOrNull() ?: error("Unable to read the current device resolution")
     val currentDensity = DISPLAY_DENSITY_REGEX.findAll(output).lastOrNull()
     return AdbDisplayInfo(
         currentWidth = currentSize.groupValues[1].toInt(),

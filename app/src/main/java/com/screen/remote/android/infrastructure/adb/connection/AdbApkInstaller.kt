@@ -28,12 +28,12 @@ internal suspend fun stageAndInstallApk(
         var tempFile: File? = null
         try {
             val tempDir = File(cacheDir, "adb-apk-install").apply {
-                check(exists() || mkdirs()) { "无法创建 APK 临时目录。" }
+                check(exists() || mkdirs()) { "Unable to create the temporary APK directory." }
             }
             tempFile = File.createTempFile("picked-", ".apk", tempDir)
             openInputStream()?.use { input ->
                 tempFile.outputStream().use(input::copyTo)
-            } ?: error("无法读取选择的 APK。")
+            } ?: error("Unable to read the selected APK.")
             install(tempFile.absolutePath)
         } catch (error: CancellationException) {
             throw error

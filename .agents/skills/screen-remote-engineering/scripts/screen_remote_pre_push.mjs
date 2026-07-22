@@ -1,22 +1,45 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 const ZERO_SHA = "0".repeat(40);
 const REVIEW_MARKER = "Screen-Remote-Review: confirmed";
+const CODEX_MODEL = "gpt-5.5";
+const CODEX_REASONING_EFFORT = "medium";
 
-function run(cwd, args, { stream = false } = {}) {
+function run(cwd, args) {
   const result = spawnSync(args[0], args.slice(1), {
     cwd,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
-    stdio: stream ? "inherit" : ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  if (stream) return [result.status ?? 1, ""];
   return [result.status ?? 1, `${result.stdout ?? ""}${result.stderr ?? ""}`.trim()];
+}
+
+function runStreaming(cwd, args, onOutput) {
+  return new Promise((resolve) => {
+    const child = spawn(args[0], args.slice(1), {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.stdout.on("data", (chunk) => {
+      process.stdout.write(chunk);
+      onOutput?.(chunk.toString("utf8"));
+    });
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      onOutput?.(chunk.toString("utf8"));
+    });
+    child.on("error", (error) => {
+      console.error(`无法启动 ${args[0]}：${error.message}`);
+      resolve([1, ""]);
+    });
+    child.on("close", (code) => resolve([code ?? 1, ""]));
+  });
 }
 
 function git(repo, ...args) {
@@ -74,7 +97,92 @@ function isCompleteResult(result) {
     && typeof result.change_summary === "string";
 }
 
-function main() {
+function withoutReviewMarker(text) {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== REVIEW_MARKER)
+    .join("\n")
+    .trim();
+}
+
+function createSessionRecorder({ baseSha, contextPath, localSha }) {
+  let buffer = "";
+  let sessionId = null;
+  return (chunk) => {
+    if (sessionId) return;
+    buffer = `${buffer}${chunk}`.replace(/\x1b\[[0-9;]*m/g, "").slice(-4096);
+    const match = buffer.match(/session id:\s*([0-9a-f]{8}-[0-9a-f-]{27})/i);
+    if (!match) return;
+    sessionId = match[1];
+    writeFileSync(contextPath, `${JSON.stringify({
+      base_sha: baseSha,
+      local_sha: localSha,
+      model: CODEX_MODEL,
+      reasoning_effort: CODEX_REASONING_EFFORT,
+      session_id: sessionId,
+      status: "running",
+    }, null, 2)}\n`);
+  };
+}
+
+function finishReview(result, { contextPath, messagePath, wikiRepo }) {
+  if (!isCompleteResult(result)) throw new Error("Codex pre-push 未生成有效结果");
+  if (result.wiki_action === "blocked") throw new Error(result.wiki_reason);
+
+  const wikiDirty = wikiStatus(wikiRepo);
+  if (result.wiki_action === "updated" && !wikiDirty) throw new Error("Codex 报告 Wiki 已更新，但外层 external/wiki/ 没有修改");
+  if (result.wiki_action === "no_update" && wikiDirty) throw new Error("Codex 报告无需更新 Wiki，但外层 external/wiki/ 出现了修改");
+
+  const subject = withoutReviewMarker(result.commit_subject);
+  const body = withoutReviewMarker(result.commit_body);
+  if (!subject) throw new Error("Codex 生成的 commit subject 仅包含确认标记");
+  writeFileSync(messagePath, `${subject}${body ? `\n\n${body}` : ""}\n\n${REVIEW_MARKER}\n`);
+
+  showMessage(messagePath);
+  console.log(`\nWiki decision: ${result.wiki_action} — ${result.wiki_reason}`);
+  if (result.wiki_pages.length) console.log(`Wiki pages: ${result.wiki_pages.join(", ")}`);
+  writeFileSync(contextPath, "");
+}
+
+async function resumeInterruptedReview() {
+  const appRepo = path.resolve(git(process.cwd(), "rev-parse", "--show-toplevel"));
+  const outer = path.dirname(appRepo);
+  const wikiRepo = path.join(outer, "external", "wiki");
+  const skillDir = path.join(appRepo, ".agents", "skills", "screen-remote-engineering");
+  const stateDir = path.resolve(appRepo, git(appRepo, "rev-parse", "--git-path", "codex-pre-push"));
+  const messagePath = path.join(stateDir, "commit-message.txt");
+  const resultPath = path.join(stateDir, "result.json");
+  const contextPath = path.join(stateDir, "review-context.json");
+  const context = readJson(contextPath);
+
+  if (context?.status !== "running" || !context.base_sha || !context.local_sha || !context.session_id) {
+    throw new Error("没有可恢复的 pre-push Wiki 审读任务");
+  }
+  if (git(appRepo, "rev-parse", "HEAD") !== context.local_sha) {
+    throw new Error("当前 HEAD 已变化；请直接再次 git push，让 hook 审读新的提交范围");
+  }
+  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git"))) {
+    throw new Error("outer project, skill, or external/wiki repository not found");
+  }
+
+  const schemaPath = path.join(skillDir, "scripts", "pre_push_result.schema.json");
+  const resumePrompt = `Continue the interrupted Screen-Remote pre-push review for ${context.base_sha}..${context.local_sha}. Reuse the context and tool results already present in this session instead of restarting the review. Inspect the existing Wiki working-tree changes, finish any incomplete bilingual updates, and return the required structured result. Keep ${appRepo} read-only and write only inside ${wikiRepo}. Write commit_subject and commit_body in English without the ${REVIEW_MARKER} trailer.`;
+  writeFileSync(resultPath, "");
+  console.log("\n▶ 正在恢复上次中断的 Codex pre-push 审读");
+  console.log(`  范围：${context.base_sha.slice(0, 12)}..${context.local_sha.slice(0, 12)}`);
+  console.log(`  模型：${CODEX_MODEL} / ${CODEX_REASONING_EFFORT}`);
+  console.log(`  Session：${context.session_id}`);
+  console.log(`  Wiki：${wikiRepo}\n`);
+  const [code] = await runStreaming(wikiRepo, ["codex", "exec", "resume", "--model", CODEX_MODEL, "--config", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`, "--output-schema", schemaPath, "--output-last-message", resultPath, context.session_id, resumePrompt]);
+  const result = readJson(resultPath);
+  finishReview(result, { contextPath, messagePath, wikiRepo });
+  if (code !== 0) console.warn("\n警告：Codex 返回非零状态，但已生成有效结果；继续处理本次结果。");
+  console.log("\n恢复完成。请检查 Wiki 和生成的 commit message；该命令不会执行 git push。");
+  return 0;
+}
+
+async function main() {
+  if (process.argv[2] === "--resume") return resumeInterruptedReview();
   if (process.argv.length < 4) {
     console.error("usage: screen_remote_pre_push.mjs <remote-name> <remote-url>");
     return 2;
@@ -104,56 +212,51 @@ function main() {
   const messagePath = path.join(stateDir, "commit-message.txt");
   const resultPath = path.join(stateDir, "result.json");
   const contextPath = path.join(stateDir, "review-context.json");
-  const cachedContext = readJson(contextPath);
-  const cachedResult = readJson(resultPath);
-  const cacheMatches = cachedContext?.base_sha === baseSha
-    && cachedContext?.local_sha === localSha
-    && cachedContext?.status === "complete"
-    && isCompleteResult(cachedResult);
+  const existingContext = readJson(contextPath);
+  if (existingContext?.status === "running"
+      && existingContext.base_sha === baseSha
+      && existingContext.local_sha === localSha
+      && existingContext.session_id) {
+    console.error(`检测到同一提交范围的中断任务，请运行：make -C ${outer} wiki-resume`);
+    return 1;
+  }
 
   if (process.env.SCREEN_REMOTE_PRE_PUSH_TEST === "1") {
     console.log(`self-test: would analyze ${baseSha.slice(0, 12)}..${localSha.slice(0, 12)} (${outgoingCount} commits)`);
     return 0;
   }
-  let result = cachedResult;
-  if (cacheMatches) {
-    console.log(`\n✓ 已复用相同范围的 Codex 审读结果：${baseSha.slice(0, 12)}..${localSha.slice(0, 12)}`);
-  } else {
-    if (wikiStatus(wikiRepo)) {
-      console.error("push 已暂停：外层 external/wiki/ 已有未提交修改，无法安全区分本轮同步。");
-      return 1;
-    }
-    const [codexCode] = run(appRepo, ["codex", "--version"]);
-    if (codexCode !== 0) throw new Error("找不到 codex CLI");
+  if (wikiStatus(wikiRepo)) {
+    console.error("push 已暂停：外层 external/wiki/ 已有未提交修改，无法安全区分本轮同步。");
+    return 1;
+  }
+  const [codexCode] = run(appRepo, ["codex", "--version"]);
+  if (codexCode !== 0) throw new Error("找不到 codex CLI");
 
   const schemaPath = path.join(skillDir, "scripts", "pre_push_result.schema.json");
-  const prompt = `Use $screen-remote-engineering and read references/wiki-sync.md completely.\n\nThis task was triggered by a human git push from the Screen-Remote app subrepository.\nAnalyze exactly the committed range ${baseSha}..${localSha} in ${appRepo}. It currently contains ${outgoingCount} outgoing commit(s), which the developer may squash after receiving your message.\nDo not use existing commit messages as your summary source.\nRead changed hunks, relevant contracts, and nearby tests. When documented knowledge changes, update complete Chinese/English page pairs only in the outer-root GitHub Wiki repository at ${wikiRepo}; use <name>.md and <name>-EN.md with reciprocal language links. Never create wiki pages inside the Screen-Remote app repository.\nDo not run git rebase, commit, amend, reset, push, or modify files outside wiki.\nReturn the requested structured result, including a Chinese commit message derived from the code.`;
-  const resolvedPrompt = `${prompt.replace("references/wiki-sync.md", path.join(skillDir, "references", "wiki-sync.md"))}\nWrite commit_subject and commit_body in English only.`;
-  writeFileSync(contextPath, `${JSON.stringify({ base_sha: baseSha, local_sha: localSha, status: "running" }, null, 2)}\n`);
+  const skillPath = path.join(skillDir, "SKILL.md");
+  const wikiSyncPath = path.join(skillDir, "references", "wiki-sync.md");
+  const prompt = `Use $screen-remote-engineering by reading ${skillPath} and ${wikiSyncPath} completely.\n\nThis task was triggered by a human git push from the Screen-Remote app subrepository.\nTreat ${appRepo} as a read-only source repository and run app Git commands with git -C ${appRepo}. Your only writable project directory is the Wiki repository at ${wikiRepo}.\nAnalyze exactly the committed range ${baseSha}..${localSha} in ${appRepo}. It currently contains ${outgoingCount} outgoing commit(s), which the developer may squash after receiving your message.\nDo not use existing commit messages as your summary source.\nRead changed hunks, relevant contracts, and nearby tests. When documented knowledge changes, update complete Chinese/English page pairs only in ${wikiRepo}; use <name>.md and <name>-EN.md with reciprocal language links. Never create wiki pages inside the Screen-Remote app repository.\nDo not run git rebase, commit, amend, reset, push, or modify files outside wiki.\nReturn the requested structured result, including an English commit message derived from the code.\nWrite commit_subject and commit_body in English only. Do not include the ${REVIEW_MARKER} trailer in either field; the hook appends it exactly once.`;
+  writeFileSync(contextPath, `${JSON.stringify({
+    base_sha: baseSha,
+    local_sha: localSha,
+    model: CODEX_MODEL,
+    reasoning_effort: CODEX_REASONING_EFFORT,
+    session_id: null,
+    status: "running",
+  }, null, 2)}\n`);
   writeFileSync(resultPath, "");
   console.log("\n▶ Codex pre-push 审读已启动");
   console.log(`  范围：${baseSha.slice(0, 12)}..${localSha.slice(0, 12)}（${outgoingCount} commits）`);
+  console.log(`  模型：${CODEX_MODEL} / ${CODEX_REASONING_EFFORT}`);
   console.log(`  Wiki：${wikiRepo}`);
+  console.log(`  若任务中断：make -C ${outer} wiki-resume`);
   console.log("  以下为 Codex 实时输出：\n");
-  const [code] = run(appRepo, ["codex", "exec", "--ephemeral", "--sandbox", "workspace-write", "--cd", appRepo, "--add-dir", wikiRepo, "--output-schema", schemaPath, "--output-last-message", resultPath, "--color", "always", resolvedPrompt], { stream: true });
-  result = readJson(resultPath);
-  if (!isCompleteResult(result)) throw new Error("Codex pre-push 未生成有效结果");
-  writeFileSync(contextPath, `${JSON.stringify({ base_sha: baseSha, local_sha: localSha, status: "complete" }, null, 2)}\n`);
+  const recordSession = createSessionRecorder({ baseSha, contextPath, localSha });
+  const [code] = await runStreaming(wikiRepo, ["codex", "exec", "--model", CODEX_MODEL, "--config", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`, "--sandbox", "workspace-write", "--cd", wikiRepo, "--output-schema", schemaPath, "--output-last-message", resultPath, "--color", "always", prompt], recordSession);
+  const result = readJson(resultPath);
+  finishReview(result, { contextPath, messagePath, wikiRepo });
   if (code !== 0) console.warn("\n警告：Codex 返回非零状态，但已生成有效结果；继续处理本次结果。");
-  }
 
-  if (result.wiki_action === "blocked") throw new Error(result.wiki_reason);
-  const wikiDirty = wikiStatus(wikiRepo);
-  if (result.wiki_action === "updated" && !wikiDirty) throw new Error("Codex 报告 Wiki 已更新，但外层 external/wiki/ 没有修改");
-  if (result.wiki_action === "no_update" && wikiDirty) throw new Error("Codex 报告无需更新 Wiki，但外层 external/wiki/ 出现了修改");
-
-  const subject = result.commit_subject.trim();
-  const body = result.commit_body.trim();
-  writeFileSync(messagePath, `${subject}${body ? `\n\n${body}` : ""}\n\n${REVIEW_MARKER}\n`);
-
-  showMessage(messagePath);
-  console.log(`\nWiki decision: ${result.wiki_action} — ${result.wiki_reason}`);
-  if (result.wiki_pages.length) console.log(`Wiki pages: ${result.wiki_pages.join(", ")}`);
   console.log(`\n请先 rebase/squash，然后编辑上述 message（保留最后的 ${REVIEW_MARKER}）。`);
   console.log(`可从文件采用：git commit --amend -F ${messagePath}`);
   console.error("本次 push 已暂停；完成整理后再次 push，由 hook 做最终确认。");
@@ -161,7 +264,7 @@ function main() {
 }
 
 try {
-  process.exitCode = main();
+  process.exitCode = await main();
 } catch (error) {
   console.error(`push 已暂停：${error.message}`);
   process.exitCode = 1;

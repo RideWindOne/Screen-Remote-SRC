@@ -186,7 +186,7 @@ internal class VideoDecoderConfigurationException(
     codecLabel: String,
     reason: String,
     cause: Throwable? = null,
-) : IllegalStateException("$codecLabel 配置失败: $reason", cause)
+) : IllegalStateException("$codecLabel configuration failed: $reason", cause)
 
 internal class VideoOutputFormatReporter {
     var onVideoSizeChanged: ((width: Int, height: Int, rotation: Int) -> Unit)? = null

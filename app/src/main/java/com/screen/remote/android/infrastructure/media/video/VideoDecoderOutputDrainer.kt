@@ -81,7 +81,7 @@ internal class VideoDecoderOutputDrainer(
         onOutputFrame(render)
         if (renderedFrameCount <= 8 || renderedFrameCount % 60 == 0) {
             VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-                "解码器输出帧 #$renderedFrameCount: size=${output.size} render=$render ptsUs=${output.presentationTimeUs}"
+                "Decoder output frame #$renderedFrameCount: size=${output.size} render=$render ptsUs=${output.presentationTimeUs}"
             }
         }
     }

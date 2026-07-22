@@ -74,7 +74,7 @@ internal class AudioDecoderBootstrapper(
         data: ByteArray,
     ) {
         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-            "第一个包: codec=$codec, size=${data.size}, data=${data.take(16).joinToString(" ") { "%02X".format(it) }}..."
+            "The first package: codec=$codec, size=${data.size}, data=${data.take(16).joinToString(" ") { "%02X".format(it) }}..."
         }
     }
 

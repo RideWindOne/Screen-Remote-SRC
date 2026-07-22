@@ -518,7 +518,7 @@ internal class ScrcpyControllerTransport(
         e: Exception,
         isKeepalive: Boolean,
     ) {
-        val message = if (isKeepalive) "控制流保活发送失败: ${e.message}" else "Socket 发送失败: ${e.message}"
+        val message = if (isKeepalive) "Control keepalive send failed: ${e.message}" else "Socket send failed: ${e.message}"
         LogManager.e(LogTags.SCRCPY_CLIENT, message)
         issueTracker.record("control.write", e.message ?: "Unknown control socket write error")
         output = null

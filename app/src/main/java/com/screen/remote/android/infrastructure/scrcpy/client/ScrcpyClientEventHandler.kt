@@ -48,12 +48,12 @@ internal class ScrcpyClientEventHandler(
             ScrcpyStatus.DISCONNECTED -> {
                 if (connectionState.value is ConnectionState.Connected) {
                     LogManager.w(LogTags.SCRCPY_CLIENT, "Native layer detects disconnection")
-                    updateConnectionStateOnError(event.errorMessage ?: "设备断开连接")
+                    updateConnectionStateOnError(event.errorMessage ?: "Device disconnected")
                 }
             }
 
             ScrcpyStatus.CONNECTION_FAILED -> {
-                val errorMsg = event.errorMessage ?: "连接失败"
+                val errorMsg = event.errorMessage ?: "Connection failed"
                 LogManager.e(LogTags.SCRCPY_CLIENT, "Native layer connection failed: $errorMsg")
                 connectionState.value = ConnectionState.Error(errorMsg)
             }
@@ -75,17 +75,17 @@ internal class ScrcpyClientEventHandler(
         when (event.eventType) {
             ScrcpyEventType.DEVICE_DISCONNECTED -> {
                 if (connectionState.value is ConnectionState.Connected) {
-                    updateConnectionStateOnError("设备断开连接: $errorMsg")
+                    updateConnectionStateOnError("Device disconnected: $errorMsg")
                 }
             }
 
             ScrcpyEventType.SERVER_CONNECTION_FAILED -> {
-                connectionState.value = ConnectionState.Error("服务器连接失败: $errorMsg")
+                connectionState.value = ConnectionState.Error("Server connection failed: $errorMsg")
             }
 
             ScrcpyEventType.DEMUXER_ERROR -> {
                 if (connectionState.value is ConnectionState.Connected) {
-                    updateConnectionStateOnError("解复用器错误: $errorMsg")
+                    updateConnectionStateOnError("Demuxer error: $errorMsg")
                 }
             }
 

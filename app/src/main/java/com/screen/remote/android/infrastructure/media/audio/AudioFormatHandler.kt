@@ -41,7 +41,7 @@ class AudioFormatHandler(
                             channelCount = opusConfig.channelCount,
                         )
                     AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                        "Opus 输出格式解析: rate=${resolvedFormat.sampleRate}, channels=${resolvedFormat.channelCount}, " +
+                        "Parsed Opus output format: rate=${resolvedFormat.sampleRate}, channels=${resolvedFormat.channelCount}, " +
                             "preSkip=${opusConfig.preSkipSamples}, inputRate=${opusConfig.originalSampleRate}"
                     }
                     resolvedFormat
@@ -59,7 +59,7 @@ class AudioFormatHandler(
                             channelCount = flacConfig.channelCount,
                         )
                     AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                        "FLAC 输出格式解析: rate=${resolvedFormat.sampleRate}, channels=${resolvedFormat.channelCount}, " +
+                        "Parsed FLAC output format: rate=${resolvedFormat.sampleRate}, channels=${resolvedFormat.channelCount}, " +
                             "bitsPerSample=${flacConfig.bitsPerSample}, minBlock=${flacConfig.minBlockSize}, maxBlock=${flacConfig.maxBlockSize}"
                     }
                     resolvedFormat
@@ -115,7 +115,7 @@ class AudioFormatHandler(
         }
 
         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-            "OpusHead 详细: version=${opusConfig.version}, channels=${opusConfig.channelCount}, " +
+            "OpusHead details: version=${opusConfig.version}, channels=${opusConfig.channelCount}, " +
                 "preSkip=${opusConfig.preSkipSamples}, sampleRate=${opusConfig.originalSampleRate}, " +
                 "outputGain=${opusConfig.outputGain}, channelMapping=${opusConfig.channelMappingFamily}"
         }
@@ -276,8 +276,8 @@ class AudioFormatHandler(
                 format.setByteBuffer("csd-1", ByteBuffer.wrap(initData[1]))
                 format.setByteBuffer("csd-2", ByteBuffer.wrap(initData[2]))
                 AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                    "配置 Opus 初始化数据: csd-0=${initData[0].size}字节, csd-1=${initData[1].size}字节, " +
-                        "csd-2=${initData[2].size}字节"
+                    "Configured Opus initialization data: csd-0=${initData[0].size} bytes, csd-1=${initData[1].size} bytes, " +
+                        "csd-2=${initData[2].size} bytes"
                 }
             }
 
@@ -291,7 +291,7 @@ class AudioFormatHandler(
                 val initData = FlacConfigParser.buildInitializationData(streamInfo.rawStreamInfo)
                 format.setByteBuffer("csd-0", ByteBuffer.wrap(initData))
                 AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                    "配置 FLAC 初始化数据: rawStreamInfo=${streamInfo.rawStreamInfo.size}字节, csd-0=${initData.size}字节"
+                    "Configured FLAC initialization data: rawStreamInfo=${streamInfo.rawStreamInfo.size} bytes, csd-0=${initData.size} bytes"
                 }
             }
 

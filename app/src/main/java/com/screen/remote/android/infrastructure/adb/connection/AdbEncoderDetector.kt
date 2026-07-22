@@ -152,9 +152,9 @@ internal object AdbEncoderShellStreamReader {
                         if (exitCode != 0) {
                             throw Exception(
                                 if (errorOutput.isNotEmpty()) {
-                                    "scrcpy-server 执行失败 (exitCode=$exitCode)\nstderr: $errorOutput"
+                                    "scrcpy-server execution failed (exitCode=$exitCode)\nstderr: $errorOutput"
                                 } else {
-                                    "scrcpy-server 执行失败 (exitCode=$exitCode)，无错误输出"
+                                    "scrcpy-server execution failed (exitCode=$exitCode), no error output"
                                 },
                             )
                         }
@@ -194,20 +194,20 @@ internal object AdbEncoderShellStreamReader {
                 "${AdbTexts.ADB_READ_OUTPUT_ERROR.english}: scrcpy-server exited immediately without outputting anything.",
             )
             throw Exception(
-                "scrcpy-server 启动失败：进程立即退出，未输出任何内容。可能原因：\n" +
-                    "1. scrcpy-server.jar 文件损坏\n" +
-                    "2. 设备不支持该版本的 scrcpy\n" +
-                    "3. Android 版本过低",
+                "scrcpy-server failed to start: the process exited immediately without output. Possible causes:\n" +
+                    "1. The scrcpy-server.jar file is corrupted\n" +
+                    "2. The device does not support this scrcpy version\n" +
+                    "3. The Android version is too old",
             )
         }
 
         val errorMessage =
             if (errorOutput.isNotEmpty()) {
-                "scrcpy-server 启动失败\nstderr: $errorOutput"
+                "scrcpy-server failed to start\nstderr: $errorOutput"
             } else if (output.isNotEmpty()) {
-                "scrcpy-server 输出不完整\nstdout: $output"
+                "Incomplete scrcpy-server output\nstdout: $output"
             } else {
-                "scrcpy-server 启动失败，未收到任何输出"
+                "scrcpy-server failed to start; no output was received"
             }
         LogManager.w(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_READ_OUTPUT_ERROR.english}: $errorMessage")
         throw Exception(errorMessage)

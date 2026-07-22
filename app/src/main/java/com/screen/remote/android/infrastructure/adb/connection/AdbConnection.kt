@@ -304,7 +304,7 @@ class AdbConnection(
     ): Result<RemoteAppIconData> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) {
-                "helper 图标请求 package=$packageName localHash=${localHash ?: "<none>"} jar=${localHelperJar.absolutePath}"
+                "helper icon request: package=$packageName localHash=${localHash ?: "<none>"} jar=${localHelperJar.absolutePath}"
             }
             runCatching {
                 dadb.loadAppIconWithHelper(
@@ -329,7 +329,7 @@ class AdbConnection(
     ): Result<List<RemoteAppListItem>> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) {
-                "helper 列表请求 offset=$offset limit=$limit includeSystem=$includeSystem jar=${localHelperJar.absolutePath}"
+                "helper list request: offset=$offset limit=$limit includeSystem=$includeSystem jar=${localHelperJar.absolutePath}"
             }
             runCatching {
                 dadb.loadAppListPageWithHelper(
@@ -353,7 +353,7 @@ class AdbConnection(
     ): Result<RemoteAppIconBatchData> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) {
-                "helper 批量图标请求 count=${requests.size} jar=${localHelperJar.absolutePath}"
+                "helper batch icon request: count=${requests.size} jar=${localHelperJar.absolutePath}"
             }
             runCatching {
                 dadb.loadAppIconBatchWithHelper(

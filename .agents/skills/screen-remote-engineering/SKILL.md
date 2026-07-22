@@ -9,10 +9,11 @@ Work from the repository's actual boundaries and load only the context needed fo
 
 ## Start every task
 
-1. Read the nearest `AGENTS.md`.
+1. This skill runs from the `Screen-Remote/` subrepository root. Read the inherited outer-project rules at `../AGENTS.md`; there is intentionally no `AGENTS.md` inside this subrepository. Do not try `AGENTS.md` or use `rg --files` to search for a parent file.
 2. Run:
 
    ```bash
+   sed -n '1,260p' ../AGENTS.md
    node .agents/skills/screen-remote-engineering/scripts/project_probe.mjs
    ```
 

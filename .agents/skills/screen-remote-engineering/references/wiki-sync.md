@@ -69,7 +69,11 @@ Whenever the trailer is absent, analyze the complete outgoing range, update wiki
 
 The marker alone is the confirmation. Do not impose commit-count, code-tree, cache, or wiki-status checks after it is present. The developer only runs ordinary `git push`; this workflow has no optional mode parameters.
 
-Before launching Codex, persist the exact remote base SHA and local SHA. If a later push has the same pair and a complete structured result already exists, reuse that result and regenerate the message without reading the code again. Invalidate the result whenever either SHA changes. A nonzero Codex exit must not discard a complete valid result.
+Before launching Codex, persist the exact remote base SHA and local SHA. If a later push finds the same pair still marked `running`, direct the developer to resume it instead of starting another review. A nonzero Codex exit must not discard a complete valid result.
+
+Run the Codex review as a persistent Wiki-scoped session. Store its exact session ID with the reviewed SHA pair under the subrepository Git directory while the context is `running`. If the terminal is interrupted, keep the partial Wiki changes and resume that exact session with the outer-root `make wiki-resume` command. The resume path must reuse prior conversation and tool context, complete the structured result, and never run `git push` itself. Clear `review-context.json` after a valid message is generated successfully.
+
+The subrepository `pre-commit` hook must reject commits whenever `review-context.json` is non-empty. Missing or empty context means there is no interrupted review and must not block a commit. This prevents history changes before an interrupted Wiki review has been resumed and completed.
 
 ## Generate the app commit message
 
@@ -88,6 +92,8 @@ Screen-Remote-Review: confirmed
 ```
 
 Write both the subject and body in English. Use a single subject without Markdown headings or version numbers unless the code change is specifically a release/version update. Keep the body concrete and omit low-value file-by-file narration. The developer may edit the subject and body, but the final commit must retain the exact trailer so the next push can proceed.
+
+Do not return `Screen-Remote-Review: confirmed` inside `commit_subject` or `commit_body`. The hook owns that trailer and appends it exactly once when writing the message file.
 
 ## Return structured output
 

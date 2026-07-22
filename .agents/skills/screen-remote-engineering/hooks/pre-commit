@@ -1,0 +1,6 @@
+#!/bin/sh
+# Installed only through the Screen-Remote subrepository's local Git config.
+set -eu
+
+hook_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec node "$hook_dir/../scripts/check_review_context.mjs"

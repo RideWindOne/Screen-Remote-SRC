@@ -30,7 +30,7 @@ internal class AudioDecoderPlayback(
     ) {
         val track = trackManager.createAudioTrack(sampleRate, channelCount)
         if (track == null) {
-            throw IllegalStateException("无法创建 RAW AudioTrack")
+            throw IllegalStateException("Unable to create RAW AudioTrack")
         }
 
         trackManager.play()
@@ -76,7 +76,7 @@ internal class AudioDecoderPlayback(
     ) {
         val bootstrap =
             bootstrapper.readBootstrap(audioStream, codec)
-                ?: throw IllegalStateException("无法读取 $codec 音频初始化数据")
+                ?: throw IllegalStateException("Unable to read $codec audio initialization data")
         val resolvedFormat =
             formatHandler.resolvePlaybackFormat(
                 codec = codec,
@@ -92,7 +92,7 @@ internal class AudioDecoderPlayback(
                 configData = bootstrap.configData,
             )
         if (createdDecoder == null) {
-            throw IllegalStateException("无法创建 $codec 音频解码器")
+            throw IllegalStateException("Unable to create $codec audio decoder")
         }
         setDecoder(createdDecoder)
 
@@ -104,7 +104,7 @@ internal class AudioDecoderPlayback(
         if (track == null) {
             getDecoder()?.release()
             setDecoder(null)
-            throw IllegalStateException("无法创建 AudioTrack")
+            throw IllegalStateException("Unable to create AudioTrack")
         }
 
         trackManager.play()
@@ -142,7 +142,7 @@ internal class AudioDecoderPlayback(
                         sampleRate = resolvedFormat.sampleRate,
                         channelCount = resolvedFormat.channelCount,
                         configData = bootstrap.configData,
-                    ) ?: throw IllegalStateException("所有 $codec 音频解码器均运行失败", error)
+                    ) ?: throw IllegalStateException("All $codec audio decoders fail", error)
                 synchronized(decoderLock) {
                     if (!isRunning() || isStopped()) {
                         runCatching { fallbackDecoder.stop() }
@@ -231,7 +231,7 @@ internal class AudioDecoderPlayback(
                                 lastPts = packetPts
                                 if (inputsWithoutOutput >= MAX_INPUTS_WITHOUT_OUTPUT) {
                                     throw IllegalStateException(
-                                        "音频解码器持续收到 $inputsWithoutOutput 个包但没有任何新输出",
+                                        "Audio decoder keeps receiving $inputsWithoutOutput packets without any new output",
                                     )
                                 }
                             }
@@ -270,7 +270,7 @@ internal class AudioDecoderPlayback(
     ): Int {
         val packet = firstAudioPacket ?: return 0
         if (packet.isEmpty()) return 0
-        val currentDecoder = getDecoder() ?: throw IllegalStateException("音频解码器不存在")
+        val currentDecoder = getDecoder() ?: throw IllegalStateException("Audio codec does not exist")
         while (isRunning() && !isStopped()) {
             when (queuePacketIntoDecoder(currentDecoder, packet, 1, 0, pts, 0)) {
                 QueuePacketResult.Queued -> {
@@ -300,11 +300,11 @@ internal class AudioDecoderPlayback(
                 val inputIndex = currentDecoder.dequeueInputBuffer(10000)
                 if (inputIndex >= 0) {
                     val inputBuffer = currentDecoder.getInputBuffer(inputIndex)
-                        ?: throw IllegalStateException("音频解码器未返回输入缓冲区")
+                        ?: throw IllegalStateException("Audio decoder did not return input buffer")
                     inputBuffer.clear()
                     if (payload.size > inputBuffer.remaining()) {
                         throw IllegalStateException(
-                            "音频包超过解码器输入容量: packet=${payload.size}, capacity=${inputBuffer.remaining()}",
+                            "The audio packet exceeds the decoder input capacity: packet=${payload.size}, capacity=${inputBuffer.remaining()}",
                         )
                     }
                     inputBuffer.put(payload)

@@ -317,7 +317,7 @@ internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
 private const val MAX_DECODER_RECOVERY_ATTEMPTS = 2
 
 internal fun Session.handleVideoEncoderDetecting(context: CodecDetectionContext) {
-    val source = if (context.reusedUploadedServer) "复用已上传 server" else "重新 push server"
+    val source = if (context.reusedUploadedServer) "reused uploaded server" else "pushed server again"
     LogManager.d(LogTags.SCRCPY_CLIENT, "Detecting video encoder... source=$source")
 }
 
@@ -337,7 +337,7 @@ internal fun Session.handleVideoEncoderError(issue: CodecIssue) {
 }
 
 internal fun Session.handleAudioEncoderDetecting(context: CodecDetectionContext) {
-    val source = if (context.reusedUploadedServer) "复用已上传 server" else "重新 push server"
+    val source = if (context.reusedUploadedServer) "reused uploaded server" else "pushed server again"
     LogManager.d(LogTags.SCRCPY_CLIENT, "Detecting audio encoder... source=$source")
 }
 
@@ -434,4 +434,4 @@ internal fun ForwardIssue.progressMessage(): String =
 internal fun SocketIssue.progressMessage(): String =
     "${RemoteTexts.REMOTE_SOCKET_ERROR.get()}: ${socketType} - $message"
 
-internal fun DecoderIssue.logMessage(): String = "解码器错误[${decoderType.name}]: $message"
+internal fun DecoderIssue.logMessage(): String = "Decoder error[${decoderType.name}]: $message"

@@ -70,7 +70,7 @@ class AudioTrackManager(
             nonPcm16ScalingWarningLogged = false
 
             AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                "AudioTrack 创建成功: rate=$sampleRate, channels=$channelCount, " +
+                "AudioTrack created successfully: rate=$sampleRate, channels=$channelCount, " +
                     "encoding=${encodingName(encoding)}, bufferSize=$bufferSize"
             }
             track
@@ -90,7 +90,7 @@ class AudioTrackManager(
         }
 
         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-            "按解码输出格式重建 AudioTrack: rate=$sampleRate, channels=$channelCount, encoding=${encodingName(encoding)}"
+            "Reconstruct AudioTrack according to decoded output format: rate=$sampleRate, channels=$channelCount, encoding=${encodingName(encoding)}"
         }
 
         release()

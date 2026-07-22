@@ -61,9 +61,9 @@ private fun String.sectionBetween(
     endMarker: String,
 ): String {
     val section = substringAfter(startMarker, missingDelimiterValue = "")
-    require(section.isNotEmpty()) { "ADB 预检缺少标记: $startMarker" }
+    require(section.isNotEmpty()) { "ADB preflight is missing marker: $startMarker" }
     val value = section.substringBefore(endMarker, missingDelimiterValue = "")
-    require(value.isNotEmpty()) { "ADB 预检缺少标记: $endMarker" }
+    require(value.isNotEmpty()) { "ADB preflight is missing marker: $endMarker" }
     return value.trim()
 }
 

@@ -17,7 +17,7 @@ class SessionContext(
         boundSession?.takeIf { currentSessionProvider() === it }
             ?: if (boundSession == null) currentSessionProvider() else null
 
-    fun requireSession(): Session = currentSession() ?: error("会话不存在")
+    fun requireSession(): Session = currentSession() ?: error("Session does not exist")
 
     /**
      * 将上下文绑定到当前会话实例。长生命周期协程和解码线程必须使用绑定上下文，

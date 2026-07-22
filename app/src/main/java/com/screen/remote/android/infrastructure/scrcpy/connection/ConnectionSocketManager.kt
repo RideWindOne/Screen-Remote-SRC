@@ -266,12 +266,12 @@ class ConnectionSocketManager(
         when (result) {
             is DummyReadResult.Success -> return
             is DummyReadResult.Closed ->
-                throw IOException("$socketType socket -> Server 未发送 dummy byte（连接已关闭）")
+                throw IOException("$socketType socket -> server did not send a dummy byte (connection closed)")
             is DummyReadResult.Timeout ->
-                throw IOException("$socketType socket -> 读取 dummy byte 超时")
+                throw IOException("$socketType socket -> timed out while reading the dummy byte")
             is DummyReadResult.Invalid ->
                 throw IOException(
-                    "$socketType socket -> 收到非预期的 dummy byte: " +
+                    "$socketType socket -> received unexpected dummy byte: " +
                         "0x${result.value.toString(16).padStart(2, '0')}",
                 )
         }

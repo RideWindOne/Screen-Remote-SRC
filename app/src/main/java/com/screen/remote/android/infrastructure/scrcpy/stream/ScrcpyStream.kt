@@ -164,7 +164,7 @@ class ScrcpySocketStream(
 
                     if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
                         LogManager.e("ScrcpySocketStream", "Session meta video size abnormality: ${width}x$height")
-                        onError("Session meta 视频尺寸异常")
+                        onError("Invalid video size in session metadata")
                         ScrcpyEventBus.pushEvent(DemuxerError("Invalid session size: ${width}x$height"))
                         return AdbShellPacket.Exit(byteArrayOf(0))
                     }
@@ -181,7 +181,7 @@ class ScrcpySocketStream(
                 // 高分辨率关键帧可能显著大于 4 MiB；仍保留硬上限防止恶意分配。
                 if (packetSize <= 0 || packetSize > MAX_VIDEO_PACKET_SIZE) {
                     LogManager.e("ScrcpySocketStream", "Packet size exception: $packetSize")
-                    onError("数据包大小异常")
+                    onError("Invalid packet size")
                     // 推送解复用器错误事件
                     ScrcpyEventBus.pushEvent(DemuxerError("Invalid packet size: $packetSize"))
                     return AdbShellPacket.Exit(byteArrayOf(0))
@@ -200,7 +200,7 @@ class ScrcpySocketStream(
         } catch (_: java.io.EOFException) {
             // 流结束
             issueTracker.record("video.eof", "Video stream closed by peer")
-            onError("视频流已关闭")
+            onError("Video stream closed")
             // 推送设备断开事件
             ScrcpyEventBus.pushEvent(DeviceDisconnected)
             return AdbShellPacket.Exit(byteArrayOf(0))
@@ -208,9 +208,9 @@ class ScrcpySocketStream(
             // 其他 IO 错误
             issueTracker.record("video.io", e.message ?: "Video stream IO error")
             if (e.isExpectedConnectionClosure()) {
-                onError("连接已断开 -> ${e.message}")
+                onError("Connection disconnected -> ${e.message}")
             } else {
-                onError("读取失败 -> ${e.message}")
+                onError("Read failed -> ${e.message}")
             }
             // 推送解复用器错误事件
             ScrcpyEventBus.pushEvent(DemuxerError(e.message ?: "Video stream error"))

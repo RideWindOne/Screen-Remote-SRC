@@ -57,7 +57,7 @@ class ConnectionMetadataReader(
                         videoInput,
                         videoMetadata.codec,
                         { error ->
-                            if (error.contains("流关闭") || error.contains("视频流已关闭")) {
+                            if (error.contains("stream closed", ignoreCase = true)) {
                                 VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Video stream closed -> $error" }
                             } else {
                                 LogManager.e(LogTags.SCRCPY_CLIENT, "Video stream error -> $error")
@@ -79,10 +79,10 @@ class ConnectionMetadataReader(
                             }
 
                             AudioStreamHeader.ConfigurationError ->
-                                throw IOException("远端音频编码器配置失败")
+                                throw IOException("Remote audio encoder configuration failed")
 
                             is AudioStreamHeader.Unsupported ->
-                                throw IOException("不支持的音频 codec ID: 0x${header.codecId.toString(16)}")
+                                throw IOException("Unsupported audio codec ID: 0x${header.codecId.toString(16)}")
 
                             is AudioStreamHeader.Codec -> {
                                 audioStream = ScrcpyAudioStream(audioSocket, audioInput, header.codec, issueTracker)
@@ -142,16 +142,16 @@ class ConnectionMetadataReader(
 
             // 验证数据合法性
             if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
-                throw IOException("${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.get()}: ${width}x$height (可能是数据未就绪)")
+                throw IOException("${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.english}: ${width}x$height (data may not be ready)")
             }
 
             if (sessionFlags and SESSION_META_FLAG == 0) {
-                throw IOException("无效的 session meta flags: 0x${sessionFlags.toString(16)}")
+                throw IOException("Invalid session metadata flags: 0x${sessionFlags.toString(16)}")
             }
 
             val codec = videoCodecFromId(codecId)
             if (codec == null) {
-                throw IOException("无效的 Codec ID: 0x${codecId.toString(16)} (数据未就绪，请重试)")
+                throw IOException("Invalid codec ID: 0x${codecId.toString(16)} (data is not ready; retry)")
             }
 
             return VideoMetadata(codec = codec, width = width, height = height)

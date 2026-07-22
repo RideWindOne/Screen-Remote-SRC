@@ -59,15 +59,15 @@ internal class AudioDecoderOutputDrainer(
                                 try {
                                     trackManager.writeDecodedData(outputSlice, bufferInfo.size)
                                 } catch (error: Exception) {
-                                    throw AudioTrackPlaybackException("AudioTrack 写入异常: ${error.message}", error)
+                                    throw AudioTrackPlaybackException("AudioTrack write exception: ${error.message}", error)
                                 }
 
                             if (written < 0) {
-                                throw AudioTrackPlaybackException("AudioTrack 写入失败: $written")
+                                throw AudioTrackPlaybackException("AudioTrack write failure: $written")
                             } else if (!firstOutputLogged) {
                                 firstOutputLogged = true
                                 AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                                    "首个音频输出: size=${bufferInfo.size}, written=$written, pts=${bufferInfo.presentationTimeUs / 1000}ms"
+                                    "First audio output: size=${bufferInfo.size}, written=$written, pts=${bufferInfo.presentationTimeUs / 1000}ms"
                                 }
                             }
                         } else {
@@ -87,16 +87,16 @@ internal class AudioDecoderOutputDrainer(
                         val channelCount = if (outputFormat.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) outputFormat.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT) else -1
                         val pcmEncoding = if (outputFormat.containsKey(android.media.MediaFormat.KEY_PCM_ENCODING)) outputFormat.getInteger(android.media.MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
                         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-                            "输出格式变化: $outputFormat, rate=$sampleRate, channels=$channelCount, pcmEncoding=$pcmEncoding"
+                            "Output format changes: $outputFormat, rate=$sampleRate, channels=$channelCount, pcmEncoding=$pcmEncoding"
                         }
                         val trackReconfigured =
                             try {
                                 trackManager.reconfigureFromOutputFormat(outputFormat)
                             } catch (error: Exception) {
-                                throw AudioTrackPlaybackException("AudioTrack 输出格式重建异常: ${error.message}", error)
+                                throw AudioTrackPlaybackException("AudioTrack output format reconstruction exception: ${error.message}", error)
                             }
                         if (!trackReconfigured) {
-                            throw AudioTrackPlaybackException("无法按解码输出格式重建 AudioTrack: $outputFormat")
+                            throw AudioTrackPlaybackException("Unable to reconstruct AudioTrack from decoded output format: $outputFormat")
                         }
                         outputIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
                     }

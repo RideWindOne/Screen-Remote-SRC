@@ -56,7 +56,7 @@ class ScrcpyForegroundService : Service() {
             deviceId: String,
             deviceName: String,
         ) {
-            require(deviceId.isNotBlank()) { "保护设备必须包含精确的 ADB 连接标识" }
+            require(deviceId.isNotBlank()) { "Protected devices must include an exact ADB connection identifier" }
             val intent =
                 Intent(context, ScrcpyForegroundService::class.java).apply {
                     action = ACTION_ADD_DEVICE
@@ -106,7 +106,7 @@ class ScrcpyForegroundService : Service() {
                 }
 
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
-                val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "未知设备"
+                val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "Unknown device"
                 if (!deviceId.isNullOrBlank()) {
                     addDevice(
                         deviceId = deviceId,

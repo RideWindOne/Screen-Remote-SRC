@@ -108,7 +108,7 @@ internal class LogFileController(
             file.readText()
         } catch (e: Exception) {
             Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_READ_FILE_FAILED.english, e)
-            "${LogTexts.LOG_READ_FILE_ERROR.get()}: ${e.message}"
+            "${LogTexts.LOG_READ_FILE_ERROR.english}: ${e.message}"
         }
 
     private fun initLogFile() {
@@ -131,7 +131,7 @@ internal class LogFileController(
             }
 
             state.fileWriter = FileWriter(state.logFile, true)
-            onInitSuccess(LogTexts.LOG_SYSTEM_INIT_SUCCESS.get())
+            onInitSuccess(LogTexts.LOG_SYSTEM_INIT_SUCCESS.english)
         } catch (e: Exception) {
             Log.e(LogTags.LOG_MANAGER, LogTexts.LOG_INIT_FILE_FAILED.english, e)
         }

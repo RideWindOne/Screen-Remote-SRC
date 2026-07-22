@@ -120,7 +120,7 @@ internal class VideoDecoderPlayback(
                     frameCount += queuedFrameDelta
                     inputsWithoutOutput += queuedFrameDelta
                     if (inputsWithoutOutput >= FIRST_OUTPUT_WATCHDOG_INPUT_FRAMES) {
-                        throw IllegalStateException("解码器持续接收 $inputsWithoutOutput 个视频帧但没有任何新输出")
+                        throw IllegalStateException("The decoder keeps receiving $inputsWithoutOutput video frames without any new output")
                     }
                 }
             } catch (e: Exception) {

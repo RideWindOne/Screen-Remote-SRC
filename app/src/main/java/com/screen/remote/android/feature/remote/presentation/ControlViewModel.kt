@@ -326,7 +326,7 @@ class ControlViewModel(
                             return@withContext Result.failure(
                                 IllegalStateException(
                                     response.errorOutput.ifBlank {
-                                        "布局抓取失败，exit=${response.exitCode}"
+                                        "Layout capture failed, exit=${response.exitCode}"
                                     },
                                 ),
                             )

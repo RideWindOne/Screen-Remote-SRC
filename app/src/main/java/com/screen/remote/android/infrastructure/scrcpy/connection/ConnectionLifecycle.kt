@@ -132,7 +132,7 @@ class ConnectionLifecycle(
             var codecDetectionStarted = false
             var ownsConnectionCleanup = false
             try {
-                val session = sessionContext.currentSession() ?: throw IllegalStateException("会话不存在")
+                val session = sessionContext.currentSession() ?: throw IllegalStateException("Session does not exist")
                 val initialOptions = session.options
                 val previousConnection = activeConnection
                 // 步骤 1: 建立/验证 ADB 连接并分配端口

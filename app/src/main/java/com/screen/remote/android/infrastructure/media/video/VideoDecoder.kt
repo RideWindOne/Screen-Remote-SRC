@@ -116,9 +116,9 @@ class VideoDecoder(
                             decoderType = DecoderType.Video,
                             detail =
                                 if (sizeFailure != null) {
-                                    "本机解码器不支持 ${sizeFailure.width}x${sizeFailure.height} (${sizeFailure.mimeType})"
+                                    "The native decoder does not support ${sizeFailure.width}x${sizeFailure.height} (${sizeFailure.mimeType})"
                                 } else {
-                                    "无法创建解码器"
+                                    "Unable to create decoder"
                                 },
                             width = sizeFailure?.width,
                             height = sizeFailure?.height,

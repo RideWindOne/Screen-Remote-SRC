@@ -49,7 +49,7 @@ internal class ScrcpyClientReconnect(
         val session = sessionManager.currentOrNull
         if (session == null) {
             LogManager.e(LogTags.SCRCPY_CLIENT, "Unable to reconnect: session ID is empty")
-            connectionState.value = ConnectionState.Error("会话未连接")
+            connectionState.value = ConnectionState.Error("Session is not connected")
             return
         }
         val sessionId = session.sessionId
@@ -57,7 +57,7 @@ internal class ScrcpyClientReconnect(
         val deviceId = getCurrentDeviceId()
         if (deviceId == null) {
             LogManager.e(LogTags.SCRCPY_CLIENT, "Unable to reconnect: Device ID is empty")
-            connectionState.value = ConnectionState.Error("设备未连接")
+            connectionState.value = ConnectionState.Error("Device is not connected")
             return
         }
 
@@ -110,7 +110,7 @@ internal class ScrcpyClientReconnect(
                     val currentSession = sessionManager.currentOrNull
                     if (currentSession == null || currentSession !== session) {
                         LogManager.e(LogTags.SCRCPY_CLIENT, "✗ Session does not exist")
-                        handleReconnectFailure("会话配置丢失")
+                        handleReconnectFailure("Session configuration is missing")
                         return@launch
                     }
 
@@ -130,7 +130,7 @@ internal class ScrcpyClientReconnect(
                             isReconnecting = false
                         }
                     } else {
-                        val errorMsg = reconnectResult.exceptionOrNull()?.message ?: "未知错误"
+                        val errorMsg = reconnectResult.exceptionOrNull()?.message ?: "Unknown error"
                         LogManager.e(
                             LogTags.SCRCPY_CLIENT,
                             "========== Reconnection failed (attempted $attempt times): $errorMsg ==========",
@@ -144,7 +144,7 @@ internal class ScrcpyClientReconnect(
                     throw e
                 } catch (e: Exception) {
                     LogManager.e(LogTags.SCRCPY_CLIENT, "========== Error during reconnection: ${e.message} ==========", e)
-                    handleReconnectFailure(e.message ?: "未知错误")
+                    handleReconnectFailure(e.message ?: "Unknown error")
                 }
             }
     }
@@ -193,13 +193,13 @@ internal class ScrcpyClientReconnect(
     private fun isPermanentError(errorMessage: String): Boolean {
         val permanentErrorKeywords =
             listOf(
-                "设备未连接",
-                "设备连接已断开",
-                "ADB 会话已断开",
-                "未授权",
-                "权限被拒绝",
-                "不支持",
-                "无效的参数",
+                "device is not connected",
+                "device connection disconnected",
+                "ADB session disconnected",
+                "unauthorized",
+                "permission denied",
+                "unsupported",
+                "invalid argument",
             )
 
         return permanentErrorKeywords.any { errorMessage.contains(it, ignoreCase = true) }

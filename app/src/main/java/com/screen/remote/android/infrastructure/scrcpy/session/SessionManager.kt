@@ -18,7 +18,7 @@ class SessionManager {
     private var activeSession: Session? = null
 
     val current: Session
-        get() = activeSession ?: error("当前没有活跃会话，请先调用 start()")
+        get() = activeSession ?: error("No active session; call start() first")
 
     val currentOrNull: Session?
         get() = activeSession

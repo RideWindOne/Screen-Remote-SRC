@@ -179,7 +179,7 @@ internal suspend fun ConnectionLifecycle.startScrcpyServer(
                 ),
             ),
         )
-        throw Exception("scrcpy-server 启动超时或失败")
+        throw Exception("scrcpy-server startup timed out or failed")
     }
 
     completeScrcpyServerStartup(scid)

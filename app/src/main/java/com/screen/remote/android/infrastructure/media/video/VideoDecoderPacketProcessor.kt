@@ -61,8 +61,8 @@ internal class VideoDecoderPacketProcessor(
                     )
                 VideoPacketCodecMode.H264, VideoPacketCodecMode.H265 -> return true
                 VideoPacketCodecMode.UNSUPPORTED ->
-                    throw VideoDecoderConfigurationException(videoCodec, "不支持动态尺寸变化")
-            } ?: throw VideoDecoderConfigurationException(videoCodec, "动态尺寸重配失败: ${width}x$height")
+                    throw VideoDecoderConfigurationException(videoCodec, "Dynamic size changes are not supported")
+            } ?: throw VideoDecoderConfigurationException(videoCodec, "Dynamic size reconfiguration failed: ${width}x$height")
         setDecoder(newDecoder)
         decoderConfigured = true
         surfaceController.applyPendingSurface(newDecoder, isStopped())
@@ -102,7 +102,7 @@ internal class VideoDecoderPacketProcessor(
         if (payload.size > nalBuffer.remaining()) {
             throw VideoDecoderConfigurationException(
                 videoCodec,
-                "编码包超过聚合缓冲区: payload=${payload.size}, remaining=${nalBuffer.remaining()}",
+                "Encoded packets exceed aggregation buffer: payload=${payload.size}, remaining=${nalBuffer.remaining()}",
             )
         }
         nalBuffer.put(payload)
@@ -116,7 +116,7 @@ internal class VideoDecoderPacketProcessor(
                 VideoPacketCodecMode.VPX ->
                     processVpx(nalBuffer, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
                 VideoPacketCodecMode.UNSUPPORTED ->
-                    throw VideoDecoderConfigurationException(videoCodec, "不支持的视频格式")
+                    throw VideoDecoderConfigurationException(videoCodec, "Unsupported video format")
             }
         decoderConfigured = decoderConfigured || result
         return decoderConfigured
@@ -187,7 +187,7 @@ internal class VideoDecoderPacketProcessor(
                     isCodecConfig = true,
                 )
             ) {
-                throw IllegalStateException("AV1 fallback 解码器无法接收缓存配置")
+                throw IllegalStateException("AV1 fallback decoder cannot receive cache configuration")
             }
         }
         surfaceController.applyPendingSurface(newDecoder, isStopped())
@@ -307,12 +307,12 @@ internal class VideoDecoderPacketProcessor(
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
             } else {
-                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.264", "解码器不存在")
+                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.264", "Decoder does not exist")
                 formatHandler.configureH264(
                     decoder, runtimeState.currentWidth, runtimeState.currentHeight, sps, pps,
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
-            } ?: throw VideoDecoderConfigurationException("H.264", "无法配置解码器")
+            } ?: throw VideoDecoderConfigurationException("H.264", "Unable to configure decoder")
         setDecoder(newDecoder)
         decoderConfigured = true
         lastH264Sps = sps
@@ -373,12 +373,12 @@ internal class VideoDecoderPacketProcessor(
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
             } else {
-                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.265", "解码器不存在")
+                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.265", "Decoder does not exist")
                 formatHandler.configureH265(
                     decoder, runtimeState.currentWidth, runtimeState.currentHeight, vps, sps, pps,
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
-            } ?: throw VideoDecoderConfigurationException("H.265", "无法配置解码器")
+            } ?: throw VideoDecoderConfigurationException("H.265", "Unable to configure decoder")
         setDecoder(newDecoder)
         decoderConfigured = true
         lastH265Vps = vps
@@ -386,7 +386,7 @@ internal class VideoDecoderPacketProcessor(
         lastH265Pps = pps
         surfaceController.applyPendingSurface(newDecoder, isStopped())
         VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-            "H265 CSD 已累积并完成配置: vps=${vps.size} sps=${sps.size} pps=${pps.size}"
+            "H265 CSD has been accumulated and configured: vps=${vps.size} sps=${sps.size} pps=${pps.size}"
         }
         return true
     }
@@ -487,7 +487,7 @@ internal class VideoDecoderPacketProcessor(
                 consecutiveInputDrops++
                 if (isCritical || consecutiveInputDrops >= MAX_CONSECUTIVE_INPUT_DROPS) {
                     throw IllegalStateException(
-                        "视频解码器输入持续阻塞: drops=$consecutiveInputDrops keyFrame=$isKeyFrame",
+                        "Video decoder input continues to block: drops=$consecutiveInputDrops keyFrame=$isKeyFrame",
                     )
                 }
                 return false
@@ -495,11 +495,11 @@ internal class VideoDecoderPacketProcessor(
             consecutiveInputDrops = 0
 
             val inputBuffer = decoder.getInputBuffer(inputIndex)
-                ?: throw IllegalStateException("解码器未返回输入缓冲区")
+                ?: throw IllegalStateException("Decoder did not return input buffer")
             inputBuffer.clear()
             if (frameData.size > inputBuffer.remaining()) {
                 throw IllegalStateException(
-                    "视频帧超过解码器输入容量: frame=${frameData.size}, capacity=${inputBuffer.remaining()}",
+                    "The video frame exceeds the decoder input capacity: frame=${frameData.size}, capacity=${inputBuffer.remaining()}",
                 )
             }
             inputBuffer.put(frameData)

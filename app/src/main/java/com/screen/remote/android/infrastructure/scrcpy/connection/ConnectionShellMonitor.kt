@@ -371,7 +371,7 @@ class ConnectionShellMonitor(
 
         val errorMsg =
             when (error) {
-                is java.io.EOFException -> "Server 进程意外终止"
+                is java.io.EOFException -> "Server process terminated unexpectedly"
                 else -> error.message ?: error.javaClass.simpleName
             }
         val expectedConnectionClosure = error.isExpectedConnectionClosure()

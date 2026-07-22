@@ -61,9 +61,9 @@ internal suspend fun Session.updateDeviceSerial(newSerial: String) {
 
     val message =
         if (current.capabilityCache.deviceSerial.isBlank()) {
-            "首次设置设备能力签名，清空未验证的能力缓存"
+            "Device capability signature initialized; clearing unverified capability cache"
         } else {
-            "设备序列号变化: ${current.capabilityCache.deviceSerial} -> $newSerial，清空设备能力"
+            "Device serial changed: ${current.capabilityCache.deviceSerial} -> $newSerial; clearing device capabilities"
         }
     LogManager.i(LogTags.SCRCPY_CLIENT, message)
     updateOptions { it.copy(capabilityCache = it.capabilityCache.resetForDevice(newSerial)) }

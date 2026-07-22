@@ -62,10 +62,10 @@ class AdbLatencyBenchmark {
                                     info.deviceName == requestedId ||
                                     info.device.deviceName == requestedId
                             } ?: scanned.singleOrNull()
-                            ?: error("未找到 USB ADB 设备: $requestedId")
+                            ?: error("USB ADB device not found: $requestedId")
 
                         val granted = connectionManager.requestUsbPermission(deviceInfo.device).getOrThrow()
-                        check(granted) { "USB 权限未授予: $requestedId" }
+                        check(granted) { "USB permission not granted: $requestedId" }
                         deviceInfo.device
                     }
                 }
@@ -112,7 +112,7 @@ class AdbLatencyBenchmark {
 
                 dadb =
                     if (candidate.transport == ConnectionTransport.USB) {
-                        val preparedDevice = requireNotNull(usbDevice) { "USB 设备尚未完成权限准备" }
+                        val preparedDevice = requireNotNull(usbDevice) { "USB device permission preparation is incomplete" }
                         val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
                         AdbRuntimeProvider.get().createUsbDadb(
                             usbManager = usbManager,
@@ -143,7 +143,7 @@ class AdbLatencyBenchmark {
                                     dadb.shell("echo -n $token")
                                 }
                             check(response.exitCode == 0 && response.output.trim() == token) {
-                                "RTT 响应无效 exit=${response.exitCode} output=${response.output.trim()}"
+                                "Invalid RTT response: exit=${response.exitCode} output=${response.output.trim()}"
                             }
                             add(elapsedMillis(startedAt))
                         }
@@ -160,7 +160,7 @@ class AdbLatencyBenchmark {
                     round = round,
                     resolvedEndpoint = resolvedEndpoint,
                     failureMillis = elapsedMillis(connectStartedAt),
-                    error = "超时",
+                    error = "Timeout",
                 )
             } catch (error: CancellationException) {
                 throw error

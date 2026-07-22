@@ -32,7 +32,7 @@ internal suspend fun raceAdbConnections(
     isCurrentRace: () -> Boolean = { true },
 ): AdbConnectionRaceOutcome {
     val distinctCandidates = candidates.distinctBy(ConnectionCandidate::deviceIdentifier)
-    require(distinctCandidates.isNotEmpty()) { "会话没有可用的 connectionCandidates" }
+    require(distinctCandidates.isNotEmpty()) { "The session has no available connection candidates" }
 
     val startedAtNanos = System.nanoTime()
     val outcomes = Channel<AdbConnectionRaceOutcome>(Channel.UNLIMITED)
@@ -179,7 +179,7 @@ internal suspend fun raceAdbConnections(
         }
     }
 
-    val selected = winner ?: throw lastError ?: IllegalStateException("ADB 连接失败")
+    val selected = winner ?: throw lastError ?: IllegalStateException("ADB connection failed")
     val selectedConnection = selected.result.getOrThrow()
     LogManager.i(
         logTag,

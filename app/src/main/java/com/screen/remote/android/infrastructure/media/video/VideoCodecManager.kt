@@ -34,7 +34,7 @@ class VideoCodecManager(
     val mimeType: String
         get() =
             requireNotNull(CodecCatalog.mimeType(CodecMediaType.VIDEO, videoCodec)) {
-                "不支持的视频格式: $videoCodec"
+                "Unsupported video format: $videoCodec"
             }
 
     /**
@@ -64,10 +64,10 @@ class VideoCodecManager(
                 if (cachedInfo == null || cachedSupportsSize == false || violatesHardwarePolicy || cachedName in rejectedDecoderNames) {
                     val detail =
                         when {
-                            cachedInfo == null -> "已不存在"
-                            cachedSupportsSize == false -> "不支持 ${width}x$height"
-                            violatesHardwarePolicy -> "不符合纯软件解码策略"
-                            else -> "本次会话已失败"
+                            cachedInfo == null -> "no longer exists"
+                            cachedSupportsSize == false -> "Not supported ${width}x$height"
+                            violatesHardwarePolicy -> "Does not comply with pure software decoding strategy"
+                            else -> "This session has failed"
                         }
                     LogManager.w(LogTags.VIDEO_DECODER, "Preferred decoder $detail, downgrade to reselect: $cachedName")
                     if (decoderSelectionPinned) {

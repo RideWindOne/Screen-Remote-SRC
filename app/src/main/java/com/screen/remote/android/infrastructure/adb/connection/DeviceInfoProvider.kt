@@ -37,7 +37,7 @@ internal object DeviceInfoProvider {
                     output = response.output,
                     errorOutput = response.errorOutput,
                 )
-                check(response.exitCode == 0) { response.errorOutput.ifBlank { "读取设备基础信息失败" } }
+                check(response.exitCode == 0) { response.errorOutput.ifBlank { "Failed to read basic device information" } }
                 val properties = parseBasicDeviceInfo(response.output)
                 val displayName = customName ?: properties.model
 
