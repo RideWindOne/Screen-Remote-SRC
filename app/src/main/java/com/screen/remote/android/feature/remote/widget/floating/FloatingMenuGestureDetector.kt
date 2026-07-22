@@ -9,7 +9,7 @@ import kotlin.math.hypot
  * 负责识别点击、拖动、长按等手势类型
  */
 internal class FloatingMenuGestureDetector(
-    private val context: Context,
+    context: Context,
     private val state: FloatingMenuGestureState,
     private val hapticEnabled: Boolean,
 ) {
@@ -29,7 +29,6 @@ internal class FloatingMenuGestureDetector(
      */
     fun checkLongPressTransition(
         distance: Float,
-        duration: Long,
     ): Boolean? {
         // 一旦检测到移动超过小阈值，判断是否进入长按模式
         if (distance > longPressCancelSlopPx && !state.hasMoved) {

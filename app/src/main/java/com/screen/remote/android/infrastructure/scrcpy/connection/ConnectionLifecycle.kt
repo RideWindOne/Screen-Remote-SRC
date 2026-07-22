@@ -43,6 +43,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 连接生命周期管理器 - 管理 Scrcpy 连接和断开的完整生命周期
@@ -317,7 +318,7 @@ class ConnectionLifecycle(
 
                 // 1. 关闭所有 Socket（停止数据传输）
                 socketManager.closeAllSockets()
-                delay(50) // 等待 Socket 完全关闭
+                delay(50.milliseconds) // 等待 Socket 完全关闭
 
                 // 2. 停止 Shell 监控（避免继续读取错误）
                 shellMonitor.stopMonitor()

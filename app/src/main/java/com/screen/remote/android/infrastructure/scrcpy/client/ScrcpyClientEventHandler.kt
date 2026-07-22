@@ -6,7 +6,6 @@ import com.screen.remote.android.core.domain.model.ScrcpyErrorEvent
 import com.screen.remote.android.core.domain.model.ScrcpyEventType
 import com.screen.remote.android.core.domain.model.ScrcpyStatus
 import com.screen.remote.android.core.domain.model.ScrcpyStatusEvent
-import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState
 import kotlinx.coroutines.flow.MutableStateFlow
 

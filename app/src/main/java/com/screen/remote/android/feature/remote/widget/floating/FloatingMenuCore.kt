@@ -2,10 +2,14 @@ package com.screen.remote.android.feature.remote.widget.floating
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.util.AttributeSet
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
@@ -104,8 +108,8 @@ fun showDualBallSystem(
 
     // 设置按键监听，拦截返回键并发送到远程设备
     ballA.setOnKeyListener { _, keyCode, event ->
-        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
-            if (event.action == android.view.KeyEvent.ACTION_UP) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP) {
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
                     if (result.isFailure) {
@@ -158,10 +162,10 @@ internal fun createBall(
     // 球颜色（使用iOS经典灰色）
     val ballColorsNormal =
         arrayOf(
-            android.graphics.Color.argb(153, 58, 58, 60), // 外层 60%
-            android.graphics.Color.argb(102, 44, 44, 46), // 第二层 40%
-            android.graphics.Color.argb(64, 28, 28, 30), // 第三层 25%
-            android.graphics.Color.argb(100, 255, 255, 255), // 25% 白色
+            Color.argb(153, 58, 58, 60), // 外层 60%
+            Color.argb(102, 44, 44, 46), // 第二层 40%
+            Color.argb(64, 28, 28, 30), // 第三层 25%
+            Color.argb(100, 255, 255, 255), // 25% 白色
         )
 
     val layerFactors = floatArrayOf(1.0f, 0.75f, 0.60f, 0.40f) // 让每层更小，创造更明显的立体效果
@@ -169,7 +173,7 @@ internal fun createBall(
     // 预分配 Paint 对象以避免在 onDraw 中重复创建
     val paints =
         ballColorsNormal.map { color ->
-            android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 this.color = color
             }
         }
@@ -181,19 +185,21 @@ internal fun createBall(
         paints = paints,
         layerFactors = layerFactors,
     ).apply {
-        layoutParams = android.view.ViewGroup.LayoutParams(sizePx, sizePx)
+        layoutParams = ViewGroup.LayoutParams(sizePx, sizePx)
         // ✅ 关键：启用触觉反馈
         isHapticFeedbackEnabled = true
     }
 }
 
-internal class FloatingBallView(
+internal class FloatingBallView @JvmOverloads constructor(
     context: Context,
-    private val diameterPx: Int,
-    private val radius: Float,
-    private val paints: List<Paint>,
-    private val layerFactors: FloatArray,
-) : View(context) {
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0,
+    private val diameterPx: Int = 0,
+    private val radius: Float = 0f,
+    private val paints: List<Paint> = emptyList(),
+    private val layerFactors: FloatArray = floatArrayOf(),
+) : View(context, attrs, defStyleAttr) {
     var hiddenEdge: FloatingMenuGestureState.Edge? = null
         private set
     var hiddenOffsetPx: Float = 0f

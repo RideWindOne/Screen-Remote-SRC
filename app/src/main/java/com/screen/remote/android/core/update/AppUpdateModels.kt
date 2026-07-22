@@ -92,7 +92,7 @@ fun selectLatestRelease(
             val version = parseAppVersion(release.tagName) ?: return@mapNotNull null
             if (version > current) release to version else null
         }
-        .maxWithOrNull(compareBy<Pair<GitHubReleaseInfo, AppVersion>> { it.second })
+        .maxWithOrNull(compareBy { it.second })
         ?.first
 }
 

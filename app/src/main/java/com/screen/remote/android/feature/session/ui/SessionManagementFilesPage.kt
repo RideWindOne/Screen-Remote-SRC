@@ -1,6 +1,8 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.annotation.SuppressLint
 import android.media.MediaPlayer
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -69,6 +69,7 @@ private data class RemoteFileClipboard(
     val entries: List<RemoteFileEntry>,
 )
 
+@SuppressLint("SdCardPath")
 internal class SessionManagementFileBrowserState {
     val currentPathState = mutableStateOf("/sdcard")
     val selectedPathsState = mutableStateOf<Set<String>>(emptySet())
@@ -77,28 +78,20 @@ internal class SessionManagementFileBrowserState {
     val localRefreshTickState = mutableIntStateOf(0)
     var lastExternalRefreshToken: Int? = null
     var lastLocalRefreshTick: Int = 0
-    private val directorySnapshots = mutableMapOf<String, FileBrowserSnapshot>()
+    private var prefetchedSnapshot: FileBrowserSnapshot? = null
     private val loadMutex = Mutex()
 
-    fun cachedSnapshot(path: String): FileBrowserSnapshot? = directorySnapshots[path]
-
-    fun cacheSnapshot(snapshot: FileBrowserSnapshot) {
-        if (!snapshot.isLoading && snapshot.errorMessage == null) {
-            directorySnapshots[snapshot.currentPath] = snapshot
+    suspend fun prefetchSnapshot(path: String): FileBrowserSnapshot =
+        loadMutex.withLock {
+            prefetchedSnapshot
+                ?.takeIf { it.currentPath == path }
+                ?.let { return@withLock it }
+            loadFileBrowserSnapshot(path).also { snapshot ->
+                if (!snapshot.isLoading && snapshot.errorMessage == null) {
+                    prefetchedSnapshot = snapshot
+                }
+            }
         }
-    }
-
-    fun applyPrefetchedSnapshot(snapshot: FileBrowserSnapshot) {
-        cacheSnapshot(snapshot)
-        if (
-            snapshot.errorMessage == null &&
-            currentPathState.value == snapshot.currentPath &&
-            (snapshotState.value.isLoading || snapshotState.value.entries.isEmpty())
-        ) {
-            snapshotState.value = snapshot
-            snapshotPathState.value = snapshot.currentPath
-        }
-    }
 
     suspend fun loadSnapshot(
         path: String,
@@ -106,9 +99,14 @@ internal class SessionManagementFileBrowserState {
     ): FileBrowserSnapshot =
         loadMutex.withLock {
             if (!forceRefresh) {
-                cachedSnapshot(path)?.let { return@withLock it }
+                prefetchedSnapshot
+                    ?.takeIf { it.currentPath == path }
+                    ?.let { snapshot ->
+                        prefetchedSnapshot = null
+                        return@withLock snapshot
+                    }
             }
-            loadFileBrowserSnapshot(path).also(::applyPrefetchedSnapshot)
+            loadFileBrowserSnapshot(path)
         }
 }
 
@@ -117,6 +115,8 @@ internal class SessionManagementFileBrowserState {
 internal fun SessionManagementFileBrowser(
     modifier: Modifier = Modifier,
     state: SessionManagementFileBrowserState,
+    dataProvider: SessionManagementDataProvider,
+    sessionId: String,
     refreshToken: Int,
     externalAddMenuRequestTick: Int,
     onSelectionModeChanged: (Boolean) -> Unit,
@@ -189,26 +189,23 @@ internal fun SessionManagementFileBrowser(
         if (pathChanged) {
             fileSnapshotPath = currentPath
             selectedPaths = emptySet()
-            if (!refreshRequested) {
-                state.cachedSnapshot(currentPath)?.let { cached ->
-                    fileSnapshot = cached
-                    fileRefreshing = false
-                    return@LaunchedEffect
-                }
-            }
             fileSnapshot = FileBrowserSnapshot.loading(currentPath)
         } else if (!refreshRequested && !fileSnapshot.isLoading && fileSnapshot.errorMessage == null) {
             fileRefreshing = false
             return@LaunchedEffect
         }
         fileRefreshing = true
-        val nextSnapshot = state.loadSnapshot(currentPath, forceRefresh = refreshRequested)
+        val nextSnapshot =
+            dataProvider.loadFileInformation(
+                sessionId = sessionId,
+                path = currentPath,
+                forceRefresh = refreshRequested,
+            ) ?: return@LaunchedEffect
         fileRefreshing = false
         if (nextSnapshot.errorMessage != null && canKeepCurrentContent) {
             fileActionMessage = nextSnapshot.errorMessage
         } else {
             fileSnapshot = nextSnapshot
-            state.cacheSnapshot(nextSnapshot)
         }
     }
 
@@ -258,7 +255,7 @@ internal fun SessionManagementFileBrowser(
         }
     }
 
-    fun savePendingDownload(destinationUri: android.net.Uri?) {
+    fun savePendingDownload(destinationUri: Uri?) {
         val entriesToDownload = pendingDownloadEntries
         pendingDownloadEntries = emptyList()
         if (destinationUri != null && entriesToDownload.isNotEmpty()) {
@@ -312,7 +309,7 @@ internal fun SessionManagementFileBrowser(
                 shape = SessionManagementCardShape,
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
-                shadowElevation = 1.dp,
+                shadowElevation = 0.dp,
             ) {
                 Row(
                     modifier =
@@ -359,7 +356,7 @@ internal fun SessionManagementFileBrowser(
                 shape = SessionManagementCardShape,
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 0.dp,
-                shadowElevation = 1.dp,
+                shadowElevation = 0.dp,
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     when {
@@ -382,14 +379,14 @@ internal fun SessionManagementFileBrowser(
                                     Modifier
                                         .align(Alignment.TopCenter)
                                         .padding(top = 12.dp)
-                                        .fillMaxWidth(0.95f),
+                                        .fillMaxWidth(),
                             )
                         }
 
                         else -> {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = if (isSelectionMode) 82.dp else 76.dp),
+                                contentPadding = PaddingValues(bottom = if (isSelectionMode) 82.dp else 0.dp),
                             ) {
                                 itemsIndexed(
                                     items = fileSnapshot.entries,
@@ -462,7 +459,6 @@ internal fun SessionManagementFileBrowser(
                         icon = Icons.Default.Download,
                         label = ManagementTexts.Files.DOWNLOAD.get(),
                         iconTint = AppColors.info,
-                        showLabel = false,
                         onClick = {
                             val entriesToDownload = selectedEntries.toList()
                             pendingDownloadEntries = entriesToDownload
@@ -477,7 +473,6 @@ internal fun SessionManagementFileBrowser(
                         icon = Icons.Default.ContentCopy,
                         label = ManagementTexts.Files.COPY.get(),
                         iconTint = MaterialTheme.colorScheme.primary,
-                        showLabel = false,
                         onClick = {
                             fileClipboard =
                                 RemoteFileClipboard(
@@ -491,7 +486,6 @@ internal fun SessionManagementFileBrowser(
                         icon = Icons.Default.ContentCut,
                         label = ManagementTexts.Files.CUT.get(),
                         iconTint = AppColors.warning,
-                        showLabel = false,
                         onClick = {
                             fileClipboard =
                                 RemoteFileClipboard(
@@ -505,7 +499,6 @@ internal fun SessionManagementFileBrowser(
                         icon = Icons.Default.Edit,
                         label = ManagementTexts.Files.RENAME.get(),
                         iconTint = AppColors.commandWindowAccent,
-                        showLabel = false,
                         onClick = {
                             renameTarget = selectedEntries.singleOrNull()
                                 ?: run {
@@ -515,10 +508,9 @@ internal fun SessionManagementFileBrowser(
                         },
                     )
                     SessionManagementBottomIconAction(
-                        icon = androidx.compose.material.icons.Icons.Outlined.Info,
+                        icon = Icons.Outlined.Info,
                         label = ManagementTexts.Files.DETAILS.get(),
                         iconTint = AppColors.info,
-                        showLabel = false,
                         onClick = {
                             fileDetailEntry = selectedEntries.singleOrNull()
                                 ?: run {
@@ -531,7 +523,6 @@ internal fun SessionManagementFileBrowser(
                         icon = Icons.Default.DeleteOutline,
                         label = ManagementTexts.Files.DELETE.get(),
                         iconTint = AppColors.destructive,
-                        showLabel = false,
                         onClick = {
                             if (selectedEntries.isNotEmpty()) {
                                 deleteTargets = selectedEntries

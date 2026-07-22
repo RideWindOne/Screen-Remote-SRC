@@ -1,7 +1,6 @@
 package com.screen.remote.android.feature.session.ui
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
@@ -54,6 +54,7 @@ import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.feature.session.ui.component.LabeledTextField
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 private val PortForwardRuleCardShape = SessionManagementCardShape
 
@@ -117,7 +118,7 @@ internal fun SessionManagementPortForwardPage(
 
     LaunchedEffect(status?.remoteRunning) {
         while (status?.remoteRunning == true) {
-            delay(2_000)
+            delay(2_000.milliseconds)
             SessionManagementPortForwardManager.logs().onSuccess { logs = it }
         }
     }
@@ -137,7 +138,7 @@ internal fun SessionManagementPortForwardPage(
             onOpenTarget = { rule ->
                 runCatching {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("http://127.0.0.1:${rule.localPort}")).apply {
+                        Intent(Intent.ACTION_VIEW, "http://127.0.0.1:${rule.localPort}".toUri()).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         },
                     )

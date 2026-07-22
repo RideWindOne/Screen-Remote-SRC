@@ -1,6 +1,6 @@
 /*
  * 编解码器测试数据生成工具
- * 
+ *
  * 从 CodecTestUtils.kt 拆分而来
  * 职责：生成测试音频数据（TTS、Beep、重采样）
  */
@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import kotlin.math.sin
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 播放原始 PCM 音频
@@ -90,7 +91,7 @@ internal suspend fun generateTTSAudio(tts: TextToSpeech?): Triple<ByteArray, Int
             if (result == TextToSpeech.SUCCESS) {
                 var waitCount = 0
                 while (!done && waitCount < 50) {
-                    delay(100)
+                    delay(100.milliseconds)
                     waitCount++
                 }
 

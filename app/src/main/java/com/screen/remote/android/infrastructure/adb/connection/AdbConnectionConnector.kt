@@ -217,7 +217,6 @@ internal class AdbConnectionConnector(
                         Context.USB_SERVICE,
                     ) as android.hardware.usb.UsbManager
 
-                var detectedSerial = serialNumber
                 var lastError: Throwable? = null
                 val features = Dadb.connectFeatures(withDelayedAck = true)
 
@@ -245,8 +244,7 @@ internal class AdbConnectionConnector(
 
                     val verifyResult = AdbConnectionVerifier.verifyDadb(dadb, deviceId, sessionContext = sessionContext)
                     if (verifyResult.isSuccess) {
-                        detectedSerial = verifyResult.getOrDefault(serialNumber)
-                        lastError = null
+                        val detectedSerial = verifyResult.getOrDefault(serialNumber)
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
                             "USB Dadb verify success for $deviceId attempt=${attempt + 1} serial=$detectedSerial",

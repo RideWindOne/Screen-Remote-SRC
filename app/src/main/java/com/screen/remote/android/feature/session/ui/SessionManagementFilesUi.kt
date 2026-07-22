@@ -12,27 +12,25 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
@@ -48,6 +46,7 @@ import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -68,9 +67,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,9 +80,11 @@ import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.i18n.ManagementTexts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 private val FilesDialogSpacing = 12.dp
 private val FilesDialogButtonSpacing = 4.dp
+private val FilesRowVerticalPadding = 7.dp
 private val FilesDetailRowHeight = 40.dp
 private val FilesDetailContentHeight = 286.dp
 private val FilesActionCardPadding = 8.dp
@@ -136,7 +137,7 @@ internal fun SessionManagementFileRow(
                 ).combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongPress,
-                ).padding(horizontal = 16.dp, vertical = 14.dp),
+                ).padding(horizontal = 16.dp, vertical = FilesRowVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -271,7 +272,7 @@ private fun SessionManagementFilePlaceholderRow(isDirectory: Boolean) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp),
+                .padding(vertical = FilesRowVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -339,7 +340,6 @@ internal fun SessionManagementBottomIconAction(
     icon: ImageVector,
     label: String,
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    showLabel: Boolean = true,
     onClick: () -> Unit,
 ) {
     Column(
@@ -357,13 +357,6 @@ internal fun SessionManagementBottomIconAction(
             contentDescription = label,
             tint = iconTint,
         )
-        if (showLabel) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
@@ -613,7 +606,7 @@ internal fun SessionManagementTextEditorDialog(
     SessionManagementCenteredDialog(
         title = ManagementTexts.Files.EDIT.format(state.entry.name),
         onDismiss = onDismiss,
-        widthRatio = 0.96f,
+        widthRatio = SessionManagementContentWidthFraction,
         maxHeightRatio = 0.9f,
         contentPadding = FilesTextEditorHorizontalPadding,
         rightButtonText = ManagementTexts.Files.SAVE.get(),
@@ -664,12 +657,9 @@ internal fun SessionManagementImagePreviewDialog(
     onOpenExternal: () -> Unit,
     onPushBack: () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
+    val containerSize = LocalWindowInfo.current.containerSize
     val density = LocalDensity.current
-    val targetWidthPx =
-        with(density) {
-            (configuration.screenWidthDp.dp * 0.9f).roundToPx()
-        }
+    val targetWidthPx = (containerSize.width * 0.9f).roundToInt()
     val targetHeightPx = with(density) { FilesImagePreviewHeight.roundToPx() }
     val imageState by produceState(
         initialValue = ImagePreviewDecodeState(),
@@ -911,7 +901,7 @@ private fun SessionManagementFilePreviewDialog(
     SessionManagementCenteredDialog(
         title = title,
         onDismiss = onDismiss,
-        widthRatio = 0.94f,
+        widthRatio = SessionManagementContentWidthFraction,
         maxHeightRatio = 0.84f,
     ) {
         Text(

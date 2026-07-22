@@ -28,8 +28,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * 通过 USB ADB 通道实现 Dadb 接口
  */
 class UsbDadb(
-    private val usbManager: UsbManager,
-    private val usbDevice: UsbDevice,
+    usbManager: UsbManager,
+    usbDevice: UsbDevice,
     private val keyPair: AdbKeyPair,
     private val deviceId: String,
 ) : Dadb {

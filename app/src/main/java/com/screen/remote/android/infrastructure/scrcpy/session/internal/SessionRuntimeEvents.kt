@@ -46,7 +46,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.startedSumm
 import com.screen.remote.android.infrastructure.scrcpy.session.model.summary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.targetSummary
 
-internal suspend fun Session.processEvent(event: SessionEvent) {
+internal fun Session.processEvent(event: SessionEvent) {
     LogManager.d(LogTags.SCRCPY_CLIENT, "Handle event: $event")
 
     when (event) {
@@ -163,7 +163,7 @@ internal fun Session.handleServerStarted(context: ServerStartContext) {
 internal fun Session.handleServerFailed(issue: ServerIssue) {
     runtime.updateProgress(ConnectionStep.START_SERVER, StepStatus.FAILED, issue.startFailedProgressMessage())
     runtime.updateSessionState(SessionState.ServerFailed(issue))
-    runtime.updateComponentState(SessionComponent.ScrcpyServer, ComponentState.Error(issue.message))
+    runtime.updateComponentState(SessionComponent.ScrcpyServer, ComponentState.Error)
 }
 
 internal fun Session.handleForwardSetting() {
@@ -183,7 +183,7 @@ internal fun Session.handleForwardSetup(
     LogManager.d(LogTags.SCRCPY_CLIENT, "Forward has been created: ${context.logSummary(localPort, remoteSocket)}")
 }
 
-internal fun Session.handleForwardRemoved(
+internal fun handleForwardRemoved(
     localPort: Int,
     context: ForwardRemovalContext,
 ) {
@@ -273,7 +273,7 @@ internal fun Session.handleDecoderStopped(decoderType: DecoderType) {
     LogManager.d(LogTags.SCRCPY_CLIENT, "Decoder stopped: ${decoderType.name}")
 }
 
-internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
+internal fun Session.handleDecoderError(issue: DecoderIssue) {
     LogManager.e(LogTags.SCRCPY_CLIENT, issue.logMessage())
 
     if (issue.kind == DecoderIssueKind.UnsupportedSize) {
@@ -316,39 +316,39 @@ internal suspend fun Session.handleDecoderError(issue: DecoderIssue) {
 
 private const val MAX_DECODER_RECOVERY_ATTEMPTS = 2
 
-internal fun Session.handleVideoEncoderDetecting(context: CodecDetectionContext) {
+internal fun handleVideoEncoderDetecting(context: CodecDetectionContext) {
     val source = if (context.reusedUploadedServer) "reused uploaded server" else "pushed server again"
     LogManager.d(LogTags.SCRCPY_CLIENT, "Detecting video encoder... source=$source")
 }
 
-internal fun Session.handleVideoEncoderDetected(summary: CodecDetectionSummary) {
+internal fun handleVideoEncoderDetected(summary: CodecDetectionSummary) {
     LogManager.d(
         LogTags.SCRCPY_CLIENT,
         "Video encoder detection completed: count=${summary.totalCount}, sample=${summary.sampleNames.joinToString()}, reusedServer=${summary.reusedUploadedServer}",
     )
 }
 
-internal fun Session.handleVideoEncoderDetectFailed(issue: CodecIssue) {
+internal fun handleVideoEncoderDetectFailed(issue: CodecIssue) {
     LogManager.e(LogTags.SCRCPY_CLIENT, "Video encoder detection failed: ${issue.message}")
 }
 
-internal fun Session.handleVideoEncoderError(issue: CodecIssue) {
+internal fun handleVideoEncoderError(issue: CodecIssue) {
     LogManager.e(LogTags.SCRCPY_CLIENT, "Video encoder error: ${issue.message}")
 }
 
-internal fun Session.handleAudioEncoderDetecting(context: CodecDetectionContext) {
+internal fun handleAudioEncoderDetecting(context: CodecDetectionContext) {
     val source = if (context.reusedUploadedServer) "reused uploaded server" else "pushed server again"
     LogManager.d(LogTags.SCRCPY_CLIENT, "Detecting audio encoder... source=$source")
 }
 
-internal fun Session.handleAudioEncoderDetected(summary: CodecDetectionSummary) {
+internal fun handleAudioEncoderDetected(summary: CodecDetectionSummary) {
     LogManager.d(
         LogTags.SCRCPY_CLIENT,
         "Audio encoder detection completed: count=${summary.totalCount}, sample=${summary.sampleNames.joinToString()}, reusedServer=${summary.reusedUploadedServer}",
     )
 }
 
-internal fun Session.handleAudioEncoderError(issue: CodecIssue) {
+internal fun handleAudioEncoderError(issue: CodecIssue) {
     LogManager.e(LogTags.SCRCPY_CLIENT, "Audio encoder error: ${issue.message}")
 }
 
@@ -417,11 +417,11 @@ internal fun SocketType.toComponent(): SessionComponent =
         SocketType.Control -> SessionComponent.ControlSocket
     }
 
-internal fun AdbIssue.progressMessage(): String = "${AdbTexts.ADB_DISCONNECTED.get()}: ${message}"
+internal fun AdbIssue.progressMessage(): String = "${AdbTexts.ADB_DISCONNECTED.get()}: $message"
 
-internal fun ServerIssue.pushFailedProgressMessage(): String = "${RemoteTexts.REMOTE_PUSH_FAILED.get()}: ${message}"
+internal fun ServerIssue.pushFailedProgressMessage(): String = "${RemoteTexts.REMOTE_PUSH_FAILED.get()}: $message"
 
-internal fun ServerIssue.startFailedProgressMessage(): String = "${RemoteTexts.REMOTE_START_FAILED.get()}: ${message}"
+internal fun ServerIssue.startFailedProgressMessage(): String = "${RemoteTexts.REMOTE_START_FAILED.get()}: $message"
 
 internal fun ForwardSetupContext.progressMessage(
     localPort: Int,
@@ -432,6 +432,6 @@ internal fun ForwardIssue.progressMessage(): String =
     "${RemoteTexts.REMOTE_FORWARD_FAILED.get()}: ${targetSummary()}: $message"
 
 internal fun SocketIssue.progressMessage(): String =
-    "${RemoteTexts.REMOTE_SOCKET_ERROR.get()}: ${socketType} - $message"
+    "${RemoteTexts.REMOTE_SOCKET_ERROR.get()}: $socketType - $message"
 
 internal fun DecoderIssue.logMessage(): String = "Decoder error[${decoderType.name}]: $message"

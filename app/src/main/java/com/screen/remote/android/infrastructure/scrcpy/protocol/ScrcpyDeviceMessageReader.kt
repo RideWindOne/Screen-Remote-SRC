@@ -6,7 +6,15 @@ import java.io.IOException
 internal sealed interface ScrcpyDeviceMessage {
     data class Clipboard(val text: String) : ScrcpyDeviceMessage
     data class ClipboardAck(val sequence: Long) : ScrcpyDeviceMessage
-    data class UhidOutput(val id: Int, val data: ByteArray) : ScrcpyDeviceMessage
+    data class UhidOutput(val id: Int, val data: ByteArray) : ScrcpyDeviceMessage {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is UhidOutput) return false
+            return id == other.id && data.contentEquals(other.data)
+        }
+
+        override fun hashCode(): Int = 31 * id + data.contentHashCode()
+    }
 }
 
 internal object ScrcpyDeviceMessageReader {

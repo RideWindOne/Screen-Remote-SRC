@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -84,6 +85,7 @@ import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 private data class RemoteLayoutInspectorUiState(
     val isLoading: Boolean,
@@ -205,11 +207,9 @@ fun RemoteDisplayScreen(
         )
 
     RemoteDisplayScreenEffects(
-        sessionId = sessionId,
         routeState = routeState,
         controlViewModel = controlViewModel,
         connectionViewModel = connectionViewModel,
-        onClose = onClose,
         scope = scope,
     )
 
@@ -489,15 +489,13 @@ private fun rememberRemoteDisplayScreenRouteState(
 
 @Composable
 private fun RemoteDisplayScreenEffects(
-    sessionId: String,
     routeState: RemoteDisplayScreenRouteState,
     controlViewModel: ControlViewModel,
     connectionViewModel: ConnectionViewModel,
-    onClose: () -> Unit,
     scope: CoroutineScope,
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
+    val containerSize = LocalWindowInfo.current.containerSize
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = context as? ComponentActivity
     val originalRequestedOrientation =
@@ -612,15 +610,19 @@ private fun RemoteDisplayScreenEffects(
         }
     }
 
-    val isALandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    LaunchedEffect(isALandscape, routeState.videoWidth, routeState.videoHeight) {
+    val isALandscape = containerSize.width > containerSize.height
+    LaunchedEffect(containerSize, routeState.videoWidth, routeState.videoHeight) {
         if (routeState.videoWidth > 0 && routeState.videoHeight > 0) {
             val aspectRatio = routeState.videoWidth.toFloat() / routeState.videoHeight.toFloat()
             routeState.onVideoMetricsChanged(routeState.videoWidth, routeState.videoHeight, aspectRatio)
 
             val isBLandscape = routeState.videoWidth > routeState.videoHeight
             val containerAspectRatio =
-                configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
+                if (containerSize.height > 0) {
+                    containerSize.width.toFloat() / containerSize.height.toFloat()
+                } else {
+                    aspectRatio
+                }
             val matchHeightFirst = aspectRatio < containerAspectRatio
 
             LogManager.d(
@@ -693,7 +695,7 @@ private fun RemoteDisplayScreenContent(
     LaunchedEffect(routeState.layoutInspectorState.isOverlayVisible) {
         if (routeState.layoutInspectorState.isOverlayVisible) {
             while (true) {
-                delay(1000)
+                delay(1000.milliseconds)
                 routeState.refreshLayoutInspectorOverlay()
             }
         }

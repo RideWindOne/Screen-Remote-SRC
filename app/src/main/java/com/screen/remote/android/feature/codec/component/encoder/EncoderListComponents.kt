@@ -122,8 +122,6 @@ fun EncoderOptionsSection(
     customEncoderName: String,
     onDefaultEncoderSelected: () -> Unit,
     onCustomEncoderNameChange: (String) -> Unit,
-    showCodecTest: Boolean,
-    onCodecTestClick: () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         // 默认编码器选项

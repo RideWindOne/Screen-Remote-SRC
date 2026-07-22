@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlin.time.Duration.Companion.milliseconds
 
 data class ConnectionLatencyEndpointState(
     val candidate: ConnectionCandidate,
@@ -104,7 +105,7 @@ class ConnectionLatencyTestViewModel(
                                             usbDevice = usbPreparation[candidate]?.getOrNull(),
                                         )
                                     recordRound(candidate, result)
-                                    delay(150)
+                                    delay(150.milliseconds)
                                 }
                                 markFinished(candidate)
                             }

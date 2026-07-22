@@ -11,7 +11,31 @@ internal data class OpusConfig(
     val originalSampleRate: Int,
     val outputGain: Int,
     val channelMappingFamily: Int,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is OpusConfig) return false
+
+        return header.contentEquals(other.header) &&
+            version == other.version &&
+            channelCount == other.channelCount &&
+            preSkipSamples == other.preSkipSamples &&
+            originalSampleRate == other.originalSampleRate &&
+            outputGain == other.outputGain &&
+            channelMappingFamily == other.channelMappingFamily
+    }
+
+    override fun hashCode(): Int {
+        var result = header.contentHashCode()
+        result = 31 * result + version
+        result = 31 * result + channelCount
+        result = 31 * result + preSkipSamples
+        result = 31 * result + originalSampleRate
+        result = 31 * result + outputGain
+        result = 31 * result + channelMappingFamily
+        return result
+    }
+}
 
 internal object OpusConfigParser {
     const val OPUS_HEADER_SIZE = 19
@@ -39,9 +63,9 @@ internal object OpusConfigParser {
             header = data.copyOf(),
             version = version,
             channelCount = channelCount,
-            preSkipSamples = readUnsignedShortLittleEndian(data, offset = 10),
-            originalSampleRate = readIntLittleEndian(data, offset = 12),
-            outputGain = readShortLittleEndian(data, offset = 16).toInt(),
+            preSkipSamples = readPreSkipSamples(data),
+            originalSampleRate = readOriginalSampleRate(data),
+            outputGain = readOutputGain(data),
             channelMappingFamily = data[18].toInt() and 0xFF,
         )
     }
@@ -88,22 +112,15 @@ internal object OpusConfigParser {
             .putLong(value)
             .array()
 
-    private fun readUnsignedShortLittleEndian(
-        data: ByteArray,
-        offset: Int,
-    ): Int = (data[offset].toInt() and 0xFF) or ((data[offset + 1].toInt() and 0xFF) shl 8)
+    private fun readPreSkipSamples(data: ByteArray): Int =
+        (data[10].toInt() and 0xFF) or ((data[11].toInt() and 0xFF) shl 8)
 
-    private fun readShortLittleEndian(
-        data: ByteArray,
-        offset: Int,
-    ): Short = readUnsignedShortLittleEndian(data, offset).toShort()
+    private fun readOutputGain(data: ByteArray): Int =
+        ((data[16].toInt() and 0xFF) or ((data[17].toInt() and 0xFF) shl 8)).toShort().toInt()
 
-    private fun readIntLittleEndian(
-        data: ByteArray,
-        offset: Int,
-    ): Int =
-        (data[offset].toInt() and 0xFF) or
-            ((data[offset + 1].toInt() and 0xFF) shl 8) or
-            ((data[offset + 2].toInt() and 0xFF) shl 16) or
-            ((data[offset + 3].toInt() and 0xFF) shl 24)
+    private fun readOriginalSampleRate(data: ByteArray): Int =
+        (data[12].toInt() and 0xFF) or
+            ((data[13].toInt() and 0xFF) shl 8) or
+            ((data[14].toInt() and 0xFF) shl 16) or
+            ((data[15].toInt() and 0xFF) shl 24)
 }

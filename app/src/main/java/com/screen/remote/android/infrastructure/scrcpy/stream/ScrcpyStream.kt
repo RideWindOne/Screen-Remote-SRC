@@ -3,7 +3,6 @@ package com.screen.remote.android.infrastructure.scrcpy.stream
 import com.screen.remote.android.core.common.constants.LogTags
 import com.screen.remote.android.core.common.event.DemuxerError
 import com.screen.remote.android.core.common.event.DeviceDisconnected
-import com.screen.remote.android.core.common.event.ScrcpyEvent
 import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
@@ -64,7 +63,7 @@ class ScrcpyAudioStream(
             val ptsAndFlags = dataInputStream.readLong() // uint64 pts (包含标志位, big-endian)
             val packetSize = dataInputStream.readInt() // uint32 size (big-endian)
 
-            if (packetSize <= 0 || packetSize > 4 * 1024 * 1024) {
+            if (packetSize !in 1..(4 * 1024 * 1024)) {
                 LogManager.e("AudioDecoder", "Audio packet size abnormality: $packetSize, pts=$ptsAndFlags")
                 return AdbShellPacket.Exit(byteArrayOf(0))
             }
@@ -132,9 +131,11 @@ internal fun isOpusSilencePacket(
  * - 推送 DemuxerError 事件（读取错误）
  *
  */
+@Suppress("unused")
 class ScrcpySocketStream(
     private val socket: Socket,
     inputStream: InputStream = socket.inputStream,
+    @Suppress("unused", "UNUSED_PARAMETER")
     override val codec: String,
     private val onError: (String) -> Unit,
     private val onVideoResolution: (Int, Int) -> Unit = { _, _ -> },
@@ -160,26 +161,25 @@ class ScrcpySocketStream(
 
                 if ((ptsAndFlags and ScrcpyProtocol.PACKET_FLAG_SESSION) != 0L) {
                     val width = (ptsAndFlags and 0xFFFF_FFFFL).toInt()
-                    val height = packetSize
 
-                    if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
-                        LogManager.e("ScrcpySocketStream", "Session meta video size abnormality: ${width}x$height")
+                    if (width !in 1..10000 || packetSize !in 1..10000) {
+                        LogManager.e("ScrcpySocketStream", "Session meta video size abnormality: ${width}x$packetSize")
                         onError("Invalid video size in session metadata")
-                        ScrcpyEventBus.pushEvent(DemuxerError("Invalid session size: ${width}x$height"))
+                        ScrcpyEventBus.pushEvent(DemuxerError("Invalid session size: ${width}x$packetSize"))
                         return AdbShellPacket.Exit(byteArrayOf(0))
                     }
 
-                    onVideoResolution(width, height)
-                    pendingSessionInfo = VideoSessionInfo(width, height)
+                    onVideoResolution(width, packetSize)
+                    pendingSessionInfo = VideoSessionInfo(width, packetSize)
                     frameInfo = null
                     VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
-                        "video session meta: size=${width}x$height flags=0x${(ptsAndFlags ushr 32).toString(16)}"
+                        "video session meta: size=${width}x$packetSize flags=0x${(ptsAndFlags ushr 32).toString(16)}"
                     }
                     continue
                 }
 
                 // 高分辨率关键帧可能显著大于 4 MiB；仍保留硬上限防止恶意分配。
-                if (packetSize <= 0 || packetSize > MAX_VIDEO_PACKET_SIZE) {
+                if (packetSize !in 1..MAX_VIDEO_PACKET_SIZE) {
                     LogManager.e("ScrcpySocketStream", "Packet size exception: $packetSize")
                     onError("Invalid packet size")
                     // 推送解复用器错误事件

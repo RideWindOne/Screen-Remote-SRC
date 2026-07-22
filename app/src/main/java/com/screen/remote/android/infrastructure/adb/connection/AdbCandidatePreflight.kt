@@ -31,7 +31,7 @@ internal fun buildAdbCandidatePreflightCommand(purpose: AdbConnectionPurpose): S
         "echo '$PREFLIGHT_SERVER_BEGIN'; " +
         if (purpose == AdbConnectionPurpose.SCRCPY_SESSION || purpose == AdbConnectionPurpose.CODEC_TEST) {
             "if [ -s '${AppConstants.SCRCPY_SERVER_PATH}' ] && " +
-                "[ \"\$(sha256sum '${AppConstants.SCRCPY_SERVER_PATH}' 2>/dev/null | cut -d' ' -f1)\" = " +
+                $$"[ \"$(sha256sum '$${AppConstants.SCRCPY_SERVER_PATH}' 2>/dev/null | cut -d' ' -f1)\" = " +
                 "'${AppConstants.SCRCPY_SERVER_SHA256}' ]; then echo 1; else echo 0; fi"
         } else {
             "echo"

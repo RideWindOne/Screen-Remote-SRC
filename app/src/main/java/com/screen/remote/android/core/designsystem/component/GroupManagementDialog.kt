@@ -1,5 +1,6 @@
 package com.screen.remote.android.core.designsystem.component
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,7 +38,6 @@ import com.screen.remote.android.core.designsystem.component.tree.TreeActions
 import com.screen.remote.android.core.designsystem.component.tree.TreeNodeItemForManagement
 import com.screen.remote.android.core.designsystem.component.tree.TreeRootItemForManagement
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupTreeNode
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
@@ -194,6 +194,8 @@ private fun GroupManagementTypeSelector(
     onTypeSelected: (GroupType) -> Unit,
 ) {
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val groupTypeBorderColor =
+        if (isDarkTheme) AppColors.darkGroupTypeBorder else AppColors.lightGroupTypeBorder
 
     Row(
         modifier =
@@ -207,6 +209,12 @@ private fun GroupManagementTypeSelector(
             onClick = { onTypeSelected(GroupType.SESSION) },
             label = { Text(SessionTexts.MAIN_TAB_SESSIONS.get()) },
             modifier = Modifier.weight(1f).height(listItemHeight),
+            border =
+                if (selectedType == GroupType.SESSION) {
+                    null
+                } else {
+                    BorderStroke(1.dp, groupTypeBorderColor)
+                },
             colors =
                 FilterChipDefaults.filterChipColors(
                     selectedContainerColor =
@@ -219,6 +227,12 @@ private fun GroupManagementTypeSelector(
             onClick = { onTypeSelected(GroupType.AUTOMATION) },
             label = { Text(SessionTexts.MAIN_TAB_ACTIONS.get()) },
             modifier = Modifier.weight(1f).height(listItemHeight),
+            border =
+                if (selectedType == GroupType.AUTOMATION) {
+                    null
+                } else {
+                    BorderStroke(1.dp, groupTypeBorderColor)
+                },
             colors =
                 FilterChipDefaults.filterChipColors(
                     selectedContainerColor =

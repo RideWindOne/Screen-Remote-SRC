@@ -63,7 +63,7 @@ internal object UsbAdbPacketCodec {
                 "Invalid ADB magic for command 0x${header.command.toUInt().toString(16)}: ${header.magic}",
             )
         }
-        if (header.payloadLength < 0 || header.payloadLength > MAX_ADB_PAYLOAD_LENGTH) {
+        if (header.payloadLength !in 0..MAX_ADB_PAYLOAD_LENGTH) {
             throw IOException("Invalid ADB payload length: ${header.payloadLength}")
         }
     }

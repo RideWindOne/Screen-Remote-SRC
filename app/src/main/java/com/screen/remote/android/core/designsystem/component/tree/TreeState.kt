@@ -291,8 +291,6 @@ object TreeActions {
 
         val sourceNode = findNodeByPath(nodes, sourcePath) ?: return false
         val descendantPaths = getDescendantPaths(sourceNode)
-        if (targetPath in descendantPaths) return false
-
-        return true
+        return targetPath !in descendantPaths
     }
 }

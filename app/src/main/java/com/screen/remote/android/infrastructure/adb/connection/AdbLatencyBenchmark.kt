@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration.Companion.milliseconds
 
 data class AdbLatencyRoundResult(
     val round: Int,
@@ -139,7 +140,7 @@ class AdbLatencyBenchmark {
                             val token = "sr-latency-$round-$sampleIndex"
                             val startedAt = System.nanoTime()
                             val response =
-                                withTimeout(SHELL_TIMEOUT_MS) {
+                                withTimeout(SHELL_TIMEOUT_MS.milliseconds) {
                                     dadb.shell("echo -n $token")
                                 }
                             check(response.exitCode == 0 && response.output.trim() == token) {

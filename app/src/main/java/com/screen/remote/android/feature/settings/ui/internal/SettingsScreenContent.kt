@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.manager.HapticFeedbackManager
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.designsystem.component.DialogPage
@@ -37,11 +38,12 @@ internal fun SettingsScreenContent(
         rightButtonText = texts.done,
         onRightButtonClick = onBack,
         enableScroll = true,
+        scrollContentTopPadding = IosDesignTokens.dialogCompactHeaderSpacerHeight,
+        scrollContentBottomPadding = IosDesignTokens.dialogCompactBottomSpacerHeight,
     ) {
         GeneralSettingsSection(
             settings = settings,
             texts = texts,
-            routeState = routeState,
             onNavigateToAppearance = onNavigateToAppearance,
             onNavigateToLanguage = onNavigateToLanguage,
             onNavigateToAbout = onNavigateToAbout,
@@ -57,7 +59,6 @@ internal fun SettingsScreenContent(
         )
 
         AdbManagementSection(
-            settings = settings,
             texts = texts,
             routeState = routeState,
             onNavigateToAdbKeys = onNavigateToAdbKeys,
@@ -95,7 +96,6 @@ internal fun SettingsScreenContent(
 private fun GeneralSettingsSection(
     settings: AppSettings,
     texts: SettingsScreenTexts,
-    routeState: SettingsScreenRouteState,
     onNavigateToAppearance: () -> Unit,
     onNavigateToLanguage: () -> Unit,
     onNavigateToAbout: () -> Unit,
@@ -154,7 +154,6 @@ private fun GeneralSettingsSection(
 
 @Composable
 private fun AdbManagementSection(
-    settings: AppSettings,
     texts: SettingsScreenTexts,
     routeState: SettingsScreenRouteState,
     onNavigateToAdbKeys: () -> Unit,

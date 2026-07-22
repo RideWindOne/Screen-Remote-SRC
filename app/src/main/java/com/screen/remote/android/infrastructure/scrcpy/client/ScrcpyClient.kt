@@ -3,7 +3,6 @@ package com.screen.remote.android.infrastructure.scrcpy.client
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import com.screen.remote.android.core.common.LogTags
@@ -12,8 +11,6 @@ import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.event.StatusChanged
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
-import com.screen.remote.android.core.common.util.ApiCompatHelper
-import com.screen.remote.android.core.common.util.compat.ServiceApiCompat
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.i18n.RemoteTexts
@@ -225,7 +222,6 @@ class ScrcpyClient(
      */
     private fun startForegroundService(
         deviceName: String,
-        options: ScrcpyOptions,
     ) {
         try {
             val deviceId = getCurrentDeviceId() ?: return

@@ -201,7 +201,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.executeShell(command)
-            result.toCommandResult(failureMessage = "Execution failed")
+            result.toCommandResult()
         }
 
     private fun executePushCommand(
@@ -211,7 +211,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.pushFile(local, remote)
-            result.toCommandResult(failureMessage = "Push failed", successOutput = "")
+            result.toCommandResult(failureMessage = "Push failed")
         }
 
     private fun executePullCommand(
@@ -221,7 +221,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.pullFile(remote, local)
-            result.toCommandResult(failureMessage = "Pull failed", successOutput = "")
+            result.toCommandResult(failureMessage = "Pull failed")
         }
 
     private fun executeForwardCommand(
@@ -238,7 +238,7 @@ internal class AdbBridgeCommandExecutor(
 
         return runBlocking {
             val result = connection.setupPortForward(localPort, remotePort)
-            result.toCommandResult(failureMessage = "Port forwarding failed", successOutput = "")
+            result.toCommandResult(failureMessage = "Port forwarding failed")
         }
     }
 
@@ -248,7 +248,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.installApk(apkPath)
-            result.toCommandResult(failureMessage = "Installation failed", successOutput = "")
+            result.toCommandResult(failureMessage = "Installation failed")
         }
 
     private fun executeUninstallCommand(
@@ -257,7 +257,7 @@ internal class AdbBridgeCommandExecutor(
     ): AdbBridgeCommandResult =
         runBlocking {
             val result = connection.uninstallPackage(packageName)
-            result.toCommandResult(failureMessage = "Uninstallation failed", successOutput = "")
+            result.toCommandResult(failureMessage = "Uninstallation failed")
         }
 }
 
@@ -266,19 +266,18 @@ internal data class AdbBridgeCommandResult(
     val output: String,
 )
 
-private fun Result<String>.toCommandResult(failureMessage: String): AdbBridgeCommandResult =
+private fun Result<String>.toCommandResult(): AdbBridgeCommandResult =
     if (isSuccess) {
         AdbBridgeCommandResult(true, getOrNull() ?: "")
     } else {
-        AdbBridgeCommandResult(false, exceptionOrNull()?.message ?: failureMessage)
+        AdbBridgeCommandResult(false, exceptionOrNull()?.message ?: "Execution failed")
     }
 
 private fun Result<Boolean>.toCommandResult(
     failureMessage: String,
-    successOutput: String,
 ): AdbBridgeCommandResult =
     if (isSuccess) {
-        AdbBridgeCommandResult(true, successOutput)
+        AdbBridgeCommandResult(true, "")
     } else {
         AdbBridgeCommandResult(false, exceptionOrNull()?.message ?: failureMessage)
     }

@@ -2,9 +2,7 @@ package com.screen.remote.android.service
 
 import android.app.Service
 import android.content.Intent
-import android.os.Binder
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import com.screen.remote.android.core.common.LogTags
@@ -18,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap
  * Service 主类只保留生命周期、action 分发和设备保护列表管理。
  */
 class ScrcpyForegroundService : Service() {
-    private val binder = LocalBinder()
     private var wakeLock: PowerManager.WakeLock? = null
     private var isRunning = false
     private var isDestroyed = false
@@ -79,10 +76,6 @@ class ScrcpyForegroundService : Service() {
         }
     }
 
-    inner class LocalBinder : Binder() {
-        fun getService(): ScrcpyForegroundService = this@ScrcpyForegroundService
-    }
-
     override fun onCreate() {
         super.onCreate()
         isDestroyed = false
@@ -139,7 +132,7 @@ class ScrcpyForegroundService : Service() {
         return START_NOT_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?) = null
 
     override fun onDestroy() {
         super.onDestroy()
@@ -220,7 +213,7 @@ class ScrcpyForegroundService : Service() {
         isRunning = false
         heartbeatMonitor.stop()
         notificationController.stopForeground()
-        LogManager.d(LogTags.SCRCPY_SERVICE, "The front desk service has stopped: startId=$startId stopped=$stopped")
+        LogManager.d(LogTags.SCRCPY_SERVICE, "The foreground service has stopped: startId=$startId")
     }
 
     private fun updateNotification() {

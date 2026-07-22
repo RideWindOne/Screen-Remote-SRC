@@ -7,11 +7,11 @@ import dadb.android.wireless.AdbMdnsConfig
 import dadb.android.wireless.AdbMdnsService
 import dadb.android.wireless.AdbMdnsServiceType
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalDadbAndroidApi::class)
 object AdbMdnsServiceResolver {
@@ -28,20 +28,16 @@ object AdbMdnsServiceResolver {
                     .createMdnsMonitor(
                         AdbMdnsConfig(serviceTypes = setOf(AdbMdnsServiceType.TLS_CONNECT)),
                     )
-            try {
+            monitor.use { monitor ->
                 monitor.start()
-                withTimeout(timeoutMs) {
-                    monitor.state
-                        .map { state ->
-                            state.connectServices.firstOrNull { service ->
-                                service.matchesTlsConnectServiceName(serviceName)
-                            }
+                withTimeout(timeoutMs.milliseconds) {
+                    monitor.state.mapNotNull { state ->
+                        state.connectServices.firstOrNull { service ->
+                            service.matchesTlsConnectServiceName(serviceName)
                         }
-                        .filterNotNull()
+                    }
                         .first()
                 }
-            } finally {
-                monitor.close()
             }
         }
 

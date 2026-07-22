@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Scrcpy 客户端重连逻辑
@@ -89,7 +90,7 @@ internal class ScrcpyClientReconnect(
             reconnectScope.launch {
                 try {
                     if (retryDelayMs > 0) {
-                        delay(retryDelayMs)
+                        delay(retryDelayMs.milliseconds)
                     }
 
                     // 不在这里重复执行 shell 验证。正式 connect 流程会复用、验证或重建 ADB，
@@ -143,7 +144,11 @@ internal class ScrcpyClientReconnect(
                     }
                     throw e
                 } catch (e: Exception) {
-                    LogManager.e(LogTags.SCRCPY_CLIENT, "========== Error during reconnection: ${e.message} ==========", e)
+                    LogManager.e(
+                        LogTags.SCRCPY_CLIENT,
+                        "========== Error during reconnection: ${e.message} ==========",
+                        e
+                    )
                     handleReconnectFailure(e.message ?: "Unknown error")
                 }
             }
@@ -219,11 +224,6 @@ internal class ScrcpyClientReconnect(
         reconnectJob = null
         reset()
     }
-
-    /**
-     * 获取重连状态
-     */
-    fun isReconnecting() = synchronized(reconnectLock) { isReconnecting }
 
     private fun computeReconnectDelay(attempt: Int): Long =
         if (attempt <= 1) {

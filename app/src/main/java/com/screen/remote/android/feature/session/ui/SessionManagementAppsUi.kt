@@ -20,19 +20,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VerifiedUser
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -48,15 +45,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.i18n.ManagementTexts
@@ -64,7 +58,7 @@ import com.screen.remote.android.core.designsystem.component.AppDivider
 
 private val AppsPanelCornerRadius = 16.dp
 private val AppsRowSpacing = 10.dp
-private val AppsRowVerticalPadding = 7.dp
+private val AppsRowVerticalPadding = 4.dp
 private val AppsRowMetaSpacing = 2.dp
 private val AppsBadgeSpacing = 6.dp
 private val AppsAvatarSize = 40.dp
@@ -72,13 +66,12 @@ private val AppsAvatarImageSize = 26.dp
 private val AppsAvatarFallbackIconSize = 20.dp
 private val AppsInfoCardHorizontalPadding = 14.dp
 private val AppsInfoCardVerticalPadding = 16.dp
-private val AppsOptionsMenuWidth = 264.dp
 private val AppsOptionsMenuOffset = DpOffset(x = (-6).dp, y = (-56).dp)
+private val AppsOptionsMenuRowHeight = 40.dp
+private val AppsOptionsMenuIconSize = 20.dp
 private val AppsActionRowCornerRadius = 12.dp
 private val AppsActionRowHorizontalPadding = 8.dp
 private val AppsActionRowVerticalPadding = 12.dp
-private val AppsSectionTitleHorizontalPadding = 16.dp
-private val AppsSectionTitleVerticalPadding = 8.dp
 private val AppsDetailLabelWidth = 92.dp
 private val AppsDetailRowMinHeight = 38.dp
 private val AppsDetailDividerInset = 110.dp
@@ -293,7 +286,7 @@ internal fun SessionManagementAppActionDialog(
     SessionManagementCenteredDialog(
         title = appTitle,
         onDismiss = onDismiss,
-        widthRatio = 0.9f,
+        widthRatio = SessionManagementContentWidthFraction,
         leftButtonText = ManagementTexts.Apps.CANCEL.get(),
     ) {
         SessionManagementAppDialogHeader(
@@ -327,6 +320,7 @@ internal fun SessionManagementAppOptionsMenu(
     expanded: Boolean,
     selectedFilters: Set<AppListFilter>,
     selectedSort: AppListSort,
+    sortAscending: Boolean,
     packageNameOnlyMode: Boolean,
     onDismiss: () -> Unit,
     onRefreshList: () -> Unit,
@@ -337,53 +331,65 @@ internal fun SessionManagementAppOptionsMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.width(AppsOptionsMenuWidth),
         offset = AppsOptionsMenuOffset,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         DropdownMenuItem(
+            modifier = Modifier.height(AppsOptionsMenuRowHeight),
             text = { Text(ManagementTexts.Apps.REFRESH_APPS.get()) },
-            leadingIcon = { Icon(imageVector = Icons.Default.Refresh, contentDescription = null) },
             onClick = onRefreshList,
         )
         HorizontalDivider()
-        SessionManagementAppOptionsSectionTitle(ManagementTexts.Apps.SORT.get())
         AppListSort.entries.forEach { option ->
             DropdownMenuItem(
+                modifier = Modifier.height(AppsOptionsMenuRowHeight),
                 text = { Text(option.label) },
-                leadingIcon = { Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = null) },
                 trailingIcon = {
                     if (selectedSort == option) {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                        Icon(
+                            imageVector =
+                                if (sortAscending) {
+                                    Icons.Default.ArrowUpward
+                                } else {
+                                    Icons.Default.ArrowDownward
+                                },
+                            contentDescription = null,
+                            modifier = Modifier.size(AppsOptionsMenuIconSize),
+                        )
                     }
                 },
                 onClick = { onSortSelected(option) },
             )
         }
         HorizontalDivider()
-        SessionManagementAppOptionsSectionTitle(ManagementTexts.Apps.LOADING.get())
         DropdownMenuItem(
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(ManagementTexts.Apps.PACKAGE_NAMES_ONLY.get())
-                    Text(
-                        text = ManagementTexts.Apps.SKIP_REMOTE_NAMES_ICONS_USE_CACHE_ONLY.get(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.height(AppsOptionsMenuRowHeight),
+            text = { Text(ManagementTexts.Apps.PACKAGE_NAMES_ONLY.get()) },
+            trailingIcon = {
+                if (packageNameOnlyMode) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(AppsOptionsMenuIconSize),
                     )
                 }
             },
-            leadingIcon = { Icon(imageVector = Icons.Default.Code, contentDescription = null) },
-            trailingIcon = { Checkbox(checked = packageNameOnlyMode, onCheckedChange = null) },
             onClick = { onPackageNameOnlyModeChanged(!packageNameOnlyMode) },
         )
         HorizontalDivider()
-        SessionManagementAppOptionsSectionTitle(ManagementTexts.Apps.FILTERS.get())
         AppListFilter.entries.forEach { option ->
             DropdownMenuItem(
+                modifier = Modifier.height(AppsOptionsMenuRowHeight),
                 text = { Text(option.label) },
-                leadingIcon = { Icon(imageVector = Icons.Default.FilterList, contentDescription = null) },
-                trailingIcon = { Checkbox(checked = option in selectedFilters, onCheckedChange = null) },
+                trailingIcon = {
+                    if (option in selectedFilters) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(AppsOptionsMenuIconSize),
+                        )
+                    }
+                },
                 onClick = { onToggleFilter(option) },
             )
         }
@@ -395,18 +401,19 @@ internal fun SessionManagementAppDetailDialog(
     entry: AppInventoryEntry,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     val detail by produceState(
         initialValue = SessionManagementAppCache.cachedAppDetail(entry.packageName) ?: AppDetailSnapshot.loading(entry),
         key1 = entry.packageName,
     ) {
-        value = loadAppDetailSnapshot(entry)
+        value = loadAppDetailSnapshot(context, entry)
     }
     val iconBitmap = SessionManagementAppCache.cachedIcon(entry.packageName)
 
     SessionManagementCenteredDialog(
         title = ManagementTexts.Apps.APP_DETAILS.get(),
         onDismiss = onDismiss,
-        widthRatio = 0.92f,
+        widthRatio = SessionManagementContentWidthFraction,
     ) {
         SessionManagementAppDialogHeader(
             appTitle = detail.appTitle,
@@ -433,6 +440,7 @@ internal fun SessionManagementAppUninstallDialog(
     onDismiss: () -> Unit,
     onConfirm: (Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
     val detail by produceState(
         initialValue = SessionManagementAppCache.cachedAppDetail(packageName) ?: AppDetailSnapshot.loading(packageName),
         key1 = packageName,
@@ -446,7 +454,7 @@ internal fun SessionManagementAppUninstallDialog(
                     apkPath = "",
                     isEnabled = true,
                 )
-        value = loadAppDetailSnapshot(appEntry)
+        value = loadAppDetailSnapshot(context, appEntry)
     }
     var keepData by remember(packageName) { mutableStateOf(false) }
 
@@ -716,20 +724,6 @@ private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
             }
         }
     }
-}
-
-@Composable
-private fun SessionManagementAppOptionsSectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier =
-            Modifier.padding(
-                horizontal = AppsSectionTitleHorizontalPadding,
-                vertical = AppsSectionTitleVerticalPadding,
-            ),
-    )
 }
 
 private data class AppDetailItem(

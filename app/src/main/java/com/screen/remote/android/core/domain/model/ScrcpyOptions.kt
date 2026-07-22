@@ -58,7 +58,7 @@ data class DeviceCapabilityCache(
     val selectedAudioDecoder: String = "",
 )
 
-fun DeviceCapabilityCache.resetForDevice(deviceSerial: String): DeviceCapabilityCache =
+fun resetForDevice(deviceSerial: String): DeviceCapabilityCache =
     DeviceCapabilityCache(deviceSerial = deviceSerial)
 
 /**

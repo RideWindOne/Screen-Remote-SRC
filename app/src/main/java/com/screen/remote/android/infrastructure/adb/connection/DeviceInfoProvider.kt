@@ -14,7 +14,7 @@ internal object DeviceInfoProvider {
     /**
      * 获取设备信息
      */
-    suspend fun getDeviceInfo(
+    fun getDeviceInfo(
         dadb: Dadb,
         deviceId: String,
         customName: String?,

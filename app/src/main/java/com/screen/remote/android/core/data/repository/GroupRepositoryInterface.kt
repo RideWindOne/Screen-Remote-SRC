@@ -2,7 +2,6 @@ package com.screen.remote.android.core.data.repository
 
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.GroupType
-import com.screen.remote.android.core.data.repository.GroupData
 import kotlinx.coroutines.flow.Flow
 
 /**

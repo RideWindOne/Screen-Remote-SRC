@@ -12,7 +12,6 @@ import com.screen.remote.android.infrastructure.scrcpy.session.internal.createMo
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.initMonitor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 internal class ScrcpyClientSessionRuntime(

@@ -1,7 +1,6 @@
 package com.screen.remote.android.feature.remote.widget.video
 
 import android.graphics.SurfaceTexture
-import android.os.Build
 import android.view.MotionEvent
 import android.view.View
 import android.view.TextureView
@@ -28,22 +27,22 @@ import com.screen.remote.android.core.i18n.RemoteTexts
  *
  * @param onSurfaceTextureAvailable Surface 可用时的回调
  * @param onSurfaceTextureDestroyed Surface 销毁时的回调
- * @param onTouch 触摸事件回调
  * @param modifier 修饰符
+ * @param onTouch 触摸事件回调
  */
 @Composable
 fun VideoTextureView(
     onSurfaceTextureAvailable: (SurfaceTexture) -> Unit,
     onSurfaceTextureDestroyed: () -> Unit,
-    onTouch: ((View, MotionEvent) -> Boolean)? = null,
     modifier: Modifier = Modifier,
+    onTouch: ((View, MotionEvent) -> Boolean)? = null,
 ) {
     val context = LocalContext.current
 
     // 记住 TextureView 实例，避免重组时重新创建
     val textureView =
         remember {
-            TextureView(context)
+            AccessibleVideoTextureView(context)
         }
 
     AndroidView(
@@ -90,24 +89,7 @@ fun VideoTextureView(
             }
         },
         update = { view ->
-            view.setOnTouchListener(
-                if (onTouch != null) { v, event -> onTouch(v, event) } else null,
-            )
-
-            // 每次重组时检查 SurfaceTexture 状态
-            val surfaceTexture = view.surfaceTexture
-            if (surfaceTexture != null) {
-                // 在 API 26+ 上检查 isReleased，否则假设有效
-                val isValid =
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        !surfaceTexture.isReleased
-                    } else {
-                        true
-                    }
-                if (isValid) {
-                    // SurfaceTexture 仍然有效，无需操作
-                }
-            }
+            view.setAccessibleOnTouchListener(onTouch)
         },
         modifier = modifier,
     )

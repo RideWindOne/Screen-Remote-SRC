@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
@@ -44,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
@@ -52,7 +52,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.constants.AppColors
-import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.data.datastore.PreferencesManager
@@ -69,7 +68,6 @@ import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.isAutomaticUpdateCheckDue
 import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.device.ui.component.AdbKeyManagementDialog
-import com.screen.remote.android.feature.remote.presentation.ConnectStatus
 import com.screen.remote.android.feature.remote.ui.RemoteDisplayScreen
 import com.screen.remote.android.feature.session.ui.component.AddSessionDialog
 import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
@@ -176,7 +174,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
     val sessionDataList by viewModel.sessionDataList.collectAsState()
     val showAddActionDialog by viewModel.showAddActionDialog.collectAsState()
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
-    val connectStatus by viewModel.connectStatus.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
@@ -184,6 +181,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
     val onboardingState by viewModel.sessionOnboardingState.collectAsState()
     val updatePreferences = remember(context) { PreferencesManager(context.applicationContext) }
     val updateChecker = remember { GitHubReleaseUpdateChecker() }
+    val managementDataProvider = remember { SessionManagementDataProvider() }
     var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
 
     RequestNotificationPermissionEffect(
@@ -202,7 +200,6 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
 
         updateChecker
             .check(
-                currentVersion = AppConstants.APP_VERSION,
                 channel = settings.updateChannel,
             ).onSuccess { release ->
                 updatePreferences.recordUpdateCheck(now, release)
@@ -213,7 +210,17 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
     LaunchedEffect(managementConnectStatus, routeState.pendingManagementSessionId) {
         when (val status = managementConnectStatus) {
             is ManagementConnectStatus.Connected -> {
-                routeState.openConnectedSessionManagement(status.sessionId)
+                if (routeState.pendingManagementSessionId == status.sessionId) {
+                    sessionDataList
+                        .find { it.id == status.sessionId }
+                        ?.let { sessionData ->
+                            managementDataProvider.startPrefetch(
+                                context = context.applicationContext,
+                                sessionData = sessionData,
+                            )
+                            routeState.openConnectedSessionManagement(status.sessionId)
+                        }
+                }
             }
 
             is ManagementConnectStatus.Failed -> {
@@ -231,6 +238,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
         if (managementSession != null) {
             SessionManagementScreen(
                 sessionData = managementSession,
+                dataProvider = managementDataProvider,
                 onBack = {
                     routeState.closeSessionManagement()
                 },
@@ -378,7 +386,7 @@ private fun ManagementLoadingDialog(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 CircularProgressIndicator(
-                    modifier = androidx.compose.ui.Modifier.size(22.dp),
+                    modifier = Modifier.size(22.dp),
                     strokeWidth = 2.dp,
                 )
                 Text(
@@ -657,7 +665,7 @@ private fun MainScreenTabSelector(
                 .width(MainScreenTabSelectorWidth)
                 .height(IosDesignTokens.segmentedControlHeight)
                 .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(MainScreenTabSelectorInset),
     ) {
         MainScreenTabButton(
@@ -705,7 +713,7 @@ private fun MainScreenTabButton(
                             AppColors.iOSSelectedBackground
                         }
                     } else {
-                        Color.Transparent
+                        MaterialTheme.colorScheme.surface
                     },
                 ).then(
                     if (selected) {
@@ -716,7 +724,7 @@ private fun MainScreenTabButton(
                 ),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.material3.TextButton(
+        TextButton(
             onClick = onClick,
             modifier = Modifier.fillMaxSize(),
             colors =

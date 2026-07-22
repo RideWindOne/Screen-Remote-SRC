@@ -122,7 +122,7 @@ internal suspend fun ConnectionLifecycle.processCodecSelection(
     LogManager.d(LogTags.SCRCPY_CLIENT, "Codec detection results saved to session $expectedSessionId")
 }
 
-internal fun ConnectionLifecycle.shouldDetectVideoCodec(options: ScrcpyOptions): Boolean =
+internal fun shouldDetectVideoCodec(options: ScrcpyOptions): Boolean =
     options.getFinalVideoEncoder().isBlank() ||
         options.getFinalVideoDecoder().isBlank() ||
         options.capabilityCache.selectedVideoCodec.isBlank() ||
@@ -134,7 +134,7 @@ internal fun ConnectionLifecycle.shouldDetectVideoCodec(options: ScrcpyOptions):
             codec = options.capabilityCache.selectedVideoCodec,
         )
 
-internal fun ConnectionLifecycle.shouldDetectAudioCodec(options: ScrcpyOptions): Boolean =
+internal fun shouldDetectAudioCodec(options: ScrcpyOptions): Boolean =
     if (!options.config.enableAudio) {
         false
     } else if (options.capabilityCache.selectedAudioCodec == "raw" && options.config.userAudioEncoder.isBlank() && options.config.userAudioDecoder.isBlank()) {
@@ -164,7 +164,7 @@ internal fun hasRemoteEncoderCapability(
     return capabilities.any { it.name == encoderName && it.codec == normalizedCodec }
 }
 
-internal suspend fun ConnectionLifecycle.selectVideoCodecIfNeeded(
+internal suspend fun selectVideoCodecIfNeeded(
     needDetect: Boolean,
     encoderCapabilities: List<EncoderCapability>,
     options: ScrcpyOptions,
@@ -180,7 +180,7 @@ internal suspend fun ConnectionLifecycle.selectVideoCodecIfNeeded(
         null
     }
 
-internal suspend fun ConnectionLifecycle.selectAudioCodecIfNeeded(
+internal suspend fun selectAudioCodecIfNeeded(
     needDetect: Boolean,
     encoderCapabilities: List<EncoderCapability>,
     options: ScrcpyOptions,
@@ -196,7 +196,7 @@ internal suspend fun ConnectionLifecycle.selectAudioCodecIfNeeded(
         null
     }
 
-internal fun ConnectionLifecycle.validateCodecSelection(
+internal fun validateCodecSelection(
     needDetectVideo: Boolean,
     needDetectAudio: Boolean,
     videoResult: CodecSelectionResult?,

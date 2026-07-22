@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,6 +77,8 @@ fun AddGroupDialog(
     var groupType by remember { mutableStateOf(initialType) }
     var showPathSelector by remember { mutableStateOf(false) }
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val groupTypeBorderColor =
+        if (isDarkTheme) AppColors.darkGroupTypeBorder else AppColors.lightGroupTypeBorder
 
     // 计算完整路径预览
     val fullPath = if (parentPath == "/") "/$name" else "$parentPath/$name"
@@ -136,6 +139,12 @@ fun AddGroupDialog(
                             Modifier
                                 .weight(1f)
                                 .height(AppDimens.listItemHeight),
+                        border =
+                            if (groupType == GroupType.SESSION) {
+                                null
+                            } else {
+                                BorderStroke(1.dp, groupTypeBorderColor)
+                            },
                         colors =
                             FilterChipDefaults.filterChipColors(
                                 selectedContainerColor =
@@ -155,6 +164,12 @@ fun AddGroupDialog(
                             Modifier
                                 .weight(1f)
                                 .height(AppDimens.listItemHeight),
+                        border =
+                            if (groupType == GroupType.AUTOMATION) {
+                                null
+                            } else {
+                                BorderStroke(1.dp, groupTypeBorderColor)
+                            },
                         colors =
                             FilterChipDefaults.filterChipColors(
                                 selectedContainerColor =

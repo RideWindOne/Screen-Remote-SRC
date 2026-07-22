@@ -1,21 +1,19 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.SectionCard
-import com.screen.remote.android.core.designsystem.component.SectionTitle
 import com.screen.remote.android.core.i18n.ManagementTexts
+import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.util.Locale
@@ -39,24 +37,112 @@ private data class WifiMetrics(
     val linkSpeed: String,
 )
 
+private val dashboardHelperCommands =
+    listOf(
+        "getprop ro.product.model",
+        "getprop ro.product.manufacturer",
+        "getprop ro.soc.model",
+        "getprop ro.build.version.release",
+        $$"cat /proc/uptime | awk '{print $1}'",
+        "getprop gsm.version.baseband",
+        "getprop ro.product.device",
+        "getprop ro.build.version.security_patch",
+        "getprop ro.serialno",
+        "wm size | grep -E 'Physical|Override' | tail -n 1",
+        "wm density | grep -E 'Physical|Override' | tail -n 1",
+        "dumpsys display | grep -E 'xDpi=|yDpi=|density .* dpi' | head -n 4",
+        "dumpsys display | grep -m 1 'DisplayDeviceInfo{'",
+        "ip -o -4 addr show 2>/dev/null; ifconfig 2>/dev/null",
+        "ip -4 route show default 2>/dev/null; cat /proc/net/route 2>/dev/null",
+        "getprop gsm.network.type",
+        "getprop gsm.operator.alpha",
+        "dumpsys telephony.registry | grep -m 1 'mSignalStrength='",
+        "dumpsys telephony.registry | grep -m 1 'mCellIdentity='",
+        "dumpsys wifi | grep -m 1 'mWifiInfo SSID:'",
+        "cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'",
+        "df /data | tail -n 1",
+        $$"""
+        for path in /sys/class/power_supply/battery/cycle_count /sys/class/power_supply/bq_bms/cycle_count
+        do
+            if [ -r "$path" ]; then
+                value=$(cat "$path" 2>/dev/null)
+                if [ -n "$value" ]; then
+                    echo "$value"
+                    break
+                fi
+            fi
+        done
+        """.trimIndent(),
+        "dumpsys battery | grep -E 'level:|status:|health:|voltage:|temperature:|current now:|current average:'",
+        "cat /sys/class/power_supply/battery/voltage_now 2>/dev/null",
+        "cmd battery get -f current_now 2>/dev/null",
+        "cmd battery get -f current_average 2>/dev/null",
+        $$"""
+        for path in \
+            /sys/class/power_supply/battery/current_now \
+            /sys/class/power_supply/battery/current_avg \
+            /sys/class/power_supply/bms/current_now \
+            /sys/class/power_supply/main/current_now \
+            /sys/class/power_supply/battery/constant_charge_current \
+            /sys/class/power_supply/usb/current_max
+        do
+            if [ -r "$path" ]; then
+                value=$(cat "$path" 2>/dev/null)
+                if [ -n "$value" ]; then
+                    echo "$value"
+                    break
+                fi
+            fi
+        done
+        """.trimIndent(),
+        "getprop ro.product.cpu.abilist",
+        "getprop ro.product.board",
+        "getprop ro.build.fingerprint",
+        "getprop service.adb.tcp.port",
+        "cat /proc/cpuinfo | grep -c processor",
+        "cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null",
+    )
+
 internal suspend fun loadDeviceDashboardSnapshot(
+    context: Context,
     sessionData: SessionData,
     preferCachedConnectionInfo: Boolean = false,
 ): DeviceDashboardSnapshot {
-    val connection = SessionManagementAdbConnection.current()
-    if (connection == null) {
-        return DeviceDashboardSnapshot.loading(sessionData).copy(
+    val connection =
+        SessionManagementAdbConnection.current() ?: return DeviceDashboardSnapshot.loading(sessionData).copy(
             isLoading = false,
             errorMessage = ManagementTexts.DeviceInfo.NO_CONNECTION_FOR_OVERVIEW.get(),
         )
+
+    val queryKeys = dashboardHelperCommands.mapIndexed { index, command -> command to "dashboard_$index" }.toMap()
+    val helperResult =
+        runCatching {
+            val helperJar = ensureLocalDadbHelperJar(context)
+            connection
+                .runQueriesWithHelper(
+                    queries = queryKeys.entries.associate { (command, key) -> key to command },
+                    localHelperJar = helperJar,
+                ).getOrThrow()
+        }.getOrElse { error ->
+            return DeviceDashboardSnapshot.loading(sessionData).copy(
+                isLoading = false,
+                errorMessage = error.message ?: ManagementTexts.DeviceInfo.OVERVIEW_LOAD_FAILED.get(),
+            )
+        }
+    val failedKeys =
+        helperResult.filterValues { it.error.isNotBlank() }.keys +
+            (queryKeys.values - helperResult.keys)
+    if (failedKeys.isNotEmpty()) {
+        LogManager.w(
+            LogTags.ADB_CONNECTION,
+            "Dashboard helper completed with ${failedKeys.size} failed fields: ${
+                failedKeys.sorted().joinToString(",")
+            }",
+        )
     }
 
-    suspend fun shell(command: String): String =
-        connection
-            .executeShell(command, retryOnFailure = false)
-            .getOrNull()
-            ?.trim()
-            .orEmpty()
+    fun shell(command: String): String =
+        queryKeys[command]?.let(helperResult::get)?.value?.trim().orEmpty()
 
     val cachedDeviceInfo = connection.deviceInfo
     val cachedPreflight = connection.getCachedCandidatePreflight().takeIf { preferCachedConnectionInfo }
@@ -73,7 +159,7 @@ internal suspend fun loadDeviceDashboardSnapshot(
             val socModelDeferred = async { shell("getprop ro.soc.model") }
             val androidVersionDeferred =
                 async { cachedValue(cachedDeviceInfo.androidVersion) ?: shell("getprop ro.build.version.release") }
-            val uptimeDeferred = async { shell("cat /proc/uptime | awk '{print \$1}'") }
+            val uptimeDeferred = async { shell($$"cat /proc/uptime | awk '{print $1}'") }
             val basebandDeferred = async { shell("getprop gsm.version.baseband") }
             val productCodeNameDeferred = async { shell("getprop ro.product.device") }
             val securityPatchDeferred = async { shell("getprop ro.build.version.security_patch") }
@@ -110,13 +196,13 @@ internal suspend fun loadDeviceDashboardSnapshot(
             val batteryCycleDeferred =
                 async {
                     shell(
-                        """
+                        $$"""
                         for path in /sys/class/power_supply/battery/cycle_count /sys/class/power_supply/bq_bms/cycle_count
                         do
-                            if [ -r "${'$'}path" ]; then
-                                value=${'$'}(cat "${'$'}path" 2>/dev/null)
-                                if [ -n "${'$'}value" ]; then
-                                    echo "${'$'}value"
+                            if [ -r "$path" ]; then
+                                value=$(cat "$path" 2>/dev/null)
+                                if [ -n "$value" ]; then
+                                    echo "$value"
                                     break
                                 fi
                             fi
@@ -136,7 +222,7 @@ internal suspend fun loadDeviceDashboardSnapshot(
             val currentNowDeferred =
                 async {
                     shell(
-                        """
+                        $$"""
                         for path in \
                             /sys/class/power_supply/battery/current_now \
                             /sys/class/power_supply/battery/current_avg \
@@ -145,10 +231,10 @@ internal suspend fun loadDeviceDashboardSnapshot(
                             /sys/class/power_supply/battery/constant_charge_current \
                             /sys/class/power_supply/usb/current_max
                         do
-                            if [ -r "${'$'}path" ]; then
-                                value=${'$'}(cat "${'$'}path" 2>/dev/null)
-                                if [ -n "${'$'}value" ]; then
-                                    echo "${'$'}value"
+                            if [ -r "$path" ]; then
+                                value=$(cat "$path" 2>/dev/null)
+                                if [ -n "$value" ]; then
+                                    echo "$value"
                                     break
                                 fi
                             fi
@@ -159,7 +245,10 @@ internal suspend fun loadDeviceDashboardSnapshot(
             val abiDeferred = async { shell("getprop ro.product.cpu.abilist") }
             val boardDeferred = async { shell("getprop ro.product.board") }
             val fingerprintDeferred =
-                async { cachedPreflight?.buildFingerprint?.takeIf { it.isNotBlank() } ?: shell("getprop ro.build.fingerprint") }
+                async {
+                    cachedPreflight?.buildFingerprint?.takeIf { it.isNotBlank() }
+                        ?: shell("getprop ro.build.fingerprint")
+                }
             val wirelessPortDeferred = async { shell("getprop service.adb.tcp.port") }
             val cpuCountDeferred = async { shell("cat /proc/cpuinfo | grep -c processor") }
             val cpuFreqDeferred =
@@ -181,7 +270,8 @@ internal suspend fun loadDeviceDashboardSnapshot(
 
             DeviceDashboardSnapshot(
                 isLoading = false,
-                model = modelDeferred.await().ifBlank { sessionData.name.ifBlank { ManagementTexts.General.UNKNOWN_DEVICE.get() } },
+                model = modelDeferred.await()
+                    .ifBlank { sessionData.name.ifBlank { ManagementTexts.General.UNKNOWN_DEVICE.get() } },
                 manufacturer = manufacturerDeferred.await(),
                 socModel = formatSocModel(socModelDeferred.await(), boardDeferred.await()),
                 androidVersion = androidVersionDeferred.await().ifBlank { "Android" },
@@ -636,11 +726,11 @@ internal fun parseDefaultGateway(raw: String): String {
     val interfaceName = Regex("""\bdev\s+(\S+)""").find(route)?.groupValues?.getOrNull(1).orEmpty()
     val ipRouteValue =
         when {
-        gateway.isNotBlank() && interfaceName.isNotBlank() -> "$gateway ($interfaceName)"
-        gateway.isNotBlank() -> gateway
-        interfaceName.isNotBlank() -> interfaceName
-        else -> ""
-    }
+            gateway.isNotBlank() && interfaceName.isNotBlank() -> "$gateway ($interfaceName)"
+            gateway.isNotBlank() -> gateway
+            interfaceName.isNotBlank() -> interfaceName
+            else -> ""
+        }
     if (ipRouteValue.isNotBlank()) return ipRouteValue
 
     val procRoute =
@@ -768,7 +858,7 @@ internal fun formatFileSize(bytes: Long): String {
 
 private fun formatBytes(bytes: Long): String {
     val gb = bytes / 1024.0 / 1024.0 / 1024.0
-    return String.format("%.2f G", gb)
+    return String.format(Locale.US, "%.2f G", gb)
 }
 
 private fun parseDisplayBytes(text: String): Long? {
@@ -809,7 +899,7 @@ private fun mapBatteryHealth(raw: String?): String =
 
 private fun formatBatteryTemperature(raw: String): String {
     val temp = raw.toFloatOrNull() ?: return raw
-    return String.format("%.1f °C", temp / 10f)
+    return String.format(Locale.US, "%.1f °C", temp / 10f)
 }
 
 private fun formatCurrentNow(raw: String): String {
@@ -821,7 +911,7 @@ private fun formatCurrentNow(raw: String): String {
             absolute >= 10_000.0 -> absolute / 1000.0
             else -> absolute
         }
-    return String.format("%.0f mA", ma)
+    return String.format(Locale.US, "%.0f mA", ma)
 }
 
 private fun formatBatteryCurrent(
@@ -872,7 +962,7 @@ private fun formatBatteryVoltage(
         } else {
             sysfsValue.toDouble()
         }
-    return String.format("%.0f mV", mv)
+    return String.format(Locale.US, "%.0f mV", mv)
 }
 
 private fun parseAdbTcpPort(raw: String): Int? {
@@ -888,12 +978,16 @@ private fun formatCpuSummary(
     val freqKhz = cpuFreqRaw.toLongOrNull()
     val freqText =
         if (freqKhz != null && freqKhz > 0) {
-            String.format("%.2f GHz", freqKhz / 1_000_000.0)
+            String.format(Locale.US, "%.2f GHz", freqKhz / 1_000_000.0)
         } else {
             ""
         }
     return when {
-        count != null && freqText.isNotBlank() -> ManagementTexts.DeviceInfo.CPU_CORES_WITH_FREQUENCY.format(count, freqText)
+        count != null && freqText.isNotBlank() -> ManagementTexts.DeviceInfo.CPU_CORES_WITH_FREQUENCY.format(
+            count,
+            freqText
+        )
+
         count != null -> ManagementTexts.DeviceInfo.CPU_CORES.format(count)
         else -> freqText
     }
@@ -937,10 +1031,21 @@ internal fun SessionManagementHomeSnapshot(snapshot: DeviceDashboardSnapshot) {
             title = ManagementTexts.DeviceInfo.DISPLAY_POWER.get(),
             items =
                 listOf(
-                    ManagementTexts.DeviceInfo.DISPLAY.get() to formatDisplaySummary(snapshot.resolution, snapshot.refreshRate),
-                    ManagementTexts.DeviceInfo.SCREEN.get() to formatScreenMetricsSummary(snapshot.dpi, snapshot.ppi, snapshot.screenSize),
+                    ManagementTexts.DeviceInfo.DISPLAY.get() to formatDisplaySummary(
+                        snapshot.resolution,
+                        snapshot.refreshRate
+                    ),
+                    ManagementTexts.DeviceInfo.SCREEN.get() to formatScreenMetricsSummary(
+                        snapshot.dpi,
+                        snapshot.ppi,
+                        snapshot.screenSize
+                    ),
                     ManagementTexts.DeviceInfo.REFRESH_RATES.get() to snapshot.supportedRefreshRates,
-                    ManagementTexts.DeviceInfo.BATTERY.get() to formatBatterySummary(snapshot.batteryHealth, snapshot.voltage, snapshot.currentNow),
+                    ManagementTexts.DeviceInfo.BATTERY.get() to formatBatterySummary(
+                        snapshot.batteryHealth,
+                        snapshot.voltage,
+                        snapshot.currentNow
+                    ),
                     ManagementTexts.DeviceInfo.STATUS.get() to
                         formatBatteryStatusSummary(snapshot.batteryStatus, snapshot.batteryLevel, snapshot.temperature),
                     ManagementTexts.DeviceInfo.CYCLE_COUNT.get() to snapshot.batteryCycleCount,
@@ -952,7 +1057,10 @@ internal fun SessionManagementHomeSnapshot(snapshot: DeviceDashboardSnapshot) {
             items =
                 listOf(
                     ManagementTexts.DeviceInfo.STORAGE.get() to snapshot.storageSummary,
-                    ManagementTexts.DeviceInfo.MEMORY.get() to formatMemorySummary(snapshot.memoryAvailable, snapshot.memoryTotal),
+                    ManagementTexts.DeviceInfo.MEMORY.get() to formatMemorySummary(
+                        snapshot.memoryAvailable,
+                        snapshot.memoryTotal
+                    ),
                 ),
         )
 
@@ -960,7 +1068,10 @@ internal fun SessionManagementHomeSnapshot(snapshot: DeviceDashboardSnapshot) {
             title = ManagementTexts.DeviceInfo.NETWORK.get(),
             items =
                 listOf(
-                    ManagementTexts.DeviceInfo.CELLULAR.get() to formatMobileBandSummary(snapshot.mobileNetworkType, snapshot.mobileBand),
+                    ManagementTexts.DeviceInfo.CELLULAR.get() to formatMobileBandSummary(
+                        snapshot.mobileNetworkType,
+                        snapshot.mobileBand
+                    ),
                     ManagementTexts.DeviceInfo.CARRIER.get() to snapshot.carrierNames,
                     "PCI" to snapshot.mobilePci,
                     "EARFCN" to snapshot.mobileEarfcn,
@@ -968,7 +1079,10 @@ internal fun SessionManagementHomeSnapshot(snapshot: DeviceDashboardSnapshot) {
                     "RSRQ" to snapshot.rsrq,
                     "SINR" to snapshot.sinr,
                     ManagementTexts.DeviceInfo.WI_FI_SSID.get() to snapshot.wifiSsid,
-                    ManagementTexts.DeviceInfo.WI_FI_INFO.get() to formatWifiSummary(snapshot.wifiFrequency, snapshot.wifiLinkSpeed),
+                    ManagementTexts.DeviceInfo.WI_FI_INFO.get() to formatWifiSummary(
+                        snapshot.wifiFrequency,
+                        snapshot.wifiLinkSpeed
+                    ),
                     "BSSID" to snapshot.wifiBssid,
                 ) +
                     snapshot.ipv4Interfaces.map { networkInterfaceLabel(it.name) to it.address } +
@@ -988,10 +1102,13 @@ private fun networkInterfaceLabel(name: String): String =
     when {
         name.matches(Regex("""(?:wlan|wifi)\d+""", RegexOption.IGNORE_CASE)) ->
             ManagementTexts.DeviceInfo.WI_FI_IP.get()
+
         name.matches(Regex("""(?:ap|softap|swlan)\d*""", RegexOption.IGNORE_CASE)) ->
             ManagementTexts.DeviceInfo.HOTSPOT_IP.get()
+
         name.matches(Regex("""(?:rndis|usb)\d*""", RegexOption.IGNORE_CASE)) ->
             ManagementTexts.DeviceInfo.USB_TETHERING_IP.get()
+
         else -> ManagementTexts.DeviceInfo.INTERFACE_IP.get()
     }
 
@@ -1058,7 +1175,7 @@ private fun SessionManagementInfoLoadingGroup(
 ) {
     SectionCard(
         title = title,
-        elevation = 1.dp,
+        elevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -1089,7 +1206,7 @@ private fun SessionManagementInfoGroup(
 
     SectionCard(
         title = title,
-        elevation = 1.dp,
+        elevation = 0.dp,
     ) {
         Column(
             modifier =

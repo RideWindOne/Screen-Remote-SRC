@@ -8,16 +8,13 @@ import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import dadb.AdbKeyPair
 import dadb.android.runtime.ExperimentalDadbAndroidApi
 import dadb.android.runtime.AdbRuntime
-import java.io.File
 
 /**
  * ADB 密钥对管理器
  * 负责生成、加载和管理 ADB 密钥对
  */
 @OptIn(ExperimentalDadbAndroidApi::class)
-internal class AdbKeyManager(
-    private val context: Context,
-) {
+internal class AdbKeyManager {
     private var keyPair: AdbKeyPair? = null
     private val adbRuntime: AdbRuntime
         get() = AdbRuntimeProvider.get()

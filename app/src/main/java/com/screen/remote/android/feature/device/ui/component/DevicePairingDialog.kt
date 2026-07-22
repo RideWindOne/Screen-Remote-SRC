@@ -59,6 +59,7 @@ import com.screen.remote.android.feature.device.viewmodel.DevicePairingViewModel
 import com.screen.remote.android.feature.session.ui.component.LabeledTextField
 import dadb.android.wireless.AdbMdnsService
 import dadb.android.wireless.AdbMdnsServiceType
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * ADB 配对码配对对话框入口。
@@ -97,7 +98,7 @@ fun AdbPairingCodeDialog(
     LaunchedEffect(pairingResult) {
         pairingResult?.let { result ->
             if (result.success) {
-                kotlinx.coroutines.delay(2000)
+                kotlinx.coroutines.delay(2000.milliseconds)
                 viewModel.resetPairingStatus()
             }
         }

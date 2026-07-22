@@ -24,7 +24,7 @@ internal object AdbRuntimeDiagnostics {
             "identity-unavailable(${error.message})"
         }
 
-    fun endpointSummary(
+    suspend fun endpointSummary(
         context: Context,
         host: String,
         port: Int,

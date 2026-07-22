@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.Socket
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 连接健康监控器
@@ -58,7 +59,7 @@ class ConnectionHealthMonitor {
                             )
 
                             if (consecutiveFailureCount < SOCKET_FAILURE_STRIKES) {
-                                delay(ALLOW_TRANSIENT_ERROR_INTERVAL_MS)
+                                delay(ALLOW_TRANSIENT_ERROR_INTERVAL_MS.milliseconds)
                                 continue
                             }
 
@@ -68,7 +69,7 @@ class ConnectionHealthMonitor {
 
                         consecutiveFailureCount = 0
                         // 每隔一段时间检查一次
-                        delay(ScrcpyConstants.HEALTH_CHECK_INTERVAL_MS)
+                        delay(ScrcpyConstants.HEALTH_CHECK_INTERVAL_MS.milliseconds)
                     } catch (_: CancellationException) {
                         break
                     } catch (e: Exception) {
@@ -79,7 +80,7 @@ class ConnectionHealthMonitor {
                         val now = System.currentTimeMillis()
                         val sinceLastNotify = now - lastNotifyAtMs
                         if (sinceLastNotify < ALLOW_TRANSIENT_ERROR_INTERVAL_MS) {
-                            delay(ALLOW_TRANSIENT_ERROR_INTERVAL_MS - sinceLastNotify)
+                            delay((ALLOW_TRANSIENT_ERROR_INTERVAL_MS - sinceLastNotify).milliseconds)
                         } else {
                             notifyConnectionLost()
                             break

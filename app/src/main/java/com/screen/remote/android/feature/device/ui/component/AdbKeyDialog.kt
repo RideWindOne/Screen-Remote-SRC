@@ -63,6 +63,7 @@ import com.screen.remote.android.feature.device.viewmodel.AdbKeysViewModel
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -606,7 +607,7 @@ private fun KeyEditItem(
 
     LaunchedEffect(isVisible) {
         if (isVisible && focusRequester != null) {
-            kotlinx.coroutines.delay(50)
+            kotlinx.coroutines.delay(50.milliseconds)
             focusRequester.requestFocus()
         }
     }

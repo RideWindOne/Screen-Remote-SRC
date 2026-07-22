@@ -2,11 +2,12 @@ package com.screen.remote.android.infrastructure.media.audio
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.MediaFormat
 import android.media.AudioTrack
+import android.media.MediaFormat
 import android.os.Build
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.ApiCompatHelper
 import java.nio.ByteBuffer
 
 /**
@@ -16,9 +17,14 @@ import java.nio.ByteBuffer
 class AudioTrackManager(
     private val volumeScale: Float = 1.0f,
 ) {
-    @Volatile private var audioTrack: AudioTrack? = null
-    @Volatile private var trackConfig: AudioTrackConfig? = null
-    @Volatile private var nonPcm16ScalingWarningLogged = false
+    @Volatile
+    private var audioTrack: AudioTrack? = null
+
+    @Volatile
+    private var trackConfig: AudioTrackConfig? = null
+
+    @Volatile
+    private var nonPcm16ScalingWarningLogged = false
 
     /**
      * 创建 AudioTrack
@@ -29,7 +35,12 @@ class AudioTrackManager(
         encoding: Int = AudioFormat.ENCODING_PCM_16BIT,
     ): AudioTrack? =
         try {
-            val config = AudioTrackConfig(sampleRate = sampleRate, channelCount = channelCount, encoding = encoding)
+            val config =
+                AudioTrackConfig(
+                    sampleRate = sampleRate,
+                    channelCount = channelCount,
+                    encoding = encoding,
+                )
             val channelConfig = config.channelMask
             val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, encoding)
             if (minBufferSize <= 0) {
@@ -58,7 +69,8 @@ class AudioTrackManager(
                             .setChannelMask(channelConfig)
                             .setEncoding(encoding)
                             .build(),
-                    ).setBufferSizeInBytes(bufferSize)
+                    )
+                    .setBufferSizeInBytes(bufferSize)
                     .setTransferMode(AudioTrack.MODE_STREAM)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 trackBuilder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
@@ -82,8 +94,13 @@ class AudioTrackManager(
     fun reconfigureFromOutputFormat(outputFormat: MediaFormat): Boolean {
         val sampleRate = outputFormat.getIntegerOrNull(MediaFormat.KEY_SAMPLE_RATE) ?: return false
         val channelCount = outputFormat.getIntegerOrNull(MediaFormat.KEY_CHANNEL_COUNT) ?: return false
-        val encoding = outputFormat.getIntegerOrNull(MediaFormat.KEY_PCM_ENCODING) ?: AudioFormat.ENCODING_PCM_16BIT
-        val newConfig = AudioTrackConfig(sampleRate = sampleRate, channelCount = channelCount, encoding = encoding)
+        val encoding = ApiCompatHelper.getPcmEncodingOrDefault(outputFormat, AudioFormat.ENCODING_PCM_16BIT)
+        val newConfig =
+            AudioTrackConfig(
+                sampleRate = sampleRate,
+                channelCount = channelCount,
+                encoding = encoding,
+            )
 
         if (trackConfig == newConfig && audioTrack != null) {
             return true
@@ -121,7 +138,7 @@ class AudioTrackManager(
         try {
             audioTrack?.stop()
             audioTrack?.release()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // 忽略
         } finally {
             audioTrack = null
@@ -164,8 +181,11 @@ class AudioTrackManager(
                 bytes
             }
 
-        if (volumeScale != 1.0f && config?.encoding != AudioFormat.ENCODING_PCM_16BIT &&
-            config?.encoding != null && !nonPcm16ScalingWarningLogged
+        if (
+            volumeScale != 1.0f &&
+            config?.encoding != AudioFormat.ENCODING_PCM_16BIT &&
+            config?.encoding != null &&
+            !nonPcm16ScalingWarningLogged
         ) {
             nonPcm16ScalingWarningLogged = true
             LogManager.w(
@@ -192,17 +212,19 @@ class AudioTrackManager(
         val scaledData = ByteArray(data.size)
 
         // PCM 16-bit 数据，每 2 个字节是一个样本
-        for (i in 0 until data.size step 2) {
+        for (i in data.indices step 2) {
             if (i + 1 >= data.size) break
 
             // 读取 16-bit 样本 (小端序)
-            val sample = ((data[i + 1].toInt() shl 8) or (data[i].toInt() and 0xFF)).toShort()
+            val sample =
+                ((data[i + 1].toInt() shl 8) or (data[i].toInt() and 0xFF)).toShort()
 
             // 应用音量缩放
             var scaledSample = (sample * scale).toInt()
 
             // 限制在 16-bit 范围内，避免溢出
-            scaledSample = scaledSample.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+            scaledSample =
+                scaledSample.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
 
             // 写回数据 (小端序)
             scaledData[i] = (scaledSample and 0xFF).toByte()
@@ -218,18 +240,14 @@ class AudioTrackManager(
     ): Int {
         var offset = 0
         while (offset < data.size) {
-            val written = track.write(data, offset, data.size - offset, AudioTrack.WRITE_BLOCKING)
+            val written =
+                track.write(data, offset, data.size - offset, AudioTrack.WRITE_BLOCKING)
             if (written < 0) return written
             if (written == 0) continue
             offset += written
         }
         return offset
     }
-
-    /**
-     * 获取当前 AudioTrack 实例
-     */
-    fun getAudioTrack(): AudioTrack? = audioTrack
 
     private fun encodingName(encoding: Int): String =
         when (encoding) {
@@ -241,7 +259,8 @@ class AudioTrackManager(
             else -> "UNKNOWN($encoding)"
         }
 
-    private fun MediaFormat.getIntegerOrNull(key: String): Int? = if (containsKey(key)) getInteger(key) else null
+    private fun MediaFormat.getIntegerOrNull(key: String): Int? =
+        if (containsKey(key)) getInteger(key) else null
 }
 
 private data class AudioTrackConfig(

@@ -54,22 +54,6 @@ internal class ScrcpyMonitorStateReducer {
                 )
             }
 
-            is ScrcpyMonitorEvent.VideoFrameDecoded -> {
-                currentState.copy(
-                    videoFrameCount = currentState.videoFrameCount + 1,
-                    lastVideoFrameTime = now,
-                    isVideoActive = true,
-                )
-            }
-
-            is ScrcpyMonitorEvent.AudioFrameDecoded -> {
-                currentState.copy(
-                    audioFrameCount = currentState.audioFrameCount + 1,
-                    lastAudioFrameTime = now,
-                    isAudioActive = true,
-                )
-            }
-
             is ScrcpyMonitorEvent.DeviceScreenLocked -> {
                 currentState.copy(
                     isScreenLocked = true,
@@ -165,10 +149,6 @@ internal class ScrcpyMonitorEventLogger(
                     "[$deviceId] Socket[${event.socketType}] idle for more than ${event.idleDurationMs}ms",
                 )
             }
-
-            is ScrcpyMonitorEvent.VideoFrameDecoded -> Unit
-
-            is ScrcpyMonitorEvent.AudioFrameDecoded -> Unit
 
             is ScrcpyMonitorEvent.DeviceScreenLocked -> {
                 LogManager.i(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] 🔒 Device lock screen")

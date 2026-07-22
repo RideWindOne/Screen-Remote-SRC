@@ -44,7 +44,7 @@ class DeviceViewModel(
             val result = adbConnectionManager.connectDevice(host, port, deviceName)
             _connectionState.value =
                 if (result.isSuccess) {
-                    ConnectionState.Success(result.getOrNull() ?: "")
+                    ConnectionState.Success
                 } else {
                     ConnectionState.Error(result.exceptionOrNull()?.message ?: "连接失败")
                 }
@@ -62,7 +62,7 @@ class DeviceViewModel(
         val result = adbConnectionManager.connectUsbDevice(usbDevice, deviceName)
         _connectionState.value =
             if (result.isSuccess) {
-                ConnectionState.Success(result.getOrNull() ?: "")
+                ConnectionState.Success
             } else {
                 ConnectionState.Error(result.exceptionOrNull()?.message ?: "USB 连接失败")
             }
@@ -72,7 +72,7 @@ class DeviceViewModel(
     /**
      * 扫描 USB 设备
      */
-    suspend fun scanUsbDevices() {
+    fun scanUsbDevices() {
         _usbScanningState.value = true
         try {
             adbConnectionManager.scanUsbDevices()
@@ -113,9 +113,7 @@ class DeviceViewModel(
 
         object Connecting : ConnectionState()
 
-        data class Success(
-            val deviceId: String,
-        ) : ConnectionState()
+        data object Success : ConnectionState()
 
         data class Error(
             val message: String,

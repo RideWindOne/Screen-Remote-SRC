@@ -4,11 +4,12 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -17,7 +18,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,12 +35,12 @@ import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.i18n.ManagementTexts
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
-fun SessionManagementScreen(
+internal fun SessionManagementScreen(
     sessionData: SessionData,
+    dataProvider: SessionManagementDataProvider,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -53,7 +53,6 @@ fun SessionManagementScreen(
     var dashboardRefreshTick by remember(sessionData.id) { mutableIntStateOf(0) }
     val contentRefreshTicks = remember(sessionData.id) { mutableStateMapOf<SessionManagementSection, Int>() }
     val appOptionsState = remember(sessionData.id) { SessionManagementAppOptionsState() }
-    val fileBrowserState = remember(sessionData.id) { SessionManagementFileBrowserState() }
     var progressDialog by remember(sessionData.id) { mutableStateOf<ManagementProgressDialogState?>(null) }
     var resultDialog by remember(sessionData.id) { mutableStateOf<ManagementResultDialogState?>(null) }
     var exitConfirmOpen by remember(sessionData.id) { mutableStateOf(false) }
@@ -69,78 +68,53 @@ fun SessionManagementScreen(
     var appAddMenuOpenTick by remember(sessionData.id) { mutableIntStateOf(0) }
     var fileSelectionMode by remember(sessionData.id) { mutableStateOf(false) }
     var commandInput by remember(sessionData.id) { mutableStateOf("") }
-    var commandHistory by remember(sessionData.id) { mutableStateOf<List<ManagementCommandRecord>>(emptyList()) }
-    var commandExecuting by remember(sessionData.id) { mutableStateOf(false) }
     var commandPresetDialogOpen by remember(sessionData.id) { mutableStateOf(false) }
     val commandTerminalSession = remember(sessionData.id) { ManagementTerminalSession(scope) }
-    var snapshot by remember(sessionData.id) {
-        mutableStateOf(DeviceDashboardSnapshot.loading(sessionData))
-    }
-    var snapshotLoaded by remember(sessionData.id) { mutableStateOf(false) }
-    var snapshotRefreshing by remember(sessionData.id) { mutableStateOf(true) }
+    val snapshot =
+        dataProvider.deviceSnapshot
+            ?: DeviceDashboardSnapshot.loading(sessionData).copy(
+                errorMessage = dataProvider.deviceErrorMessage,
+            )
+    val snapshotRefreshing = dataProvider.deviceRefreshing
+    val fileBrowserState = dataProvider.fileBrowserState
 
     DisposableEffect(commandTerminalSession) {
         onDispose {
             commandTerminalSession.close()
-            SessionManagementAppCache.releaseScope(sessionData.id)
-        }
-    }
-
-
-    LaunchedEffect(sessionData.id) {
-        coroutineScope {
-            launch {
-                fileBrowserState.loadSnapshot("/sdcard")
-            }
-            launch {
-                loadSessionManagementAppData(
-                    context = context,
-                    scopeKey = sessionData.id,
-                )
-            }
+            dataProvider.invalidate(sessionData.id)
         }
     }
 
     LaunchedEffect(sessionData.id, dashboardRefreshTick) {
-        val hasPreviousSnapshot = snapshotLoaded
-        if (!hasPreviousSnapshot) {
-            snapshot = DeviceDashboardSnapshot.loading(sessionData)
-        }
-        snapshotRefreshing = true
+        val hasPreviousSnapshot = dataProvider.deviceSnapshot != null
         val nextSnapshot =
-            loadDeviceDashboardSnapshot(
+            dataProvider.loadDeviceInformation(
+                context = context,
                 sessionData = sessionData,
-                preferCachedConnectionInfo = !snapshotLoaded,
+                forceRefresh = dashboardRefreshTick > 0,
             )
-        snapshotRefreshing = false
-        if (nextSnapshot.errorMessage != null && hasPreviousSnapshot) {
+        if (nextSnapshot?.errorMessage != null && hasPreviousSnapshot) {
             resultDialog =
                 ManagementResultDialogState(
                     title = ManagementTexts.General.DEVICE_INFO.get(),
                     message = nextSnapshot.errorMessage,
                     isSuccess = false,
                 )
-        } else {
-            snapshot = nextSnapshot
-            snapshotLoaded = nextSnapshot.errorMessage == null
         }
     }
 
     val onRefresh =
         remember(sessionData.id, selectedSection) {
-            when {
-                selectedSection == SessionManagementSection.Apps -> {
+            when (selectedSection) {
+                SessionManagementSection.Apps -> {
                     appOptionsState::show
                 }
 
-                selectedSection == SessionManagementSection.DeviceInfo ||
-                    selectedSection == SessionManagementSection.Utility -> {
+                SessionManagementSection.DeviceInfo, SessionManagementSection.Utility -> {
                     { dashboardRefreshTick += 1 }
                 }
 
-                selectedSection == SessionManagementSection.Files ||
-                    selectedSection == SessionManagementSection.Process ||
-                    selectedSection == SessionManagementSection.PortForward -> {
+                SessionManagementSection.Files, SessionManagementSection.Process, SessionManagementSection.PortForward -> {
                     {
                         contentRefreshTicks[selectedSection] =
                             (contentRefreshTicks[selectedSection] ?: 0) + 1
@@ -185,21 +159,6 @@ fun SessionManagementScreen(
             if (result.isSuccess && refreshDashboardOnSuccess) {
                 dashboardRefreshTick++
             }
-        }
-    }
-
-    fun runManagementCommand(command: String) {
-        val normalizedCommand = command.trim()
-        if (normalizedCommand.isBlank() || commandExecuting) {
-            return
-        }
-
-        commandInput = normalizedCommand
-        commandExecuting = true
-        scope.launch {
-            val record = executeManagementShellCommand(normalizedCommand)
-            commandHistory = listOf(record) + commandHistory
-            commandExecuting = false
         }
     }
 
@@ -253,115 +212,140 @@ fun SessionManagementScreen(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                SessionManagementDetailPane(
-                    modifier = Modifier.fillMaxSize(),
-                    sessionData = sessionData,
-                    selectedSection = selectedSection,
-                    snapshot = snapshot,
-                    snapshotRefreshing = snapshotRefreshing,
-                    refreshToken = contentRefreshTicks[selectedSection] ?: 0,
-                    appOptionsState = appOptionsState,
-                    fileBrowserState = fileBrowserState,
-                    fileAddMenuOpenTick = fileAddMenuOpenTick,
-                    appAddMenuOpenTick = appAddMenuOpenTick,
-                    commandInput = commandInput,
-                    commandHistory = commandHistory,
-                    commandExecuting = commandExecuting,
-                    commandPresetDialogOpen = commandPresetDialogOpen,
-                    commandTerminalSession = commandTerminalSession,
-                    onFileSelectionModeChanged = { fileSelectionMode = it },
-                    onCommandInputChange = { commandInput = it },
-                    onCommandExecute = ::runManagementCommand,
-                    onCommandHistoryClear = { commandHistory = emptyList() },
-                    onCommandPresetDialogChange = { commandPresetDialogOpen = it },
-                    onUtilityAction = { action ->
-                        when (action) {
-                            UtilityAction.FixedPort -> {
-                                fixedPortDialogState =
-                                    ManagementValueInputDialogState(
-                                        title = ManagementTexts.General.FIXED_PORT.get(),
-                                        label = ManagementTexts.General.PORT.get(),
-                                        initialValue = snapshot.wirelessDebugPort?.toString().orEmpty(),
-                                        confirmText = ManagementTexts.General.APPLY.get(),
-                                        placeholder = ManagementTexts.General.EXAMPLE_5555.get(),
-                                    )
-                            }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = SessionManagementPageBottomInset),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                SessionManagementPageFrame(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(SessionManagementPageOuterWidthFraction)
+                            .fillMaxHeight(),
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        SessionManagementTopRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = selectedSection.title,
+                            onOpenMenu = { drawerOpen = true },
+                            onRefresh = topActionCallback,
+                            actionIcon = topActionIcon,
+                            actionContentDescription = topActionContentDescription,
+                        )
 
-                            UtilityAction.Screenshot -> {
-                                progressDialog =
-                                    ManagementProgressDialogState(
-                                        title = ManagementTexts.General.SCREENSHOT.get(),
-                                        message = ManagementTexts.General.CAPTURING_SCREENSHOT_FROM_DEVICE.get(),
-                                    )
-                                scope.launch {
-                                    val result = captureDeviceScreenshot(context)
-                                    progressDialog = null
-                                    result.fold(
-                                        onSuccess = { file ->
-                                            screenshotResult = ScreenshotPreviewState(file = file)
-                                        },
-                                        onFailure = { error ->
-                                            resultDialog =
-                                                ManagementResultDialogState(
-                                                    title = ManagementTexts.General.SCREENSHOT.get(),
-                                                    message = error.message ?: ManagementTexts.General.SCREENSHOT_FAILED.get(),
-                                                    isSuccess = false,
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            SessionManagementDetailPane(
+                                modifier =
+                                    Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(SessionManagementContentWidthWithinPageFraction),
+                                sessionData = sessionData,
+                                selectedSection = selectedSection,
+                                snapshot = snapshot,
+                                snapshotRefreshing = snapshotRefreshing,
+                                refreshToken = contentRefreshTicks[selectedSection] ?: 0,
+                                appOptionsState = appOptionsState,
+                                dataProvider = dataProvider,
+                                fileBrowserState = fileBrowserState,
+                                fileAddMenuOpenTick = fileAddMenuOpenTick,
+                                appAddMenuOpenTick = appAddMenuOpenTick,
+                                commandInput = commandInput,
+                                commandPresetDialogOpen = commandPresetDialogOpen,
+                                commandTerminalSession = commandTerminalSession,
+                                onFileSelectionModeChanged = { fileSelectionMode = it },
+                                onCommandInputChange = { commandInput = it },
+                                onCommandPresetDialogChange = { commandPresetDialogOpen = it },
+                                onUtilityAction = { action ->
+                                    when (action) {
+                                        UtilityAction.FixedPort -> {
+                                            fixedPortDialogState =
+                                                ManagementValueInputDialogState(
+                                                    title = ManagementTexts.General.FIXED_PORT.get(),
+                                                    label = ManagementTexts.General.PORT.get(),
+                                                    initialValue = snapshot.wirelessDebugPort?.toString().orEmpty(),
+                                                    confirmText = ManagementTexts.General.APPLY.get(),
+                                                    placeholder = ManagementTexts.General.EXAMPLE_5555.get(),
                                                 )
-                                        },
-                                    )
-                                }
-                            }
+                                        }
 
-                            UtilityAction.AdvancedReboot -> {
-                                rebootDialogOpen = true
-                            }
+                                        UtilityAction.Screenshot -> {
+                                            progressDialog =
+                                                ManagementProgressDialogState(
+                                                    title = ManagementTexts.General.SCREENSHOT.get(),
+                                                    message = ManagementTexts.General.CAPTURING_SCREENSHOT_FROM_DEVICE.get(),
+                                                )
+                                            scope.launch {
+                                                val result = captureDeviceScreenshot(context)
+                                                progressDialog = null
+                                                result.fold(
+                                                    onSuccess = { file ->
+                                                        screenshotResult = ScreenshotPreviewState(file = file)
+                                                    },
+                                                    onFailure = { error ->
+                                                        resultDialog =
+                                                            ManagementResultDialogState(
+                                                                title = ManagementTexts.General.SCREENSHOT.get(),
+                                                                message = error.message
+                                                                    ?: ManagementTexts.General.SCREENSHOT_FAILED.get(),
+                                                                isSuccess = false,
+                                                            )
+                                                    },
+                                                )
+                                            }
+                                        }
 
-                            UtilityAction.ActivateApp -> {
-                                activationDialogOpen = true
-                            }
+                                        UtilityAction.AdvancedReboot -> {
+                                            rebootDialogOpen = true
+                                        }
 
-                            UtilityAction.ModifyDpi -> {
-                                dpiDialogState =
-                                    ManagementValueInputDialogState(
-                                        title = ManagementTexts.General.CHANGE_DPI.get(),
-                                        label = ManagementTexts.General.DPI_VALUE.get(),
-                                        initialValue = snapshot.currentDpiValue.orEmpty(),
-                                        confirmText = ManagementTexts.General.APPLY.get(),
-                                    )
-                            }
+                                        UtilityAction.ActivateApp -> {
+                                            activationDialogOpen = true
+                                        }
 
-                            UtilityAction.ModifyResolution -> {
-                                resolutionDialogState =
-                                    ResolutionDialogState(
-                                        width = snapshot.currentResolutionWidth.orEmpty(),
-                                        height = snapshot.currentResolutionHeight.orEmpty(),
-                                    )
-                            }
+                                        UtilityAction.ModifyDpi -> {
+                                            dpiDialogState =
+                                                ManagementValueInputDialogState(
+                                                    title = ManagementTexts.General.CHANGE_DPI.get(),
+                                                    label = ManagementTexts.General.DPI_VALUE.get(),
+                                                    initialValue = snapshot.currentDpiValue.orEmpty(),
+                                                    confirmText = ManagementTexts.General.APPLY.get(),
+                                                )
+                                        }
 
-                            UtilityAction.AnimationScale -> {
-                                animationDialogState =
-                                    AnimationScaleDialogState(
-                                        windowScale = "1.0",
-                                        transitionScale = "1.0",
-                                        durationScale = "1.0",
-                                    )
-                            }
+                                        UtilityAction.ModifyResolution -> {
+                                            resolutionDialogState =
+                                                ResolutionDialogState(
+                                                    width = snapshot.currentResolutionWidth.orEmpty(),
+                                                    height = snapshot.currentResolutionHeight.orEmpty(),
+                                                )
+                                        }
 
-                            UtilityAction.SleepStandby -> {
-                                standbyDialogOpen = true
-                            }
+                                        UtilityAction.AnimationScale -> {
+                                            animationDialogState =
+                                                AnimationScaleDialogState(
+                                                    windowScale = "1.0",
+                                                    transitionScale = "1.0",
+                                                    durationScale = "1.0",
+                                                )
+                                        }
+
+                                        UtilityAction.SleepStandby -> {
+                                            standbyDialogOpen = true
+                                        }
+                                    }
+                                },
+                            )
                         }
-                    },
-                )
-
-                SessionManagementTopRow(
-                    title = selectedSection.title,
-                    onOpenMenu = { drawerOpen = true },
-                    onRefresh = topActionCallback,
-                    actionIcon = topActionIcon,
-                    actionContentDescription = topActionContentDescription,
-                )
+                    }
+                }
             }
         }
 
@@ -423,7 +407,10 @@ fun SessionManagementScreen(
                     title = ManagementTexts.General.ADVANCED_REBOOT.get(),
                     message = ManagementTexts.General.RUNNING.format(mode.label),
                 ) {
-                    runShellAction(mode.command, successMessage = ManagementTexts.General.COMMAND_SENT.format(mode.label))
+                    runShellAction(
+                        mode.command,
+                        successMessage = ManagementTexts.General.COMMAND_SENT.format(mode.label)
+                    )
                 }
             },
         )
@@ -476,7 +463,10 @@ fun SessionManagementScreen(
                     title = ManagementTexts.General.SCREEN_STANDBY.get(),
                     message = ManagementTexts.General.RUNNING_STANDBY_ACTION.format(action.label),
                 ) {
-                    runShellAction(action.command, successMessage = ManagementTexts.General.COMMAND_SENT.format(action.label))
+                    runShellAction(
+                        action.command,
+                        successMessage = ManagementTexts.General.COMMAND_SENT.format(action.label)
+                    )
                 }
             },
         )
@@ -493,7 +483,10 @@ fun SessionManagementScreen(
                     message = ManagementTexts.General.APPLYING_DPI.format(value),
                     refreshDashboardOnSuccess = true,
                 ) {
-                    runShellAction("wm density $value", successMessage = ManagementTexts.General.DPI_CHANGED.format(value))
+                    runShellAction(
+                        "wm density $value",
+                        successMessage = ManagementTexts.General.DPI_CHANGED.format(value)
+                    )
                 }
             },
         )
@@ -555,7 +548,10 @@ fun SessionManagementScreen(
                     message = ManagementTexts.General.APPLYING_X.format(width, height),
                     refreshDashboardOnSuccess = true,
                 ) {
-                    runShellAction("wm size ${width}x$height", successMessage = ManagementTexts.General.RESOLUTION_CHANGED_X.format(width, height))
+                    runShellAction(
+                        "wm size ${width}x$height",
+                        successMessage = ManagementTexts.General.RESOLUTION_CHANGED_X.format(width, height)
+                    )
                 }
             },
         )
@@ -595,12 +591,17 @@ fun SessionManagementScreen(
                     val result = saveImageToGallery(context, state.file)
                     if (result.isSuccess) {
                         screenshotResult = null
-                        Toast.makeText(context, ManagementTexts.General.SCREENSHOT_SAVED_GALLERY.get(), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            ManagementTexts.General.SCREENSHOT_SAVED_GALLERY.get(),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     } else {
                         resultDialog =
                             ManagementResultDialogState(
                                 title = ManagementTexts.General.SAVE_SCREENSHOT.get(),
-                                message = result.exceptionOrNull()?.message ?: ManagementTexts.General.SAVE_TO_GALLERY_FAILED.get(),
+                                message = result.exceptionOrNull()?.message
+                                    ?: ManagementTexts.General.SAVE_TO_GALLERY_FAILED.get(),
                                 isSuccess = false,
                             )
                     }
@@ -610,10 +611,7 @@ fun SessionManagementScreen(
     }
 }
 
-private val SessionManagementContentHorizontalPadding = 20.dp
-private val SessionManagementProcessContentHorizontalPadding = 2.dp
-private val SessionManagementContentBottomPadding = 20.dp
-private val SessionManagementContentTopPadding = 110.dp
+private val SessionManagementPageBottomInset = 12.dp
 
 @Composable
 private fun SessionManagementDetailPane(
@@ -624,63 +622,28 @@ private fun SessionManagementDetailPane(
     snapshotRefreshing: Boolean,
     refreshToken: Int,
     appOptionsState: SessionManagementAppOptionsState,
+    dataProvider: SessionManagementDataProvider,
     fileBrowserState: SessionManagementFileBrowserState,
     fileAddMenuOpenTick: Int,
     appAddMenuOpenTick: Int,
     commandInput: String,
-    commandHistory: List<ManagementCommandRecord>,
-    commandExecuting: Boolean,
     commandPresetDialogOpen: Boolean,
     commandTerminalSession: ManagementTerminalSession,
     onFileSelectionModeChanged: (Boolean) -> Unit,
     onCommandInputChange: (String) -> Unit,
-    onCommandExecute: (String) -> Unit,
-    onCommandHistoryClear: () -> Unit,
     onCommandPresetDialogChange: (Boolean) -> Unit,
     onUtilityAction: (UtilityAction) -> Unit,
 ) {
-    val horizontalPadding =
-        if (selectedSection == SessionManagementSection.Process) {
-            SessionManagementProcessContentHorizontalPadding
-        } else {
-            SessionManagementContentHorizontalPadding
-        }
-
-    if (selectedSection == SessionManagementSection.Process) {
-        Box(
-            modifier =
-                modifier
-                    .fillMaxSize()
-                    .padding(
-                        start = horizontalPadding,
-                        end = horizontalPadding,
-                        top = SessionManagementContentTopPadding,
-                        bottom = SessionManagementContentBottomPadding,
+    when (selectedSection) {
+        SessionManagementSection.DeviceInfo -> {
+            LazyColumn(
+                modifier = modifier.fillMaxSize(),
+                contentPadding =
+                    PaddingValues(
+                        top = SessionManagementPageInnerTopPadding,
+                        bottom = SessionManagementPageInnerBottomPadding,
                     ),
-        ) {
-            SessionManagementProcessPage(
-                modifier = Modifier.fillMaxSize(),
-                snapshot = snapshot,
-                refreshToken = refreshToken,
-                cacheScopeKey = sessionData.id,
-            )
-        }
-        return
-    }
-
-    LazyColumn(
-        modifier = modifier.fillMaxHeight(),
-        contentPadding =
-            PaddingValues(
-                start = horizontalPadding,
-                end = horizontalPadding,
-                top = SessionManagementContentTopPadding,
-                bottom = SessionManagementContentBottomPadding,
-            ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        when (selectedSection) {
-            SessionManagementSection.DeviceInfo -> {
+            ) {
                 item {
                     Box {
                         SessionManagementHomeSnapshot(snapshot = snapshot)
@@ -690,8 +653,17 @@ private fun SessionManagementDetailPane(
                     }
                 }
             }
+        }
 
-            SessionManagementSection.Utility -> {
+        SessionManagementSection.Utility -> {
+            LazyColumn(
+                modifier = modifier.fillMaxSize(),
+                contentPadding =
+                    PaddingValues(
+                        top = SessionManagementPageInnerTopPadding,
+                        bottom = SessionManagementPageInnerBottomPadding,
+                    ),
+            ) {
                 item {
                     Box {
                         SessionManagementUtilityList(
@@ -704,59 +676,66 @@ private fun SessionManagementDetailPane(
                     }
                 }
             }
+        }
 
-            SessionManagementSection.Files -> {
-                item {
-                    SessionManagementFileBrowser(
-                        modifier = Modifier.fillParentMaxHeight(),
-                        state = fileBrowserState,
-                        refreshToken = refreshToken,
-                        externalAddMenuRequestTick = fileAddMenuOpenTick,
-                        onSelectionModeChanged = onFileSelectionModeChanged,
-                    )
-                }
-            }
+        SessionManagementSection.Files -> {
+            SessionManagementFileBrowser(
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(top = SessionManagementPageInnerTopPadding),
+                state = fileBrowserState,
+                dataProvider = dataProvider,
+                sessionId = sessionData.id,
+                refreshToken = refreshToken,
+                externalAddMenuRequestTick = fileAddMenuOpenTick,
+                onSelectionModeChanged = onFileSelectionModeChanged,
+            )
+        }
 
-            SessionManagementSection.Apps -> {
-                item {
-                    SessionManagementAppsPage(
-                        modifier = Modifier.fillParentMaxHeight(),
-                        refreshToken = refreshToken,
-                        optionsState = appOptionsState,
-                        addMenuRequestTick = appAddMenuOpenTick,
-                        cacheScopeKey = sessionData.id,
-                    )
-                }
-            }
+        SessionManagementSection.Apps -> {
+            SessionManagementAppsPage(
+                modifier = modifier.fillMaxSize(),
+                refreshToken = refreshToken,
+                optionsState = appOptionsState,
+                addMenuRequestTick = appAddMenuOpenTick,
+                cacheScopeKey = sessionData.id,
+                dataProvider = dataProvider,
+            )
+        }
 
-            SessionManagementSection.Process -> Unit
+        SessionManagementSection.Process -> {
+            SessionManagementProcessPage(
+                modifier = modifier.fillMaxSize(),
+                snapshot = snapshot,
+                refreshToken = refreshToken,
+                cacheScopeKey = sessionData.id,
+            )
+        }
 
-            SessionManagementSection.PortForward -> {
-                item {
-                    SessionManagementPortForwardPage(
-                        sessionData = sessionData,
-                        modifier = Modifier.fillParentMaxHeight(),
-                        refreshToken = refreshToken,
-                    )
-                }
-            }
+        SessionManagementSection.PortForward -> {
+            SessionManagementPortForwardPage(
+                sessionData = sessionData,
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(vertical = SessionManagementPageInnerTopPadding),
+                refreshToken = refreshToken,
+            )
+        }
 
-            SessionManagementSection.Command -> {
-                item {
-                    SessionManagementCommandPage(
-                        modifier = Modifier.fillParentMaxHeight(),
-                        terminalSession = commandTerminalSession,
-                        commandInput = commandInput,
-                        history = commandHistory,
-                        isExecuting = commandExecuting,
-                        onCommandInputChange = onCommandInputChange,
-                        onExecuteCommand = onCommandExecute,
-                        onClearHistory = onCommandHistoryClear,
-                        showPresetDialog = commandPresetDialogOpen,
-                        onShowPresetDialogChange = onCommandPresetDialogChange,
-                    )
-                }
-            }
+        SessionManagementSection.Command -> {
+            SessionManagementCommandPage(
+                modifier =
+                    modifier
+                        .fillMaxSize()
+                        .padding(vertical = SessionManagementPageInnerTopPadding),
+                terminalSession = commandTerminalSession,
+                commandInput = commandInput,
+                onCommandInputChange = onCommandInputChange,
+                showPresetDialog = commandPresetDialogOpen,
+                onShowPresetDialogChange = onCommandPresetDialogChange,
+            )
         }
     }
 }

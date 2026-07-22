@@ -95,4 +95,22 @@ internal data class VideoDecoderBootstrapPacket(
     val ptsUs: Long,
     val isConfig: Boolean,
     val isKeyFrame: Boolean,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is VideoDecoderBootstrapPacket) return false
+
+        return data.contentEquals(other.data) &&
+            ptsUs == other.ptsUs &&
+            isConfig == other.isConfig &&
+            isKeyFrame == other.isKeyFrame
+    }
+
+    override fun hashCode(): Int {
+        var result = data.contentHashCode()
+        result = 31 * result + ptsUs.hashCode()
+        result = 31 * result + isConfig.hashCode()
+        result = 31 * result + isKeyFrame.hashCode()
+        return result
+    }
+}

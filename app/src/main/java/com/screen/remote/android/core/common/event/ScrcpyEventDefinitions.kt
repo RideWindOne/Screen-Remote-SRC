@@ -93,7 +93,7 @@ data class KeyDown(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "Key pressed: keycode=$keycode"
+    override fun getDescription() = "Key pressed: scancode=$scancode keycode=$keycode keymod=$keymod"
 }
 
 data class KeyUp(
@@ -105,7 +105,7 @@ data class KeyUp(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "Key released: keycode=$keycode"
+    override fun getDescription() = "Key released: scancode=$scancode keycode=$keycode keymod=$keymod"
 }
 
 data class TouchDown(
@@ -118,7 +118,7 @@ data class TouchDown(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "Touch down: pointer=$pointerId ($x, $y)"
+    override fun getDescription() = "Touch down: pointer=$pointerId ($x, $y) pressure=$pressure"
 }
 
 data class TouchMove(
@@ -131,7 +131,7 @@ data class TouchMove(
 
     override fun getCategory() = Category.UI
 
-    override fun getDescription() = "Touch move: pointer=$pointerId ($x, $y)"
+    override fun getDescription() = "Touch move: pointer=$pointerId ($x, $y) pressure=$pressure"
 
     override fun needsSampling() = true
 }
@@ -294,7 +294,9 @@ data class TimeLimitReached(
     override fun getDescription() = "Time limit reached: ${duration}ms"
 }
 
+@Suppress("unused")
 data class RunOnMainThread(
+    @Suppress("unused", "UNUSED_PARAMETER")
     val task: () -> Unit,
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.VERBOSE

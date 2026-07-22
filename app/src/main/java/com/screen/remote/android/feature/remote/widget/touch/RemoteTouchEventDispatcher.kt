@@ -73,9 +73,6 @@ internal class RemoteTouchEventDispatcher(
                     ?: activeRemotePoints[endedPointerId]
                     ?: toRemotePoint(event, event.actionIndex, view, deviceWidth, deviceHeight)
             releasePointer(endedPointerId, remotePoint, deviceWidth, deviceHeight)
-            if (event.actionMasked == MotionEvent.ACTION_UP) {
-                view.performClick()
-            }
         }
 
         return true

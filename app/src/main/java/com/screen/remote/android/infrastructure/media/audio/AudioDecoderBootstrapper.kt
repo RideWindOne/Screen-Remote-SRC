@@ -87,4 +87,28 @@ internal data class DecodeBootstrap(
     val configData: ByteArray?,
     val firstAudioPacket: ByteArray?,
     val firstAudioPts: Long?,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is DecodeBootstrap) return false
+
+        if (configData != null) {
+            if (other.configData == null || !configData.contentEquals(other.configData)) return false
+        } else if (other.configData != null) {
+            return false
+        }
+        if (firstAudioPacket != null) {
+            if (other.firstAudioPacket == null || !firstAudioPacket.contentEquals(other.firstAudioPacket)) return false
+        } else if (other.firstAudioPacket != null) {
+            return false
+        }
+        return firstAudioPts == other.firstAudioPts
+    }
+
+    override fun hashCode(): Int {
+        var result = configData?.contentHashCode() ?: 0
+        result = 31 * result + (firstAudioPacket?.contentHashCode() ?: 0)
+        result = 31 * result + (firstAudioPts?.hashCode() ?: 0)
+        return result
+    }
+}

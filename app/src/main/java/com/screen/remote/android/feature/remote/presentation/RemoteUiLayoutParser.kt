@@ -289,11 +289,7 @@ internal object RemoteUiLayoutParser {
         }
 
         val shortClassName = node.className.substringAfterLast('.').lowercase()
-        if (shortClassName in IGNORED_CLASS_NAMES) {
-            return true
-        }
-
-        return false
+        return shortClassName in IGNORED_CLASS_NAMES
     }
 
     private fun shouldIgnoreDecorativeIndicatorNode(
@@ -379,7 +375,6 @@ internal object RemoteUiLayoutParser {
                 bounds = bounds,
                 clickable = clickable,
                 focusable = focusable,
-                checkable = checkable,
             ) -> RemoteUiLayoutNodeKind.TOGGLE
 
             looksLikeCustomButton(
@@ -493,12 +488,7 @@ internal object RemoteUiLayoutParser {
         bounds: RemoteUiLayoutBounds,
         clickable: Boolean,
         focusable: Boolean,
-        checkable: Boolean,
     ): Boolean {
-        if (checkable) {
-            return false
-        }
-
         if (!clickable && !focusable) {
             return false
         }
@@ -758,13 +748,8 @@ internal object RemoteUiLayoutParser {
             return true
         }
 
-        if (existing.kind in setOf(RemoteUiLayoutNodeKind.TEXT, RemoteUiLayoutNodeKind.INPUT) &&
+        return existing.kind in setOf(RemoteUiLayoutNodeKind.TEXT, RemoteUiLayoutNodeKind.INPUT) &&
             candidate.kind in setOf(RemoteUiLayoutNodeKind.BUTTON, RemoteUiLayoutNodeKind.IMAGE, RemoteUiLayoutNodeKind.OTHER)
-        ) {
-            return true
-        }
-
-        return false
     }
 
     private fun overlapOverSmallerArea(
@@ -917,10 +902,10 @@ internal object RemoteUiLayoutParser {
             return false
         }
 
-        return when {
-            tokens.size >= 2 -> tokens.all { it.length <= 4 && it.any(Char::isLetter) }
-            tokens.size == 1 -> tokens.single().length <= 3 && tokens.single().any(Char::isLetter)
-            else -> false
+        return if (tokens.size >= 2) {
+            tokens.all { it.length <= 4 && it.any(Char::isLetter) }
+        } else {
+            tokens.single().length <= 3 && tokens.single().any(Char::isLetter)
         }
     }
 

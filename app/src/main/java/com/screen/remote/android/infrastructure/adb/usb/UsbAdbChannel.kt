@@ -26,7 +26,7 @@ import java.util.concurrent.LinkedBlockingQueue
  * 通过 USB 批量传输端点实现 ADB 通信
  */
 class UsbAdbChannel(
-    private val usbManager: UsbManager,
+    usbManager: UsbManager,
     private val usbDevice: UsbDevice,
 ) : AdbChannel {
     // 打开 USB 设备连接
@@ -221,10 +221,6 @@ class UsbAdbChannel(
         }
 
         return ByteBuffer.wrap(bytes)
-    }
-
-    override fun flush() {
-        // USB 批量传输不需要显式刷新
     }
 
     override fun close() {

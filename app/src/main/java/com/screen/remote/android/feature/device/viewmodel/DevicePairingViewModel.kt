@@ -232,6 +232,6 @@ class DevicePairingViewModel : ViewModel() {
 
     override fun onCleared() {
         stopMdnsPairingDiscovery()
-        super.onCleared()
+        // super.onCleared()
     }
 }

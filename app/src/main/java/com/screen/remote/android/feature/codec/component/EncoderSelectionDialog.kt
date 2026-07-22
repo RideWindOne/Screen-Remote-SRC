@@ -11,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.LogTags
@@ -40,12 +39,12 @@ import kotlinx.coroutines.launch
 
 /**
  * 编码器选择对话框
- * 
+ *
  * 文件拆分说明：
  * - encoder/VideoEncoderSection.kt - 视频编码器配置逻辑
  * - encoder/AudioEncoderSection.kt - 音频编码器配置逻辑
  * - encoder/EncoderListComponents.kt - 编码器列表UI组件
- * 
+ *
  * 本文件保留主对话框逻辑和状态管理
  */
 
@@ -158,7 +157,6 @@ fun EncoderSelectionDialog(
                     connection.detectEncoders(
                         context = context,
                         skipPush = connection.getCachedCandidatePreflight()?.hasCompatibleScrcpyServer == true,
-                        persistToBoundSession = false,
                     )
                 if (result.isSuccess) {
                     val detectionResult = result.getOrNull()
@@ -246,8 +244,6 @@ fun EncoderSelectionDialog(
                         selectedEncoder = ""
                         selectedCodec = ""
                     },
-                    showCodecTest = config.showCodecTest,
-                    onCodecTestClick = { },
                 )
             }
         }

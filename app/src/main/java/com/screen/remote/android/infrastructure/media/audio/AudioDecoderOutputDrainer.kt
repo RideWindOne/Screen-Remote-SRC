@@ -4,6 +4,7 @@ import android.media.AudioFormat
 import android.media.MediaCodec
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.ApiCompatHelper
 
 internal class AudioDecoderOutputDrainer(
     private val trackManager: AudioTrackManager,
@@ -59,7 +60,10 @@ internal class AudioDecoderOutputDrainer(
                                 try {
                                     trackManager.writeDecodedData(outputSlice, bufferInfo.size)
                                 } catch (error: Exception) {
-                                    throw AudioTrackPlaybackException("AudioTrack write exception: ${error.message}", error)
+                                    throw AudioTrackPlaybackException(
+                                        "AudioTrack write exception: ${error.message}",
+                                        error
+                                    )
                                 }
 
                             if (written < 0) {
@@ -83,9 +87,19 @@ internal class AudioDecoderOutputDrainer(
 
                     outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         val outputFormat = codec.outputFormat
-                        val sampleRate = if (outputFormat.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) outputFormat.getInteger(android.media.MediaFormat.KEY_SAMPLE_RATE) else -1
-                        val channelCount = if (outputFormat.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) outputFormat.getInteger(android.media.MediaFormat.KEY_CHANNEL_COUNT) else -1
-                        val pcmEncoding = if (outputFormat.containsKey(android.media.MediaFormat.KEY_PCM_ENCODING)) outputFormat.getInteger(android.media.MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
+                        val sampleRate =
+                            if (outputFormat.containsKey(android.media.MediaFormat.KEY_SAMPLE_RATE)) outputFormat.getInteger(
+                                android.media.MediaFormat.KEY_SAMPLE_RATE
+                            ) else -1
+                        val channelCount =
+                            if (outputFormat.containsKey(android.media.MediaFormat.KEY_CHANNEL_COUNT)) outputFormat.getInteger(
+                                android.media.MediaFormat.KEY_CHANNEL_COUNT
+                            ) else -1
+                        val pcmEncoding =
+                            ApiCompatHelper.getPcmEncodingOrDefault(
+                                outputFormat,
+                                AudioFormat.ENCODING_PCM_16BIT,
+                            )
                         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
                             "Output format changes: $outputFormat, rate=$sampleRate, channels=$channelCount, pcmEncoding=$pcmEncoding"
                         }
@@ -93,7 +107,10 @@ internal class AudioDecoderOutputDrainer(
                             try {
                                 trackManager.reconfigureFromOutputFormat(outputFormat)
                             } catch (error: Exception) {
-                                throw AudioTrackPlaybackException("AudioTrack output format reconstruction exception: ${error.message}", error)
+                                throw AudioTrackPlaybackException(
+                                    "AudioTrack output format reconstruction exception: ${error.message}",
+                                    error
+                                )
                             }
                         if (!trackReconfigured) {
                             throw AudioTrackPlaybackException("Unable to reconstruct AudioTrack from decoded output format: $outputFormat")
@@ -125,8 +142,7 @@ internal class AudioDecoderOutputDrainer(
         }
     }
 
-    private companion object {
-    }
+    private companion object
 }
 
 internal class AudioTrackPlaybackException(

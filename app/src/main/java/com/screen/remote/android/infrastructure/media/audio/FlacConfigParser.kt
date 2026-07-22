@@ -8,7 +8,31 @@ internal data class FlacStreamInfo(
     val channelCount: Int,
     val bitsPerSample: Int,
     val totalSamples: Long,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is FlacStreamInfo) return false
+
+        return rawStreamInfo.contentEquals(other.rawStreamInfo) &&
+            minBlockSize == other.minBlockSize &&
+            maxBlockSize == other.maxBlockSize &&
+            sampleRate == other.sampleRate &&
+            channelCount == other.channelCount &&
+            bitsPerSample == other.bitsPerSample &&
+            totalSamples == other.totalSamples
+    }
+
+    override fun hashCode(): Int {
+        var result = rawStreamInfo.contentHashCode()
+        result = 31 * result + minBlockSize
+        result = 31 * result + maxBlockSize
+        result = 31 * result + sampleRate
+        result = 31 * result + channelCount
+        result = 31 * result + bitsPerSample
+        result = 31 * result + totalSamples.hashCode()
+        return result
+    }
+}
 
 internal object FlacConfigParser {
     const val STREAM_INFO_SIZE = 34
@@ -33,7 +57,7 @@ internal object FlacConfigParser {
                 ((streamInfo[16].toLong() and 0xFF) shl 8) or
                 (streamInfo[17].toLong() and 0xFF)
 
-        if (sampleRate <= 0 || channelCount <= 0 || bitsPerSample <= 0) {
+        if (sampleRate <= 0) {
             return null
         }
 
@@ -56,7 +80,7 @@ internal object FlacConfigParser {
                 ((data[5].toInt() and 0xFF) shl 16) or
                     ((data[6].toInt() and 0xFF) shl 8) or
                     (data[7].toInt() and 0xFF)
-            if (blockType == 0 && blockLength == STREAM_INFO_SIZE && data.size >= 8 + blockLength) {
+            if (blockType == 0 && blockLength == STREAM_INFO_SIZE) {
                 return data.copyOfRange(8, 8 + STREAM_INFO_SIZE)
             }
         }
@@ -66,7 +90,7 @@ internal object FlacConfigParser {
                 ((data[1].toInt() and 0xFF) shl 16) or
                     ((data[2].toInt() and 0xFF) shl 8) or
                     (data[3].toInt() and 0xFF)
-            if (blockType == 0 && blockLength == STREAM_INFO_SIZE && data.size >= 4 + blockLength) {
+            if (blockType == 0 && blockLength == STREAM_INFO_SIZE) {
                 return data.copyOfRange(4, 4 + STREAM_INFO_SIZE)
             }
         }
@@ -78,9 +102,9 @@ internal object FlacConfigParser {
         val metadataHeader =
             byteArrayOf(
                 0x80.toByte(), // last-metadata-block = 1, block type = STREAMINFO
-                ((data.size shr 16) and 0xFF).toByte(),
-                ((data.size shr 8) and 0xFF).toByte(),
-                (data.size and 0xFF).toByte(),
+                0x00,
+                0x00,
+                STREAM_INFO_SIZE.toByte(),
             )
 
         return FLAC_STREAM_MARKER + metadataHeader + data

@@ -71,7 +71,7 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     val pushJob =
         async {
             val pushStartTime = System.currentTimeMillis()
-            if (!connection.hasRemoteScrcpyServer(pushTargetPath)) {
+            if (!connection.hasRemoteScrcpyServer()) {
                 connection.pushScrcpyServer(context).getOrElse { error ->
                     throw Exception("Push failed: ${error.message}", error)
                 }
@@ -117,17 +117,14 @@ internal suspend fun ConnectionLifecycle.setupForwardAndPushServer(
     }
 }
 
-private suspend fun AdbConnection.hasRemoteScrcpyServer(path: String): Boolean =
-    if (path == AppConstants.SCRCPY_SERVER_PATH) {
-        getCachedCandidatePreflight()?.hasCompatibleScrcpyServer ?: probeRemoteScrcpyServer(path)
-    } else {
-        probeRemoteScrcpyServer(path)
-    }
+private suspend fun AdbConnection.hasRemoteScrcpyServer(): Boolean =
+    getCachedCandidatePreflight()?.hasCompatibleScrcpyServer ?: probeRemoteScrcpyServer()
 
-private suspend fun AdbConnection.probeRemoteScrcpyServer(path: String): Boolean =
+private suspend fun AdbConnection.probeRemoteScrcpyServer(): Boolean =
     runCatching {
         executeShell(
-            "if [ -s '$path' ] && [ \"\$(sha256sum '$path' 2>/dev/null | cut -d' ' -f1)\" = " +
+            "if [ -s '${AppConstants.SCRCPY_SERVER_PATH}' ] && " +
+                $$"[ \"$(sha256sum '$${AppConstants.SCRCPY_SERVER_PATH}' 2>/dev/null | cut -d' ' -f1)\" = " +
                 "'${AppConstants.SCRCPY_SERVER_SHA256}' ]; then echo 1; else echo 0; fi",
             retryOnFailure = false,
         )
@@ -193,7 +190,7 @@ internal fun ConnectionLifecycle.completeScrcpyServerStartup(scid: Int) {
 /**
  * 构建 Scrcpy 命令（从会话配置读取参数）
  */
-internal fun ConnectionLifecycle.buildScrcpyCommand(
+internal fun buildScrcpyCommand(
     scid: Int,
     options: ScrcpyOptions,
 ): String {

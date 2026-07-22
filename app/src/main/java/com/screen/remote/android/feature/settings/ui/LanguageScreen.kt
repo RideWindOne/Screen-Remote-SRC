@@ -25,9 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
-import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LanguageManager
-import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.SectionTitle

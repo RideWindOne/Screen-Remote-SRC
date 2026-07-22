@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.MediaStore
@@ -103,7 +104,6 @@ fun AboutScreen(onBack: () -> Unit) {
             checkingUpdate = true
             updateChecker
                 .check(
-                    currentVersion = AppConstants.APP_VERSION,
                     channel = settings.updateChannel,
                 ).onSuccess { release ->
                     preferencesManager.recordUpdateCheck(now, release)
@@ -601,7 +601,6 @@ private fun UpdateVersionRow(
 
 @Composable
 private fun DonateDialog(onDismiss: () -> Unit) {
-    val context = LocalContext.current
     val trc20Address = "TMrGbcfyXT4cf49EULAoBfB5mfYNeAyxLj"
     val gateInviteCode = "ZKDRFFFF"
 
@@ -792,7 +791,7 @@ private fun WechatGroupDialog(onDismiss: () -> Unit) {
     )
 }
 
-private fun saveWechatQrToGallery(context: android.content.Context) {
+private fun saveWechatQrToGallery(context: Context) {
     runCatching {
         val bitmap =
             BitmapFactory.decodeResource(context.resources, R.drawable.wechat_qr)
@@ -813,7 +812,7 @@ private fun saveWechatQrToGallery(context: android.content.Context) {
                 ?: error("create gallery file failed")
 
         resolver.openOutputStream(uri)?.use { output ->
-            if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)) {
+            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
                 error("write gallery file failed")
             }
         } ?: error("open output stream failed")

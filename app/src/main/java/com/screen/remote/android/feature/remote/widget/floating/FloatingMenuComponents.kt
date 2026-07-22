@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 悬浮菜单控制器组件（自动显示版本）
@@ -38,7 +39,7 @@ fun AutoFloatingMenu(actions: FloatingMenuActions) {
     LaunchedEffect(Unit) {
         ballSystemReference = showDualBallSystem(context, actions, scope)
         // 延迟启用旋转监听，避免初始化时的配置抖动
-        kotlinx.coroutines.delay(300)
+        kotlinx.coroutines.delay(300.milliseconds)
         isInitialized = true
     }
 
@@ -47,7 +48,7 @@ fun AutoFloatingMenu(actions: FloatingMenuActions) {
         if (isInitialized) {
             hideDualBallSystem(ballSystemReference)
             ballSystemReference = null
-            kotlinx.coroutines.delay(50)
+            kotlinx.coroutines.delay(50.milliseconds)
             ballSystemReference = showDualBallSystem(context, actions, scope)
         }
     }
@@ -79,7 +80,7 @@ fun AutoFloatingMenuDirect(actions: FloatingMenuActions) {
     LaunchedEffect(Unit) {
         ballSystemReference = showDualBallSystem(context, actions, scope)
         // 延迟启用旋转监听，避免初始化时的配置抖动
-        kotlinx.coroutines.delay(300)
+        kotlinx.coroutines.delay(300.milliseconds)
         isInitialized = true
     }
 
@@ -88,7 +89,7 @@ fun AutoFloatingMenuDirect(actions: FloatingMenuActions) {
         if (isInitialized) {
             hideDualBallSystem(ballSystemReference)
             ballSystemReference = null
-            kotlinx.coroutines.delay(50)
+            kotlinx.coroutines.delay(50.milliseconds)
             ballSystemReference = showDualBallSystem(context, actions, scope)
         }
     }
@@ -119,7 +120,7 @@ fun FloatingMenuController(actions: FloatingMenuActions) {
         if (isFloatingShown && lastOrientation != configuration.orientation) {
             hideDualBallSystem(ballSystemReference)
             ballSystemReference = null
-            kotlinx.coroutines.delay(50)
+            kotlinx.coroutines.delay(50.milliseconds)
             ballSystemReference = showDualBallSystem(context, actions, scope)
             lastOrientation = configuration.orientation
         } else if (isFloatingShown && ballSystemReference != null) {

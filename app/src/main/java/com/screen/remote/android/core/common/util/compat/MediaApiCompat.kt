@@ -71,19 +71,30 @@ fun setAllowFrameDropIfSupported(
     format: MediaFormat,
     allowFrameDrop: Int,
 ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         format.setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, allowFrameDrop)
     }
 }
+
+/**
+ * Reads the decoded PCM encoding on Android 7.0 and newer.
+ */
+fun getPcmEncodingOrDefault(
+    format: MediaFormat,
+    defaultEncoding: Int,
+): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+        format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+    } else {
+        defaultEncoding
+    }
 
 /**
  * 安全地从 MediaFormat 获取裁剪区域
  */
 fun getCropRectIfSupported(format: MediaFormat): android.graphics.Rect? =
     try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            format.containsKey("crop-left")
-        ) {
+        if (format.containsKey("crop-left")) {
             val left = format.getInteger("crop-left")
             val right = format.getInteger("crop-right")
             val top = format.getInteger("crop-top")

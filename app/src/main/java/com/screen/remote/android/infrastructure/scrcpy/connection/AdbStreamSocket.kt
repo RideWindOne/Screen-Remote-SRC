@@ -210,7 +210,7 @@ internal class AdbStreamSocket(
     }
 
     private sealed interface Chunk {
-        data class Data(
+        class Data(
             val bytes: ByteArray,
         ) : Chunk
 

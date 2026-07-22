@@ -26,7 +26,7 @@ import com.screen.remote.android.core.common.IosDesignTokens
 fun IOSStyledDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
-    modifier: Modifier = Modifier.widthIn(min = 30.dp, max = 150.dp).wrapContentWidth(),
+    modifier: Modifier = Modifier,
     offset: DpOffset = DpOffset(0.dp, 80.dp),
     alignment: Alignment = Alignment.TopCenter,
     content: @Composable ColumnScope.() -> Unit,
@@ -46,6 +46,8 @@ fun IOSStyledDropdownMenu(
         Surface(
             modifier =
                 modifier
+                    .widthIn(min = 30.dp, max = 150.dp)
+                    .wrapContentWidth()
                     .widthIn(min = 30.dp, max = 160.dp)
                     .wrapContentSize(),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(IosDesignTokens.cardCornerRadius),

@@ -339,7 +339,7 @@ internal fun SessionManagementExitConfirmDialog(
     SessionManagementCenteredDialog(
         title = ManagementTexts.Dialogs.LEAVE_MANAGEMENT_PAGE.get(),
         onDismiss = onDismiss,
-        widthRatio = 0.94f,
+        widthRatio = SessionManagementContentWidthFraction,
         contentPadding = 24.dp,
         leftButtonText = ManagementTexts.Dialogs.CANCEL.get(),
         rightButtonText = ManagementTexts.Dialogs.LEAVE.get(),

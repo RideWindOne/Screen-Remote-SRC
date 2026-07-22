@@ -62,7 +62,7 @@ internal class VideoDecoderPacketProcessor(
                 VideoPacketCodecMode.H264, VideoPacketCodecMode.H265 -> return true
                 VideoPacketCodecMode.UNSUPPORTED ->
                     throw VideoDecoderConfigurationException(videoCodec, "Dynamic size changes are not supported")
-            } ?: throw VideoDecoderConfigurationException(videoCodec, "Dynamic size reconfiguration failed: ${width}x$height")
+            }
         setDecoder(newDecoder)
         decoderConfigured = true
         surfaceController.applyPendingSurface(newDecoder, isStopped())
@@ -74,7 +74,6 @@ internal class VideoDecoderPacketProcessor(
         payload: ByteArray,
         nalBuffer: ByteBuffer,
         configured: Boolean,
-        frameCount: Int,
         pts: Long,
         packetIsConfig: Boolean,
         packetIsKeyFrame: Boolean,
@@ -109,8 +108,8 @@ internal class VideoDecoderPacketProcessor(
 
         val result =
             when (videoPacketCodecMode(videoCodec)) {
-                VideoPacketCodecMode.H264 -> drainH264(nalBuffer, effectiveConfigured, frameCount, pts, packetIsKeyFrame)
-                VideoPacketCodecMode.H265 -> drainH265(nalBuffer, effectiveConfigured, frameCount, pts, packetIsKeyFrame)
+                VideoPacketCodecMode.H264 -> drainH264(nalBuffer, effectiveConfigured)
+                VideoPacketCodecMode.H265 -> drainH265(nalBuffer, effectiveConfigured)
                 VideoPacketCodecMode.AV1 ->
                     processAV1(nalBuffer, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
                 VideoPacketCodecMode.VPX ->
@@ -230,16 +229,13 @@ internal class VideoDecoderPacketProcessor(
     private fun drainH264(
         nalBuffer: ByteBuffer,
         configured: Boolean,
-        frameCount: Int,
-        pts: Long,
-        packetIsKeyFrame: Boolean,
     ): Boolean {
         var currentConfigured = configured
         while (nalBuffer.position() >= 4) {
             val beforePosition = nalBuffer.position()
-            val updated = processH264(nalBuffer, currentConfigured, frameCount, pts, packetIsKeyFrame)
+            val updated = processH264(nalBuffer, currentConfigured)
             currentConfigured = currentConfigured || updated
-            if (nalBuffer.position() == 0 || (updated == currentConfigured && nalBuffer.position() == beforePosition)) {
+            if (nalBuffer.position() == 0 || nalBuffer.position() == beforePosition) {
                 break
             }
         }
@@ -249,16 +245,13 @@ internal class VideoDecoderPacketProcessor(
     private fun drainH265(
         nalBuffer: ByteBuffer,
         configured: Boolean,
-        frameCount: Int,
-        pts: Long,
-        packetIsKeyFrame: Boolean,
     ): Boolean {
         var currentConfigured = configured
         while (nalBuffer.position() >= 4) {
             val beforePosition = nalBuffer.position()
-            val updated = processH265(nalBuffer, currentConfigured, frameCount, pts, packetIsKeyFrame)
+            val updated = processH265(nalBuffer, currentConfigured)
             currentConfigured = currentConfigured || updated
-            if (nalBuffer.position() == 0 || (updated == currentConfigured && nalBuffer.position() == beforePosition)) {
+            if (nalBuffer.position() == 0 || nalBuffer.position() == beforePosition) {
                 break
             }
         }
@@ -268,14 +261,9 @@ internal class VideoDecoderPacketProcessor(
     private fun processH264(
         nalBuffer: ByteBuffer,
         configured: Boolean,
-        frameCount: Int,
-        pts: Long,
-        packetIsKeyFrame: Boolean,
     ): Boolean {
         val nalUnit = nalParser.extractNalUnit(nalBuffer) ?: return configured
-        val nalType = nalParser.getH264NalType(nalUnit)
-
-        return when (nalType) {
+        return when (nalParser.getH264NalType(nalUnit)) {
             VideoNalParser.H264_NAL_SPS -> {
                 pendingH264Sps = nalUnit.copyOf()
                 configureH264IfReady(configured)
@@ -284,11 +272,7 @@ internal class VideoDecoderPacketProcessor(
                 pendingH264Pps = nalUnit.copyOf()
                 configureH264IfReady(configured)
             }
-            else -> if (configured) {
-                val isKeyFrame = packetIsKeyFrame || nalParser.isH264KeyFrame(nalType)
-                decodeFrame(nalUnit, pts, isKeyFrame)
-                true
-            } else configured
+            else -> configured
         }
     }
 
@@ -312,7 +296,7 @@ internal class VideoDecoderPacketProcessor(
                     decoder, runtimeState.currentWidth, runtimeState.currentHeight, sps, pps,
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
-            } ?: throw VideoDecoderConfigurationException("H.264", "Unable to configure decoder")
+            }
         setDecoder(newDecoder)
         decoderConfigured = true
         lastH264Sps = sps
@@ -325,14 +309,9 @@ internal class VideoDecoderPacketProcessor(
     private fun processH265(
         nalBuffer: ByteBuffer,
         configured: Boolean,
-        frameCount: Int,
-        pts: Long,
-        packetIsKeyFrame: Boolean,
     ): Boolean {
         val nalUnit = nalParser.extractNalUnit(nalBuffer) ?: return configured
-        val nalType = nalParser.getH265NalType(nalUnit)
-
-        return when (nalType) {
+        return when (nalParser.getH265NalType(nalUnit)) {
             VideoNalParser.H265_NAL_VPS -> {
                 pendingH265Vps = nalUnit.copyOf()
                 configureH265IfReady(configured)
@@ -345,11 +324,7 @@ internal class VideoDecoderPacketProcessor(
                 pendingH265Pps = nalUnit.copyOf()
                 configureH265IfReady(configured)
             }
-            else -> if (configured) {
-                val isKeyFrame = packetIsKeyFrame || nalParser.isH265KeyFrame(nalType)
-                decodeFrame(nalUnit, pts, isKeyFrame)
-                true
-            } else configured
+            else -> configured
         }
     }
 
@@ -378,7 +353,7 @@ internal class VideoDecoderPacketProcessor(
                     decoder, runtimeState.currentWidth, runtimeState.currentHeight, vps, sps, pps,
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
-            } ?: throw VideoDecoderConfigurationException("H.265", "Unable to configure decoder")
+            }
         setDecoder(newDecoder)
         decoderConfigured = true
         lastH265Vps = vps

@@ -1,5 +1,6 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -78,6 +79,7 @@ internal suspend fun executeManagementShell(command: String): Result<String> {
     )
 }
 
+@SuppressLint("SdCardPath")
 internal fun navigateFileBrowserUp(path: String): String =
     when (val normalizedPath = normalizeRemotePath(path)) {
         "/" -> "/sdcard"

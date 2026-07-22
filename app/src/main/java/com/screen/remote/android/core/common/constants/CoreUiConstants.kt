@@ -1,5 +1,6 @@
 package com.screen.remote.android.core.common.constants
 
+import android.annotation.SuppressLint
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.screen.remote.android.BuildConfig
@@ -69,6 +70,7 @@ object AppTextSizes {
 /**
  * 文件路径常量
  */
+@SuppressLint("SdCardPath")
 object FilePathConstants {
     const val DEVICE_SCREENSHOT_DIR = "/sdcard/Pictures"
     const val APP_ICONS_DIR = "app_icons"
@@ -87,7 +89,9 @@ object IosDesignTokens {
     val dialogHeaderHorizontalPadding = 8.dp
     val dialogActionSlotWidth = 48.dp
     val dialogHeaderSpacerHeight = 8.dp
+    val dialogCompactHeaderSpacerHeight = 4.dp
     val dialogBottomSpacerHeight = 16.dp
+    val dialogCompactBottomSpacerHeight = 8.dp
 
     val dialogCornerRadius = 8.dp
     val cardCornerRadius = 12.dp

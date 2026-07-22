@@ -1,5 +1,6 @@
 package com.screen.remote.android.feature.remote.presentation
 
+import android.annotation.SuppressLint
 import com.screen.remote.android.core.common.manager.LogManager.dShell
 
 import android.content.Context
@@ -24,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 设备控制 ViewModel
@@ -108,7 +110,7 @@ class ControlViewModel(
 
                 // 发送按下事件
                 sendTouchEvent(0, pointerId, startX, startY, screenWidth, screenHeight)
-                delay(16)
+                delay(16.milliseconds)
 
                 // 发送移动事件
                 for (i in 1..steps) {
@@ -116,7 +118,7 @@ class ControlViewModel(
                     val currentX = (startX + (endX - startX) * progress).toInt()
                     val currentY = (startY + (endY - startY) * progress).toInt()
                     sendTouchEvent(2, pointerId, currentX, currentY, screenWidth, screenHeight)
-                    delay(16)
+                    delay(16.milliseconds)
                 }
 
                 // 发送抬起事件
@@ -250,6 +252,7 @@ class ControlViewModel(
             }
         }
 
+    @SuppressLint("SdCardPath")
     suspend fun sendFileToDevice(
         context: Context,
         uri: Uri,
@@ -405,7 +408,7 @@ class ControlViewModel(
     private fun extractUiLayoutXml(rawOutput: String): String? {
         val startIndex = rawOutput.indexOf(UI_LAYOUT_DUMP_START)
         val endIndex = rawOutput.indexOf(UI_LAYOUT_DUMP_END)
-        if (startIndex >= 0 && endIndex > startIndex) {
+        if (startIndex in 0..<endIndex) {
             return rawOutput
                 .substring(startIndex + UI_LAYOUT_DUMP_START.length, endIndex)
                 .trim()

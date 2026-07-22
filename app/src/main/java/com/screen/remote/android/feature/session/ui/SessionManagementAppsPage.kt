@@ -3,6 +3,7 @@ package com.screen.remote.android.feature.session.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -10,14 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,8 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.FilePickerHelper
@@ -50,6 +42,7 @@ private data class AppListProjectionRequest(
     val apps: List<AppInventoryEntry>,
     val selectedFilters: Set<AppListFilter>,
     val sort: AppListSort,
+    val sortAscending: Boolean,
     val packageNameOnlyMode: Boolean,
     val normalizedSearchQuery: String,
     val presentationGeneration: Int,
@@ -81,6 +74,7 @@ internal fun SessionManagementAppsPage(
     optionsState: SessionManagementAppOptionsState,
     addMenuRequestTick: Int,
     cacheScopeKey: String,
+    dataProvider: SessionManagementDataProvider,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -93,7 +87,7 @@ internal fun SessionManagementAppsPage(
     var searchQuery by remember { mutableStateOf("") }
     var submittedSearchQuery by remember { mutableStateOf("") }
     var selectedFilters by remember { mutableStateOf(AppListFilter.defaultSelection) }
-    var sort by remember { mutableStateOf(AppListSort.Title) }
+    var sortSelection by remember { mutableStateOf(AppListSortSelection()) }
     var packageNameOnlyMode by remember { mutableStateOf(false) }
     var selectedAppForActions by remember { mutableStateOf<AppInventoryEntry?>(null) }
     var selectedAppForDetails by remember { mutableStateOf<AppInventoryEntry?>(null) }
@@ -119,14 +113,15 @@ internal fun SessionManagementAppsPage(
             errorMessage = inventoryError,
         )
 
-    LaunchedEffect(cacheScopeKey, refreshToken, listRefreshTick) {
+    LaunchedEffect(cacheScopeKey, refreshToken, listRefreshTick, selectedFilters) {
         inventoryRefreshing = true
         val manualRefresh = forceRefreshPending
         forceRefreshPending = false
         inventoryError = null
-        loadSessionManagementAppData(
+        dataProvider.loadApplicationInformation(
             context = context,
-            scopeKey = cacheScopeKey,
+            sessionId = cacheScopeKey,
+            selectedFilters = selectedFilters,
             forceRefresh = manualRefresh,
         )
         val result = SessionManagementAppCache.snapshot()
@@ -156,11 +151,12 @@ internal fun SessionManagementAppsPage(
     }
 
     val projectionRequest =
-        remember(inventoryAppList, selectedFilters, sort, packageNameOnlyMode, normalizedSearchQuery, appCacheRevision) {
+        remember(inventoryAppList, selectedFilters, sortSelection, packageNameOnlyMode, normalizedSearchQuery, appCacheRevision) {
             AppListProjectionRequest(
                 apps = inventoryAppList,
                 selectedFilters = selectedFilters,
-                sort = sort,
+                sort = sortSelection.sort,
+                sortAscending = sortSelection.ascending,
                 packageNameOnlyMode = packageNameOnlyMode,
                 normalizedSearchQuery = normalizedSearchQuery,
                 presentationGeneration = appCacheRevision,
@@ -190,9 +186,7 @@ internal fun SessionManagementAppsPage(
     }
 
     val apkImportLauncher =
-        FilePickerHelper.rememberImportFileLauncher(
-            mimeTypes = arrayOf("application/vnd.android.package-archive", "application/octet-stream", "*/*"),
-        ) { uri ->
+        FilePickerHelper.rememberImportFileLauncher { uri ->
             uri ?: return@rememberImportFileLauncher
             scope.launch {
                 appActionProgress = ManagementTexts.Apps.PREPARING_APK.get()
@@ -244,6 +238,11 @@ internal fun SessionManagementAppsPage(
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            contentPadding =
+                PaddingValues(
+                    top = SessionManagementPageInnerTopPadding,
+                    bottom = 0.dp,
+                ),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             item {
@@ -251,7 +250,7 @@ internal fun SessionManagementAppsPage(
                     shape = SessionManagementCardShape,
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
-                    shadowElevation = 1.dp,
+                    shadowElevation = 0.dp,
                 ) {
                     Column(
                         modifier =
@@ -271,36 +270,16 @@ internal fun SessionManagementAppsPage(
                             fontWeight = FontWeight.SemiBold,
                         )
 
-                        OutlinedTextField(
+                        SessionManagementSearchField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
                                     .height(SessionManagementControlHeight),
-                            singleLine = true,
-                            shape = SessionManagementControlShape,
-                            trailingIcon = {
-                                IconButton(onClick = { submittedSearchQuery = searchQuery.trim() }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = ManagementTexts.Apps.SEARCH.get(),
-                                    )
-                                }
-                            },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions =
-                                KeyboardActions(
-                                    onSearch = { submittedSearchQuery = searchQuery.trim() },
-                                ),
-                            placeholder = {
-                                Text(
-                                    text = ManagementTexts.Apps.SEARCH_APPS_PACKAGES.get(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
+                            onSearch = { submittedSearchQuery = searchQuery.trim() },
+                            placeholder = ManagementTexts.Apps.SEARCH_APPS_PACKAGES.get(),
+                            contentDescription = ManagementTexts.Apps.SEARCH.get(),
                         )
                     }
                 }
@@ -308,7 +287,7 @@ internal fun SessionManagementAppsPage(
 
             if (
                 initialProjectionLoading ||
-                    (!appInventory.isLoading && appInventory.errorMessage == null && visibleApps.isNotEmpty())
+                    (appInventory.errorMessage == null && visibleApps.isNotEmpty())
             ) {
                 item {
                     Box(modifier = Modifier.height(12.dp))
@@ -398,14 +377,15 @@ internal fun SessionManagementAppsPage(
             SessionManagementAppOptionsMenu(
                 expanded = optionsState.expanded,
                 selectedFilters = selectedFilters,
-                selectedSort = sort,
+                selectedSort = sortSelection.sort,
+                sortAscending = sortSelection.ascending,
                 packageNameOnlyMode = packageNameOnlyMode,
                 onDismiss = optionsState::dismiss,
                 onRefreshList = {
                     optionsState.dismiss()
                     refreshInventory(manual = true)
                 },
-                onSortSelected = { sort = it },
+                onSortSelected = { selectedSort -> sortSelection = sortSelection.select(selectedSort) },
                 onPackageNameOnlyModeChanged = { packageNameOnlyMode = it },
                 onToggleFilter = { filter ->
                     selectedFilters =
@@ -579,7 +559,16 @@ private fun projectVisibleApps(request: AppListProjectionRequest): List<AppInven
         }.filter { entry -> matchesSelectedAppFilters(entry, request.selectedFilters) }
         .filter { entry -> matchesAppSearch(entry, request.packageNameOnlyMode, query) }
         .sortedWith(
-            when (request.sort) {
+            appListComparator(request.sort, request.sortAscending),
+        ).toList()
+}
+
+internal fun appListComparator(
+    sort: AppListSort,
+    ascending: Boolean,
+): Comparator<AppInventoryEntry> {
+    val comparator =
+        when (sort) {
                 AppListSort.Title -> {
                     compareBy<AppInventoryEntry> { it.appTitle.lowercase(Locale.getDefault()) }
                         .thenBy { it.packageName.lowercase(Locale.getDefault()) }
@@ -591,16 +580,16 @@ private fun projectVisibleApps(request: AppListProjectionRequest): List<AppInven
                 }
 
                 AppListSort.EnabledState -> {
-                    compareByDescending<AppInventoryEntry> { it.isEnabled }
+                    compareBy<AppInventoryEntry> { it.isEnabled }
                         .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
                 }
 
                 AppListSort.Size -> {
-                    compareByDescending<AppInventoryEntry> { it.apkSizeBytes ?: -1L }
+                    compareBy<AppInventoryEntry> { it.apkSizeBytes ?: -1L }
                         .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
                 }
-            },
-        ).toList()
+            }
+    return if (ascending) comparator else Comparator { left, right -> comparator.compare(right, left) }
 }
 
 private fun matchesSelectedAppFilters(

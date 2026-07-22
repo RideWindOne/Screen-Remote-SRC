@@ -22,11 +22,11 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalDadbAndroidApi::class)
 class AdbKeysViewModel(
-    private val context: Context,
+    context: Context,
     private val adbConnectionManager: AdbConnectionManager,
 ) : ViewModel() {
-    private val storageRoot
-        get() = AdbRuntime.defaultStorageRoot(context)
+    private val contentResolver = context.applicationContext.contentResolver
+    private val storageRoot = AdbRuntime.defaultStorageRoot(context.applicationContext)
 
     private val adbRuntime: AdbRuntime
         get() = AdbRuntimeProvider.get()
@@ -92,11 +92,11 @@ class AdbKeysViewModel(
                     return@withContext Result.failure(Exception("Keys not found"))
                 }
 
-                context.contentResolver.openOutputStream(privateKeyUri)?.use { output ->
+                contentResolver.openOutputStream(privateKeyUri)?.use { output ->
                     output.write(privateKey.toByteArray())
                 }
 
-                context.contentResolver.openOutputStream(publicKeyUri)?.use { output ->
+                contentResolver.openOutputStream(publicKeyUri)?.use { output ->
                     output.write(publicKey.toByteArray())
                 }
 
@@ -142,11 +142,11 @@ class AdbKeysViewModel(
                 }
 
                 val privateKey =
-                    context.contentResolver.openInputStream(privateKeyUri)?.use { input ->
+                    contentResolver.openInputStream(privateKeyUri)?.use { input ->
                         input.readBytes().toString(Charsets.UTF_8)
                     } ?: return@withContext Result.failure(Exception("无法读取私钥文件"))
                 val publicKey =
-                    context.contentResolver.openInputStream(publicKeyUri)?.use { input ->
+                    contentResolver.openInputStream(publicKeyUri)?.use { input ->
                         input.readBytes().toString(Charsets.UTF_8)
                     } ?: return@withContext Result.failure(Exception("无法读取公钥文件"))
 
@@ -160,7 +160,7 @@ class AdbKeysViewModel(
 
     private fun getFileName(uri: android.net.Uri): String {
         var fileName = ""
-        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
             if (cursor.moveToFirst() && nameIndex >= 0) {
                 fileName = cursor.getString(nameIndex)
@@ -206,11 +206,13 @@ class AdbKeysViewModel(
         fun provideFactory(
             context: Context,
             adbConnectionManager: AdbConnectionManager,
-        ): ViewModelProvider.Factory =
-            object : ViewModelProvider.Factory {
+        ): ViewModelProvider.Factory {
+            val applicationContext = context.applicationContext
+            return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    AdbKeysViewModel(context, adbConnectionManager) as T
+                    AdbKeysViewModel(applicationContext, adbConnectionManager) as T
             }
+        }
     }
 }

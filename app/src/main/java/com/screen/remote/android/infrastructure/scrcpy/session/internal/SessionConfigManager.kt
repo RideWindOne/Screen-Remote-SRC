@@ -66,7 +66,7 @@ internal suspend fun Session.updateDeviceSerial(newSerial: String) {
             "Device serial changed: ${current.capabilityCache.deviceSerial} -> $newSerial; clearing device capabilities"
         }
     LogManager.i(LogTags.SCRCPY_CLIENT, message)
-    updateOptions { it.copy(capabilityCache = it.capabilityCache.resetForDevice(newSerial)) }
+    updateOptions { it.copy(capabilityCache = resetForDevice(newSerial)) }
 }
 
 /**

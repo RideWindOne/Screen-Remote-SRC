@@ -23,9 +23,7 @@ sealed class ComponentState {
 
     data object Disconnected : ComponentState()
 
-    data class Error(
-        val message: String,
-    ) : ComponentState()
+    data object Error : ComponentState()
 }
 
 enum class SocketType {

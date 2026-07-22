@@ -1,5 +1,6 @@
 package com.screen.remote.android.core.update
 
+import com.screen.remote.android.core.common.AppConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -18,14 +19,13 @@ class GitHubReleaseUpdateChecker(
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     suspend fun check(
-        currentVersion: String,
         channel: UpdateChannel,
     ): Result<GitHubReleaseInfo?> =
         withContext(Dispatchers.IO) {
             runCatching {
                 selectLatestRelease(
                     releases = fetchReleases(),
-                    currentVersion = currentVersion,
+                    currentVersion = AppConstants.APP_VERSION,
                     channel = channel,
                 )
             }

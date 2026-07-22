@@ -14,7 +14,6 @@ import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
-import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.domain.model.formatSessionAddress
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.domain.model.parseTcpHostPort
@@ -24,6 +23,7 @@ import java.util.UUID
 /**
  * 会话对话框状态管理
  */
+@Suppress("unused")
 class SessionDialogState(
     sessionData: SessionData? = null,
 ) {
@@ -107,10 +107,12 @@ class SessionDialogState(
         }
     }
 
+    @Suppress("unused", "UNUSED_PARAMETER")
     fun updateConfig(transform: ScrcpyConfig.() -> ScrcpyConfig) {
         config = config.transform()
     }
 
+    @Suppress("unused", "UNUSED_PARAMETER")
     fun updateCapabilityCache(transform: DeviceCapabilityCache.() -> DeviceCapabilityCache) {
         capabilityCache = capabilityCache.transform()
     }

@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 internal object DebugUsbAdbCommands {
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -278,7 +279,7 @@ internal object DebugUsbAdbCommands {
 
         log("ensureConnected: connecting usb adb for ${device.device.deviceName}")
         val deviceId =
-            withTimeout(DebugUsbAdbReceiver.CONNECT_TIMEOUT_MS) {
+            withTimeout(DebugUsbAdbReceiver.CONNECT_TIMEOUT_MS.milliseconds) {
                 manager.connectUsbDevice(device.device, device.getDisplayName()).getOrThrow()
             }
         log("ensureConnected: connected deviceId=$deviceId")

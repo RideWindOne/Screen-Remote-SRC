@@ -35,7 +35,7 @@ object DeviceTransportSerial {
         val normalized =
             stripMdnPrefix(value)
                 .trimEnd('.')
-                .removeSuffixIgnoreCase(".local")
+                .removeLocalSuffixIgnoreCase()
                 .trimEnd('.')
         val suffix = MDNS_SERVICE_SUFFIXES.firstOrNull { normalized.endsWith(it, ignoreCase = true) }
         return if (suffix == null) normalized else normalized.dropLast(suffix.length)
@@ -86,6 +86,6 @@ object DeviceTransportSerial {
         return if (trimmed.startsWith(prefix, ignoreCase = true)) trimmed.substring(prefix.length).trim() else trimmed
     }
 
-    private fun String.removeSuffixIgnoreCase(suffix: String): String =
-        if (endsWith(suffix, ignoreCase = true)) dropLast(suffix.length) else this
+    private fun String.removeLocalSuffixIgnoreCase(): String =
+        if (endsWith(".local", ignoreCase = true)) dropLast(".local".length) else this
 }

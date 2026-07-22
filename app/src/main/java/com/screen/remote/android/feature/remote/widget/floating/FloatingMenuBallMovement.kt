@@ -11,7 +11,7 @@ import kotlin.math.hypot
  * 负责处理普通拖动和长按拖动时的球体位置更新
  */
 internal class FloatingMenuBallMovement(
-    private val context: Context,
+    context: Context,
     private val ballA: View,
     private val ballB: View,
     private val windowManager: WindowManager,
@@ -66,9 +66,6 @@ internal class FloatingMenuBallMovement(
         val newAY = (clampedACenterY - ballARadius).toInt()
 
         // B球中心与A球中心对齐
-        val newBX = (clampedACenterX - ballBRadius).toInt()
-        val newBY = (clampedACenterY - ballBRadius).toInt()
-
         // 计算实际移动距离
         val finalDeltaX = newAX - paramsA.x
         var finalDeltaY = newAY - paramsA.y

@@ -24,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -60,7 +59,7 @@ fun CompactGroupSelector(
             Modifier
                 .height(IosDesignTokens.segmentedControlHeight)
                 .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .background(MaterialTheme.colorScheme.surface)
                 .padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -74,7 +73,6 @@ fun CompactGroupSelector(
                 },
             selected = pathInfo.pathParts.isEmpty(),
             isDarkTheme = isDarkTheme,
-            textColor = MaterialTheme.colorScheme.onSurface,
             clickable = pathInfo.parentClickable,
             onClick = { state.open(CompactGroupSelectorLevel.Parent) },
         ) {
@@ -100,7 +98,6 @@ fun CompactGroupSelector(
                 text = pathInfo.currentLevelName,
                 selected = true,
                 isDarkTheme = isDarkTheme,
-                textColor = MaterialTheme.colorScheme.onSurface,
                 clickable = pathInfo.currentClickable,
                 onClick = { state.open(CompactGroupSelectorLevel.Current) },
             ) {
@@ -121,7 +118,6 @@ private fun CompactGroupChip(
     text: String,
     selected: Boolean,
     isDarkTheme: Boolean,
-    textColor: Color,
     clickable: Boolean,
     onClick: () -> Unit,
     dropdownContent: @Composable () -> Unit,
@@ -155,7 +151,12 @@ private fun CompactGroupChip(
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = textColor,
+                color =
+                    if (selected) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
             )
         }
 

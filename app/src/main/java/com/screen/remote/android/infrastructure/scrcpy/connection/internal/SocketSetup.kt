@@ -4,6 +4,8 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Random
 
 /**
@@ -48,11 +50,13 @@ internal fun generateScid(): Int {
  * 通过创建临时 ServerSocket 让系统自动分配可用端口
  */
 internal suspend fun findAvailablePort(): Int =
-    try {
-        java.net.ServerSocket(0).use { socket ->
-            socket.localPort
+    withContext(Dispatchers.IO) {
+        try {
+            java.net.ServerSocket(0).use { socket ->
+                socket.localPort
+            }
+        } catch (e: Exception) {
+            // 如果失败，返回默认端口范围内的随机端口
+            27183 + Random().nextInt(1000)
         }
-    } catch (e: Exception) {
-        // 如果失败，返回默认端口范围内的随机端口
-        27183 + Random().nextInt(1000)
     }

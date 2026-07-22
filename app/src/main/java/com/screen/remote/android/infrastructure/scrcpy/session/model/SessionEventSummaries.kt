@@ -4,7 +4,7 @@ fun ServerPushContext.startedSummary(): String = "target=$targetPath"
 
 fun ServerPushContext.completedSummary(): String = "target=$targetPath, durationMs=${durationMs ?: -1}"
 
-fun ForwardSetupContext.targetSummary(
+fun targetSummary(
     localPort: Int,
     remoteSocket: String,
 ): String = "$localPort -> $remoteSocket"

@@ -16,7 +16,6 @@ import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.data.datastore.LocalDecoderCache
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.i18n.CodecTexts
-import com.screen.remote.android.feature.codec.model.CodecInfo
 import com.screen.remote.android.feature.codec.ui.internal.AudioCodecSelectorContent
 import com.screen.remote.android.feature.codec.ui.internal.initializeAudioCodecSelectorTts
 import com.screen.remote.android.feature.codec.ui.internal.rememberAudioCodecSelectorState

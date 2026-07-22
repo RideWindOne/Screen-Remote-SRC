@@ -27,18 +27,6 @@ sealed class ScrcpyMonitorEvent {
         val idleDurationMs: Long,
     ) : ScrcpyMonitorEvent()
 
-    // ============ Codec 数据 ============
-    data class VideoFrameDecoded(
-        val width: Int,
-        val height: Int,
-        val pts: Long,
-    ) : ScrcpyMonitorEvent()
-
-    data class AudioFrameDecoded(
-        val sampleRate: Int,
-        val channels: Int,
-    ) : ScrcpyMonitorEvent()
-
     // ============ 设备状态 ============
     data object DeviceScreenLocked : ScrcpyMonitorEvent()
 
@@ -59,7 +47,6 @@ sealed class ScrcpyMonitorEvent {
     data class Exception(
         val type: ExceptionType,
         val message: String,
-        val throwable: Throwable? = null,
     ) : ScrcpyMonitorEvent()
 }
 

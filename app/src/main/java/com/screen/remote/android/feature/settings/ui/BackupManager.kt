@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 internal object BackupManager {
     private val exportJson =
@@ -104,7 +105,7 @@ internal object BackupManager {
             throw Exception("${CommonTexts.ERROR_LABEL.get()}: ${e.message}", e)
         }
 
-    private fun readAdbKeys(context: Context): AdbKeysData {
+    private suspend fun readAdbKeys(context: Context): AdbKeysData {
         val runtimeRoot = runtimeRoot(context)
         return AdbKeysData(
             privateKey = readTextIfExists(File(runtimeRoot, "adbkey")),
@@ -187,7 +188,7 @@ internal object BackupManager {
             )
         }
 
-        delay(100)
+        delay(100.milliseconds)
 
         val updatedGroups = viewModel.groupViewModel.groups.first()
         val pathToNewId = updatedGroups.associate { it.path to it.id }

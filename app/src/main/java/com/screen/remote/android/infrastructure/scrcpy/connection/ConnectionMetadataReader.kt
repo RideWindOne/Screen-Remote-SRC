@@ -117,7 +117,7 @@ class ConnectionMetadataReader(
             // 2. first socket 发送 device meta (64 bytes)
             // 3. video socket 发送 codec id (4 bytes)
             // 4. video socket 发送 session meta (flags + width + height, 12 bytes)
-            val deviceNameBytes = readExact(dis, DEVICE_NAME_FIELD_LENGTH, "video:device_meta")
+            val deviceNameBytes = readDeviceName(dis)
             val deviceName = String(deviceNameBytes, Charsets.UTF_8).trim('\u0000')
             VideoDebugLog.d(LogTags.SCRCPY_CLIENT) { "Device name: $deviceName" }
             VideoDebugLog.d(LogTags.SCRCPY_PACKET) { "video device meta: ${hex(deviceNameBytes, limit = 32)}" }
@@ -141,7 +141,7 @@ class ConnectionMetadataReader(
             }
 
             // 验证数据合法性
-            if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
+            if (width !in 1..10000 || height !in 1..10000) {
                 throw IOException("${RemoteTexts.REMOTE_INVALID_VIDEO_SIZE.english}: ${width}x$height (data may not be ready)")
             }
 
@@ -150,9 +150,7 @@ class ConnectionMetadataReader(
             }
 
             val codec = videoCodecFromId(codecId)
-            if (codec == null) {
-                throw IOException("Invalid codec ID: 0x${codecId.toString(16)} (data is not ready; retry)")
-            }
+                ?: throw IOException("Invalid codec ID: 0x${codecId.toString(16)} (data is not ready; retry)")
 
             return VideoMetadata(codec = codec, width = width, height = height)
         } catch (e: Exception) {
@@ -161,28 +159,24 @@ class ConnectionMetadataReader(
         }
     }
 
-    private fun readExact(
-        inputStream: InputStream,
-        size: Int,
-        stage: String,
-    ): ByteArray {
-        val buffer = ByteArray(size)
+    private fun readDeviceName(inputStream: InputStream): ByteArray {
+        val buffer = ByteArray(DEVICE_NAME_FIELD_LENGTH)
         var offset = 0
 
-        while (offset < size) {
+        while (offset < DEVICE_NAME_FIELD_LENGTH) {
             try {
-                val read = inputStream.read(buffer, offset, size - offset)
+                val read = inputStream.read(buffer, offset, DEVICE_NAME_FIELD_LENGTH - offset)
                 if (read < 0) {
-                    throw EOFException("$stage EOF after $offset/$size bytes")
+                    throw EOFException("video:device_meta EOF after $offset/$DEVICE_NAME_FIELD_LENGTH bytes")
                 }
                 offset += read
                 VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
-                    "$stage chunk=$read total=$offset/$size data=${hex(buffer.copyOf(offset))}"
+                    "video:device_meta chunk=$read total=$offset/$DEVICE_NAME_FIELD_LENGTH data=${hex(buffer.copyOf(offset))}"
                 }
             } catch (e: java.net.SocketTimeoutException) {
                 LogManager.e(
                     LogTags.SCRCPY_PACKET,
-                    "$stage timeout total=$offset/$size partial=${hex(buffer.copyOf(offset))}",
+                    "video:device_meta timeout total=$offset/$DEVICE_NAME_FIELD_LENGTH partial=${hex(buffer.copyOf(offset))}",
                     e,
                 )
                 throw e

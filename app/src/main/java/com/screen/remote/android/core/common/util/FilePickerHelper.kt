@@ -39,12 +39,10 @@ object FilePickerHelper {
 
     /**
      * 创建单文件导入选择器
-     * @param mimeTypes MIME 类型数组，如 arrayOf("application/json")
      * @param onResult 选择结果回调
      */
     @Composable
     fun rememberImportFileLauncher(
-        mimeTypes: Array<String> = arrayOf("*/*"),
         initialDirectoryUri: Uri? = null,
         onResult: (Uri?) -> Unit,
     ): ManagedActivityResultLauncher<Array<String>, Uri?> =

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,18 +16,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,10 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -67,10 +62,9 @@ private val ProcessChildDividerInsetStart = 66.dp
 private val ProcessChildDividerInsetEnd = 12.dp
 private val ProcessCardHorizontalPadding = 12.dp
 private val ProcessRowHorizontalPadding = 10.dp
-private val ProcessRowVerticalPadding = 10.dp
+private val ProcessRowVerticalPadding = 8.dp
 private val ProcessMemoryLabelWidth = 62.dp
 private val ProcessActionSlotWidth = 76.dp
-private const val ProcessPanelWidthFraction = 0.985f
 
 private data class ProcessMemorySnapshot(
     val totalBytes: Long?,
@@ -125,7 +119,7 @@ internal fun SessionManagementProcessPage(
     var appPresentationGeneration by remember { mutableIntStateOf(0) }
     var actionProgress by remember { mutableStateOf<String?>(null) }
     var actionResult by remember { mutableStateOf<String?>(null) }
-    var helperReady by remember { mutableStateOf(false) }
+    val helperReady = helperJar != null
     var cacheReady by remember(cacheScopeKey) { mutableStateOf(false) }
     var searchQuery by remember(refreshToken) { mutableStateOf("") }
     var submittedSearchQuery by remember(refreshToken) { mutableStateOf("") }
@@ -144,12 +138,6 @@ internal fun SessionManagementProcessPage(
         SessionManagementAppCache.prepareForSession(context, cacheScopeKey)
         cacheReady = true
         helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
-    }
-
-    LaunchedEffect(helperJar) {
-        val readyHelperJar = helperJar ?: return@LaunchedEffect
-        val connection = SessionManagementAdbConnection.current()
-        helperReady = connection?.prepareAppIconHelper(readyHelperJar)?.isSuccess == true
     }
 
     LaunchedEffect(cacheReady, refreshToken) {
@@ -276,6 +264,11 @@ internal fun SessionManagementProcessPage(
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            contentPadding =
+                PaddingValues(
+                    top = SessionManagementPageInnerTopPadding,
+                    bottom = SessionManagementPageInnerBottomPadding,
+                ),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             item {
@@ -309,7 +302,7 @@ internal fun SessionManagementProcessPage(
                             SessionManagementVirtualizedPanelRow(
                                 index = index,
                                 totalCount = 6,
-                                widthFraction = ProcessPanelWidthFraction,
+                                dividerInsetStart = 66.dp,
                             ) {
                                 SessionManagementProcessPlaceholderRow()
                             }
@@ -336,7 +329,7 @@ internal fun SessionManagementProcessPage(
                         )
                     }
                     item {
-                        Box(modifier = Modifier.height(14.dp))
+                        Box(modifier = Modifier.height(12.dp))
                     }
                     if (visibleEntries.isEmpty()) {
                         item {
@@ -359,7 +352,7 @@ internal fun SessionManagementProcessPage(
                             SessionManagementVirtualizedPanelRow(
                                 index = index,
                                 totalCount = visibleEntries.size,
-                                widthFraction = ProcessPanelWidthFraction,
+                                dividerInsetStart = 66.dp,
                             ) {
                                 SessionManagementProcessRow(
                                     entry = entry,
@@ -407,11 +400,11 @@ private fun SessionManagementProcessMemoryCard(
     progress: Float,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(ProcessPanelWidthFraction),
+        modifier = Modifier.fillMaxWidth(),
         shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -536,11 +529,11 @@ private fun SessionManagementProcessListHeader(
     onSearch: (String) -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(ProcessPanelWidthFraction),
+        modifier = Modifier.fillMaxWidth(),
         shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -566,36 +559,16 @@ private fun SessionManagementProcessListHeader(
                 )
             }
 
-            OutlinedTextField(
+            SessionManagementSearchField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(SessionManagementControlHeight),
-                singleLine = true,
-                shape = SessionManagementControlShape,
-                trailingIcon = {
-                    IconButton(onClick = { onSearch(searchQuery) }) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = ManagementTexts.Processes.SEARCH.get(),
-                        )
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions =
-                    KeyboardActions(
-                        onSearch = { onSearch(searchQuery) },
-                    ),
-                placeholder = {
-                    Text(
-                        text = ManagementTexts.Processes.SEARCH_APPS_PACKAGES.get(),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
+                onSearch = { onSearch(searchQuery) },
+                placeholder = ManagementTexts.Processes.SEARCH_APPS_PACKAGES.get(),
+                contentDescription = ManagementTexts.Processes.SEARCH.get(),
             )
         }
     }

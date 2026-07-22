@@ -1,7 +1,6 @@
 package com.screen.remote.android.app
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -17,6 +16,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.manager.LanguageManager
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
                     overlayPermissionLauncher.launch(
                         Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName"),
+                            "package:$packageName".toUri(),
                         ),
                     )
                 }

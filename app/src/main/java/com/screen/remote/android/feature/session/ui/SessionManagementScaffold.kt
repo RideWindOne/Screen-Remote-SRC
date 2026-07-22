@@ -1,10 +1,12 @@
 package com.screen.remote.android.feature.session.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -19,6 +21,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
@@ -35,6 +40,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Usb
@@ -51,10 +57,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,8 +89,109 @@ private val ManagementDrawerItemSpacing = 6.dp
 private val ManagementSurfaceElevation = 1.dp
 
 internal val SessionManagementCardShape = RoundedCornerShape(12.dp)
+internal val SessionManagementPageBottomShape =
+    RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
 internal val SessionManagementControlShape = RoundedCornerShape(18.dp)
 internal val SessionManagementControlHeight = 38.dp
+internal const val SessionManagementPageOuterWidthFraction = 0.98f
+internal const val SessionManagementContentWidthFraction = 0.95f
+internal const val SessionManagementContentWidthWithinPageFraction =
+    SessionManagementContentWidthFraction / SessionManagementPageOuterWidthFraction
+internal val SessionManagementPageInnerTopPadding = 8.dp
+internal val SessionManagementPageInnerBottomPadding = 8.dp
+
+@Composable
+internal fun SessionManagementPageFrame(
+    modifier: Modifier = Modifier,
+    clipBottom: Boolean = true,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier =
+            modifier.then(
+                if (clipBottom) {
+                    Modifier.clip(SessionManagementPageBottomShape)
+                } else {
+                    Modifier
+                },
+            ),
+        content = content,
+    )
+}
+
+@Composable
+internal fun SessionManagementSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    placeholder: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    val textStyle =
+        MaterialTheme.typography.bodySmall.copy(
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(SessionManagementControlHeight),
+        singleLine = true,
+        textStyle = textStyle,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        decorationBox = { innerTextField ->
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = SessionManagementControlShape,
+                color = Color.Transparent,
+                border =
+                    BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
+                    ),
+            ) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = textStyle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    IconButton(
+                        onClick = onSearch,
+                        modifier = Modifier.size(SessionManagementControlHeight),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = contentDescription,
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
 
 @Composable
 internal fun SessionManagementLoadingBar(modifier: Modifier = Modifier) {
@@ -285,6 +395,7 @@ internal fun SessionManagementAddFab(
 
 @Composable
 internal fun SessionManagementTopRow(
+    modifier: Modifier = Modifier,
     title: String,
     onOpenMenu: () -> Unit,
     onRefresh: (() -> Unit)?,
@@ -293,8 +404,7 @@ internal fun SessionManagementTopRow(
 ) {
     Surface(
         modifier =
-            Modifier
-                .fillMaxWidth()
+            modifier
                 .zIndex(1f),
         color = MaterialTheme.colorScheme.background,
         tonalElevation = ManagementSurfaceElevation,
@@ -490,7 +600,7 @@ internal fun SessionManagementUtilityList(
         shape = SessionManagementCardShape,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =

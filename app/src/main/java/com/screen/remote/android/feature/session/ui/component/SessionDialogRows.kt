@@ -158,7 +158,6 @@ fun LabeledClickableRow(
     trailingText: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    showArrow: Boolean = true,
     leadingIcon: ImageVector? = null,
     leadingIconTint: Color? = null,
     helpText: String? = null,
@@ -172,7 +171,6 @@ fun LabeledClickableRow(
             text = trailingText,
             onClick = onClick,
             modifier = Modifier.fillMaxWidth(),
-            showArrow = showArrow,
             leadingIcon = leadingIcon,
             leadingIconTint = leadingIconTint,
         )

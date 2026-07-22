@@ -9,7 +9,7 @@ import org.junit.Test
 class RemoteBackPolicyTest {
     @Test
     fun `reconnect preparation is intercepted even while low level state is disconnected`() {
-        val status = ConnectStatus.Connecting("session", "preparing reconnect")
+        val status = ConnectStatus.Connecting("session")
 
         assertTrue(shouldInterceptRemoteBack(ConnectionState.Disconnected, status))
         assertTrue(shouldCancelConnectionOnBack(ConnectionState.Disconnected, status))
@@ -17,7 +17,7 @@ class RemoteBackPolicyTest {
 
     @Test
     fun `connected back remains a remote key event instead of cancelling`() {
-        val status = ConnectStatus.Connected("session")
+        val status = ConnectStatus.Connected
 
         assertTrue(shouldInterceptRemoteBack(ConnectionState.Connected, status))
         assertFalse(shouldCancelConnectionOnBack(ConnectionState.Connected, status))

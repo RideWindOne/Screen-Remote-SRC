@@ -10,6 +10,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 internal data class AdbConnectionRaceOutcome(
     val candidate: ConnectionCandidate,
@@ -101,7 +102,7 @@ internal suspend fun raceAdbConnections(
                     outcomes.receive()
                 } else {
                     val remainingNanos = decisionDeadlineNanos - System.nanoTime()
-                    withTimeoutOrNull((remainingNanos / 1_000_000L).coerceAtLeast(1L)) {
+                    withTimeoutOrNull((remainingNanos / 1_000_000L).coerceAtLeast(1L).milliseconds) {
                         outcomes.receive()
                     }
                 }

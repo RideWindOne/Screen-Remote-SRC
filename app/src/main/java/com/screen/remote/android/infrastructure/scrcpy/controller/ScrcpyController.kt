@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.net.Socket
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Scrcpy 控制器 - 对外暴露触摸、按键、文本等控制用例。
@@ -100,7 +101,7 @@ class ScrcpyController(
                     if (downResult.isFailure) {
                         return@withContext downResult
                     }
-                    delay(10)
+                    delay(10.milliseconds)
                     sendSingleKeyEvent(keyCode, 1, repeat, metaState)
                 } else {
                     sendSingleKeyEvent(keyCode, action, repeat, metaState)
@@ -142,14 +143,14 @@ class ScrcpyController(
             }
 
             try {
-                transport.enqueueClipboard(text, paste = true)
+                transport.enqueueClipboardAndPaste(text)
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to inject text: ${e.message}", e)
                 Result.failure(e)
             }
         }
 
-    suspend fun setDisplayPower(on: Boolean): Result<Boolean> =
+    suspend fun turnDisplayOff(): Result<Boolean> =
         withContext(Dispatchers.IO) {
             requireDeviceId() ?: return@withContext Result.failure(
                 Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
@@ -160,7 +161,7 @@ class ScrcpyController(
             )
 
             try {
-                transport.enqueueDisplayPower(on)
+                transport.enqueueDisplayPowerOff()
             } catch (e: Exception) {
                 LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to send screen power control: ${e.message}", e)
                 Result.failure(e)
@@ -198,17 +199,17 @@ class ScrcpyController(
                 }
 
                 sendTouchEvent(0, 0, 100, 100, screenWidth, screenHeight, 1.0f)
-                delay(10)
+                delay(10.milliseconds)
                 sendTouchEvent(2, 0, 200, 200, screenWidth, screenHeight, 1.0f)
-                delay(10)
+                delay(10.milliseconds)
                 sendTouchEvent(1, 0, 200, 200, screenWidth, screenHeight, 0f)
                 dControl(LogTags.SCRCPY_CLIENT) { "A sliding event has been sent to trigger a screen refresh" }
                 Result.success(true)
             } catch (e: Exception) {
                 try {
-                    delay(50)
+                    delay(50.milliseconds)
                     sendKeyEvent(224)
-                    delay(50)
+                    delay(50.milliseconds)
                     dControl(LogTags.SCRCPY_CLIENT) { RemoteTexts.SCRCPY_SCREEN_WAKE_SIGNAL_SENT.english }
                     Result.success(true)
                 } catch (wakeError: Exception) {
@@ -221,7 +222,7 @@ class ScrcpyController(
             }
         }
 
-    private suspend fun sendSingleKeyEvent(
+    private fun sendSingleKeyEvent(
         keyCode: Int,
         action: Int,
         repeat: Int = 0,

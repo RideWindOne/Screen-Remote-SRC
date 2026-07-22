@@ -12,13 +12,14 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
-import kotlin.coroutines.coroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 data class DownloadedUpdate(
     val file: File,
@@ -99,7 +100,7 @@ class AppUpdateDownloader(
         onProgress: (Int?) -> Unit,
     ) {
         while (true) {
-            coroutineContext.ensureActive()
+            currentCoroutineContext().ensureActive()
             downloadManager.query(DownloadManager.Query().setFilterById(downloadId)).use { cursor ->
                 if (!cursor.moveToFirst()) throw IOException("Update download disappeared")
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
@@ -116,7 +117,7 @@ class AppUpdateDownloader(
                     }
                 }
             }
-            delay(DOWNLOAD_POLL_INTERVAL_MS)
+            delay(DOWNLOAD_POLL_INTERVAL_MS.milliseconds)
         }
     }
 

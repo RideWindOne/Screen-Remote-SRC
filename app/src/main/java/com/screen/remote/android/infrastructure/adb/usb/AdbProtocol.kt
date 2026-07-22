@@ -215,11 +215,6 @@ interface AdbChannel {
     fun read(size: Int): ByteBuffer
 
     /**
-     * 刷新通道
-     */
-    fun flush()
-
-    /**
      * 关闭通道
      */
     fun close()

@@ -31,21 +31,13 @@ sealed class ConnectStatus {
 
     data class Connecting(
         val sessionId: String,
-        val message: String,
     ) : ConnectStatus()
 
-    data class Connected(
-        val sessionId: String,
-    ) : ConnectStatus()
+    data object Connected : ConnectStatus()
 
-    data class Failed(
-        val sessionId: String,
-        val error: String,
-    ) : ConnectStatus()
+    data object Failed : ConnectStatus()
 
-    data class Unauthorized(
-        val sessionId: String,
-    ) : ConnectStatus()
+    data object Unauthorized : ConnectStatus()
 }
 
 /**
@@ -89,7 +81,7 @@ class ConnectionViewModel(
                 val sessionData = sessionRepository.getSessionData(sessionId)
                 if (sessionData == null) {
                     withContext(Dispatchers.Main) {
-                        _connectStatus.value = ConnectStatus.Failed(sessionId, "会话不存在")
+                        _connectStatus.value = ConnectStatus.Failed
                         _connectedSessionId.value = null
                     }
                     return@launch
@@ -102,10 +94,7 @@ class ConnectionViewModel(
                 withContext(Dispatchers.Main) {
                     _connectedSessionId.value = sessionId
                     _connectStatus.value =
-                        ConnectStatus.Connecting(
-                            sessionId,
-                            if (isReconnecting) "Reconnecting..." else "Connecting to ADB...",
-                        )
+                        ConnectStatus.Connecting(sessionId)
                 }
 
                 try {
@@ -119,13 +108,9 @@ class ConnectionViewModel(
 
                     withContext(Dispatchers.Main) {
                         if (result.isSuccess) {
-                            _connectStatus.value = ConnectStatus.Connected(sessionId)
+                            _connectStatus.value = ConnectStatus.Connected
                         } else {
-                            _connectStatus.value =
-                                ConnectStatus.Failed(
-                                    sessionId,
-                                    result.exceptionOrNull()?.message ?: "连接失败",
-                                )
+                            _connectStatus.value = ConnectStatus.Failed
                         }
                     }
                 } catch (cancelled: CancellationException) {
@@ -134,7 +119,7 @@ class ConnectionViewModel(
                 } catch (e: Exception) {
                     LogManager.e(LogTags.CONNECTION_VM, "Connection session exception: ${e.message}")
                     withContext(Dispatchers.Main) {
-                        _connectStatus.value = ConnectStatus.Failed(sessionId, e.message ?: "连接失败")
+                        _connectStatus.value = ConnectStatus.Failed
                     }
                 }
             }

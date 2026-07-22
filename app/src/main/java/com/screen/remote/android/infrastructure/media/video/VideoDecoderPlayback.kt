@@ -97,7 +97,6 @@ internal class VideoDecoderPlayback(
                                 payload = packet.payload,
                                 nalBuffer = nalBuffer,
                                 configured = configured,
-                                frameCount = frameCount,
                                 pts = packetPts,
                                 packetIsConfig = frameInfo?.isConfig ?: false,
                                 packetIsKeyFrame = frameInfo?.isKeyFrame ?: false,

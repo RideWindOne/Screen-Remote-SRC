@@ -39,6 +39,7 @@ import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 键盘输入处理组件
@@ -113,7 +114,7 @@ fun KeyboardInputHandler(
                                             action = 0, // ACTION_DOWN
                                             metaState = 4096, // CTRL
                                         )
-                                        delay(10)
+                                        delay(10.milliseconds)
                                         controlViewModel.sendKeyEvent(
                                             keyCode = 29,
                                             action = 1, // ACTION_UP
@@ -131,7 +132,7 @@ fun KeyboardInputHandler(
                                             action = 0,
                                             metaState = 4096,
                                         )
-                                        delay(10)
+                                        delay(10.milliseconds)
                                         controlViewModel.sendKeyEvent(
                                             keyCode = 31,
                                             action = 1,
@@ -149,7 +150,7 @@ fun KeyboardInputHandler(
                                             action = 0,
                                             metaState = 4096,
                                         )
-                                        delay(10)
+                                        delay(10.milliseconds)
                                         controlViewModel.sendKeyEvent(
                                             keyCode = 52,
                                             action = 1,
@@ -206,11 +207,11 @@ fun KeyboardInputHandler(
             LogTags.CONTROL_HANDLER,
             "KeyboardInputHandler requesting local keyboard, token=$requestToken",
         )
-        delay(120)
+        delay(120.milliseconds)
         try {
             focusRequester.requestFocus()
             hostView.requestFocus()
-            delay(80)
+            delay(80.milliseconds)
             ApiCompatHelper.showSoftInput(hostView)
             keyboardController?.show()
         } catch (e: Exception) {

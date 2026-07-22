@@ -239,6 +239,8 @@ fun DialogPage(
     rightButtonEnabled: Boolean = true,
     trailingContent: @Composable (() -> Unit)? = null,
     enableScroll: Boolean = false,
+    scrollContentTopPadding: Dp = IosDesignTokens.dialogHeaderSpacerHeight,
+    scrollContentBottomPadding: Dp = IosDesignTokens.dialogBottomSpacerHeight,
     horizontalPadding: Dp = AppDimens.paddingStandard,
     verticalSpacing: Dp? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -268,14 +270,24 @@ fun DialogPage(
                 trailingContent = trailingContent,
             )
 
-            DialogHeaderSpacer()
+            if (!enableScroll) {
+                DialogHeaderSpacer()
+            }
 
             val contentModifier =
                 Modifier
                     .fillMaxWidth()
                     .wrapContentHeight()
                     .padding(horizontal = horizontalPadding)
-                    .then(if (enableScroll) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                    .then(
+                        if (enableScroll) {
+                            Modifier
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = scrollContentTopPadding)
+                        } else {
+                            Modifier
+                        },
+                    )
 
             Column(
                 modifier = contentModifier,
@@ -288,7 +300,7 @@ fun DialogPage(
             ) {
                 content()
                 if (enableScroll) {
-                    DialogBottomSpacer()
+                    DialogBottomSpacer(height = scrollContentBottomPadding)
                 }
             }
 

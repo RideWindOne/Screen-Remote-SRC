@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 internal class ScrcpyClientConnectionCoordinator(
     private val stateMachine: ConnectionStateMachine,
@@ -41,7 +42,7 @@ internal class ScrcpyClientConnectionCoordinator(
     private val issueTracker: SessionIssueTracker,
     private val getCurrentDeviceId: () -> String?,
     private val onSessionStateChanged: (SessionState) -> Unit,
-    private val startForegroundService: (String, ScrcpyOptions) -> Unit,
+    private val startForegroundService: (String) -> Unit,
 ) {
     private val observerScope = CoroutineScope(Dispatchers.Main)
     private val operationMutex = Mutex()
@@ -103,7 +104,7 @@ internal class ScrcpyClientConnectionCoordinator(
                 }
 
                 if (options.config.turnScreenOff) {
-                    controller.setDisplayPower(on = false)
+                    controller.turnDisplayOff()
                         .onFailure { error ->
                             LogManager.w(LogTags.SCRCPY_CLIENT, "Request to close device screen failed: ${error.message}")
                         }
@@ -111,7 +112,7 @@ internal class ScrcpyClientConnectionCoordinator(
 
                 val resolution = videoResolution.value
                 if (resolution != null) {
-                    startForegroundService(activeDeviceId, options)
+                    startForegroundService(activeDeviceId)
                 }
 
                 withContext(Dispatchers.Main) {
@@ -160,7 +161,7 @@ internal class ScrcpyClientConnectionCoordinator(
         audioStreamState.value?.close()
         videoStreamState.value = null
         audioStreamState.value = null
-        delay(50)
+        delay(50.milliseconds)
 
         lifecycle.disconnect()
         controller.stop()

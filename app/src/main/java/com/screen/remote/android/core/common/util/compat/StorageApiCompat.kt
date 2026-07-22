@@ -17,11 +17,7 @@ import android.os.Parcelable
  */
 fun getUsbDeviceSerialNumber(device: UsbDevice): String? =
     try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            device.serialNumber
-        } else {
-            null
-        }
+        device.serialNumber
     } catch (e: SecurityException) {
         null
     }

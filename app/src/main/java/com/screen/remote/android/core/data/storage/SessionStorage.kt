@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.map
  * ```
  */
 class SessionStorage(
-    private val context: Context,
+    context: Context,
 ) {
     private val repository = SessionRepository(context)
     private val profileRepository = ScrcpyProfileRepository(context)

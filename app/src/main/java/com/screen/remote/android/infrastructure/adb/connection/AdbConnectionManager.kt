@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap
 class AdbConnectionManager private constructor(
     private val context: Context,
 ) {
-    private val keyManager = AdbKeyManager(context)
+    private val keyManager = AdbKeyManager()
     private val usbAdbManager: UsbAdbManager by lazy { UsbAdbManager(context) }
     private val connectionRegistry = AdbConnectionRegistry()
     private val connector =
@@ -187,7 +187,7 @@ class AdbConnectionManager private constructor(
             connector.connectUsbByDeviceId(deviceId, deviceName, sessionContext)
         }
 
-    suspend fun scanUsbDevices() = usbAdbManager.scanUsbDevices()
+    fun scanUsbDevices() = usbAdbManager.scanUsbDevices()
 
     suspend fun requestUsbPermission(device: UsbDevice) = usbAdbManager.requestUsbPermission(device)
 

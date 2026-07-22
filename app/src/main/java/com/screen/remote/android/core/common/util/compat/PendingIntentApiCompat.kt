@@ -6,16 +6,16 @@ import android.content.Intent
 import android.os.Build
 
 internal object PendingIntentApiCompat {
-    fun getPendingIntentFlags(mutable: Boolean = false): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (mutable) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    fun getPendingIntentFlags(mutable: Boolean = false): Int {
+        val mutabilityFlag =
+            when {
+                !mutable -> PendingIntent.FLAG_IMMUTABLE
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> PendingIntent.FLAG_MUTABLE
+                else -> 0
             }
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
+
+        return PendingIntent.FLAG_UPDATE_CURRENT or mutabilityFlag
+    }
 
     fun createUsbPermissionPendingIntent(
         context: Context,

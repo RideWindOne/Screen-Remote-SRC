@@ -1,18 +1,5 @@
 package com.screen.remote.android.feature.device.data
 
-import com.screen.remote.android.core.common.util.parseHostPort
-
-/**
- * 配对方式
- */
-enum class PairingMethod {
-    /** 二维码配对 */
-    QR_CODE,
-
-    /** 配对码配对 */
-    PAIRING_CODE,
-}
-
 /**
  * 配对状态
  */
@@ -32,20 +19,6 @@ enum class PairingStatus {
     /** 失败 */
     FAILED,
 }
-
-/**
- * 配对请求数据
- */
-data class PairingRequest(
-    /** 配对方式 */
-    val method: PairingMethod,
-    /** IP 地址 */
-    val ipAddress: String,
-    /** 端口 */
-    val port: String,
-    /** 配对码（仅配对码方式需要） */
-    val pairingCode: String? = null,
-)
 
 /**
  * 配对结果
@@ -72,61 +45,6 @@ data class DeviceInfo(
     /** 设备序列号 */
     val serialNumber: String? = null,
 )
-
-/**
- * 二维码数据
- *
- * Android 无线调试二维码格式：
- * WIFI:T:ADB;S:<service-name>;P:<password>;;
- */
-data class QRCodeData(
-    /** 服务名称（包含 IP 和端口） */
-    val serviceName: String,
-    /** 密码（配对码） */
-    val password: String,
-) {
-    companion object {
-        /**
-         * 从二维码字符串解析数据
-         */
-        fun parse(qrCodeString: String): QRCodeData? {
-            return try {
-                // 解析格式：WIFI:T:ADB;S:<service-name>;P:<password>;;
-                val regex = Regex("WIFI:T:ADB;S:([^;]+);P:([^;]+);;")
-                val matchResult = regex.find(qrCodeString) ?: return null
-
-                val serviceName = matchResult.groupValues[1]
-                val password = matchResult.groupValues[2]
-
-                QRCodeData(serviceName, password)
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-
-    /**
-     * 提取 IP 地址
-     */
-    fun extractIpAddress(): String? =
-        try {
-            // 服务名称格式通常为：adb-<serial>-<random>._adb-tls-pairing._tcp
-            // 或者直接包含 IP:Port
-            parseHostPort(serviceName, allowUnbracketedIpv6 = true)?.host
-        } catch (e: Exception) {
-            null
-        }
-
-    /**
-     * 提取端口
-     */
-    fun extractPort(): String? =
-        try {
-            parseHostPort(serviceName, allowUnbracketedIpv6 = true)?.port?.toString()
-        } catch (e: Exception) {
-            null
-        }
-}
 
 /**
  * 配对历史记录

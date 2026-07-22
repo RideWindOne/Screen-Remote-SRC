@@ -65,7 +65,9 @@ data class ShellCommandExecuted(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.DEBUG
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Shell executed: $command (${durationMs}ms)"
+    override fun getDescription() =
+        "[$deviceId] Shell ${if (success) "succeeded" else "failed"}: $command " +
+            "(${durationMs}ms, outputChars=${output.length})"
 }
 
 data class ShellCommandFailed(
@@ -90,7 +92,8 @@ data class ForwardSetup(
     override fun getLogLevel() = if (success) LogLevel.INFO else LogLevel.ERROR
     override fun getCategory() = Category.MONITOR
     override fun getDescription() =
-        "[$deviceId] Forward ${if (success) "succeeded" else "failed"}: $localPort -> $remoteSocket (${durationMs}ms)"
+        "[$deviceId] Forward ${if (success) "succeeded" else "failed"}: $localPort -> $remoteSocket " +
+            "(${durationMs}ms)${error?.let { ", error=$it" }.orEmpty()}"
 }
 
 data class ForwardRemoved(
@@ -196,7 +199,9 @@ data class MonitorException(
 ) : ScrcpyEvent() {
     override fun getLogLevel() = LogLevel.ERROR
     override fun getCategory() = Category.MONITOR
-    override fun getDescription() = "[$deviceId] Exception[$type]: $message"
+    override fun getDescription() =
+        "[$deviceId] Exception[$type]: $message" +
+            throwable?.let { " (${it.javaClass.simpleName}: ${it.message ?: "no message"})" }.orEmpty()
 }
 
 data class ServerLog(

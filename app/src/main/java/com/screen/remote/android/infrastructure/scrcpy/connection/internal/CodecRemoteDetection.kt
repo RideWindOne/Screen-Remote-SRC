@@ -31,7 +31,6 @@ internal suspend fun ConnectionLifecycle.detectEncodersFromRemote(connection: Ad
             connection.detectEncoders(
                 context = context,
                 skipPush = true,
-                persistToBoundSession = false,
             )
         } catch (e: Exception) {
             LogManager.w(LogTags.SCRCPY_CLIENT, "Get encoder exception: ${e.message}")

@@ -45,7 +45,6 @@ fun BackupRestoreScreen(
 
     val importLauncher =
         FilePickerHelper.rememberImportFileLauncher(
-            mimeTypes = arrayOf("application/json"),
             initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
         ) { uri ->
             uri ?: return@rememberImportFileLauncher

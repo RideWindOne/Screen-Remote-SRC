@@ -1,12 +1,12 @@
 /*
  * API 版本兼容性辅助工具 - 主入口
- * 
+ *
  * 文件拆分说明：
  * - MediaApiCompat.kt: MediaCodec、音视频编解码器相关 API
  * - NetworkApiCompat.kt: 网络、广播接收器相关 API
  * - StorageApiCompat.kt: USB、Intent、Parcelable 相关 API
  * - UiApiCompat.kt: 窗口、系统栏、输入法、触觉反馈、震动相关 API
- * 
+ *
  * 本文件保留：系统服务、通知、PendingIntent、权限等核心 API
  */
 
@@ -17,7 +17,6 @@ import android.content.Intent
 import android.os.Build
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.common.util.compat.*
 
 /**
  * API 版本兼容性辅助工具类
@@ -126,6 +125,9 @@ object ApiCompatHelper {
     fun setAllowFrameDropIfSupported(format: android.media.MediaFormat, allowFrameDrop: Int) =
         com.screen.remote.android.core.common.util.compat.setAllowFrameDropIfSupported(format, allowFrameDrop)
 
+    fun getPcmEncodingOrDefault(format: android.media.MediaFormat, defaultEncoding: Int): Int =
+        com.screen.remote.android.core.common.util.compat.getPcmEncodingOrDefault(format, defaultEncoding)
+
     fun getCropRectIfSupported(format: android.media.MediaFormat): android.graphics.Rect? =
         com.screen.remote.android.core.common.util.compat.getCropRectIfSupported(format)
 
@@ -182,6 +184,9 @@ object ApiCompatHelper {
         filter: android.content.IntentFilter,
         exported: Boolean = false,
     ) = registerReceiver(context, receiver, filter, exported)
+
+    fun isValidWifiLinkSpeed(linkSpeedMbps: Int): Boolean =
+        com.screen.remote.android.core.common.util.compat.isValidWifiLinkSpeed(linkSpeedMbps)
 
     // ============ Intent 兼容 ============
 

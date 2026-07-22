@@ -2,4 +2,13 @@
 <resources>
     <!-- Android 系统必需：应用名称 -->
     <string name="app_name">Screen Remote</string>
+    <string name="floating_menu_upload">Upload</string>
+    <string name="floating_menu_layout_inspector">Layout Inspector</string>
+    <string name="floating_menu_adapt_device_resolution">Adapt device resolution</string>
+    <string name="floating_menu_back">Back</string>
+    <string name="floating_menu_home">Home</string>
+    <string name="floating_menu_recents">Recents</string>
+    <string name="floating_menu_keyboard">Keyboard</string>
+    <string name="floating_menu_options">Options</string>
+    <string name="floating_menu_disconnect">Disconnect</string>
 </resources>

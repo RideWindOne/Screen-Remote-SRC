@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -19,10 +18,10 @@ private val Context.adbEndpointTlsDataStore: DataStore<Preferences> by preferenc
 class AdbEndpointTlsDataStore(
     private val context: Context,
 ) {
-    fun findObservedConnectTlsPublicKey(endpoint: String): String? =
+    suspend fun findObservedConnectTlsPublicKey(endpoint: String): String? =
         findRecord(endpoint)?.observedConnectTlsPublicKeySha256Base64
 
-    fun rememberObservedConnectTlsPublicKey(
+    suspend fun rememberObservedConnectTlsPublicKey(
         endpoint: String,
         observedConnectTlsPublicKeySha256Base64: String,
     ) {
@@ -41,7 +40,7 @@ class AdbEndpointTlsDataStore(
         }
     }
 
-    fun markTlsPairingSucceeded(endpoint: String) {
+    suspend fun markTlsPairingSucceeded(endpoint: String) {
         val normalizedEndpoint = normalizeEndpoint(endpoint) ?: throw IllegalArgumentException("Blank endpoint")
         val now = System.currentTimeMillis()
         updateRecords { current ->
@@ -56,7 +55,7 @@ class AdbEndpointTlsDataStore(
         }
     }
 
-    fun forgetEndpoint(endpoint: String): Boolean {
+    suspend fun forgetEndpoint(endpoint: String): Boolean {
         val normalizedEndpoint = normalizeEndpoint(endpoint) ?: return false
         val current = listRecords()
         if (current.none { it.endpoint == normalizedEndpoint }) {
@@ -66,56 +65,46 @@ class AdbEndpointTlsDataStore(
         return true
     }
 
-    fun clear(): Boolean {
+    suspend fun clear(): Boolean {
         val hadState = listRecords().isNotEmpty()
-        runBlocking {
-            context.adbEndpointTlsDataStore.edit { preferences ->
-                preferences.remove(Keys.STATE_JSON)
-            }
+        context.adbEndpointTlsDataStore.edit { preferences ->
+            preferences.remove(Keys.STATE_JSON)
         }
         return hadState
     }
 
-    fun exportJson(): String? =
-        runBlocking {
-            context.adbEndpointTlsDataStore.data
-                .map { preferences -> preferences[Keys.STATE_JSON] }
-                .first()
-                ?.takeIf { it.isNotBlank() }
-        }
+    suspend fun exportJson(): String? =
+        context.adbEndpointTlsDataStore.data
+            .map { preferences -> preferences[Keys.STATE_JSON] }
+            .first()
+            ?.takeIf { it.isNotBlank() }
 
-    fun importJson(rawJson: String?) {
+    suspend fun importJson(rawJson: String?) {
         val normalizedRawJson = normalizeRawJson(rawJson)
-        runBlocking {
-            context.adbEndpointTlsDataStore.edit { preferences ->
-                if (normalizedRawJson.isBlank()) {
-                    preferences.remove(Keys.STATE_JSON)
-                } else {
-                    preferences[Keys.STATE_JSON] = normalizedRawJson
-                }
+        context.adbEndpointTlsDataStore.edit { preferences ->
+            if (normalizedRawJson.isBlank()) {
+                preferences.remove(Keys.STATE_JSON)
+            } else {
+                preferences[Keys.STATE_JSON] = normalizedRawJson
             }
         }
     }
 
-    private fun listRecords(): List<TlsEndpointRecord> =
-        runBlocking {
-            context.adbEndpointTlsDataStore.data
-                .map { preferences -> decode(preferences[Keys.STATE_JSON]) }
-                .first()
-                .sortedBy { it.endpoint }
-        }
+    private suspend fun listRecords(): List<TlsEndpointRecord> =
+        context.adbEndpointTlsDataStore.data
+            .map { preferences -> decode(preferences[Keys.STATE_JSON]) }
+            .first()
+            .sortedBy { it.endpoint }
 
-    private fun findRecord(endpoint: String): TlsEndpointRecord? {
+    private suspend fun findRecord(endpoint: String): TlsEndpointRecord? {
         val normalizedEndpoint = normalizeEndpoint(endpoint) ?: return null
         return listRecords().firstOrNull { it.endpoint == normalizedEndpoint }
     }
 
-    private fun updateRecords(transform: (List<TlsEndpointRecord>) -> List<TlsEndpointRecord>) {
-        runBlocking {
-            context.adbEndpointTlsDataStore.edit { preferences ->
-                val current = decode(preferences[Keys.STATE_JSON])
-                preferences[Keys.STATE_JSON] = encode(transform(current))
-            }
+    private suspend fun updateRecords(transform: (List<TlsEndpointRecord>) -> List<TlsEndpointRecord>) {
+        context.adbEndpointTlsDataStore.edit { preferences ->
+            val current = decode(preferences[Keys.STATE_JSON])
+            preferences[Keys.STATE_JSON] = encode(transform(current))
         }
     }
 

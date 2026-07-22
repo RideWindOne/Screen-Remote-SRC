@@ -26,9 +26,8 @@ internal class FloatingMenuGestureCompletionHandler(
         when {
             detector.isClick(duration) -> handleClick()
             state.isSecondStageLongPress && !state.hasMoved -> handleSecondStageLongPress()
-            state.canEnterLongPress && !state.hasMoved -> handleReservedFunction()
             state.isLongPress && state.hasMoved -> handleLongPressDrag(finalDirection)
-            state.hasMoved && !state.isLongPress -> handleNormalDrag()
+            state.hasMoved -> handleNormalDrag()
         }
 
         state.cancelLongPressCallbacks()
@@ -67,9 +66,6 @@ internal class FloatingMenuGestureCompletionHandler(
         menuManager.showMenu()
     }
 
-    private fun handleReservedFunction() {
-    }
-
     private fun handleSecondStageLongPress() {
         scope.launch {
             val result = actions.captureTargetDeviceScreenshot()
@@ -91,9 +87,9 @@ internal class FloatingMenuGestureCompletionHandler(
 
         scope.launch {
             when (direction) {
-                FloatingMenuGestureState.Direction.LEFT -> dispatchKeyEvent(4, "手势返回键失败")
-                FloatingMenuGestureState.Direction.RIGHT -> dispatchKeyEvent(187, "手势最近任务键失败")
-                FloatingMenuGestureState.Direction.UP -> dispatchKeyEvent(3, "手势主页键失败")
+                FloatingMenuGestureState.Direction.LEFT -> dispatchKeyEvent(4, "Gesture back key failed")
+                FloatingMenuGestureState.Direction.RIGHT -> dispatchKeyEvent(187, "Gesture recent apps key failed")
+                FloatingMenuGestureState.Direction.UP -> dispatchKeyEvent(3, "Gesture home key failed")
                 FloatingMenuGestureState.Direction.DOWN -> {
                     actions.controlViewModel.executeShellCommand("cmd statusbar expand-notifications")
                 }

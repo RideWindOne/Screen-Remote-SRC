@@ -82,8 +82,7 @@ internal class VideoDecoderSurfaceController(
             surface = newSurface
             val targetSurface = newSurface ?: dummySurface
             try {
-                val codec = decoder
-                if (codec == null || isStopped) {
+                if (decoder == null || isStopped) {
                     pendingSurface = targetSurface
                     VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Codec not running, saved for application Surface" }
                     return
@@ -94,7 +93,7 @@ internal class VideoDecoderSurfaceController(
                         return
                     }
                     pendingSurface = targetSurface
-                    codec.setOutputSurface(targetSurface)
+                    decoder.setOutputSurface(targetSurface)
                     appliedSurface = targetSurface
                     pendingSurface = null
 

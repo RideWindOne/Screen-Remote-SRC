@@ -36,3 +36,6 @@ fun registerReceiverCompat(
         context.registerReceiver(receiver, filter)
     }
 }
+
+/** Returns whether a Wi-Fi link speed is a usable positive value. */
+fun isValidWifiLinkSpeed(linkSpeedMbps: Int): Boolean = linkSpeedMbps > 0

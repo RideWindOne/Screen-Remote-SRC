@@ -28,8 +28,7 @@ internal class AudioDecoderPlayback(
         sampleRate: Int,
         channelCount: Int,
     ) {
-        val track = trackManager.createAudioTrack(sampleRate, channelCount)
-        if (track == null) {
+        if (trackManager.createAudioTrack(sampleRate, channelCount) == null) {
             throw IllegalStateException("Unable to create RAW AudioTrack")
         }
 
@@ -211,8 +210,6 @@ internal class AudioDecoderPlayback(
                                 queuePacketIntoDecoder(
                                     currentDecoder,
                                     packet.payload,
-                                    frameCount,
-                                    inputCount,
                                     packetPts,
                                     flags,
                                 )
@@ -223,8 +220,9 @@ internal class AudioDecoderPlayback(
 
                         when (result) {
                             QueuePacketResult.Break -> {
-                            break
+                                break
                             }
+
                             QueuePacketResult.Queued -> {
                                 inputCount++
                                 inputsWithoutOutput++
@@ -235,6 +233,7 @@ internal class AudioDecoderPlayback(
                                     )
                                 }
                             }
+
                             QueuePacketResult.Skipped -> Unit
                         }
                     }
@@ -272,11 +271,12 @@ internal class AudioDecoderPlayback(
         if (packet.isEmpty()) return 0
         val currentDecoder = getDecoder() ?: throw IllegalStateException("Audio codec does not exist")
         while (isRunning() && !isStopped()) {
-            when (queuePacketIntoDecoder(currentDecoder, packet, 1, 0, pts, 0)) {
+            when (queuePacketIntoDecoder(currentDecoder, packet, pts, 0)) {
                 QueuePacketResult.Queued -> {
                     AudioDebugLog.d(LogTags.AUDIO_DECODER) { "The first audio packet has been processed: size=${packet.size}, pts=$pts" }
                     return 1
                 }
+
                 QueuePacketResult.Break -> return 0
                 QueuePacketResult.Skipped -> Thread.yield()
             }
@@ -287,8 +287,6 @@ internal class AudioDecoderPlayback(
     private fun queuePacketIntoDecoder(
         currentDecoder: MediaCodec,
         payload: ByteArray,
-        frameCount: Int,
-        inputCount: Int,
         pts: Long,
         flags: Int,
     ): QueuePacketResult {

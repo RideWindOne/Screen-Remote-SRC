@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Shell 流类型别名
@@ -54,7 +55,7 @@ class ConnectionShellMonitor(
      * 设置 Shell 流并监听 scrcpy-server 启动状态
      */
     fun setShellStream(stream: ShellStream) {
-        stopReader(closeStream = false)
+        stopReader()
         shellStream = stream
         synchronized(recentShellLines) {
             recentShellLines.clear()
@@ -114,7 +115,7 @@ class ConnectionShellMonitor(
                     return@withContext false
                 }
 
-                delay(10)
+                delay(10.milliseconds)
             }
 
             LogManager.w(LogTags.SCRCPY_SERVER, "Timeout waiting for scrcpy-server to start")
@@ -240,12 +241,9 @@ class ConnectionShellMonitor(
             }
     }
 
-    private fun stopReader(closeStream: Boolean) {
+    private fun stopReader() {
         synchronized(stateLock) {
             intentionalStop = true
-        }
-        if (closeStream) {
-            runCatching { shellStream?.close() }
         }
         cancelReaderScope()
     }

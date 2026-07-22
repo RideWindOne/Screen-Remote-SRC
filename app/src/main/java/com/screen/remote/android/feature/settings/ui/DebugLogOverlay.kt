@@ -1,6 +1,5 @@
 package com.screen.remote.android.feature.settings.ui
 
-import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.view.Gravity
 import android.view.Window
@@ -59,9 +58,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontFamily
@@ -71,6 +70,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toDrawable
 import com.screen.remote.android.core.common.manager.LiveLogEntry
 import com.screen.remote.android.core.common.manager.LiveLogStore
 import com.screen.remote.android.core.common.manager.rememberText
@@ -126,6 +126,7 @@ private fun rememberDebugLogTexts() =
 fun DebugLogOverlay(enabled: Boolean) {
     if (!enabled) return
 
+    val containerSize = LocalWindowInfo.current.containerSize
     val expanded = remember { mutableStateOf(false) }
     val fullScreen = remember { mutableStateOf(false) }
 
@@ -137,11 +138,10 @@ fun DebugLogOverlay(enabled: Boolean) {
     ) { window ->
         val texts = rememberDebugLogTexts()
         val density = LocalDensity.current
-        val configuration = LocalConfiguration.current
         val collapsedSizePx = with(density) { 64.dp.toPx() }
         val initialMarginPx = with(density) { 9.dp.toPx() }
-        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-        val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+        val screenWidthPx = containerSize.width.toFloat()
+        val screenHeightPx = containerSize.height.toFloat()
         var buttonOffsetX by remember { mutableFloatStateOf(initialMarginPx) }
         var buttonOffsetY by remember { mutableFloatStateOf(initialMarginPx) }
 
@@ -151,6 +151,7 @@ fun DebugLogOverlay(enabled: Boolean) {
             fullScreen = fullScreen.value,
             collapsedX = buttonOffsetX.roundToInt(),
             collapsedY = buttonOffsetY.roundToInt(),
+            containerHeightPx = containerSize.height,
         )
 
         if (expanded.value) {
@@ -232,7 +233,7 @@ private fun SingleDebugWindow(
                 WindowManager.LayoutParams.TYPE_PHONE
             },
         )
-        window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
+        window.setBackgroundDrawable(android.graphics.Color.TRANSPARENT.toDrawable())
         window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.addFlags(
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -261,11 +262,11 @@ private fun ConfigureDebugWindow(
     fullScreen: Boolean,
     collapsedX: Int,
     collapsedY: Int,
+    containerHeightPx: Int,
 ) {
     val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
     val collapsedSize = with(density) { 64.dp.roundToPx() }
-    val halfHeight = with(density) { (configuration.screenHeightDp.dp / 2).roundToPx() }
+    val halfHeight = containerHeightPx / 2
 
     SideEffect {
         if (expanded) {

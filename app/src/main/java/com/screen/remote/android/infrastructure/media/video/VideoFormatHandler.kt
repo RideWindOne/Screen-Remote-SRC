@@ -53,7 +53,7 @@ class VideoFormatHandler(
         pps: ByteArray,
         surface: Surface?,
         dummySurface: Surface?,
-    ): MediaCodec? =
+    ): MediaCodec =
         configurator.reconfigureH264(
             oldDecoder = oldDecoder,
             width = width,
@@ -95,7 +95,7 @@ class VideoFormatHandler(
         pps: ByteArray,
         surface: Surface?,
         dummySurface: Surface?,
-    ): MediaCodec? =
+    ): MediaCodec =
         configurator.reconfigureH265(
             oldDecoder = oldDecoder,
             width = width,
@@ -128,7 +128,7 @@ class VideoFormatHandler(
         height: Int,
         surface: Surface?,
         dummySurface: Surface?,
-    ): MediaCodec? =
+    ): MediaCodec =
         configurator.reconfigureAV1(
             oldDecoder = oldDecoder,
             width = width,
@@ -143,7 +143,7 @@ class VideoFormatHandler(
         height: Int,
         surface: Surface?,
         dummySurface: Surface?,
-    ): MediaCodec? =
+    ): MediaCodec =
         configurator.reconfigureVpx(
             oldDecoder = oldDecoder,
             width = width,

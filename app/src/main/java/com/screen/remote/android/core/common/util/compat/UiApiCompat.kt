@@ -12,10 +12,13 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Vibrator
 import android.os.VibrationEffect
+import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.Window
 import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
@@ -48,7 +51,7 @@ fun setDecorFitsSystemWindows(
         window.setDecorFitsSystemWindows(decorFitsSystemWindows)
     } else {
         if (!decorFitsSystemWindows) {
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+            window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         }
     }
 }
@@ -73,7 +76,7 @@ fun showSoftInputCompat(view: View) {
 fun getVibratorCompat(context: Context): Vibrator? =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vibratorManager =
-            context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+            context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
         vibratorManager?.defaultVibrator
     } else {
         @Suppress("DEPRECATION")
@@ -182,29 +185,29 @@ fun setFullScreen(
         val controller = window.insetsController
         if (fullscreen) {
             controller?.hide(
-                android.view.WindowInsets.Type.statusBars() or
-                    android.view.WindowInsets.Type.navigationBars(),
+                WindowInsets.Type.statusBars() or
+                    WindowInsets.Type.navigationBars(),
             )
             controller?.systemBarsBehavior =
-                android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
             controller?.show(
-                android.view.WindowInsets.Type.statusBars() or
-                    android.view.WindowInsets.Type.navigationBars(),
+                WindowInsets.Type.statusBars() or
+                    WindowInsets.Type.navigationBars(),
             )
         }
     } else {
         if (fullscreen) {
             window.decorView.systemUiVisibility = (
-                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                    android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             )
         } else {
-            window.decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_VISIBLE
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         }
     }
 }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Socket 连接管理器
@@ -161,7 +162,7 @@ class ConnectionSocketManager(
             )
 
             val videoCandidate = socketCandidates.getValue("video")
-            waitForDummyByte(videoCandidate, "video")
+            waitForVideoDummyByte(videoCandidate)
 
             videoSocket = videoCandidate
             audioSocket = socketCandidates["audio"]
@@ -241,7 +242,7 @@ class ConnectionSocketManager(
                     lastError = error
                 }
 
-            delay(DIRECT_VIDEO_CONNECT_RETRY_DELAY_MS)
+            delay(DIRECT_VIDEO_CONNECT_RETRY_DELAY_MS.milliseconds)
         }
 
         throw IOException("Failed to open video adb stream: ${lastError?.message ?: "server socket not ready"}", lastError)
@@ -251,44 +252,27 @@ class ConnectionSocketManager(
      * 等待并验证 dummy byte（Server 准备就绪信号）
      * 参考：scrcpy Server 在 accept 后立即发送 dummy byte (0x00)
      */
-    private suspend fun waitForDummyByte(
-        socket: Socket,
-        socketType: String,
-    ) {
-        val result =
-            readDummyByte(
-                socket,
-                socketType,
-                maxRetries = SOCKET_DUMMY_BYTE_MAX_RETRIES,
-                retryDelayMs = SOCKET_DUMMY_BYTE_RETRY_DELAY_MS,
-            )
-
-        when (result) {
+    private suspend fun waitForVideoDummyByte(socket: Socket) {
+        when (val result = readVideoDummyByte(socket)) {
             is DummyReadResult.Success -> return
             is DummyReadResult.Closed ->
-                throw IOException("$socketType socket -> server did not send a dummy byte (connection closed)")
+                throw IOException("video socket -> server did not send a dummy byte (connection closed)")
             is DummyReadResult.Timeout ->
-                throw IOException("$socketType socket -> timed out while reading the dummy byte")
+                throw IOException("video socket -> timed out while reading the dummy byte")
             is DummyReadResult.Invalid ->
                 throw IOException(
-                    "$socketType socket -> received unexpected dummy byte: " +
+                    "video socket -> received unexpected dummy byte: " +
                         "0x${result.value.toString(16).padStart(2, '0')}",
                 )
         }
     }
 
-    private suspend fun readDummyByte(
-        socket: Socket,
-        socketType: String,
-        maxRetries: Int,
-        retryDelayMs: Long,
-        logRetries: Boolean = true,
-    ): DummyReadResult {
-        val inputStream = socket.getInputStream()
+    private suspend fun readVideoDummyByte(socket: Socket): DummyReadResult {
+        val inputStream = withContext(Dispatchers.IO) { socket.getInputStream() }
 
-        repeat(maxRetries) { retryIndex ->
+        repeat(SOCKET_DUMMY_BYTE_MAX_RETRIES) { retryIndex ->
             try {
-                val dummyByte = inputStream.read()
+                val dummyByte = withContext(Dispatchers.IO) { inputStream.read() }
                 if (dummyByte == -1) {
                     return DummyReadResult.Closed
                 }
@@ -296,25 +280,22 @@ class ConnectionSocketManager(
                 if (dummyByte != 0x00) {
                     LogManager.w(
                         LogTags.SCRCPY_CLIENT,
-                        "$socketType socket: Received unexpected dummy byte: 0x${dummyByte.toString(16).padStart(2, '0')}",
+                        "video socket: Received unexpected dummy byte: 0x${dummyByte.toString(16).padStart(2, '0')}",
                     )
                     return DummyReadResult.Invalid(dummyByte)
                 }
 
-                LogManager.d(
-                    LogTags.SCRCPY_CLIENT,
-                    "$socketType socket: Dummy byte verified (0x${dummyByte.toString(16).padStart(2, '0')})",
-                )
-                return DummyReadResult.Success(dummyByte)
+                LogManager.d(LogTags.SCRCPY_CLIENT, "video socket: Dummy byte verified (0x00)")
+                return DummyReadResult.Success
             } catch (e: java.net.SocketTimeoutException) {
-                if (logRetries && retryIndex < maxRetries - 1) {
+                if (retryIndex < SOCKET_DUMMY_BYTE_MAX_RETRIES - 1) {
                     LogManager.w(
                         LogTags.SCRCPY_CLIENT,
-                        "$socketType socket: Reading dummy byte timed out, try again ${retryIndex + 1}/$maxRetries",
+                        "video socket: Reading dummy byte timed out, try again ${retryIndex + 1}/$SOCKET_DUMMY_BYTE_MAX_RETRIES",
                     )
                 }
-                if (retryIndex < maxRetries - 1) {
-                    delay(retryDelayMs)
+                if (retryIndex < SOCKET_DUMMY_BYTE_MAX_RETRIES - 1) {
+                    delay(SOCKET_DUMMY_BYTE_RETRY_DELAY_MS.milliseconds)
                     return@repeat
                 }
                 return DummyReadResult.Timeout
@@ -468,9 +449,7 @@ class ConnectionSocketManager(
     }
 
     private sealed interface DummyReadResult {
-        data class Success(
-            val value: Int,
-        ) : DummyReadResult
+        data object Success : DummyReadResult
 
         data class Invalid(
             val value: Int,

@@ -19,6 +19,7 @@ import com.screen.remote.android.feature.codec.ui.CodecList
 import com.screen.remote.android.feature.codec.ui.CodecOptionsSection
 import com.screen.remote.android.feature.codec.ui.EmptyCodecState
 import com.screen.remote.android.feature.codec.ui.FilterConfig
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 internal fun AudioCodecSelectorContent(
@@ -123,7 +124,7 @@ internal suspend fun initializeAudioCodecSelectorTts(context: android.content.Co
         com.screen.remote.android.core.common.manager.TTSManager.init(context, showToast = true)
         var waitCount = 0
         while (!com.screen.remote.android.core.common.manager.TTSManager.isReady() && waitCount < 50) {
-            kotlinx.coroutines.delay(100)
+            kotlinx.coroutines.delay(100.milliseconds)
             waitCount++
         }
     }

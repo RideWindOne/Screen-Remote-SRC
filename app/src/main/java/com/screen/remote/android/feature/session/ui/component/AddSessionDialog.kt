@@ -54,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,9 +74,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.screen.remote.android.core.common.AppDimens
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppTextSizes
 import com.screen.remote.android.core.common.PlaceholderTexts
+import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.constants.NetworkConstants
 import com.screen.remote.android.core.common.constants.ScrcpyConstants
 import com.screen.remote.android.core.common.util.resolveLocalDisplaySpec
@@ -84,7 +85,6 @@ import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.DialogContainer
 import com.screen.remote.android.core.designsystem.component.DialogHeader
 import com.screen.remote.android.core.designsystem.component.DialogHeaderSpacer
-import com.screen.remote.android.core.designsystem.component.DialogBottomSpacer
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.GroupSelectorDialog
 import com.screen.remote.android.core.designsystem.component.HelpIcon
@@ -311,8 +311,6 @@ fun AddSessionDialog(
         state = state,
         isEditMode = sessionData != null,
         availableGroups = sessionGroups,
-        mdnsConnectServices = mdnsState.connectServices,
-        mdnsConnectLoading = mdnsState.loading,
         onDismiss = onDismiss,
         onConnectionLatencyTest = { state.showConnectionLatencyTest = true },
         onConfirm = {
@@ -343,8 +341,6 @@ private fun AddSessionDialogContent(
     state: SessionDialogState,
     isEditMode: Boolean,
     availableGroups: List<DeviceGroup>,
-    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
-    mdnsConnectLoading: Boolean,
     onDismiss: () -> Unit,
     onConnectionLatencyTest: () -> Unit,
     onConfirm: () -> Unit,
@@ -371,14 +367,13 @@ private fun AddSessionDialogContent(
             }
         },
         enableScroll = true,
+        scrollContentTopPadding = IosDesignTokens.dialogCompactHeaderSpacerHeight,
+        scrollContentBottomPadding = IosDesignTokens.dialogCompactBottomSpacerHeight,
         verticalSpacing = 8.dp,
     ) {
         RemoteDeviceSection(
             state = state,
             availableGroups = availableGroups,
-            mdnsConnectServices = mdnsConnectServices,
-            mdnsConnectLoading = mdnsConnectLoading,
-            onUsbDeviceClick = { state.showUsbDeviceDialog = true },
             onGroupSelectorClick = { state.showGroupSelector = true },
             onConnectionLatencyTest = onConnectionLatencyTest,
             showConnectionLatencyTest = isEditMode,
@@ -388,7 +383,6 @@ private fun AddSessionDialogContent(
         AudioConfigSection(state)
         OtherOptionsSection(state)
         VirtualDisplaySection(state)
-        DialogBottomSpacer()
     }
 }
 
@@ -454,9 +448,6 @@ private fun SessionDialogSection(
 private fun RemoteDeviceSection(
     state: SessionDialogState,
     availableGroups: List<DeviceGroup>,
-    mdnsConnectServices: List<MdnsDiscoveredConnectService>,
-    mdnsConnectLoading: Boolean,
-    onUsbDeviceClick: () -> Unit,
     onGroupSelectorClick: () -> Unit,
     onConnectionLatencyTest: () -> Unit,
     showConnectionLatencyTest: Boolean,
@@ -519,7 +510,7 @@ private fun DeviceTypeDropdownRow(state: SessionDialogState) {
             onDismissRequest = { state.showDeviceTypeMenu = false },
             alignment = Alignment.TopEnd,
         ) {
-            SessionDeviceType.values().forEach { type ->
+            SessionDeviceType.entries.forEach { type ->
                 IOSStyledDropdownMenuItem(
                     text = type.displayText(),
                     onClick = {
@@ -647,7 +638,7 @@ private fun SessionAddressDeviceTypeDropdownRow(state: SessionAddressDialogState
             onDismissRequest = { state.showDeviceTypeMenu = false },
             alignment = Alignment.TopEnd,
         ) {
-            SessionDeviceType.values().forEach { type ->
+            SessionDeviceType.entries.forEach { type ->
                 IOSStyledDropdownMenuItem(
                     text = type.displayText(),
                     onClick = {
@@ -1006,7 +997,7 @@ private fun EditableAddressTypeDropdownRow(address: EditableSessionAddress) {
             onDismissRequest = { address.showTypeMenu = false },
             alignment = Alignment.TopEnd,
         ) {
-            SessionDeviceType.values().forEach { type ->
+            SessionDeviceType.entries.forEach { type ->
                 IOSStyledDropdownMenuItem(
                     text = type.displayText(),
                     onClick = {
@@ -1409,7 +1400,6 @@ private fun VideoConfigSection(state: SessionDialogState) {
                 }
             },
             helpText = SessionTexts.HELP_VIDEO_ENCODER.get(),
-            showArrow = false,
         )
 
         AppDivider()
@@ -1419,7 +1409,6 @@ private fun VideoConfigSection(state: SessionDialogState) {
             trailingText = state.config.userVideoDecoder.ifEmpty { SessionTexts.LABEL_DEFAULT.get() },
             onClick = { state.showVideoDecoderSelector = true },
             helpText = SessionTexts.HELP_VIDEO_DECODER.get(),
-            showArrow = false,
         )
     }
 }
@@ -1463,7 +1452,7 @@ private fun VerticalOptionPicker(
                 ?: 0
         }
     val selectedIsCustom = customEnabled && selectedIndex == options.lastIndex
-    var accumulatedDrag by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var accumulatedDrag by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
     var showCustomEditor by remember { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -1628,7 +1617,7 @@ private fun VerticalOptionPicker(
                     onValueChange = { next -> editorValue = next.filter(Char::isDigit) },
                     label = { Text(label) },
                     keyboardOptions =
-                        androidx.compose.foundation.text.KeyboardOptions(
+                        KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                         ),
                     singleLine = true,
@@ -1710,7 +1699,6 @@ private fun AudioConfigSection(state: SessionDialogState) {
                     }
                 },
                 helpText = SessionTexts.HELP_AUDIO_ENCODER.get(),
-                showArrow = false,
             )
 
             AppDivider()
@@ -1720,7 +1708,6 @@ private fun AudioConfigSection(state: SessionDialogState) {
                 trailingText = state.config.userAudioDecoder.ifEmpty { SessionTexts.LABEL_DEFAULT.get() },
                 onClick = { state.showAudioDecoderSelector = true },
                 helpText = SessionTexts.HELP_AUDIO_DECODER.get(),
-                showArrow = false,
             )
 
             AppDivider()
@@ -1802,7 +1789,7 @@ private fun AudioConfigSection(state: SessionDialogState) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(AudioVolumeValueWidth),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                    textAlign = TextAlign.End,
                 )
             }
         }

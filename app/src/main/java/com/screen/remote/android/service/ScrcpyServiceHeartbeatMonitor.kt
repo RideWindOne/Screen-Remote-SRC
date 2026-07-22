@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 internal class ScrcpyServiceHeartbeatMonitor(
     private val applicationContext: Context,
@@ -40,7 +41,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
                 LogManager.d(LogTags.SCRCPY_SERVICE, "ADB heartbeat detection has started (interval: ${HEARTBEAT_INTERVAL}ms)")
 
                 while (isActive) {
-                    delay(HEARTBEAT_INTERVAL)
+                    delay(HEARTBEAT_INTERVAL.milliseconds)
 
                     if (protectedDevices.isEmpty()) {
                         continue

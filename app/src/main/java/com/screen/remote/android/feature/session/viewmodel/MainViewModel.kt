@@ -12,7 +12,6 @@ import com.screen.remote.android.core.data.repository.GroupRepository
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
-import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.domain.model.ScrcpyAction
 import com.screen.remote.android.core.update.parseAppVersion
@@ -54,12 +53,10 @@ sealed class ManagementConnectStatus {
 
     data class Connected(
         val sessionId: String,
-        val deviceId: String,
     ) : ManagementConnectStatus()
 
     data class Failed(
         val sessionId: String,
-        val error: String,
     ) : ManagementConnectStatus()
 }
 
@@ -275,7 +272,7 @@ class MainViewModel(
 
     suspend fun sendText(text: String) = controlViewModel.sendText(text)
 
-    suspend fun sendTouchEvent(
+    fun sendTouchEvent(
         action: Int,
         pointerId: Long,
         x: Int,
@@ -430,7 +427,7 @@ private class ManagementAdbSessionController(
         if (connectGeneration.get() != generation) return
         if (sessionData == null) {
             LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId session does not exist")
-            _status.value = ManagementConnectStatus.Failed(sessionId, "会话不存在")
+            _status.value = ManagementConnectStatus.Failed(sessionId)
             return
         }
 
@@ -464,7 +461,6 @@ private class ManagementAdbSessionController(
                     _status.value =
                         ManagementConnectStatus.Failed(
                             sessionId,
-                            error.message ?: "ADB 连接失败",
                         )
                     return
                 }
@@ -481,7 +477,7 @@ private class ManagementAdbSessionController(
         if (connectGeneration.get() != generation) return
         val connection = adbConnectionManager.getConnection(connectedDeviceId)
         if (connection == null) {
-            _status.value = ManagementConnectStatus.Failed(sessionData.id, "ADB 连接已建立，但未找到连接对象")
+            _status.value = ManagementConnectStatus.Failed(sessionData.id)
             return
         }
 
@@ -494,7 +490,7 @@ private class ManagementAdbSessionController(
             deviceName = connection.deviceInfo.name,
         )
         _deviceId.value = connectedDeviceId
-        _status.value = ManagementConnectStatus.Connected(sessionData.id, connectedDeviceId)
+        _status.value = ManagementConnectStatus.Connected(sessionData.id)
         LogManager.i(LogTags.MANAGEMENT, "Management connection is ready: sessionId=${sessionData.id} deviceId=$connectedDeviceId")
     }
 

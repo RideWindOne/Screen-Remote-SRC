@@ -107,6 +107,6 @@ fun DialogHeaderSpacer() {
 }
 
 @Composable
-fun DialogBottomSpacer() {
-    Spacer(modifier = Modifier.height(IosDesignTokens.dialogBottomSpacerHeight))
+fun DialogBottomSpacer(height: Dp = IosDesignTokens.dialogBottomSpacerHeight) {
+    Spacer(modifier = Modifier.height(height))
 }

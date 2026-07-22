@@ -22,7 +22,6 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
@@ -230,8 +229,8 @@ private fun DialogFieldPlaceholder(
     visible: Boolean,
     placeholder: String,
     isError: Boolean,
-    textAlign: TextAlign = TextAlign.Start,
     modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start,
 ) {
     if (!visible) {
         return

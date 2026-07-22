@@ -70,8 +70,8 @@ internal object SessionManagementPortForwardManager {
                         .append(" nohup app_process / ").append(REMOTE_MAIN_CLASS)
                         .append(" ").append(arguments)
                         .append(" >> ").append(REMOTE_LOG).append(" 2>&1 </dev/null & ")
-                    append("pid=$!; printf '%s\\n' \"${'$'}pid\" > ").append(REMOTE_PID).append("; ")
-                    append("printf 'PID=%s\\n' \"${'$'}pid\"")
+                    append($$"pid=$!; printf '%s\\n' \"$pid\" > ").append(REMOTE_PID).append("; ")
+                    append($$"printf 'PID=%s\\n' \"$pid\"")
                 }
 
             val launchOutput = connection.executeShell("sh -c ${quoteShellArg(script)}", retryOnFailure = false).getOrThrow()
@@ -108,10 +108,10 @@ internal object SessionManagementPortForwardManager {
     private suspend fun status(connection: AdbConnection): Result<PortForwardStatus> =
         runCatching {
             val script =
-                "pid=\$(cat $REMOTE_PID 2>/dev/null); " +
-                    "if [ -n \"\$pid\" ] && [ -r /proc/\$pid/cmdline ] && " +
-                    "tr '\\000' ' ' < /proc/\$pid/cmdline | grep -F -q ${quoteShellArg(REMOTE_MAIN_CLASS)}; " +
-                    "then printf 'STATE=RUNNING\\nPID=%s\\n' \"\$pid\"; " +
+                $$"pid=$(cat $$REMOTE_PID 2>/dev/null); " +
+                    $$"if [ -n \"$pid\" ] && [ -r /proc/$pid/cmdline ] && " +
+                    $$"tr '\\000' ' ' < /proc/$pid/cmdline | grep -F -q $${quoteShellArg(REMOTE_MAIN_CLASS)}; " +
+                    $$"then printf 'STATE=RUNNING\\nPID=%s\\n' \"$pid\"; " +
                     "else rm -f $REMOTE_PID; printf 'STATE=STOPPED\\n'; fi; " +
                     "if [ -f $REMOTE_CONFIG ]; then printf 'CONFIG='; cat $REMOTE_CONFIG; fi"
             val output =
@@ -143,12 +143,12 @@ internal object SessionManagementPortForwardManager {
     private suspend fun stopRemoteProcess(connection: AdbConnection): Result<Unit> =
         runCatching {
             val script =
-                "pid=\$(cat $REMOTE_PID 2>/dev/null); " +
-                    "if [ -n \"\$pid\" ] && [ -r /proc/\$pid/cmdline ] && " +
-                    "tr '\\000' ' ' < /proc/\$pid/cmdline | grep -F -q ${quoteShellArg(REMOTE_MAIN_CLASS)}; then " +
-                    "kill \"\$pid\" 2>/dev/null || true; " +
-                    "i=0; while kill -0 \"\$pid\" 2>/dev/null && [ \"\$i\" -lt 20 ]; do sleep 0.1; i=\$((i + 1)); done; " +
-                    "if kill -0 \"\$pid\" 2>/dev/null; then kill -9 \"\$pid\" 2>/dev/null || true; fi; fi; " +
+                $$"pid=$(cat $$REMOTE_PID 2>/dev/null); " +
+                    $$"if [ -n \"$pid\" ] && [ -r /proc/$pid/cmdline ] && " +
+                    $$"tr '\\000' ' ' < /proc/$pid/cmdline | grep -F -q $${quoteShellArg(REMOTE_MAIN_CLASS)}; then " +
+                    $$"kill \"$pid\" 2>/dev/null || true; " +
+                    $$"i=0; while kill -0 \"$pid\" 2>/dev/null && [ \"$i\" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done; " +
+                    $$"if kill -0 \"$pid\" 2>/dev/null; then kill -9 \"$pid\" 2>/dev/null || true; fi; fi; " +
                     "rm -f $REMOTE_PID"
             connection.executeShell("sh -c ${quoteShellArg(script)}", retryOnFailure = false).getOrThrow()
         }

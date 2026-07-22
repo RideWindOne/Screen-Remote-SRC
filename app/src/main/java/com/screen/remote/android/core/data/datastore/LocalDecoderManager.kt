@@ -44,8 +44,11 @@ data class LocalDecoderData(
  * 注意：解码器是本地设备的能力，所有会话共享同一份数据
  */
 class LocalDecoderManager(
-    private val context: Context,
+    context: Context,
 ) {
+    private val contentResolver = context.applicationContext.contentResolver
+    private val dataStore = context.applicationContext.localDecoderDataStore
+
     private val json =
         Json {
             ignoreUnknownKeys = true
@@ -65,7 +68,7 @@ class LocalDecoderManager(
     fun getLocalRuntimeSignature(): String {
         val androidId =
             Settings.Secure.getString(
-                context.contentResolver,
+                contentResolver,
                 Settings.Secure.ANDROID_ID,
             ).orEmpty()
         return listOf(androidId, Build.FINGERPRINT, Build.VERSION.SDK_INT, Build.VERSION.SECURITY_PATCH).joinToString("|")
@@ -75,7 +78,7 @@ class LocalDecoderManager(
      * 数据流
      */
     val dataFlow: Flow<LocalDecoderData> =
-        context.localDecoderDataStore.data.map { preferences ->
+        dataStore.data.map { preferences ->
             LocalDecoderData(
                 runtimeSignature = preferences[Keys.RUNTIME_SIGNATURE] ?: "",
                 videoDecoders =
@@ -105,7 +108,7 @@ class LocalDecoderManager(
      */
     suspend fun saveVideoDecoders(decoders: List<DecoderCapability>) {
         val runtimeSignature = getLocalRuntimeSignature()
-        context.localDecoderDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             invalidateCapabilitiesForNewRuntime(preferences, runtimeSignature)
             preferences[Keys.RUNTIME_SIGNATURE] = runtimeSignature
             preferences[Keys.VIDEO_DECODERS] = json.encodeToString(decoders)
@@ -117,7 +120,7 @@ class LocalDecoderManager(
      */
     suspend fun saveAudioDecoders(decoders: List<DecoderCapability>) {
         val runtimeSignature = getLocalRuntimeSignature()
-        context.localDecoderDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             invalidateCapabilitiesForNewRuntime(preferences, runtimeSignature)
             preferences[Keys.RUNTIME_SIGNATURE] = runtimeSignature
             preferences[Keys.AUDIO_DECODERS] = json.encodeToString(decoders)
@@ -128,7 +131,7 @@ class LocalDecoderManager(
      * 保存完整数据
      */
     suspend fun saveData(data: LocalDecoderData) {
-        context.localDecoderDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[Keys.RUNTIME_SIGNATURE] = data.runtimeSignature
             preferences[Keys.VIDEO_DECODERS] = json.encodeToString(data.videoDecoders)
             preferences[Keys.AUDIO_DECODERS] = json.encodeToString(data.audioDecoders)
@@ -139,7 +142,7 @@ class LocalDecoderManager(
      * 清空数据
      */
     suspend fun clearData() {
-        context.localDecoderDataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences.clear()
         }
     }

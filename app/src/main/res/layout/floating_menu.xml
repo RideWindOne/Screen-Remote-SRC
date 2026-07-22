@@ -24,7 +24,7 @@
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:background="@android:color/transparent"
-            android:contentDescription="Upload"
+            android:contentDescription="@string/floating_menu_upload"
             android:paddingStart="5dp"
             android:paddingTop="7dp"
             android:paddingEnd="5dp"
@@ -38,7 +38,7 @@
             android:layout_height="42dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:contentDescription="Layout Inspector"
+            android:contentDescription="@string/floating_menu_layout_inspector"
             android:paddingStart="5dp"
             android:paddingTop="7dp"
             android:paddingEnd="5dp"
@@ -52,7 +52,7 @@
             android:layout_height="42dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:contentDescription="Adapt device resolution"
+            android:contentDescription="@string/floating_menu_adapt_device_resolution"
             android:paddingStart="5dp"
             android:paddingTop="7dp"
             android:paddingEnd="5dp"
@@ -76,7 +76,7 @@
             android:src="@drawable/ic_toolbar_back"
             android:scaleType="centerInside"
             android:padding="7dp"
-            android:contentDescription="Back" />
+            android:contentDescription="@string/floating_menu_back" />
 
         <ImageButton
             android:id="@+id/btn_home"
@@ -87,7 +87,7 @@
             android:src="@drawable/ic_toolbar_home"
             android:scaleType="centerInside"
             android:padding="7dp"
-            android:contentDescription="Home" />
+            android:contentDescription="@string/floating_menu_home" />
 
         <ImageButton
             android:id="@+id/btn_recent"
@@ -98,7 +98,7 @@
             android:src="@drawable/ic_toolbar_switch"
             android:scaleType="centerInside"
             android:padding="7dp"
-            android:contentDescription="Recents" />
+            android:contentDescription="@string/floating_menu_recents" />
 
         <ImageButton
             android:id="@+id/btn_keyboard"
@@ -109,7 +109,7 @@
             android:src="@drawable/ic_toolbar_keyboard"
             android:scaleType="centerInside"
             android:padding="7dp"
-            android:contentDescription="Keyboard" />
+            android:contentDescription="@string/floating_menu_keyboard" />
 
         <ImageButton
             android:id="@+id/btn_menu"
@@ -120,7 +120,7 @@
             android:src="@drawable/ic_toolbar_more"
             android:scaleType="centerInside"
             android:padding="7dp"
-            android:contentDescription="Options" />
+            android:contentDescription="@string/floating_menu_options" />
 
         <ImageButton
             android:id="@+id/btn_close"
@@ -128,7 +128,7 @@
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:contentDescription="Disconnect"
+            android:contentDescription="@string/floating_menu_disconnect"
             android:padding="7dp"
             android:scaleType="centerInside"
             android:src="@drawable/ic_toolbar_close" />

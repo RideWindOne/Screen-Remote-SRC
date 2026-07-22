@@ -31,18 +31,17 @@ import java.io.EOFException
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
+import kotlin.time.Duration.Companion.milliseconds
 
 internal fun configureControlSocketForStreaming(socket: Socket) {
     socket.soTimeout = 0
 }
 
 internal class TouchTransportTiming(
-    minimumHoldDurationNanos: Long = 0L,
-    moveIntervalNanos: Long = 0L,
+    private var minimumHoldDurationNanos: Long = 0L,
+    private var moveIntervalNanos: Long = 0L,
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
-    private var minimumHoldDurationNanos = minimumHoldDurationNanos
-    private var moveIntervalNanos = moveIntervalNanos
     private val downSentAtNanos = HashMap<Long, Long>()
     private var lastMoveSentAtNanos: Long? = null
 
@@ -156,7 +155,7 @@ internal class ScrcpyControllerTransport(
         }
     }
 
-    private data class TextMessage(
+    private class TextMessage(
         val textBytes: ByteArray,
     ) : ControlMessage {
         override fun encodeTo(buffer: ByteBuffer) {
@@ -166,7 +165,7 @@ internal class ScrcpyControllerTransport(
         }
     }
 
-    private data class EncodedMessage(
+    private class EncodedMessage(
         val bytes: ByteArray,
     ) : ControlMessage {
         override fun encodeTo(buffer: ByteBuffer) {
@@ -190,7 +189,7 @@ internal class ScrcpyControllerTransport(
         }
     }
 
-    private data class StartAppMessage(
+    private class StartAppMessage(
         val nameBytes: ByteArray,
     ) : ControlMessage {
         override fun encodeTo(buffer: ByteBuffer) {
@@ -253,7 +252,7 @@ internal class ScrcpyControllerTransport(
                         }
 
                         val signalReceived =
-                            withTimeoutOrNull(waitMs) {
+                            withTimeoutOrNull(waitMs.milliseconds) {
                                 wakeSignal.receive()
                                 true
                             } ?: false
@@ -349,17 +348,14 @@ internal class ScrcpyControllerTransport(
         return enqueue(TextMessage(textBytes))
     }
 
-    fun enqueueClipboard(
-        text: String,
-        paste: Boolean,
-    ): Result<Boolean> =
+    fun enqueueClipboardAndPaste(text: String): Result<Boolean> =
         try {
-            enqueue(EncodedMessage(ScrcpyClipboardProtocol.encode(text, paste)))
+            enqueue(EncodedMessage(ScrcpyClipboardProtocol.encode(text, paste = true)))
         } catch (e: IllegalArgumentException) {
             Result.failure(e)
         }
 
-    fun enqueueDisplayPower(on: Boolean): Result<Boolean> = enqueue(DisplayPowerMessage(on))
+    fun enqueueDisplayPowerOff(): Result<Boolean> = enqueue(DisplayPowerMessage(on = false))
 
     fun enqueueStartApp(name: String): Result<Boolean> {
         val nameBytes = name.toByteArray(Charsets.UTF_8)
@@ -446,6 +442,8 @@ internal class ScrcpyControllerTransport(
             orderedMessages.isNotEmpty() || latestTouchMoves.isNotEmpty()
         }
 
+    // Control writes intentionally run on controlDispatcher, a dedicated single blocking thread.
+    @Suppress("BlockingMethodInNonBlockingContext")
     private suspend fun sendControlMessage(
         message: ControlMessage,
         isKeepalive: Boolean,
@@ -462,7 +460,7 @@ internal class ScrcpyControllerTransport(
             if (message is TouchMessage && message.action == TouchAction.ACTION_UP) {
                 val holdDelayNanos = touchTiming.remainingHoldDelayNanos(message.pointerId)
                 if (holdDelayNanos > 0L) {
-                    delay(nanosToDelayMillis(holdDelayNanos))
+                    delay(nanosToDelayMillis(holdDelayNanos).milliseconds)
                 }
             }
 
@@ -527,25 +525,30 @@ internal class ScrcpyControllerTransport(
         clearControlSocket()
     }
 
+    // This receiver is launched only on receiverScope, whose dispatcher is Dispatchers.IO.
+    @Suppress("BlockingMethodInNonBlockingContext")
     private suspend fun receiveDeviceMessages(deviceId: String) {
-        var activeSocket: Socket? = null
-        var input: DataInputStream? = null
+        var activeChannel: Pair<Socket, DataInputStream>? = null
         while (currentCoroutineContext().isActive) {
             val socket = getControlSocket()
             if (socket == null || socket.isClosed || !socket.isConnected) {
-                activeSocket = null
-                input = null
-                delay(CONTROL_SOCKET_POLL_INTERVAL_MS)
+                activeChannel = null
+                delay(CONTROL_SOCKET_POLL_INTERVAL_MS.milliseconds)
                 continue
             }
 
-            if (activeSocket !== socket || input == null) {
-                activeSocket = socket
-                // 握手完成后的 control 通道允许长期没有设备消息，不能沿用建链阶段的读超时。
-                // 停止/重连通过关闭 socket 唤醒阻塞读取。
-                configureControlSocketForStreaming(socket)
-                input = DataInputStream(socket.getInputStream())
-            }
+            val input =
+                activeChannel
+                    ?.takeIf { channel -> channel.first === socket }
+                    ?.second
+                    ?: run {
+                        // 握手完成后的 control 通道允许长期没有设备消息，不能沿用建链阶段的读超时。
+                        // 停止/重连通过关闭 socket 唤醒阻塞读取。
+                        configureControlSocketForStreaming(socket)
+                        DataInputStream(socket.getInputStream()).also { stream ->
+                            activeChannel = socket to stream
+                        }
+                    }
 
             try {
                 when (val message = ScrcpyDeviceMessageReader.read(input)) {

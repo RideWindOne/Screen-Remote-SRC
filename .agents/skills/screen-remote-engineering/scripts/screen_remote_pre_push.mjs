@@ -7,7 +7,7 @@ import process from "node:process";
 
 const ZERO_SHA = "0".repeat(40);
 const REVIEW_MARKER = "Screen-Remote-Review: confirmed";
-const CODEX_MODEL = "gpt-5.5";
+const CODEX_MODEL = "gpt-5.6-sol";
 const CODEX_REASONING_EFFORT = "medium";
 
 function run(cwd, args) {

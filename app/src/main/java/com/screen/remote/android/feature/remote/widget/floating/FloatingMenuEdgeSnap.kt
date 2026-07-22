@@ -61,10 +61,7 @@ internal class FloatingMenuEdgeSnap(
     }
 
     fun snapToEdge() {
-        val target = analyzer.resolveSnapTarget(animator.paramsA, animator.paramsB, animator.ballA, animator.ballB)
-        if (target == null) {
-            return
-        }
+        val target = analyzer.resolveSnapTarget(animator.paramsA, animator.ballA, animator.ballB) ?: return
 
         state.isSnappedToEdge = true
         state.snappedEdge = target.edge
@@ -173,7 +170,6 @@ internal class FloatingMenuEdgeAnalyzer(
 
     fun resolveSnapTarget(
         paramsA: WindowManager.LayoutParams,
-        paramsB: WindowManager.LayoutParams,
         ballA: View,
         ballB: View,
     ): FloatingMenuSnapTarget? {

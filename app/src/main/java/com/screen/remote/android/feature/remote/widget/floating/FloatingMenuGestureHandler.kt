@@ -291,7 +291,6 @@ class FloatingMenuGestureHandler(
         val dx = event.rawX - state.downRawX
         val dy = event.rawY - state.downRawY
         val distance = hypot(dx.toDouble(), dy.toDouble()).toFloat()
-        val duration = System.currentTimeMillis() - state.downTime
 
         if (state.isMenuShown) {
             state.cancelLongPressCallbacks()
@@ -302,7 +301,7 @@ class FloatingMenuGestureHandler(
             return
         }
 
-        detector.checkLongPressTransition(distance, duration)
+        detector.checkLongPressTransition(distance)
 
         if (!detector.checkMovementThreshold(dx, dy)) {
             return

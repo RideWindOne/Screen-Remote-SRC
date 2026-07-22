@@ -27,12 +27,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.feature.remote.presentation.VideoDecoderManager
 import com.screen.remote.android.infrastructure.media.video.VideoPerformanceSnapshot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 internal data class RemotePerformanceSample(
     val decodedFps: Double = 0.0,
@@ -59,7 +61,7 @@ internal fun RemotePerformanceStatsOverlay(
         var previousTimeNanos = SystemClock.elapsedRealtimeNanos()
 
         while (isActive) {
-            delay(STATS_SAMPLE_INTERVAL_MS)
+            delay(STATS_SAMPLE_INTERVAL_MS.milliseconds)
             val nowNanos = SystemClock.elapsedRealtimeNanos()
             val elapsedSeconds = (nowNanos - previousTimeNanos) / 1_000_000_000.0
             val currentVideo = videoDecoderManager.performanceSnapshot()
@@ -161,10 +163,13 @@ private data class WifiLinkRates(
 @SuppressLint("MissingPermission", "Deprecated")
 @Suppress("DEPRECATION")
 private fun readWifiLinkRates(context: Context): WifiLinkRates {
-    val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return WifiLinkRates()
+    val wifiManager =
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            ?: return WifiLinkRates()
     val wifiInfo =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val connectivityManager =
+                context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             val activeNetwork = connectivityManager?.activeNetwork
             val capabilities = activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
             if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
@@ -185,7 +190,7 @@ private fun readWifiLinkRates(context: Context): WifiLinkRates {
     }
 }
 
-private fun Int.validLinkSpeed(): Int? = takeIf { it > 0 && it != WifiInfo.LINK_SPEED_UNKNOWN }
+private fun Int.validLinkSpeed(): Int? = takeIf(ApiCompatHelper::isValidWifiLinkSpeed)
 
 private fun byteRate(
     previousBytes: Long?,

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 会话管理 ViewModel
@@ -42,7 +43,7 @@ class SessionViewModel(
             _editingSessionId.value = null
             // 使用延迟确保对话框完全关闭后再打开新的
             viewModelScope.launch {
-                kotlinx.coroutines.delay(100)
+                kotlinx.coroutines.delay(100.milliseconds)
                 _editingSessionId.value = sessionId
                 _showAddSessionDialog.value = true
             }
@@ -116,7 +117,7 @@ class SessionViewModel(
         // 查找所有相同基础名字的会话
         val pattern = Regex("^${Regex.escape(baseName)}(?:_(\\d+))?$")
         val existingNumbers =
-            existingNames.mapNotNull { name ->
+            existingNames.map { name ->
                 pattern
                     .matchEntire(name)
                     ?.groupValues

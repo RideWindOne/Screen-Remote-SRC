@@ -10,14 +10,9 @@ import com.screen.remote.android.core.common.event.ScrcpyEventBus.pushEvent
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.LogManager.dShell
 import com.screen.remote.android.core.i18n.AdbTexts
-import com.screen.remote.android.infrastructure.scrcpy.session.internal.saveDiscoveredEncoders
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbConnectionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbIssueKind
-import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecDetectionContext
-import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecDetectionSummary
-import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecIssue
-import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardRemovalContext
@@ -36,14 +31,18 @@ import dadb.PortForwarder
 import dadb.helper.RemoteAppIconBatchData
 import dadb.helper.RemoteAppIconBatchRequest
 import dadb.helper.RemoteAppIconData
+import dadb.helper.RemoteAppData
 import dadb.helper.RemoteAppListItem
 import dadb.helper.RemoteHelperFileState
 import dadb.helper.RemoteHelperProbeResult
+import dadb.helper.RemoteHelperQueryResult
 import dadb.helper.loadAppIconBatchWithHelper
 import dadb.helper.loadAppIconWithHelper
+import dadb.helper.loadAppsWithHelper
 import dadb.helper.loadAppListPageWithHelper
 import dadb.helper.prepareRemoteAppIconHelper
 import dadb.helper.runRemoteAppHelperProbe
+import dadb.helper.runQueriesWithHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +63,7 @@ import java.net.SocketException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.toDuration
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * ADB 连接封装
@@ -369,6 +368,38 @@ class AdbConnection(
             }
         }
 
+    suspend fun loadAppsWithHelper(
+        includeUser: Boolean,
+        includeSystem: Boolean,
+        includeEnabled: Boolean,
+        includeDisabled: Boolean,
+        fields: Set<String>,
+        packageNames: Set<String> = emptySet(),
+        localHelperJar: File,
+    ): Result<List<RemoteAppData>> =
+        withContext(Dispatchers.IO) {
+            dManagement(LogTags.ADB_CONNECTION) {
+                "helper app data request: user=$includeUser system=$includeSystem enabled=$includeEnabled disabled=$includeDisabled fields=${fields.sorted().joinToString(",")}"
+            }
+            runCatching {
+                dadb.loadAppsWithHelper(
+                    includeUser = includeUser,
+                    includeSystem = includeSystem,
+                    includeEnabled = includeEnabled,
+                    includeDisabled = includeDisabled,
+                    fields = fields,
+                    packageNames = packageNames,
+                    localHelperJar = localHelperJar,
+                )
+            }.onFailure { error ->
+                LogManager.e(
+                    LogTags.ADB_CONNECTION,
+                    "Helper app data request failed: ${error.message}",
+                    error,
+                )
+            }
+        }
+
     suspend fun runAppHelperProbe(
         command: String,
         args: List<String>,
@@ -393,16 +424,32 @@ class AdbConnection(
             }
         }
 
+    suspend fun runQueriesWithHelper(
+        queries: Map<String, String>,
+        localHelperJar: File,
+    ): Result<Map<String, RemoteHelperQueryResult>> =
+        withContext(Dispatchers.IO) {
+            dManagement(LogTags.ADB_CONNECTION) {
+                "helper query batch request: count=${queries.size}"
+            }
+            runCatching {
+                dadb.runQueriesWithHelper(
+                    queries = queries,
+                    localHelperJar = localHelperJar,
+                )
+            }.onFailure { error ->
+                LogManager.e(
+                    LogTags.ADB_CONNECTION,
+                    "Helper query batch request failed: ${error.message}",
+                    error,
+                )
+            }
+        }
+
     suspend fun detectEncoders(
         context: Context,
         skipPush: Boolean = false,
-        persistToBoundSession: Boolean = true,
     ): Result<EncoderDetectionResult> {
-        val detectionContext = CodecDetectionContext(reusedUploadedServer = skipPush)
-        if (persistToBoundSession) {
-            sessionContext?.emit(SessionEvent.VideoEncoderDetecting(detectionContext))
-            sessionContext?.emit(SessionEvent.AudioEncoderDetecting(detectionContext))
-        }
         val streamingDadb =
             runCatching { streamingDadb() }.getOrElse { error ->
                 return Result.failure(error)
@@ -415,91 +462,6 @@ class AdbConnection(
                 streamingShellExecutor::openStream,
                 skipPush,
             )
-
-        if (result.isSuccess && persistToBoundSession) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val detectionResult = result.getOrNull() ?: return@withContext
-                    val session = sessionContext?.currentSession() ?: return@withContext
-
-                    val videoEncoders = detectionResult.videoEncoders
-                    val audioEncoders = detectionResult.audioEncoders
-
-                    if (videoEncoders.isNotEmpty()) {
-                        sessionContext?.emit(
-                            SessionEvent.VideoEncoderDetected(
-                                CodecDetectionSummary(
-                                    totalCount = videoEncoders.size,
-                                    sampleNames = videoEncoders.take(3).map { it.name },
-                                    reusedUploadedServer = skipPush,
-                                ),
-                            ),
-                        )
-                    } else {
-                        sessionContext?.emit(
-                            SessionEvent.VideoEncoderDetectFailed(
-                                CodecIssue(
-                                    kind = CodecIssueKind.NoEncodersFound,
-                                    detail = "No remote video encoders detected",
-                                ),
-                            ),
-                        )
-                    }
-
-                    if (audioEncoders.isNotEmpty()) {
-                        sessionContext?.emit(
-                            SessionEvent.AudioEncoderDetected(
-                                CodecDetectionSummary(
-                                    totalCount = audioEncoders.size,
-                                    sampleNames = audioEncoders.take(3).map { it.name },
-                                    reusedUploadedServer = skipPush,
-                                ),
-                            ),
-                        )
-                    } else {
-                        sessionContext?.emit(
-                            SessionEvent.AudioEncoderError(
-                                CodecIssue(
-                                    kind = CodecIssueKind.NoEncodersFound,
-                                    detail = "No remote audio encoders detected",
-                                ),
-                            ),
-                        )
-                    }
-                    if (videoEncoders.isNotEmpty() || audioEncoders.isNotEmpty()) {
-                        session.saveDiscoveredEncoders(
-                            remoteVideoEncoders = videoEncoders,
-                            remoteAudioEncoders = audioEncoders,
-                        )
-
-                        LogManager.d(
-                            LogTags.ADB_CONNECTION,
-                            "Codec saved to session ${session.sessionId}: video=${videoEncoders.size}, audio=${audioEncoders.size}",
-                        )
-                    }
-                } catch (e: Exception) {
-                    LogManager.w(LogTags.ADB_CONNECTION, "Asynchronous saving of encoder list failed: ${e.message}")
-                }
-            }
-        } else if (result.isFailure && persistToBoundSession) {
-            val detail = result.exceptionOrNull()?.message ?: "Unknown encoder detection error"
-            sessionContext?.emit(
-                SessionEvent.VideoEncoderDetectFailed(
-                    CodecIssue(
-                        kind = CodecIssueKind.DetectionFailed,
-                        detail = detail,
-                    ),
-                ),
-            )
-            sessionContext?.emit(
-                SessionEvent.AudioEncoderError(
-                    CodecIssue(
-                        kind = CodecIssueKind.DetectionFailed,
-                        detail = detail,
-                    ),
-                ),
-            )
-        }
 
         return result
     }
@@ -657,7 +619,7 @@ internal class AdbConnectionShellExecutor(
 
         LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_AUTO_RECONNECT_RETRY.english}: $command")
         return try {
-            delay(100)
+            delay(100.milliseconds)
             val retryResponse = dadb.shell(command)
             logShellCommandResult(
                 tag = LogTags.ADB_CONNECTION,
@@ -858,7 +820,7 @@ internal object AdbConnectionVerifier {
                     logShellCommandStart(LogTags.ADB_CONNECTION, command)
                     val shellCall = async { dadb.shell(command) }
                     try {
-                        withTimeout(timeoutMs) {
+                        withTimeout(timeoutMs.milliseconds) {
                             shellCall.await().also { response ->
                                 logShellCommandResult(
                                     tag = LogTags.ADB_CONNECTION,
