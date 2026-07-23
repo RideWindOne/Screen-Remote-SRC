@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.domain.model.AppSettings
+import com.screen.remote.android.core.telemetry.TelemetryJournal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
@@ -121,6 +122,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        TelemetryJournal.recordDiagnostic("D", tag, message)
         if (!isDebugLoggingEnabledForTag(tag)) {
             return
         }
@@ -139,6 +141,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        TelemetryJournal.recordDiagnostic("I", tag, message)
         if (!isDebugLoggingEnabledForTag(tag)) {
             return
         }
@@ -157,6 +160,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        TelemetryJournal.recordDiagnostic("W", tag, message)
         if (state.runtimeLoggingSuppressed) return
         LiveLogStore.append("W", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {
@@ -173,6 +177,7 @@ object LogManager {
         message: String,
         throwable: Throwable? = null,
     ) {
+        TelemetryJournal.recordDiagnostic("E", tag, message)
         if (state.runtimeLoggingSuppressed) return
         LiveLogStore.append("E", tag, messageWithThrowable(message, throwable))
         if (throwable != null) {

@@ -103,6 +103,11 @@ sealed class SessionEvent {
         val reason: String
             get() = issue.message
     }
+    data object ConfirmDecoderResolutionRecovery : SessionEvent()
+    data object DismissDecoderResolutionRecovery : SessionEvent()
+    data class ServerVideoCaptureError(
+        val detail: String,
+    ) : SessionEvent()
 
     // 控制事件
     data class RequestReconnect(

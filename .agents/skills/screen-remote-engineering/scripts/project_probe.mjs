@@ -65,6 +65,7 @@ const rootIndex = args.indexOf("--root");
 const base = baseIndex >= 0 ? args[baseIndex + 1] : undefined;
 const root = findRoot(rootIndex >= 0 ? args[rootIndex + 1] : process.cwd());
 const app = path.join(root, "Screen-Remote");
+const dadb = path.join(root, "external", "dadb");
 const [scope, files] = changedFiles(app, base);
 const kinds = categories(files);
 
@@ -95,3 +96,6 @@ if (files.some((file) => !file.startsWith("app/src/test/"))) {
 
 printStatus("outer status", root);
 printStatus("app status", app);
+printStatus("dadb status", dadb);
+const [dadbHeadCode, dadbHead] = run(dadb, ["git", "log", "-1", "--format=%H %s"]);
+console.log(dadbHeadCode === 0 ? `dadb latest commit: ${dadbHead}` : "dadb latest commit: unavailable");

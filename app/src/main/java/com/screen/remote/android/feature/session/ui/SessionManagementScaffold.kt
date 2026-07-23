@@ -474,6 +474,7 @@ internal fun SessionManagementTopRow(
 @Composable
 internal fun SessionManagementDrawer(
     sessionData: SessionData,
+    connectionEndpoint: String,
     selectedSection: SessionManagementSection,
     onDismiss: () -> Unit,
     onSectionSelected: (SessionManagementSection) -> Unit,
@@ -542,13 +543,13 @@ internal fun SessionManagementDrawer(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = sessionData.name.ifBlank { sessionData.primaryConnectionEndpointForDisplay() },
+                            text = sessionData.name.ifBlank { connectionEndpoint },
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = sessionData.primaryConnectionEndpointForDisplay(),
+                            text = connectionEndpoint,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

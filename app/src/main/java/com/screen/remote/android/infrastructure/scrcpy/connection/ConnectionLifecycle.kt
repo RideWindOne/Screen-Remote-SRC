@@ -147,6 +147,23 @@ class ConnectionLifecycle(
                 ownsConnectionCleanup = true
                 cleanupOldResources(previousConnection)
 
+                if (options.config.compatibilityMode) {
+                    activeConnection = null
+                    val displayInfo =
+                        connection.getCachedDisplayInfo()
+                            ?: connection.refreshDisplayInfo().getOrNull()
+                    if (displayInfo != null) {
+                        session.onVideoResolution(displayInfo.currentWidth, displayInfo.currentHeight)
+                    }
+                    onVideoStreamReady(null)
+                    onAudioStreamReady(null)
+                    LogManager.i(
+                        LogTags.SCRCPY_CLIENT,
+                        "Compatibility mode connected over ADB; scrcpy-server startup is skipped",
+                    )
+                    return@withContext Result.success(Pair(null, null))
+                }
+
                 // 步骤 3: 生成 SCID 并设置 Forward
                 val scid = generateScid()
                 val socketName = "scrcpy_%08x".format(scid)

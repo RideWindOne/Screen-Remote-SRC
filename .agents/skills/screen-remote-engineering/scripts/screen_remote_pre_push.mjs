@@ -105,7 +105,7 @@ function withoutReviewMarker(text) {
     .trim();
 }
 
-function createSessionRecorder({ baseSha, contextPath, localSha }) {
+function createSessionRecorder({ baseSha, contextPath, dadbSha, localSha }) {
   let buffer = "";
   let sessionId = null;
   return (chunk) => {
@@ -117,6 +117,7 @@ function createSessionRecorder({ baseSha, contextPath, localSha }) {
     writeFileSync(contextPath, `${JSON.stringify({
       base_sha: baseSha,
       local_sha: localSha,
+      dadb_sha: dadbSha,
       model: CODEX_MODEL,
       reasoning_effort: CODEX_REASONING_EFFORT,
       session_id: sessionId,
@@ -148,6 +149,7 @@ async function resumeInterruptedReview() {
   const appRepo = path.resolve(git(process.cwd(), "rev-parse", "--show-toplevel"));
   const outer = path.dirname(appRepo);
   const wikiRepo = path.join(outer, "external", "wiki");
+  const dadbRepo = path.join(outer, "external", "dadb");
   const skillDir = path.join(appRepo, ".agents", "skills", "screen-remote-engineering");
   const stateDir = path.resolve(appRepo, git(appRepo, "rev-parse", "--git-path", "codex-pre-push"));
   const messagePath = path.join(stateDir, "commit-message.txt");
@@ -155,21 +157,23 @@ async function resumeInterruptedReview() {
   const contextPath = path.join(stateDir, "review-context.json");
   const context = readJson(contextPath);
 
-  if (context?.status !== "running" || !context.base_sha || !context.local_sha || !context.session_id) {
+  if (context?.status !== "running" || !context.base_sha || !context.local_sha || !context.dadb_sha || !context.session_id) {
     throw new Error("没有可恢复的 pre-push Wiki 审读任务");
   }
   if (git(appRepo, "rev-parse", "HEAD") !== context.local_sha) {
     throw new Error("当前 HEAD 已变化；请直接再次 git push，让 hook 审读新的提交范围");
   }
-  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git"))) {
-    throw new Error("outer project, skill, or external/wiki repository not found");
+  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git")) || !existsSync(path.join(dadbRepo, ".git"))) {
+    throw new Error("outer project, skill, external/wiki, or external/dadb repository not found");
   }
+  git(dadbRepo, "cat-file", "-e", `${context.dadb_sha}^{commit}`);
 
   const schemaPath = path.join(skillDir, "scripts", "pre_push_result.schema.json");
-  const resumePrompt = `Continue the interrupted Screen-Remote pre-push review for ${context.base_sha}..${context.local_sha}. Reuse the context and tool results already present in this session instead of restarting the review. Inspect the existing Wiki working-tree changes, finish any incomplete bilingual updates, and return the required structured result. Keep ${appRepo} read-only and write only inside ${wikiRepo}. Write commit_subject and commit_body in English without the ${REVIEW_MARKER} trailer.`;
+  const resumePrompt = `Continue the interrupted Screen-Remote pre-push review for app range ${context.base_sha}..${context.local_sha} and locked dadb commit ${context.dadb_sha}^..${context.dadb_sha}. Reuse the context and tool results already present in this session instead of restarting the review. Inspect the existing Wiki working-tree changes, finish any incomplete bilingual updates, and return the required structured result. Keep ${appRepo} and ${dadbRepo} read-only and write only inside ${wikiRepo}. Ignore uncommitted app and dadb changes. Write commit_subject and commit_body in English without the ${REVIEW_MARKER} trailer.`;
   writeFileSync(resultPath, "");
   console.log("\n▶ 正在恢复上次中断的 Codex pre-push 审读");
   console.log(`  范围：${context.base_sha.slice(0, 12)}..${context.local_sha.slice(0, 12)}`);
+  console.log(`  dadb：${context.dadb_sha.slice(0, 12)}^..${context.dadb_sha.slice(0, 12)}`);
   console.log(`  模型：${CODEX_MODEL} / ${CODEX_REASONING_EFFORT}`);
   console.log(`  Session：${context.session_id}`);
   console.log(`  Wiki：${wikiRepo}\n`);
@@ -199,10 +203,13 @@ async function main() {
   }
   const outer = path.dirname(appRepo);
   const wikiRepo = path.join(outer, "external", "wiki");
+  const dadbRepo = path.join(outer, "external", "dadb");
   const skillDir = path.join(appRepo, ".agents", "skills", "screen-remote-engineering");
-  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git"))) throw new Error("outer project, skill, or external/wiki repository not found");
+  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git")) || !existsSync(path.join(dadbRepo, ".git"))) throw new Error("outer project, skill, external/wiki, or external/dadb repository not found");
 
   const baseSha = resolveBase(appRepo, remoteName, remoteRef, remoteSha, localSha);
+  const dadbSha = git(dadbRepo, "rev-parse", "HEAD");
+  git(dadbRepo, "cat-file", "-e", `${dadbSha}^{commit}`);
   const outgoingCount = Number(git(appRepo, "rev-list", "--count", `${baseSha}..${localSha}`));
   if (outgoingCount === 0) return 0;
 
@@ -222,7 +229,7 @@ async function main() {
   }
 
   if (process.env.SCREEN_REMOTE_PRE_PUSH_TEST === "1") {
-    console.log(`self-test: would analyze ${baseSha.slice(0, 12)}..${localSha.slice(0, 12)} (${outgoingCount} commits)`);
+    console.log(`self-test: would analyze app ${baseSha.slice(0, 12)}..${localSha.slice(0, 12)} (${outgoingCount} commits) and dadb ${dadbSha.slice(0, 12)}^..${dadbSha.slice(0, 12)}`);
     return 0;
   }
   if (wikiStatus(wikiRepo)) {
@@ -235,10 +242,11 @@ async function main() {
   const schemaPath = path.join(skillDir, "scripts", "pre_push_result.schema.json");
   const skillPath = path.join(skillDir, "SKILL.md");
   const wikiSyncPath = path.join(skillDir, "references", "wiki-sync.md");
-  const prompt = `Use $screen-remote-engineering by reading ${skillPath} and ${wikiSyncPath} completely.\n\nThis task was triggered by a human git push from the Screen-Remote app subrepository.\nTreat ${appRepo} as a read-only source repository and run app Git commands with git -C ${appRepo}. Your only writable project directory is the Wiki repository at ${wikiRepo}.\nAnalyze exactly the committed range ${baseSha}..${localSha} in ${appRepo}. It currently contains ${outgoingCount} outgoing commit(s), which the developer may squash after receiving your message.\nDo not use existing commit messages as your summary source.\nRead changed hunks, relevant contracts, and nearby tests. When documented knowledge changes, update complete Chinese/English page pairs only in ${wikiRepo}; use <name>.md and <name>-EN.md with reciprocal language links. Never create wiki pages inside the Screen-Remote app repository.\nDo not run git rebase, commit, amend, reset, push, or modify files outside wiki.\nReturn the requested structured result, including an English commit message derived from the code.\nWrite commit_subject and commit_body in English only. Do not include the ${REVIEW_MARKER} trailer in either field; the hook appends it exactly once.`;
+  const prompt = `Use $screen-remote-engineering by reading ${skillPath} and ${wikiSyncPath} completely.\n\nThis task was triggered by a human git push from the Screen-Remote app subrepository.\nTreat ${appRepo} and ${dadbRepo} as read-only source repositories. Run app Git commands with git -C ${appRepo} and dadb Git commands with git -C ${dadbRepo}. Your only writable project directory is the Wiki repository at ${wikiRepo}.\nAnalyze exactly the committed app range ${baseSha}..${localSha} in ${appRepo}. It currently contains ${outgoingCount} outgoing commit(s), which the developer may squash after receiving your message.\nAlso inspect exactly the latest committed dadb range ${dadbSha}^..${dadbSha}. Ignore uncommitted app and dadb changes and do not compare dadb against a remote branch. Use dadb as dependency evidence for Wiki behavior and integration boundaries, but do not include unrelated dadb-only work in the Screen Remote app commit message.\nDo not use existing commit messages as your summary source.\nRead changed hunks, relevant contracts, and nearby tests. When documented knowledge changes, update complete Chinese/English page pairs only in ${wikiRepo}; preserve established readable filenames and reciprocal language links. Never create wiki pages inside the Screen-Remote app repository.\nDo not run git rebase, commit, amend, reset, push, or modify files outside wiki.\nReturn the requested structured result, including an English app commit message derived from the app code.\nWrite commit_subject and commit_body in English only. Do not include the ${REVIEW_MARKER} trailer in either field; the hook appends it exactly once.`;
   writeFileSync(contextPath, `${JSON.stringify({
     base_sha: baseSha,
     local_sha: localSha,
+    dadb_sha: dadbSha,
     model: CODEX_MODEL,
     reasoning_effort: CODEX_REASONING_EFFORT,
     session_id: null,
@@ -247,11 +255,12 @@ async function main() {
   writeFileSync(resultPath, "");
   console.log("\n▶ Codex pre-push 审读已启动");
   console.log(`  范围：${baseSha.slice(0, 12)}..${localSha.slice(0, 12)}（${outgoingCount} commits）`);
+  console.log(`  dadb：${dadbSha.slice(0, 12)}^..${dadbSha.slice(0, 12)}`);
   console.log(`  模型：${CODEX_MODEL} / ${CODEX_REASONING_EFFORT}`);
   console.log(`  Wiki：${wikiRepo}`);
   console.log(`  若任务中断：make -C ${outer} wiki-resume`);
   console.log("  以下为 Codex 实时输出：\n");
-  const recordSession = createSessionRecorder({ baseSha, contextPath, localSha });
+  const recordSession = createSessionRecorder({ baseSha, contextPath, dadbSha, localSha });
   const [code] = await runStreaming(wikiRepo, ["codex", "exec", "--model", CODEX_MODEL, "--config", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`, "--sandbox", "workspace-write", "--cd", wikiRepo, "--output-schema", schemaPath, "--output-last-message", resultPath, "--color", "always", prompt], recordSession);
   const result = readJson(resultPath);
   finishReview(result, { contextPath, messagePath, wikiRepo });

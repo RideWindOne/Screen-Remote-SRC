@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 
 /**
  * 会话管理 ViewModel
@@ -27,15 +28,19 @@ class SessionViewModel(
 
     private val _editingSessionId = MutableStateFlow<String?>(null)
     val editingSessionId: StateFlow<String?> = _editingSessionId.asStateFlow()
+    private val _newSessionPrefill = MutableStateFlow(NewSessionPrefill())
+    val newSessionPrefill: StateFlow<NewSessionPrefill> = _newSessionPrefill.asStateFlow()
 
     // ============ 对话框操作 ============
 
-    fun showAddSessionDialog() {
+    fun showAddSessionDialog(prefill: NewSessionPrefill = NewSessionPrefill()) {
         _editingSessionId.value = null
+        _newSessionPrefill.value = prefill
         _showAddSessionDialog.value = true
     }
 
     fun showEditSessionDialog(sessionId: String) {
+        _newSessionPrefill.value = NewSessionPrefill()
         // 如果当前正在编辑其他会话，先关闭对话框再打开新的
         // 这样可以确保不会丢失原始数据（临时编辑数据会被丢弃）
         if (_showAddSessionDialog.value && _editingSessionId.value != sessionId) {
@@ -56,6 +61,7 @@ class SessionViewModel(
     fun hideAddSessionDialog() {
         _showAddSessionDialog.value = false
         _editingSessionId.value = null
+        _newSessionPrefill.value = NewSessionPrefill()
     }
 
     // ============ 会话 CRUD ============

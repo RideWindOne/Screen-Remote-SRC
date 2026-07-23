@@ -71,6 +71,15 @@ class VideoCodecManager(
                         }
                     LogManager.w(LogTags.VIDEO_DECODER, "Preferred decoder $detail, downgrade to reselect: $cachedName")
                     if (decoderSelectionPinned) {
+                        if (cachedSupportsSize == false) {
+                            _lastSizeFailure =
+                                DecoderSizeFailure(
+                                    mimeType = mimeType,
+                                    width = width,
+                                    height = height,
+                                    suggestedMaxSize = findSuggestedMaxSize(listOf(cachedInfo), width, height),
+                                )
+                        }
                         LogManager.e(LogTags.VIDEO_DECODER, "User fixed video decoder is unavailable and does not perform automatic downgrade: $cachedName")
                         return null
                     }

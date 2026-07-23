@@ -13,26 +13,34 @@ class SessionOnboardingStateTest {
     }
 
     @Test
-    fun differentVersionShowsRecentUpdates() {
-        assertEquals(
-            SessionOnboardingState.RECENT_UPDATES,
-            resolveSessionOnboardingState(lastSeenVersion = "4.4.3.5", currentVersion = "4.4.3.6"),
-        )
-    }
-
-    @Test
-    fun legacyVersionWithPrefixShowsRecentUpdates() {
-        assertEquals(
-            SessionOnboardingState.RECENT_UPDATES,
-            resolveSessionOnboardingState(lastSeenVersion = "v4.4.3", currentVersion = "4.4.3.6"),
-        )
-    }
-
-    @Test
-    fun currentVersionStaysHidden() {
+    fun oldBuildWithoutContentStaysHidden() {
         assertEquals(
             SessionOnboardingState.HIDDEN,
-            resolveSessionOnboardingState(lastSeenVersion = "4.4.3.6", currentVersion = "4.4.3.6"),
+            resolveSessionOnboardingState(lastSeenVersion = "4.4.3.3", currentVersion = "4.4.3.6"),
+        )
+    }
+
+    @Test
+    fun buildWithoutNewContentStaysHidden() {
+        assertEquals(
+            SessionOnboardingState.HIDDEN,
+            resolveSessionOnboardingState(lastSeenVersion = "4.4.3.6", currentVersion = "4.4.3.7"),
+        )
+    }
+
+    @Test
+    fun versionEightShowsUrlSchemeAiMcpContent() {
+        assertEquals(
+            SessionOnboardingState.RECENT_UPDATES,
+            resolveSessionOnboardingState(lastSeenVersion = "4.4.3.6", currentVersion = "4.4.3.8"),
+        )
+    }
+
+    @Test
+    fun laterBuildWithoutNewContentStaysHidden() {
+        assertEquals(
+            SessionOnboardingState.HIDDEN,
+            resolveSessionOnboardingState(lastSeenVersion = "4.4.3.8", currentVersion = "4.4.3.9"),
         )
     }
 }

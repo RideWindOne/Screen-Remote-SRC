@@ -5,13 +5,14 @@ Use this workflow only when the locally installed Git `pre-push` hook is trigger
 ## Contract
 
 - Treat the remote SHA and local SHA supplied by Git as the source of truth.
-- Analyze committed content only; ignore unrelated working-tree changes.
+- Treat the dadb SHA captured by the hook as the source of truth for exactly one dependency commit: `<dadb-sha>^..<dadb-sha>`.
+- Analyze committed content only; ignore app and dadb working-tree changes and do not substitute a dadb remote comparison.
 - A push without the marker may contain multiple outgoing commits. Analyze their combined committed result so the developer can squash them afterward.
 - Never run `rebase`, `commit`, `commit --amend`, `reset`, `push`, or any other history-changing Git command.
 - Update files only inside the outer-root `external/wiki/` GitHub Wiki repository when documentation is materially affected. Never create wiki pages inside `Screen-Remote/`.
 - Return one commit message derived from the final code, not from the existing commit message.
 
-Ignore uncommitted app changes. The hook reads only Git objects in the outgoing range.
+Ignore uncommitted app and dadb changes. The hook reads the app outgoing range plus one locked dadb commit.
 
 ## Read the outgoing change
 
@@ -28,11 +29,22 @@ Use names and changed hunks to choose context. Read owning contracts and nearby 
 
 Load `connection-safety.md` when the range touches ADB, scrcpy, sockets, session runtime, controller, codec, decoder, or media.
 
+The hook also provides an exact `<dadb-sha>`. Inspect only that commit from `../external/dadb/`:
+
+```bash
+git -C ../external/dadb diff --stat <dadb-sha>^ <dadb-sha>
+git -C ../external/dadb diff --name-status <dadb-sha>^ <dadb-sha>
+git -C ../external/dadb diff --find-renames <dadb-sha>^ <dadb-sha> -- <selected paths>
+git -C ../external/dadb show --format=fuller --stat <dadb-sha>
+```
+
+Use the dadb commit to verify dependency behavior, helper protocols, Android support, and integration boundaries documented by the wiki. Do not summarize unrelated dadb-only work in the Screen Remote app commit message.
+
 ## Update bilingual canonical wiki knowledge
 
 Read `../external/wiki/Documentation-Maintenance-Conventions.md` and use `../external/wiki/Technical-Documentation-Index.md` to locate existing canonical pages.
 
-For every affected Chinese page `<name>.md`, update or create its complete English counterpart `<name>-EN.md` in the same pass. Put reciprocal language links near the top of both pages: `[English](<name>-EN)` on the Chinese page and `[中文](<name>)` on the English page. The English page must carry the same current knowledge, not merely an abbreviated summary. Include both paths in `wiki_pages`.
+For every affected Chinese page, update or create its complete English counterpart in the same pass. Preserve established readable filenames and use the technical index and existing reciprocal links to resolve the pair; for a new page without an established mapping, `<name>.md` and `<name>-EN.md` are acceptable. Put reciprocal language links near the top of both pages. The English page must carry the same current knowledge, not merely an abbreviated summary. Include both paths in `wiki_pages`.
 
 Update wiki when the outgoing code changes a documented behavior, boundary, workflow, configuration, dependency fact, operational constraint, troubleshooting signal, or user-visible capability.
 
@@ -77,7 +89,7 @@ The subrepository `pre-commit` hook must reject commits whenever `review-context
 
 ## Generate the app commit message
 
-Derive the message from observable code changes and tests, not from the old message.
+Derive the message from observable app-range changes and tests, not from the old message or unrelated dadb-only work.
 
 Use this format:
 

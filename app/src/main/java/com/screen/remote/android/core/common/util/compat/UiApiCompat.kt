@@ -23,6 +23,13 @@ import android.view.inputmethod.InputMethodManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 
+fun getRootWindowInsetsCompat(view: View): WindowInsets? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        view.rootWindowInsets
+    } else {
+        null
+    }
+
 /**
  * 读取屏幕挖孔的安全边距。Android 9 以下没有 DisplayCutout，返回零边距。
  */

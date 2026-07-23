@@ -8,7 +8,6 @@ import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.infrastructure.scrcpy.connection.isExpectedConnectionClosure
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
-import java.nio.ByteBuffer
 
 internal class VideoDecoderPlayback(
     videoCodec: String,
@@ -27,7 +26,6 @@ internal class VideoDecoderPlayback(
     private val onConnectionLost: () -> Unit,
 ) {
     private companion object {
-        const val BUFFER_SIZE = 32 * 1024 * 1024
         const val FIRST_OUTPUT_WATCHDOG_INPUT_FRAMES = 120
     }
 
@@ -57,7 +55,6 @@ internal class VideoDecoderPlayback(
 
     fun decodeLoop(videoStream: VideoStream) {
         val bufferInfo = MediaCodec.BufferInfo()
-        val nalBuffer = ByteBuffer.allocate(BUFFER_SIZE)
         var configured = false
         var frameCount = 0
         var lastPts = 0L
@@ -95,7 +92,6 @@ internal class VideoDecoderPlayback(
                         configured =
                             packetProcessor.processStdOutPacket(
                                 payload = packet.payload,
-                                nalBuffer = nalBuffer,
                                 configured = configured,
                                 pts = packetPts,
                                 packetIsConfig = frameInfo?.isConfig ?: false,

@@ -50,10 +50,17 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.i18n.ManagementTexts
+import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
+import com.screen.remote.android.app.deeplink.ManageDestination
+import com.screen.remote.android.app.deeplink.ManageSection
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
+import com.screen.remote.android.app.deeplink.resolveSessionTarget
+import com.screen.remote.android.app.deeplink.SettingsDestination as DeepLinkSettingsDestination
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.constants.AppColors
 import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.manager.rememberText
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AddActionDialog
@@ -62,7 +69,11 @@ import com.screen.remote.android.core.designsystem.component.GroupManagementDial
 import com.screen.remote.android.core.designsystem.component.PathBreadcrumb
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.GroupType
+import com.screen.remote.android.core.domain.model.SessionColor
+import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
+import com.screen.remote.android.core.data.repository.toData
 import com.screen.remote.android.core.i18n.SessionTexts
+import com.screen.remote.android.core.telemetry.TelemetryManager
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.isAutomaticUpdateCheckDue
@@ -118,6 +129,18 @@ private class MainScreenRouteState {
     var managementSessionId by mutableStateOf<String?>(null)
         private set
 
+    var pendingManagementDestination by mutableStateOf(ManageDestination())
+        private set
+
+    var managementDestination by mutableStateOf(ManageDestination())
+        private set
+
+    var pendingManagementParameters by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    var managementParameters by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
     fun selectTab(tab: MainScreenTab) {
         selectedTab = tab
     }
@@ -138,14 +161,22 @@ private class MainScreenRouteState {
         settingsDestination = null
     }
 
-    fun requestSessionManagement(sessionId: String) {
+    fun requestSessionManagement(
+        sessionId: String,
+        destination: ManageDestination = ManageDestination(),
+        parameters: Map<String, String> = emptyMap(),
+    ) {
         pendingManagementSessionId = sessionId
+        pendingManagementDestination = destination
+        pendingManagementParameters = parameters
         managementSessionId = null
     }
 
     fun openConnectedSessionManagement(sessionId: String) {
         if (pendingManagementSessionId == sessionId) {
             managementSessionId = sessionId
+            managementDestination = pendingManagementDestination
+            managementParameters = pendingManagementParameters
             pendingManagementSessionId = null
         }
     }
@@ -153,12 +184,18 @@ private class MainScreenRouteState {
     fun cancelPendingSessionManagement(sessionId: String? = null) {
         if (sessionId == null || pendingManagementSessionId == sessionId) {
             pendingManagementSessionId = null
+            pendingManagementDestination = ManageDestination()
+            pendingManagementParameters = emptyMap()
         }
     }
 
     fun closeSessionManagement() {
         managementSessionId = null
         pendingManagementSessionId = null
+        pendingManagementDestination = ManageDestination()
+        managementDestination = ManageDestination()
+        pendingManagementParameters = emptyMap()
+        managementParameters = emptyMap()
     }
 }
 
@@ -166,12 +203,22 @@ private class MainScreenRouteState {
 private fun rememberMainScreenRouteState(): MainScreenRouteState = remember { MainScreenRouteState() }
 
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.provideFactory(LocalContext.current))) {
+fun MainScreen(
+    viewModel: MainViewModel = viewModel(factory = MainViewModel.provideFactory(LocalContext.current)),
+    deepLink: ScreenRemoteDeepLink? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+) {
     val context = LocalContext.current
     val routeState = rememberMainScreenRouteState()
     val showAddDialog by viewModel.showAddSessionDialog.collectAsState()
     val editingSessionId by viewModel.editingSessionId.collectAsState()
+    val newSessionPrefill by viewModel.newSessionPrefill.collectAsState()
     val sessionDataList by viewModel.sessionDataList.collectAsState()
+    val urlSessionData by viewModel.urlSessionData.collectAsState()
+    val availableSessionData =
+        remember(sessionDataList, urlSessionData) {
+            sessionDataList + listOfNotNull(urlSessionData?.takeIf { url -> sessionDataList.none { it.id == url.id } })
+        }
     val showAddActionDialog by viewModel.showAddActionDialog.collectAsState()
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
@@ -184,10 +231,82 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
     val managementDataProvider = remember { SessionManagementDataProvider() }
     var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
 
+    LaunchedEffect(deepLink, onboardingState, availableSessionData) {
+        val link = deepLink ?: return@LaunchedEffect
+        if (onboardingState != SessionOnboardingState.HIDDEN) return@LaunchedEffect
+        try {
+            val storedSessions =
+                when (link) {
+                    is ScreenRemoteDeepLink.EditSession,
+                    is ScreenRemoteDeepLink.ScrcpySession,
+                    is ScreenRemoteDeepLink.ManageSession,
+                    -> viewModel.sessionRepository.sessionDataFlow.first()
+                    else -> emptyList()
+                }
+            when (link) {
+                ScreenRemoteDeepLink.Sessions -> routeState.selectTab(MainScreenTab.SESSIONS)
+                ScreenRemoteDeepLink.Actions -> routeState.selectTab(MainScreenTab.ACTIONS)
+                is ScreenRemoteDeepLink.AddSession -> viewModel.showAddSessionDialog(link.prefill)
+                is ScreenRemoteDeepLink.EditSession -> {
+                    val session = storedSessions.resolveDeepLinkSession(link.sessionSelector)
+                    if (session != null) {
+                        viewModel.showEditSessionDialog(session.id)
+                    } else {
+                        LogManager.w("DeepLink", "Session not found for edit URL: ${link.sessionSelector}")
+                    }
+                }
+                is ScreenRemoteDeepLink.ScrcpySession -> {
+                    val storedSession = storedSessions.resolveDeepLinkSession(link.sessionSelector)
+                    val session = storedSession ?: createTransientDeepLinkSession(link.sessionSelector)
+                    if (session != null) {
+                        viewModel.connectUrlSession(session, link.parameters)
+                    } else {
+                        LogManager.w("DeepLink", "Session not found for scrcpy URL: ${link.sessionSelector}")
+                    }
+                }
+                is ScreenRemoteDeepLink.ManageSession -> {
+                    val storedSession = storedSessions.resolveDeepLinkSession(link.sessionSelector)
+                    val session = storedSession ?: createTransientDeepLinkSession(link.sessionSelector)
+                    if (session != null) {
+                        routeState.requestSessionManagement(session.id, link.destination, link.parameters)
+                        if (storedSession != null) {
+                            viewModel.connectManagementSession(storedSession.id)
+                        } else {
+                            viewModel.connectManagementSession(session)
+                        }
+                    } else {
+                        LogManager.w("DeepLink", "Session not found for management URL: ${link.sessionSelector}")
+                    }
+                }
+                is ScreenRemoteDeepLink.Settings -> {
+                    routeState.navigateToSettings(link.destination.toMainScreenDestination())
+                }
+                ScreenRemoteDeepLink.DiagnosticLogs -> {
+                    routeState.navigateToSettings(MainScreenSettingsDestination.LOG_MANAGEMENT)
+                }
+                is ScreenRemoteDeepLink.SettingValue -> {
+                    viewModel.applyUrlSetting(link.setting, link.value)
+                }
+                ScreenRemoteDeepLink.GenerateAdbKeys -> viewModel.generateAdbKeys()
+                ScreenRemoteDeepLink.Disconnect -> {
+                    viewModel.clearConnectStatus()
+                    viewModel.disconnectFromDevice()
+                }
+            }
+        } finally {
+            onDeepLinkConsumed()
+        }
+    }
+
     RequestNotificationPermissionEffect(
         context = context,
         enabled = onboardingState == SessionOnboardingState.HIDDEN,
     )
+
+    LaunchedEffect(onboardingState) {
+        if (onboardingState != SessionOnboardingState.HIDDEN) return@LaunchedEffect
+        TelemetryManager.runDaily(context.applicationContext)
+    }
 
     LaunchedEffect(onboardingState) {
         if (onboardingState != SessionOnboardingState.HIDDEN) return@LaunchedEffect
@@ -211,7 +330,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
         when (val status = managementConnectStatus) {
             is ManagementConnectStatus.Connected -> {
                 if (routeState.pendingManagementSessionId == status.sessionId) {
-                    sessionDataList
+                    availableSessionData
                         .find { it.id == status.sessionId }
                         ?.let { sessionData ->
                             managementDataProvider.startPrefetch(
@@ -234,11 +353,14 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
 
     val managementSessionId = routeState.managementSessionId
     if (managementSessionId != null) {
-        val managementSession = sessionDataList.find { it.id == managementSessionId }
+        val managementSession = availableSessionData.find { it.id == managementSessionId }
         if (managementSession != null) {
             SessionManagementScreen(
                 sessionData = managementSession,
                 dataProvider = managementDataProvider,
+                initialSection = routeState.managementDestination.section.toManagementSection(),
+                initialFilePath = routeState.managementDestination.filePath,
+                initialCommand = routeState.managementParameters["command"].orEmpty(),
                 onBack = {
                     routeState.closeSessionManagement()
                 },
@@ -276,6 +398,7 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
                 viewModel = viewModel,
                 showAddDialog = showAddDialog,
                 editingSessionId = editingSessionId,
+                newSessionPrefill = newSessionPrefill,
                 sessionDataList = sessionDataList,
                 showAddActionDialog = showAddActionDialog,
                 groups = groups,
@@ -337,6 +460,47 @@ fun MainScreen(viewModel: MainViewModel = viewModel(factory = MainViewModel.prov
         }
     }
 }
+
+private fun DeepLinkSettingsDestination.toMainScreenDestination(): MainScreenSettingsDestination =
+    when (this) {
+        DeepLinkSettingsDestination.ROOT -> MainScreenSettingsDestination.ROOT
+        DeepLinkSettingsDestination.ABOUT -> MainScreenSettingsDestination.ABOUT
+        DeepLinkSettingsDestination.APPEARANCE -> MainScreenSettingsDestination.APPEARANCE
+        DeepLinkSettingsDestination.LANGUAGE -> MainScreenSettingsDestination.LANGUAGE
+        DeepLinkSettingsDestination.LOGS -> MainScreenSettingsDestination.LOG_MANAGEMENT
+        DeepLinkSettingsDestination.GROUPS -> MainScreenSettingsDestination.GROUP_MANAGEMENT
+        DeepLinkSettingsDestination.ADB_KEYS -> MainScreenSettingsDestination.ADB_KEYS
+        DeepLinkSettingsDestination.BACKUP -> MainScreenSettingsDestination.BACKUP_RESTORE
+    }
+
+private fun List<SessionData>.resolveDeepLinkSession(selector: String): SessionData? =
+    resolveSessionTarget(
+        candidates = this,
+        selector = selector,
+        sessionId = SessionData::id,
+        sessionName = SessionData::name,
+    )
+
+private fun createTransientDeepLinkSession(selector: String): SessionData? =
+    parseSessionAddressCandidate(selector)?.let { candidate ->
+        SessionData(
+            id = "url:${candidate.deviceIdentifier()}",
+            name = selector,
+            connectionCandidates = listOf(candidate.toData()),
+            color = SessionColor.BLUE.name,
+        )
+    }
+
+private fun ManageSection.toManagementSection(): SessionManagementSection =
+    when (this) {
+        ManageSection.DEVICE -> SessionManagementSection.DeviceInfo
+        ManageSection.UTILITY -> SessionManagementSection.Utility
+        ManageSection.FILE -> SessionManagementSection.Files
+        ManageSection.APP -> SessionManagementSection.Apps
+        ManageSection.PROCESS -> SessionManagementSection.Process
+        ManageSection.PORT_FORWARD -> SessionManagementSection.PortForward
+        ManageSection.COMMAND -> SessionManagementSection.Command
+    }
 
 @Composable
 private fun RequestNotificationPermissionEffect(
@@ -547,6 +711,7 @@ private fun MainScreenDialogs(
     viewModel: MainViewModel,
     showAddDialog: Boolean,
     editingSessionId: String?,
+    newSessionPrefill: NewSessionPrefill,
     sessionDataList: List<SessionData>,
     showAddActionDialog: Boolean,
     groups: List<DeviceGroup>,
@@ -556,9 +721,10 @@ private fun MainScreenDialogs(
             editingSessionId?.let { id ->
                 sessionDataList.find { it.id == id }
             }
-        key(editingSessionId ?: "new") {
+        key(editingSessionId ?: newSessionPrefill) {
             AddSessionDialog(
                 sessionData = editingSession,
+                initialPrefill = newSessionPrefill,
                 availableGroups = groups,
                 onDismiss = viewModel::hideAddSessionDialog,
                 onConfirm = viewModel::saveSessionData,

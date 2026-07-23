@@ -117,6 +117,7 @@ import com.screen.remote.android.feature.session.ui.quoteShellArg
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -297,11 +298,12 @@ private fun rememberMdnsSessionDiscoveryManager(): MdnsSessionDiscoveryManager {
 @Composable
 fun AddSessionDialog(
     sessionData: SessionData? = null,
+    initialPrefill: NewSessionPrefill = NewSessionPrefill(),
     availableGroups: List<DeviceGroup>,
     onDismiss: () -> Unit,
     onConfirm: (SessionData) -> Unit,
 ) {
-    val state = remember(sessionData) { SessionDialogState(sessionData) }
+    val state = remember(sessionData, initialPrefill) { SessionDialogState(sessionData, initialPrefill) }
     val remoteAppCache = remember(state) { RemoteLaunchableAppCache() }
     val sessionGroups = remember(availableGroups) { availableGroups.filter { it.type == GroupType.SESSION } }
     val mdnsManager = rememberMdnsSessionDiscoveryManager()
@@ -1238,10 +1240,20 @@ private fun MdnsServiceItem(
 private fun ConnectionOptionsSection(state: SessionDialogState) {
     SessionDialogSection(title = SessionTexts.SECTION_CONNECTION_OPTIONS.get()) {
         CompactSwitchRow(
+            text = SessionTexts.SWITCH_COMPATIBILITY_MODE.get(),
+            checked = state.config.compatibilityMode,
+            onCheckedChange = state::updateCompatibilityMode,
+            helpText = SessionTexts.HELP_COMPATIBILITY_MODE.get(),
+        )
+
+        AppDivider()
+
+        CompactSwitchRow(
             text = SessionTexts.SWITCH_GAME_MODE.get(),
             checked = state.config.gameMode,
             onCheckedChange = state::updateGameMode,
             helpText = SessionTexts.HELP_GAME_MODE.get(),
+            enabled = !state.config.compatibilityMode,
         )
 
         AppDivider()
@@ -1251,12 +1263,14 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
             checked = state.config.useFullScreen && !state.config.gameMode,
             onCheckedChange = { enabled -> state.updateConfig { copy(useFullScreen = enabled) } },
             helpText =
-                if (state.config.gameMode) {
+                if (state.config.compatibilityMode) {
+                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+                } else if (state.config.gameMode) {
                     SessionTexts.HELP_GAME_MODE_FULL_SCREEN_DISABLED.get()
                 } else {
                     SessionTexts.HELP_USE_FULL_SCREEN.get()
                 },
-            enabled = !state.config.gameMode,
+            enabled = !state.config.gameMode && !state.config.compatibilityMode,
         )
 
         AppDivider()
@@ -1273,15 +1287,25 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
             text = SessionTexts.SWITCH_ENABLE_HARDWARE_DECODING.get(),
             checked = state.config.enableHardwareDecoding,
             onCheckedChange = { enabled -> state.updateConfig { copy(enableHardwareDecoding = enabled) } },
-            helpText = SessionTexts.HELP_ENABLE_HARDWARE_DECODING.get(),
+            helpText =
+                if (state.config.compatibilityMode) {
+                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+                } else {
+                    SessionTexts.HELP_ENABLE_HARDWARE_DECODING.get()
+                },
+            enabled = !state.config.compatibilityMode,
         )
 
         AppDivider()
 
-        CompactSwitchRow(
-            text = SessionTexts.SWITCH_FOLLOW_ORIENTATION.get(),
-            checked = state.config.followRemoteOrientation,
-            onCheckedChange = { enabled -> state.updateConfig { copy(followRemoteOrientation = enabled) } },
+        CompactBinaryChoiceRow(
+            text = SessionTexts.LABEL_FOLLOW_ROTATION.get(),
+            firstChoice = SessionTexts.OPTION_ROTATION_LOCAL.get(),
+            secondChoice = SessionTexts.OPTION_ROTATION_TARGET.get(),
+            secondChoiceSelected = state.config.followRemoteOrientation,
+            onChoiceChange = { followTarget ->
+                state.updateConfig { copy(followRemoteOrientation = followTarget) }
+            },
             helpText = SessionTexts.HELP_FOLLOW_ORIENTATION.get(),
         )
 
@@ -1296,6 +1320,7 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
                 }
             },
             helpText = SessionTexts.HELP_USE_ADB_FORWARD.get(),
+            enabled = !state.config.compatibilityMode,
         )
 
     }
@@ -1304,6 +1329,31 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
 @Composable
 private fun VideoConfigSection(state: SessionDialogState) {
     SessionDialogSection(title = SessionTexts.SECTION_VIDEO_CONFIG.get()) {
+        if (state.config.compatibilityMode) {
+            VerticalOptionPicker(
+                label = SessionTexts.LABEL_MAX_SIZE.get(),
+                value = state.maxSize,
+                presets =
+                    listOf(
+                        "720" to "720",
+                        "1080" to "1080",
+                        "1920" to "1920",
+                        SessionTexts.LABEL_ORIGINAL.get() to "",
+                    ),
+                customEnabled = true,
+                emptyCustomFallback = "",
+                alwaysApplyEmptyCustomFallback = true,
+                onValueChange = { state.maxSize = it },
+                helpText = SessionTexts.HELP_COMPATIBILITY_QUALITY.get(),
+            )
+        } else {
+            ScrcpyVideoConfigRows(state)
+        }
+    }
+}
+
+@Composable
+private fun ScrcpyVideoConfigRows(state: SessionDialogState) {
         VerticalOptionPicker(
             label = SessionTexts.LABEL_MAX_SIZE.get(),
             value = state.maxSize,
@@ -1410,7 +1460,6 @@ private fun VideoConfigSection(state: SessionDialogState) {
             onClick = { state.showVideoDecoderSelector = true },
             helpText = SessionTexts.HELP_VIDEO_DECODER.get(),
         )
-    }
 }
 
 @Composable
@@ -1660,7 +1709,13 @@ private fun AudioConfigSection(state: SessionDialogState) {
             text = SessionTexts.SWITCH_ENABLE_AUDIO.get(),
             checked = state.config.enableAudio,
             onCheckedChange = { enabled -> state.updateConfig { copy(enableAudio = enabled) } },
-            helpText = SessionTexts.HELP_ENABLE_AUDIO.get(),
+            helpText =
+                if (state.config.compatibilityMode) {
+                    SessionTexts.HELP_COMPATIBILITY_AUDIO_DISABLED.get()
+                } else {
+                    SessionTexts.HELP_ENABLE_AUDIO.get()
+                },
+            enabled = !state.config.compatibilityMode,
         )
 
         if (state.config.enableAudio) {
@@ -1797,12 +1852,13 @@ private fun AudioConfigSection(state: SessionDialogState) {
 }
 
 internal fun isVideoCodecSelectionCompatible(state: SessionDialogState): Boolean =
-    CodecUtils.isEncoderDecoderCompatible(
-        encoders = state.capabilityCache.remoteVideoEncoders,
-        encoderName = state.config.userVideoEncoder,
-        decoderName = state.config.userVideoDecoder,
-        mediaType = CodecMediaType.VIDEO,
-    )
+    state.config.compatibilityMode ||
+        CodecUtils.isEncoderDecoderCompatible(
+            encoders = state.capabilityCache.remoteVideoEncoders,
+            encoderName = state.config.userVideoEncoder,
+            decoderName = state.config.userVideoDecoder,
+            mediaType = CodecMediaType.VIDEO,
+        )
 
 internal fun isAudioCodecSelectionCompatible(state: SessionDialogState): Boolean =
     !state.config.enableAudio ||
@@ -1820,7 +1876,13 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             text = SessionTexts.SWITCH_CLIPBOARD_SYNC.get(),
             checked = state.config.clipboardSync,
             onCheckedChange = { enabled -> state.updateConfig { copy(clipboardSync = enabled) } },
-            helpText = SessionTexts.HELP_CLIPBOARD_SYNC.get(),
+            helpText =
+                if (state.config.compatibilityMode) {
+                    SessionTexts.HELP_COMPATIBILITY_CLIPBOARD_DISABLED.get()
+                } else {
+                    SessionTexts.HELP_CLIPBOARD_SYNC.get()
+                },
+            enabled = !state.config.compatibilityMode,
         )
         AppDivider()
 
@@ -1828,15 +1890,22 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             text = SessionTexts.SWITCH_TURN_SCREEN_OFF.get(),
             checked = state.config.turnScreenOff,
             onCheckedChange = { enabled -> state.updateConfig { copy(turnScreenOff = enabled) } },
-            helpText = SessionTexts.HELP_TURN_SCREEN_OFF.get(),
+            helpText =
+                if (state.config.compatibilityMode) {
+                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+                } else {
+                    SessionTexts.HELP_TURN_SCREEN_OFF.get()
+                },
+            enabled = !state.config.compatibilityMode,
         )
         AppDivider()
 
         CompactSwitchRow(
             text = SessionTexts.SWITCH_POWER_OFF_ON_CLOSE.get(),
-            checked = state.config.powerOffOnClose,
+            checked = state.config.powerOffOnClose && state.config.cleanupOnDisconnect,
             onCheckedChange = { enabled -> state.updateConfig { copy(powerOffOnClose = enabled) } },
             helpText = SessionTexts.HELP_POWER_OFF_ON_CLOSE.get(),
+            enabled = state.config.cleanupOnDisconnect && !state.config.compatibilityMode,
         )
         AppDivider()
 
@@ -1847,11 +1916,13 @@ private fun OtherOptionsSection(state: SessionDialogState) {
                 state.updateConfig {
                     copy(
                         cleanupOnDisconnect = cleanupEnabled,
+                        powerOffOnClose = powerOffOnClose && cleanupEnabled,
                         stayAwake = stayAwake && cleanupEnabled,
                     )
                 }
             },
             helpText = SessionTexts.HELP_CLEANUP_ON_DISCONNECT.get(),
+            enabled = !state.config.compatibilityMode,
         )
         AppDivider()
 
@@ -1868,7 +1939,7 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             checked = state.config.stayAwake && state.config.cleanupOnDisconnect,
             onCheckedChange = { enabled -> state.updateConfig { copy(stayAwake = enabled) } },
             helpText = SessionTexts.HELP_STAY_AWAKE.get(),
-            enabled = state.config.cleanupOnDisconnect,
+            enabled = state.config.cleanupOnDisconnect && !state.config.compatibilityMode,
         )
 
         AppDivider()
@@ -1878,6 +1949,7 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             checked = state.config.ignoreVideoEncoderConstraints,
             onCheckedChange = { enabled -> state.updateConfig { copy(ignoreVideoEncoderConstraints = enabled) } },
             helpText = SessionTexts.HELP_IGNORE_VIDEO_ENCODER_CONSTRAINTS.get(),
+            enabled = !state.config.compatibilityMode,
         )
     }
 }
@@ -1891,7 +1963,13 @@ private fun VirtualDisplaySection(state: SessionDialogState) {
             text = SessionTexts.SWITCH_NEW_DISPLAY.get(),
             checked = state.config.newDisplayEnabled,
             onCheckedChange = { enabled -> state.updateConfig { copy(newDisplayEnabled = enabled) } },
-            helpText = SessionTexts.HELP_NEW_DISPLAY.get(),
+            helpText =
+                if (state.config.compatibilityMode) {
+                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+                } else {
+                    SessionTexts.HELP_NEW_DISPLAY.get()
+                },
+            enabled = !state.config.compatibilityMode,
         )
 
         if (state.config.newDisplayEnabled) {

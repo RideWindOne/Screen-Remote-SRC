@@ -262,7 +262,7 @@ internal suspend fun downloadRemoteEntriesToDocument(
                         if (entry.isDirectory) {
                             zip.putNextEntry(ZipEntry("$zipPath/"))
                             zip.closeEntry()
-                            val snapshot = loadFileBrowserSnapshot(entry.fullPath)
+                            val snapshot = loadFileBrowserSnapshot(context, entry.fullPath)
                             snapshot.errorMessage?.let(::error)
                             snapshot.entries.forEach { child -> addEntry(child, zipPath) }
                         } else {
@@ -637,7 +637,10 @@ internal suspend fun loadRemoteFileDetailSnapshot(entry: RemoteFileEntry): Remot
     }
 }
 
-internal suspend fun loadFileBrowserSnapshot(path: String): FileBrowserSnapshot {
+internal suspend fun loadFileBrowserSnapshot(
+    context: Context,
+    path: String,
+): FileBrowserSnapshot {
     val connection =
         SessionManagementAdbConnection.current()
             ?: return FileBrowserSnapshot.loading(path).copy(
@@ -645,25 +648,26 @@ internal suspend fun loadFileBrowserSnapshot(path: String): FileBrowserSnapshot 
                 errorMessage = ManagementTexts.Files.NO_ADB_CONNECTION_AVAILABLE_SO_FOLDER_CAN_T.get(),
             )
 
-    suspend fun shell(command: String): String =
-        connection
-            .executeShell(command, retryOnFailure = false)
-            .getOrNull()
-            ?.trim()
-            .orEmpty()
-
     return runCatching {
         val normalizedPath = normalizeRemotePath(path)
+        val helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
         val entries =
-            loadFileBrowserEntriesFast(
-                shell = { command -> shell(command) },
-                path = normalizedPath,
-            ).ifEmpty {
-                loadFileBrowserEntriesFallback(
-                    connection = connection,
+            connection
+                .loadDirectoryWithHelper(
                     path = normalizedPath,
-                )
-            }
+                    localHelperJar = helperJar,
+                ).getOrThrow()
+                .map { entry ->
+                    RemoteFileEntry(
+                        name = entry.name,
+                        fullPath = joinRemotePath(normalizedPath, entry.name),
+                        isDirectory = entry.type == dadb.helper.RemoteFileType.Directory,
+                        sizeBytes = entry.sizeBytes.takeUnless { entry.type == dadb.helper.RemoteFileType.Directory },
+                        detail =
+                            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                                .format(Date(entry.modifiedTimeMillis)),
+                    )
+                }.let(::sortRemoteFileEntries)
 
         FileBrowserSnapshot(
             isLoading = false,
@@ -676,107 +680,6 @@ internal suspend fun loadFileBrowserSnapshot(path: String): FileBrowserSnapshot 
             errorMessage = error.message ?: ManagementTexts.Files.COULDN_T_LOAD_FOLDER.get(),
         )
     }
-}
-
-private suspend fun loadFileBrowserEntriesFast(
-    shell: suspend (String) -> String,
-    path: String,
-): List<RemoteFileEntry> {
-    val directoryOperand = remoteDirectoryOperand(path)
-    val command =
-        "find ${quoteShellArg(directoryOperand)} -mindepth 1 -maxdepth 1 -printf '%y\\t%TY-%Tm-%Td %TH:%TM\\t%s\\t%f\\n' 2>/dev/null"
-    val output = shell(command)
-    return withContext(Dispatchers.Default) {
-        val lines =
-            output
-                .lineSequence()
-                .filter(String::isNotBlank)
-                .toList()
-        val entries =
-            lines
-                .mapNotNull { line -> parseFindFileBrowserEntry(path = path, line = line) }
-
-        if (entries.size == lines.size) {
-            sortRemoteFileEntries(entries)
-        } else {
-            emptyList()
-        }
-    }
-}
-
-private suspend fun loadFileBrowserEntriesFallback(
-    connection: AdbConnection,
-    path: String,
-): List<RemoteFileEntry> {
-    val directoryOperand = remoteDirectoryOperand(path)
-    val output =
-        connection
-            .executeShell("ls -lAnp ${quoteShellArg(directoryOperand)}", retryOnFailure = false)
-            .getOrThrow()
-
-    return withContext(Dispatchers.Default) {
-        output
-            .lineSequence()
-            .mapNotNull { line -> parseLsFileBrowserEntry(path = path, line = line) }
-            .toList()
-            .let(::sortRemoteFileEntries)
-    }
-}
-
-private fun remoteDirectoryOperand(path: String): String {
-    val normalizedPath = normalizeRemotePath(path)
-    return if (normalizedPath == "/") normalizedPath else "$normalizedPath/"
-}
-
-internal fun parseLsFileBrowserEntry(
-    path: String,
-    line: String,
-): RemoteFileEntry? {
-    val parts = line.trim().split(Regex("\\s+"), limit = 8)
-    if (parts.size < 8 || parts.first() == "total") return null
-
-    val permissions = parts[0]
-    val isDirectory = permissions.startsWith("d")
-    val sizeBytes = parts[4].toLongOrNull() ?: return null
-    val rawName = parts[7].substringBefore(" -> ")
-    val name = rawName.removeSuffix("/")
-    if (name.isBlank() || name == "." || name == "..") return null
-
-    return RemoteFileEntry(
-        name = name,
-        fullPath = joinRemotePath(path, name),
-        isDirectory = isDirectory,
-        sizeBytes = sizeBytes.takeUnless { isDirectory },
-        detail = formatFileModifiedTime("${parts[5]} ${parts[6]}"),
-    )
-}
-
-internal fun parseFindFileBrowserEntry(
-    path: String,
-    line: String,
-): RemoteFileEntry? {
-    val firstSeparator = line.indexOf('\t')
-    if (firstSeparator <= 0) return null
-    val secondSeparator = line.indexOf('\t', startIndex = firstSeparator + 1)
-    if (secondSeparator <= firstSeparator) return null
-    val thirdSeparator = line.indexOf('\t', startIndex = secondSeparator + 1)
-    if (thirdSeparator <= secondSeparator) return null
-
-    val type = line.substring(0, firstSeparator)
-    val modified = line.substring(firstSeparator + 1, secondSeparator)
-    val sizeBytes = line.substring(secondSeparator + 1, thirdSeparator).trim().toLongOrNull()
-    val name = line.substring(thirdSeparator + 1)
-    if (name.isBlank() || name == "." || name == "..") return null
-    val isDirectory = type == "d"
-    if (sizeBytes == null) return null
-
-    return RemoteFileEntry(
-        name = name,
-        fullPath = joinRemotePath(path, name),
-        isDirectory = isDirectory,
-        sizeBytes = sizeBytes.takeUnless { isDirectory },
-        detail = modified.trim().takeIf { it.isNotBlank() }?.let(::formatFileModifiedTime) ?: "--",
-    )
 }
 
 private fun sortRemoteFileEntries(entries: List<RemoteFileEntry>): List<RemoteFileEntry> =

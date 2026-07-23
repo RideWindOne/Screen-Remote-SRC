@@ -10,6 +10,7 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.screen.remote.android.core.common.util.compat.getDownloadManagerCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -30,7 +31,7 @@ class AppUpdateDownloader(
     context: Context,
 ) {
     private val appContext = context.applicationContext
-    private val downloadManager = appContext.getSystemService(DownloadManager::class.java)
+    private val downloadManager = getDownloadManagerCompat(appContext)
 
     suspend fun download(
         asset: GitHubReleaseAsset,

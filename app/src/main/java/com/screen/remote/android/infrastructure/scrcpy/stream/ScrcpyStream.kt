@@ -10,6 +10,7 @@ import com.screen.remote.android.infrastructure.media.audio.AudioDebugLog
 import com.screen.remote.android.infrastructure.media.audio.AudioFrameInfo
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.media.video.VideoDebugLog
+import com.screen.remote.android.infrastructure.media.video.VideoMemoryPolicy
 import com.screen.remote.android.infrastructure.scrcpy.connection.isExpectedConnectionClosure
 import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoFrameInfo
@@ -179,7 +180,7 @@ class ScrcpySocketStream(
                 }
 
                 // 高分辨率关键帧可能显著大于 4 MiB；仍保留硬上限防止恶意分配。
-                if (packetSize !in 1..MAX_VIDEO_PACKET_SIZE) {
+                if (packetSize !in 1..maxVideoPacketSize) {
                     LogManager.e("ScrcpySocketStream", "Packet size exception: $packetSize")
                     onError("Invalid packet size")
                     // 推送解复用器错误事件
@@ -231,6 +232,6 @@ class ScrcpySocketStream(
     }
 
     private companion object {
-        const val MAX_VIDEO_PACKET_SIZE = 32 * 1024 * 1024
+        val maxVideoPacketSize = VideoMemoryPolicy.maxPacketBytes()
     }
 }

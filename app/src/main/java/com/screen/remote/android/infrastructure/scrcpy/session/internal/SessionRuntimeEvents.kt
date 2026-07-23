@@ -18,7 +18,9 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.CodecIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ComponentState
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssueKind
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderType
+import com.screen.remote.android.infrastructure.scrcpy.session.model.VideoResolutionRecoverySource
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardRemovalContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardSetupContext
@@ -26,6 +28,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIs
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectStateContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerPushContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerStartContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionComponent
@@ -71,6 +74,9 @@ internal fun Session.processEvent(event: SessionEvent) {
         is SessionEvent.DecoderStarted -> handleDecoderStarted(event.decoderType)
         is SessionEvent.DecoderStopped -> handleDecoderStopped(event.decoderType)
         is SessionEvent.DecoderError -> handleDecoderError(event.issue)
+        is SessionEvent.ConfirmDecoderResolutionRecovery -> handleConfirmDecoderResolutionRecovery()
+        is SessionEvent.DismissDecoderResolutionRecovery -> handleDismissDecoderResolutionRecovery()
+        is SessionEvent.ServerVideoCaptureError -> handleServerVideoCaptureError(event.detail)
         is SessionEvent.RequestReconnect -> handleRequestReconnect(event.issue)
         is SessionEvent.RequestCleanup -> handleRequestCleanup(event.trigger)
         is SessionEvent.VideoEncoderDetecting -> handleVideoEncoderDetecting(event.context)
@@ -161,6 +167,10 @@ internal fun Session.handleServerStarted(context: ServerStartContext) {
 }
 
 internal fun Session.handleServerFailed(issue: ServerIssue) {
+    if (hasPendingDecoderResolutionRecovery() && issue.kind == ServerIssueKind.ProcessExited) {
+        LogManager.w(LogTags.SCRCPY_CLIENT, "scrcpy-server exited while waiting for video size recovery confirmation")
+        return
+    }
     runtime.updateProgress(ConnectionStep.START_SERVER, StepStatus.FAILED, issue.startFailedProgressMessage())
     runtime.updateSessionState(SessionState.ServerFailed(issue))
     runtime.updateComponentState(SessionComponent.ScrcpyServer, ComponentState.Error)
@@ -202,6 +212,10 @@ internal fun Session.handleSessionError(issue: SessionIssue) {
 
 internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
     val reason = issue.message
+    if (hasPendingDecoderResolutionRecovery()) {
+        LogManager.d(LogTags.SCRCPY_CLIENT, "Automatic reconnect is paused while waiting for video size recovery confirmation: $reason")
+        return
+    }
     when (runtime.sessionState.value) {
         is SessionState.Reconnecting -> {
             LogManager.d(
@@ -264,6 +278,9 @@ internal fun Session.handleRequestCleanup(trigger: CleanupTrigger) {
 }
 
 internal fun Session.handleDecoderStarted(decoderType: DecoderType) {
+    if (decoderType == DecoderType.Video) {
+        clearDecoderResolutionRecovery()
+    }
     runtime.updateComponentState(decoderType.toComponent(), ComponentState.Running)
     LogManager.d(LogTags.SCRCPY_CLIENT, "Decoder started: ${decoderType.name}")
 }
@@ -277,13 +294,17 @@ internal fun Session.handleDecoderError(issue: DecoderIssue) {
     LogManager.e(LogTags.SCRCPY_CLIENT, issue.logMessage())
 
     if (issue.kind == DecoderIssueKind.UnsupportedSize) {
-        val suggestedMaxSize = issue.suggestedMaxSize
+        val failedLongEdge =
+            listOfNotNull(issue.width, issue.height)
+                .filter { it > 0 }
+                .maxOrNull()
+        val suggestedMaxSize =
+            nextVideoRecoveryMaxSize(
+                currentMaxSize = options.config.maxSize,
+                failedLongEdge = failedLongEdge,
+            )
         if (suggestedMaxSize == null) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "Decoding size is not supported and no auto-downgrade size is available")
-            return
-        }
-        if (!runtime.tryConsumeDecoderRecoveryAttempt(MAX_DECODER_RECOVERY_ATTEMPTS)) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "Decoding automatic downgrade has reached the upper limit, stop retrying")
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Decoding size is not supported and no recovery size is available")
             return
         }
 
@@ -295,11 +316,19 @@ internal fun Session.handleDecoderError(issue: DecoderIssue) {
             )
             return
         }
-        setOptions(currentOptions.copy(config = currentOptions.config.copy(maxSize = suggestedMaxSize)))
+        publishDecoderResolutionRecovery(
+            DecoderResolutionRecoveryRequest(
+                width = issue.width ?: 0,
+                height = issue.height ?: 0,
+                suggestedMaxSize = suggestedMaxSize,
+                decoderName = currentOptions.getFinalVideoDecoder(),
+            ),
+        )
         LogManager.w(
             LogTags.SCRCPY_CLIENT,
-            "The decoder does not support ${issue.width}x${issue.height}. This operation downgrades maxSize=$suggestedMaxSize and then reconnects (the persistent configuration is not written)",
+            "Decoder size recovery requires user confirmation: decoder=${currentOptions.getFinalVideoDecoder()} size=${issue.width}x${issue.height} suggestedMaxSize=$suggestedMaxSize",
         )
+        return
     }
 
     if (runtime.sessionState.value is SessionState.Connected) {
@@ -314,7 +343,94 @@ internal fun Session.handleDecoderError(issue: DecoderIssue) {
     LogManager.e(LogTags.SCRCPY_CLIENT, "Decoder error details: ${issue.summary()}")
 }
 
-private const val MAX_DECODER_RECOVERY_ATTEMPTS = 2
+internal fun Session.handleConfirmDecoderResolutionRecovery() {
+    val request = consumeDecoderResolutionRecovery() ?: return
+    if (!runtime.tryConsumeDecoderRecoveryAttempt(MAX_DECODER_RECOVERY_ATTEMPTS)) {
+        LogManager.e(LogTags.SCRCPY_CLIENT, "Decoder size recovery has reached the retry limit")
+        return
+    }
+
+    val currentOptions = options
+    if (currentOptions.config.maxSize in 1..request.suggestedMaxSize) {
+        LogManager.w(
+            LogTags.SCRCPY_CLIENT,
+            "Ignore stale decoder size recovery confirmation: current=${currentOptions.config.maxSize} suggested=${request.suggestedMaxSize}",
+        )
+        return
+    }
+
+    setOptions(currentOptions.copy(config = currentOptions.config.copy(maxSize = request.suggestedMaxSize)))
+    LogManager.w(
+        LogTags.SCRCPY_CLIENT,
+        "User confirmed decoder size recovery: decoder=${request.decoderName} size=${request.width}x${request.height} maxSize=${request.suggestedMaxSize}; reconnecting without changing persistent configuration",
+    )
+    handleRequestReconnect(
+        ReconnectIssue(
+            kind = ReconnectIssueKind.DecoderError,
+            detail = "User approved decoder size recovery to maxSize=${request.suggestedMaxSize}",
+        ),
+    )
+}
+
+internal fun Session.handleDismissDecoderResolutionRecovery() {
+    val request = consumeDecoderResolutionRecovery() ?: return
+    LogManager.i(
+        LogTags.SCRCPY_CLIENT,
+        "User dismissed decoder size recovery: decoder=${request.decoderName} size=${request.width}x${request.height} suggestedMaxSize=${request.suggestedMaxSize}",
+    )
+    if (request.source == VideoResolutionRecoverySource.ServerCapture) {
+        handleSessionError(
+            SessionIssue(
+                kind = SessionIssueKind.RuntimeFailure,
+                detail = request.detail,
+            ),
+        )
+    }
+}
+
+internal fun Session.handleServerVideoCaptureError(detail: String) {
+    val suggestedMaxSize = nextVideoRecoveryMaxSize(options.config.maxSize)
+    if (suggestedMaxSize == null) {
+        handleServerFailed(
+            ServerIssue(
+                kind = ServerIssueKind.RuntimeStdOut,
+                detail = detail,
+            ),
+        )
+        return
+    }
+
+    publishDecoderResolutionRecovery(
+        DecoderResolutionRecoveryRequest(
+            width = 0,
+            height = 0,
+            suggestedMaxSize = suggestedMaxSize,
+            decoderName = "",
+            source = VideoResolutionRecoverySource.ServerCapture,
+            detail = detail,
+        ),
+    )
+    LogManager.w(
+        LogTags.SCRCPY_CLIENT,
+        "Video capture size recovery requires user confirmation: currentMaxSize=${options.config.maxSize} suggestedMaxSize=$suggestedMaxSize",
+    )
+}
+
+internal fun nextVideoRecoveryMaxSize(
+    currentMaxSize: Int,
+    failedLongEdge: Int? = null,
+): Int? {
+    val upperExclusive =
+        when {
+            currentMaxSize > 0 -> currentMaxSize
+            failedLongEdge != null && failedLongEdge > 0 -> failedLongEdge
+            else -> Int.MAX_VALUE
+        }
+    return VIDEO_RECOVERY_MAX_SIZE_TIERS.firstOrNull { it < upperExclusive }
+}
+
+private const val MAX_DECODER_RECOVERY_ATTEMPTS = 3
+private val VIDEO_RECOVERY_MAX_SIZE_TIERS = listOf(1920, 1080, 720)
 
 internal fun handleVideoEncoderDetecting(context: CodecDetectionContext) {
     val source = if (context.reusedUploadedServer) "reused uploaded server" else "pushed server again"

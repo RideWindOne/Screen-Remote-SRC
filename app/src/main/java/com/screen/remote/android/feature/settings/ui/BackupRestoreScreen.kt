@@ -92,7 +92,7 @@ fun BackupRestoreScreen(
                 helpText = SettingsTexts.HELP_RESTORE_DATA.get(),
                 onClick = {
                     try {
-                        importLauncher.launch(arrayOf("application/json"))
+                        importLauncher.launch(arrayOf("*/*"))
                     } catch (_: ActivityNotFoundException) {
                         dialogState =
                             BackupRestoreDialogState(

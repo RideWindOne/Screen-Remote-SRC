@@ -82,6 +82,24 @@ object RemoteTexts {
             "目标设备键盘已打开，可能影响底部按钮点击",
             "The target device keyboard is open and may interfere with the bottom buttons",
         )
+    val REMOTE_DECODER_SIZE_UNSUPPORTED_TITLE =
+        TextPair("当前解码器不支持此分辨率", "Decoder does not support this resolution")
+    val REMOTE_DECODER_SIZE_UNSUPPORTED_MESSAGE =
+        TextPair(
+            "固定解码器 %s 无法解码 %d×%d。是否使用 maxSize=%d 临时重新连接？此操作不会修改会话配置。",
+            "The fixed decoder %s cannot decode %d×%d. Reconnect temporarily with maxSize=%d? This will not change the session configuration.",
+        )
+    val REMOTE_DECODER_SIZE_RECOVERY_CONFIRM =
+        TextPair("降低尺寸并重连", "Reduce size and reconnect")
+    val REMOTE_DECODER_SIZE_RECOVERY_CANCEL =
+        TextPair("保持当前设置", "Keep current settings")
+    val REMOTE_CAPTURE_SIZE_UNSUPPORTED_TITLE =
+        TextPair("原画采集失败", "Native-resolution capture failed")
+    val REMOTE_CAPTURE_SIZE_UNSUPPORTED_MESSAGE =
+        TextPair(
+            "目标设备无法以当前尺寸启动视频采集或编码。是否使用 maxSize=%d 临时重新连接？此操作不会修改会话配置。",
+            "The target device could not start video capture or encoding at the current size. Reconnect temporarily with maxSize=%d? This will not change the session configuration.",
+        )
 
     // ScrcpyClient
     val SCRCPY_NATIVE_LIB_LOAD_FAILED = TextPair("Native 库加载失败", "Native library load failed")

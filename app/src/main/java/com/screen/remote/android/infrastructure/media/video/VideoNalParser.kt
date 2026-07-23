@@ -1,7 +1,5 @@
 package com.screen.remote.android.infrastructure.media.video
 
-import java.nio.ByteBuffer
-
 /**
  * VideoNalParser - NAL 单元解析器
  * 负责 H.264/H.265 NAL 单元的提取和 Frame Meta 解析
@@ -27,34 +25,22 @@ class VideoNalParser {
     }
 
     /**
-     * 提取 NAL 单元
+     * Splits one scrcpy codec-config packet into its Annex-B NAL units.
      */
-    fun extractNalUnit(buffer: ByteBuffer): ByteArray? {
-        if (buffer.position() < 3) return null
-
-        buffer.flip()
-        val limit = buffer.limit()
-        val start = findStartCode(buffer, 0, limit)
-        if (start == null) {
-            buffer.compact()
-            return null
+    fun extractNalUnits(data: ByteArray): List<ByteArray> {
+        if (data.size < 3) return emptyList()
+        val starts = mutableListOf<StartCode>()
+        var searchFrom = 0
+        while (searchFrom < data.size - 2) {
+            val start = findStartCode(data, searchFrom) ?: break
+            starts += start
+            searchFrom = start.index + start.length
         }
-
-        val next = findStartCode(buffer, start.index + start.length, limit)
-        val endPos = next?.index ?: limit
-        val nalSize = endPos - start.index
-        val nalUnit = ByteArray(nalSize)
-        buffer.position(start.index)
-        buffer.get(nalUnit)
-
-        if (next != null) {
-            buffer.position(endPos)
-            buffer.compact()
-        } else {
-            buffer.clear()
+        if (starts.isEmpty()) return emptyList()
+        return starts.mapIndexed { index, start ->
+            val end = starts.getOrNull(index + 1)?.index ?: data.size
+            data.copyOfRange(start.index, end)
         }
-
-        return nalUnit
     }
 
     /**
@@ -99,14 +85,13 @@ class VideoNalParser {
         }
 
     private fun findStartCode(
-        buffer: ByteBuffer,
+        data: ByteArray,
         fromIndex: Int,
-        limit: Int,
     ): StartCode? {
-        for (index in fromIndex until limit - 2) {
-            if (buffer.get(index) != 0.toByte() || buffer.get(index + 1) != 0.toByte()) continue
-            if (buffer.get(index + 2) == 1.toByte()) return StartCode(index, 3)
-            if (index + 3 < limit && buffer.get(index + 2) == 0.toByte() && buffer.get(index + 3) == 1.toByte()) {
+        for (index in fromIndex until data.size - 2) {
+            if (data[index] != 0.toByte() || data[index + 1] != 0.toByte()) continue
+            if (data[index + 2] == 1.toByte()) return StartCode(index, 3)
+            if (index + 3 < data.size && data[index + 2] == 0.toByte() && data[index + 3] == 1.toByte()) {
                 return StartCode(index, 4)
             }
         }

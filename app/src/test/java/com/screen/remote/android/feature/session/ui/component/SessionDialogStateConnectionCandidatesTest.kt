@@ -1,5 +1,6 @@
 package com.screen.remote.android.feature.session.ui.component
 
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.data.repository.ConnectionCandidateData
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
@@ -8,6 +9,32 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SessionDialogStateConnectionCandidatesTest {
+    @Test
+    fun urlAddressPrefillsANewTcpSessionWithoutInventingAnId() {
+        val state =
+            SessionDialogState(
+                initialPrefill =
+                    NewSessionPrefill(
+                        name = "Living room",
+                        address = "192.168.1.20:5555",
+                        color = "PURPLE",
+                        backupAddresses = listOf("192.168.1.21:5555"),
+                        groupIds = listOf("group-1"),
+                        scrcpyParameters = mapOf("maxFps" to "120", "audio" to "on"),
+                    ),
+            )
+        val saved = state.toSessionData()
+
+        assertEquals("Living room", state.sessionName)
+        assertEquals("PURPLE", saved.color)
+        assertEquals("192.168.1.20", saved.toConnectionCandidates().first().host)
+        assertEquals(5555, saved.toConnectionCandidates().first().port)
+        assertEquals("192.168.1.21", saved.toConnectionCandidates()[1].host)
+        assertEquals(listOf("group-1"), saved.groupIds)
+        assertEquals(120, saved.config.maxFps)
+        assertEquals(true, saved.config.enableAudio)
+    }
+
     @Test
     fun editingPreservesConfigFieldsNotExposedByTheDialog() {
         val original =
@@ -181,5 +208,53 @@ class SessionDialogStateConnectionCandidatesTest {
         assertEquals("192.168.1.3", candidates[1].host)
         assertEquals(5556, candidates[1].port)
         assertEquals(ConnectionTransport.TCP, candidates[1].transport)
+    }
+
+    @Test
+    fun compatibilityModeDisablesUnsupportedSessionFeatures() {
+        val state =
+            SessionDialogState(
+                sessionData =
+                    SessionData(
+                        id = "session",
+                        name = "Device",
+                        connectionCandidates = listOf(ConnectionCandidateData("TCP", "192.168.1.2", 5555)),
+                        color = "BLUE",
+                        config =
+                            ScrcpyConfig(
+                                gameMode = true,
+                                enableAudio = true,
+                                turnScreenOff = true,
+                            ),
+                    ),
+            )
+
+        state.updateCompatibilityMode(true)
+        state.updateConfig {
+            copy(
+                enableAudio = true,
+                clipboardSync = true,
+            )
+        }
+        val saved = state.toSessionData().config
+
+        assertEquals(true, saved.compatibilityMode)
+        assertEquals(false, saved.gameMode)
+        assertEquals(false, state.config.enableAudio)
+        assertEquals(false, state.config.clipboardSync)
+        assertEquals(false, saved.enableAudio)
+        assertEquals(false, saved.clipboardSync)
+        assertEquals(false, saved.turnScreenOff)
+    }
+
+    @Test
+    fun enablingGameModeLeavesCompatibilityMode() {
+        val state = SessionDialogState()
+
+        state.updateCompatibilityMode(true)
+        state.updateGameMode(true)
+
+        assertEquals(false, state.config.compatibilityMode)
+        assertEquals(true, state.config.gameMode)
     }
 }

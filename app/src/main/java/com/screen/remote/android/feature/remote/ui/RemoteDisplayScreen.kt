@@ -3,7 +3,9 @@ package com.screen.remote.android.feature.remote.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.net.Uri
+import android.view.KeyEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.WindowManager
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,12 +46,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.designsystem.component.MessageItem
 import com.screen.remote.android.core.designsystem.component.MessageListState
 import com.screen.remote.android.core.designsystem.component.rememberMessageListState
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.getDisplayText
@@ -60,6 +65,8 @@ import com.screen.remote.android.core.common.util.resolveLocalDisplaySpec
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutNode
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
+import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHandler
+import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHost
 import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
@@ -82,6 +89,8 @@ import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryMan
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
+import com.screen.remote.android.infrastructure.scrcpy.session.model.VideoResolutionRecoverySource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -125,6 +134,16 @@ internal fun requestedOrientationForRemoteScreen(orientation: RemoteScreenOrient
         null -> null
     }
 
+internal fun requestedOrientationForRotationPolicy(
+    followRemoteOrientation: Boolean,
+    remoteOrientation: RemoteScreenOrientation?,
+): Int? =
+    if (followRemoteOrientation) {
+        requestedOrientationForRemoteScreen(remoteOrientation)
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
 internal fun shouldCancelConnectionOnBack(
     connectionState: ConnectionState,
     connectStatus: ConnectStatus,
@@ -139,12 +158,29 @@ internal fun shouldInterceptRemoteBack(
     connectStatus: ConnectStatus,
 ): Boolean = connectionState is ConnectionState.Connected || shouldCancelConnectionOnBack(connectionState, connectStatus)
 
+internal fun connectionStateForRemoteOverlay(
+    connectionState: ConnectionState,
+    compatibilityMode: Boolean,
+    compatibilityFrameAvailable: Boolean,
+): ConnectionState =
+    if (
+        compatibilityMode &&
+        !compatibilityFrameAvailable &&
+        connectionState is ConnectionState.Connected
+    ) {
+        ConnectionState.Connecting
+    } else {
+        connectionState
+    }
+
 private data class RemoteDisplayScreenRouteState(
     val videoStream: VideoStream?,
+    val compatibilityFrame: Bitmap?,
     val audioStream: AudioStream?,
     val connectionState: ConnectionState,
     val connectStatus: ConnectStatus,
     val connectionProgress: List<ConnectionProgress>,
+    val decoderResolutionRecoveryRequest: DecoderResolutionRecoveryRequest?,
     val settings: AppSettings,
     val sessionData: SessionData?,
     val messageListState: MessageListState,
@@ -232,19 +268,24 @@ private fun rememberRemoteDisplayScreenRouteState(
     settingsViewModel: SettingsViewModel,
 ): RemoteDisplayScreenRouteState {
     val videoStream by connectionViewModel.getVideoStream().collectAsState()
+    val compatibilityFrame by connectionViewModel.getCompatibilityFrame().collectAsState()
+    val videoResolution by connectionViewModel.getVideoResolution().collectAsState()
     val audioStream by connectionViewModel.getAudioStream().collectAsState()
     val connectionState by connectionViewModel.getConnectionState().collectAsState()
     val connectStatus by connectionViewModel.connectStatus.collectAsState()
     val connectionProgress by connectionViewModel.connectionProgress.collectAsState()
+    val decoderResolutionRecoveryRequest by connectionViewModel.decoderResolutionRecoveryRequest.collectAsState()
     val settings by settingsViewModel.settings.collectAsState()
     val sessionData by remember(sessionId, sessionRepository) {
         sessionRepository.getSessionDataFlow(sessionId)
     }.collectAsState(initial = null)
+    val activeSessionData by connectionViewModel.activeSessionData.collectAsState()
+    val resolvedSessionData = activeSessionData?.takeIf { it.id == sessionId } ?: sessionData
     val scope = rememberCoroutineScope()
 
-    DisposableEffect(sessionData?.config?.keepDeviceAwake) {
+    DisposableEffect(resolvedSessionData?.config?.keepDeviceAwake) {
         val activity = context as? ComponentActivity
-        if (sessionData?.config?.keepDeviceAwake == true) {
+        if (resolvedSessionData?.config?.keepDeviceAwake == true) {
             activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
         onDispose {
@@ -272,6 +313,18 @@ private fun rememberRemoteDisplayScreenRouteState(
     var videoHeight by remember { mutableIntStateOf(0) }
     val deviceResolutionAdaptedState = remember { mutableStateOf(false) }
 
+    LaunchedEffect(resolvedSessionData?.config?.compatibilityMode, videoResolution) {
+        if (resolvedSessionData?.config?.compatibilityMode == true) {
+            videoResolution?.let { (width, height) ->
+                if (width > 0 && height > 0) {
+                    videoWidth = width
+                    videoHeight = height
+                    videoAspectRatio = width.toFloat() / height.toFloat()
+                }
+            }
+        }
+    }
+
     LaunchedEffect(connectionState) {
         if (connectionState is ConnectionState.Connected) {
             controlViewModel.getTargetDisplayInfo()
@@ -296,7 +349,7 @@ private fun rememberRemoteDisplayScreenRouteState(
             videoStream = videoStream,
             surfaceHolder = surfaceHolder,
             renderSurface = renderSurface,
-            usePersistentSurface = sessionData?.config?.let { it.useFullScreen && !it.gameMode } ?: false,
+            usePersistentSurface = resolvedSessionData?.config?.let { it.useFullScreen && !it.gameMode } ?: false,
             lifecycleState = lifecycleState,
             onVideoSizeChanged = { width, height, aspectRatio ->
                 videoWidth = width
@@ -440,12 +493,14 @@ private fun rememberRemoteDisplayScreenRouteState(
 
     return RemoteDisplayScreenRouteState(
         videoStream = videoStream,
+        compatibilityFrame = compatibilityFrame,
         audioStream = audioStream,
         connectionState = connectionState,
         connectStatus = connectStatus,
         connectionProgress = connectionProgress,
+        decoderResolutionRecoveryRequest = decoderResolutionRecoveryRequest,
         settings = settings,
-        sessionData = sessionData,
+        sessionData = resolvedSessionData,
         messageListState = messageListState,
         videoDecoderManager = videoDecoderManager,
         floatingMenuActions = floatingMenuActions,
@@ -518,20 +573,22 @@ private fun RemoteDisplayScreenEffects(
         routeState.videoWidth,
         routeState.videoHeight,
     ) {
+        val followRemoteOrientation = routeState.sessionData?.config?.followRemoteOrientation == true
         val targetOrientation =
-            if (routeState.sessionData?.config?.followRemoteOrientation == true) {
-                requestedOrientationForRemoteScreen(
-                    remoteScreenOrientation(routeState.videoWidth, routeState.videoHeight),
-                )
-            } else {
-                originalRequestedOrientation
-            }
+            requestedOrientationForRotationPolicy(
+                followRemoteOrientation = followRemoteOrientation,
+                remoteOrientation = remoteScreenOrientation(routeState.videoWidth, routeState.videoHeight),
+            )
 
         if (targetOrientation != null && activity?.requestedOrientation != targetOrientation) {
             activity?.requestedOrientation = targetOrientation
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
-                "Follow the target device orientation: ${routeState.videoWidth}x${routeState.videoHeight}, requestedOrientation=$targetOrientation",
+                if (followRemoteOrientation) {
+                    "Rotation policy changed to target: ${routeState.videoWidth}x${routeState.videoHeight}, requestedOrientation=$targetOrientation"
+                } else {
+                    "Rotation policy changed to local: orientation restriction removed"
+                },
             )
         }
     }
@@ -669,6 +726,66 @@ private fun RemoteDisplayScreenEffects(
             else -> Unit
         }
     }
+
+    val hardwareKeyEventHost = context as? RemoteHardwareKeyEventHost
+    DisposableEffect(hardwareKeyEventHost, routeState.connectionState) {
+        val captureVolumeKeys = routeState.connectionState is ConnectionState.Connected
+        val handler =
+            if (captureVolumeKeys) {
+                var volumePressCount = 0
+                var passCurrentPressToLocal = false
+
+                RemoteHardwareKeyEventHandler { event ->
+                    val remoteKeyCode =
+                        when (event.keyCode) {
+                            KeyEvent.KEYCODE_VOLUME_UP -> KeyEvent.KEYCODE_VOLUME_UP
+                            KeyEvent.KEYCODE_VOLUME_DOWN -> KeyEvent.KEYCODE_VOLUME_DOWN
+                            else -> return@RemoteHardwareKeyEventHandler false
+                        }
+                    val action = event.action
+                    val metaState = event.metaState
+                    val repeatCount = event.repeatCount
+                    val passThroughToLocal =
+                        when (action) {
+                            KeyEvent.ACTION_DOWN -> {
+                                if (repeatCount == 0) {
+                                    volumePressCount += 1
+                                    passCurrentPressToLocal = volumePressCount % 2 == 0
+                                }
+                                passCurrentPressToLocal
+                            }
+
+                            KeyEvent.ACTION_UP -> passCurrentPressToLocal
+                            else -> false
+                        }
+
+                    scope.launch {
+                        controlViewModel.sendKeyEvent(
+                            keyCode = remoteKeyCode,
+                            action = action,
+                            metaState = metaState,
+                            repeat = repeatCount,
+                        ).onFailure { error ->
+                            LogManager.e(
+                                LogTags.REMOTE_DISPLAY,
+                                "Failed to forward hardware volume key: keyCode=$remoteKeyCode action=$action: ${error.message}",
+                                error,
+                            )
+                        }
+                    }
+                    if (action == KeyEvent.ACTION_UP) {
+                        passCurrentPressToLocal = false
+                    }
+                    !passThroughToLocal
+                }
+            } else {
+                null
+            }
+        hardwareKeyEventHost?.setRemoteHardwareKeyEventHandler(handler)
+        onDispose {
+            hardwareKeyEventHost?.setRemoteHardwareKeyEventHandler(null)
+        }
+    }
 }
 
 @Composable
@@ -710,7 +827,7 @@ private fun RemoteDisplayScreenContent(
         Box(modifier = Modifier.fillMaxSize()) {
             if (
                 shouldShowFloatingMenu(
-                    videoAvailable = routeState.videoStream != null,
+                    videoAvailable = routeState.videoStream != null || routeState.compatibilityFrame != null,
                     showFloatingBall = routeState.sessionData?.config?.showFloatingBall,
                 )
             ) {
@@ -723,6 +840,7 @@ private fun RemoteDisplayScreenContent(
                 videoAspectRatio = routeState.videoAspectRatio,
                 videoWidth = routeState.videoWidth,
                 videoHeight = routeState.videoHeight,
+                compatibilityFrame = routeState.compatibilityFrame,
                 configuration = configuration,
                 onSurfaceHolderChanged = routeState.onSurfaceHolderChanged,
                 onRenderSurfaceChanged = routeState.onRenderSurfaceChanged,
@@ -777,9 +895,14 @@ private fun RemoteDisplayScreenContent(
             }
 
             ConnectionStateOverlay(
-                connectionState = routeState.connectionState,
+                connectionState =
+                    connectionStateForRemoteOverlay(
+                        connectionState = routeState.connectionState,
+                        compatibilityMode = routeState.sessionData?.config?.compatibilityMode == true,
+                        compatibilityFrameAvailable = routeState.compatibilityFrame != null,
+                    ),
                 messageListState = routeState.messageListState,
-                onReconnect = { connectionViewModel.connectSession(sessionId) },
+                onReconnect = connectionViewModel::reconnectActiveSession,
                 onClose = onClose,
             )
 
@@ -793,6 +916,62 @@ private fun RemoteDisplayScreenContent(
             }
         }
     }
+
+    routeState.decoderResolutionRecoveryRequest?.let { request ->
+        DecoderResolutionRecoveryDialog(
+            request = request,
+            onConfirm = connectionViewModel::confirmDecoderResolutionRecovery,
+            onDismiss = connectionViewModel::dismissDecoderResolutionRecovery,
+        )
+    }
+}
+
+@Composable
+private fun DecoderResolutionRecoveryDialog(
+    request: DecoderResolutionRecoveryRequest,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val isServerCaptureFailure = request.source == VideoResolutionRecoverySource.ServerCapture
+    val title =
+        rememberText(
+            if (isServerCaptureFailure) {
+                RemoteTexts.REMOTE_CAPTURE_SIZE_UNSUPPORTED_TITLE
+            } else {
+                RemoteTexts.REMOTE_DECODER_SIZE_UNSUPPORTED_TITLE
+            },
+        )
+    val confirm = rememberText(RemoteTexts.REMOTE_DECODER_SIZE_RECOVERY_CONFIRM)
+    val cancel = rememberText(RemoteTexts.REMOTE_DECODER_SIZE_RECOVERY_CANCEL)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Text(
+                if (isServerCaptureFailure) {
+                    RemoteTexts.REMOTE_CAPTURE_SIZE_UNSUPPORTED_MESSAGE.format(request.suggestedMaxSize)
+                } else {
+                    RemoteTexts.REMOTE_DECODER_SIZE_UNSUPPORTED_MESSAGE.format(
+                        request.decoderName,
+                        request.width,
+                        request.height,
+                        request.suggestedMaxSize,
+                    )
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirm)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(cancel)
+            }
+        },
+    )
 }
 
 internal fun shouldShowFloatingMenu(

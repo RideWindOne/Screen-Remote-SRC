@@ -33,16 +33,23 @@ import dadb.helper.RemoteAppIconBatchRequest
 import dadb.helper.RemoteAppIconData
 import dadb.helper.RemoteAppData
 import dadb.helper.RemoteAppListItem
+import dadb.helper.RemoteDirectoryEntry
 import dadb.helper.RemoteHelperFileState
 import dadb.helper.RemoteHelperProbeResult
 import dadb.helper.RemoteHelperQueryResult
+import dadb.helper.RemoteProcessEntry
+import dadb.helper.RemoteScreenshotStream
 import dadb.helper.loadAppIconBatchWithHelper
 import dadb.helper.loadAppIconWithHelper
 import dadb.helper.loadAppsWithHelper
 import dadb.helper.loadAppListPageWithHelper
+import dadb.helper.loadDirectoryWithHelper
+import dadb.helper.loadProcessesWithHelper
+import dadb.helper.injectRemoteTextWithHelper
 import dadb.helper.prepareRemoteAppIconHelper
 import dadb.helper.runRemoteAppHelperProbe
 import dadb.helper.runQueriesWithHelper
+import dadb.helper.openRemoteScreenshotStreamWithHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -229,6 +236,44 @@ class AdbConnection(
             }
         }
 
+    suspend fun executeServiceBytes(destination: String): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                dadb.open(destination).use { stream ->
+                    stream.source.readByteArray()
+                }
+            }
+        }
+
+    suspend fun openRemoteScreenshotStream(
+        localHelperJar: File,
+        maxSize: Int,
+        jpegQuality: Int,
+    ): Result<RemoteScreenshotStream> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                streamingDadb().openRemoteScreenshotStreamWithHelper(
+                    localHelperJar = localHelperJar,
+                    maxSize = maxSize,
+                    jpegQuality = jpegQuality,
+                )
+            }
+        }
+
+    suspend fun injectRemoteText(
+        localHelperJar: File,
+        text: String,
+    ): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                streamingDadb().injectRemoteTextWithHelper(
+                    text = text,
+                    localHelperJar = localHelperJar,
+                )
+                true
+            }
+        }
+
     suspend fun restartTcpip(port: Int): Result<String> = executeService("tcpip:$port")
 
     suspend fun setupPortForward(
@@ -291,6 +336,44 @@ class AdbConnection(
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
                     "Helper preparation failed: ${error.message}",
+                    error,
+                )
+            }
+        }
+
+    suspend fun loadDirectoryWithHelper(
+        path: String,
+        localHelperJar: File,
+    ): Result<List<RemoteDirectoryEntry>> =
+        withContext(Dispatchers.IO) {
+            dManagement(LogTags.ADB_CONNECTION) {
+                "helper directory request: path=$path jar=${localHelperJar.absolutePath}"
+            }
+            runCatching {
+                dadb.loadDirectoryWithHelper(
+                    path = path,
+                    localHelperJar = localHelperJar,
+                )
+            }.onFailure { error ->
+                LogManager.e(
+                    LogTags.ADB_CONNECTION,
+                    "Helper directory request failed path=$path: ${error.message}",
+                    error,
+                )
+            }
+        }
+
+    suspend fun loadProcessesWithHelper(localHelperJar: File): Result<List<RemoteProcessEntry>> =
+        withContext(Dispatchers.IO) {
+            dManagement(LogTags.ADB_CONNECTION) {
+                "helper process request: jar=${localHelperJar.absolutePath}"
+            }
+            runCatching {
+                dadb.loadProcessesWithHelper(localHelperJar = localHelperJar)
+            }.onFailure { error ->
+                LogManager.e(
+                    LogTags.ADB_CONNECTION,
+                    "Helper process request failed: ${error.message}",
                     error,
                 )
             }

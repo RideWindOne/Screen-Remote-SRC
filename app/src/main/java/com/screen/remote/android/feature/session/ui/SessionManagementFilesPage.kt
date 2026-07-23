@@ -81,12 +81,15 @@ internal class SessionManagementFileBrowserState {
     private var prefetchedSnapshot: FileBrowserSnapshot? = null
     private val loadMutex = Mutex()
 
-    suspend fun prefetchSnapshot(path: String): FileBrowserSnapshot =
+    suspend fun prefetchSnapshot(
+        context: android.content.Context,
+        path: String,
+    ): FileBrowserSnapshot =
         loadMutex.withLock {
             prefetchedSnapshot
                 ?.takeIf { it.currentPath == path }
                 ?.let { return@withLock it }
-            loadFileBrowserSnapshot(path).also { snapshot ->
+            loadFileBrowserSnapshot(context, path).also { snapshot ->
                 if (!snapshot.isLoading && snapshot.errorMessage == null) {
                     prefetchedSnapshot = snapshot
                 }
@@ -94,6 +97,7 @@ internal class SessionManagementFileBrowserState {
         }
 
     suspend fun loadSnapshot(
+        context: android.content.Context,
         path: String,
         forceRefresh: Boolean = false,
     ): FileBrowserSnapshot =
@@ -106,7 +110,7 @@ internal class SessionManagementFileBrowserState {
                         return@withLock snapshot
                     }
             }
-            loadFileBrowserSnapshot(path)
+            loadFileBrowserSnapshot(context, path)
         }
 }
 
@@ -197,6 +201,7 @@ internal fun SessionManagementFileBrowser(
         fileRefreshing = true
         val nextSnapshot =
             dataProvider.loadFileInformation(
+                context = context,
                 sessionId = sessionId,
                 path = currentPath,
                 forceRefresh = refreshRequested,

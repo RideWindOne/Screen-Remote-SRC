@@ -10,6 +10,8 @@ import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.key.core.adb.AdbKeyManager
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
+import com.screen.remote.android.core.telemetry.TelemetryJournal
+import com.screen.remote.android.core.telemetry.TelemetryPreferences
 import dadb.android.runtime.ExperimentalDadbAndroidApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,9 +31,15 @@ class ScreenRemoteApp : Application() {
 
         // 初始化日志管理器（启用文件日志）
         LogManager.init(this, true)
+        TelemetryJournal.init(this)
         appScope.launch {
             PreferencesManager(this@ScreenRemoteApp).settingsFlow.collectLatest { settings ->
                 LogManager.applySettings(settings)
+            }
+        }
+        appScope.launch {
+            TelemetryPreferences(this@ScreenRemoteApp).stateFlow.collectLatest { telemetry ->
+                TelemetryJournal.setEnabled(telemetry.enabled)
             }
         }
 

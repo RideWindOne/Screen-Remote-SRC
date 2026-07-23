@@ -3,7 +3,6 @@ package com.screen.remote.android.infrastructure.media.video
 import android.media.MediaCodec
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import java.nio.ByteBuffer
 
 internal class VideoDecoderPacketProcessor(
     internal val videoCodec: String,
@@ -72,7 +71,6 @@ internal class VideoDecoderPacketProcessor(
 
     fun processStdOutPacket(
         payload: ByteArray,
-        nalBuffer: ByteBuffer,
         configured: Boolean,
         pts: Long,
         packetIsConfig: Boolean,
@@ -98,22 +96,14 @@ internal class VideoDecoderPacketProcessor(
             return true
         }
 
-        if (payload.size > nalBuffer.remaining()) {
-            throw VideoDecoderConfigurationException(
-                videoCodec,
-                "Encoded packets exceed aggregation buffer: payload=${payload.size}, remaining=${nalBuffer.remaining()}",
-            )
-        }
-        nalBuffer.put(payload)
-
         val result =
             when (videoPacketCodecMode(videoCodec)) {
-                VideoPacketCodecMode.H264 -> drainH264(nalBuffer, effectiveConfigured)
-                VideoPacketCodecMode.H265 -> drainH265(nalBuffer, effectiveConfigured)
+                VideoPacketCodecMode.H264 -> processH264ConfigPacket(payload, effectiveConfigured)
+                VideoPacketCodecMode.H265 -> processH265ConfigPacket(payload, effectiveConfigured)
                 VideoPacketCodecMode.AV1 ->
-                    processAV1(nalBuffer, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
+                    processAV1(payload, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
                 VideoPacketCodecMode.VPX ->
-                    processVpx(nalBuffer, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
+                    processVpx(payload, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
                 VideoPacketCodecMode.UNSUPPORTED ->
                     throw VideoDecoderConfigurationException(videoCodec, "Unsupported video format")
             }
@@ -226,43 +216,40 @@ internal class VideoDecoderPacketProcessor(
         )
     }
 
-    private fun drainH264(
-        nalBuffer: ByteBuffer,
+    private fun processH264ConfigPacket(
+        payload: ByteArray,
         configured: Boolean,
     ): Boolean {
         var currentConfigured = configured
-        while (nalBuffer.position() >= 4) {
-            val beforePosition = nalBuffer.position()
-            val updated = processH264(nalBuffer, currentConfigured)
-            currentConfigured = currentConfigured || updated
-            if (nalBuffer.position() == 0 || nalBuffer.position() == beforePosition) {
-                break
-            }
+        val nalUnits = nalParser.extractNalUnits(payload)
+        if (nalUnits.isEmpty()) {
+            throw VideoDecoderConfigurationException(videoCodec, "H.264 config packet contains no Annex-B NAL units")
+        }
+        for (nalUnit in nalUnits) {
+            currentConfigured = processH264NalUnit(nalUnit, currentConfigured) || currentConfigured
         }
         return currentConfigured
     }
 
-    private fun drainH265(
-        nalBuffer: ByteBuffer,
+    private fun processH265ConfigPacket(
+        payload: ByteArray,
         configured: Boolean,
     ): Boolean {
         var currentConfigured = configured
-        while (nalBuffer.position() >= 4) {
-            val beforePosition = nalBuffer.position()
-            val updated = processH265(nalBuffer, currentConfigured)
-            currentConfigured = currentConfigured || updated
-            if (nalBuffer.position() == 0 || nalBuffer.position() == beforePosition) {
-                break
-            }
+        val nalUnits = nalParser.extractNalUnits(payload)
+        if (nalUnits.isEmpty()) {
+            throw VideoDecoderConfigurationException(videoCodec, "H.265 config packet contains no Annex-B NAL units")
+        }
+        for (nalUnit in nalUnits) {
+            currentConfigured = processH265NalUnit(nalUnit, currentConfigured) || currentConfigured
         }
         return currentConfigured
     }
 
-    private fun processH264(
-        nalBuffer: ByteBuffer,
+    private fun processH264NalUnit(
+        nalUnit: ByteArray,
         configured: Boolean,
     ): Boolean {
-        val nalUnit = nalParser.extractNalUnit(nalBuffer) ?: return configured
         return when (nalParser.getH264NalType(nalUnit)) {
             VideoNalParser.H264_NAL_SPS -> {
                 pendingH264Sps = nalUnit.copyOf()
@@ -302,15 +289,14 @@ internal class VideoDecoderPacketProcessor(
         lastH264Sps = sps
         lastH264Pps = pps
         surfaceController.applyPendingSurface(newDecoder, isStopped())
-        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H264 CSD has been accumulated and configured: sps=${sps.size} pps=${pps.size}" }
+        VideoDebugLog.d(LogTags.VIDEO_DECODER) { "H264 CSD packet configured: sps=${sps.size} pps=${pps.size}" }
         return true
     }
 
-    private fun processH265(
-        nalBuffer: ByteBuffer,
+    private fun processH265NalUnit(
+        nalUnit: ByteArray,
         configured: Boolean,
     ): Boolean {
-        val nalUnit = nalParser.extractNalUnit(nalBuffer) ?: return configured
         return when (nalParser.getH265NalType(nalUnit)) {
             VideoNalParser.H265_NAL_VPS -> {
                 pendingH265Vps = nalUnit.copyOf()
@@ -361,26 +347,21 @@ internal class VideoDecoderPacketProcessor(
         lastH265Pps = pps
         surfaceController.applyPendingSurface(newDecoder, isStopped())
         VideoDebugLog.d(LogTags.VIDEO_DECODER) {
-            "H265 CSD has been accumulated and configured: vps=${vps.size} sps=${sps.size} pps=${pps.size}"
+            "H265 CSD packet configured: vps=${vps.size} sps=${sps.size} pps=${pps.size}"
         }
         return true
     }
 
     private fun processAV1(
-        nalBuffer: ByteBuffer,
+        frameData: ByteArray,
         configured: Boolean,
         pts: Long,
         packetIsConfig: Boolean,
         packetIsKeyFrame: Boolean,
     ): Boolean {
-        if (nalBuffer.position() <= 0) {
+        if (frameData.isEmpty()) {
             return configured
         }
-
-        nalBuffer.flip()
-        val frameData = ByteArray(nalBuffer.remaining())
-        nalBuffer.get(frameData)
-        nalBuffer.clear()
 
         if (packetIsConfig) {
             lastAv1Config = frameData.copyOf()
@@ -408,18 +389,13 @@ internal class VideoDecoderPacketProcessor(
     }
 
     private fun processVpx(
-        frameBuffer: ByteBuffer,
+        frameData: ByteArray,
         configured: Boolean,
         pts: Long,
         packetIsConfig: Boolean,
         packetIsKeyFrame: Boolean,
     ): Boolean {
-        if (frameBuffer.position() <= 0) return configured
-
-        frameBuffer.flip()
-        val frameData = ByteArray(frameBuffer.remaining())
-        frameBuffer.get(frameData)
-        frameBuffer.clear()
+        if (frameData.isEmpty()) return configured
 
         if (!configured) {
             val newDecoder = getDecoder()?.let {

@@ -35,4 +35,33 @@ class RemoteScreenOrientationTest {
         )
         assertNull(requestedOrientationForRemoteScreen(null))
     }
+
+    @Test
+    fun `local rotation policy removes orientation restrictions`() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            requestedOrientationForRotationPolicy(
+                followRemoteOrientation = false,
+                remoteOrientation = RemoteScreenOrientation.LANDSCAPE,
+            ),
+        )
+    }
+
+    @Test
+    fun `target rotation policy follows the remote screen`() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            requestedOrientationForRotationPolicy(
+                followRemoteOrientation = true,
+                remoteOrientation = RemoteScreenOrientation.LANDSCAPE,
+            ),
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            requestedOrientationForRotationPolicy(
+                followRemoteOrientation = true,
+                remoteOrientation = RemoteScreenOrientation.PORTRAIT,
+            ),
+        )
+    }
 }

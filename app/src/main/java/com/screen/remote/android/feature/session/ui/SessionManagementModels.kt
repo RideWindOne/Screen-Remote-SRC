@@ -142,6 +142,15 @@ internal data class DeviceDashboardSnapshot(
     }
 }
 
+internal fun managementConnectionEndpoint(
+    sessionData: SessionData,
+    activeDeviceId: String?,
+): String =
+    activeDeviceId
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: sessionData.primaryConnectionEndpointForDisplay()
+
 internal data class DeviceIpv4Interface(
     val name: String,
     val address: String,

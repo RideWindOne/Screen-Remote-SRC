@@ -3,6 +3,7 @@ package com.screen.remote.android.infrastructure.scrcpy.client
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import com.screen.remote.android.core.common.LogTags
@@ -13,6 +14,7 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
+import com.screen.remote.android.core.domain.model.compatibilityCaptureSettings
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
@@ -25,6 +27,8 @@ import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionStat
 import com.screen.remote.android.infrastructure.scrcpy.controller.ScrcpyController
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.service.ScrcpyForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +41,15 @@ class ScrcpyClient(
     private val context: Context,
     private val adbConnectionManager: AdbConnectionManager,
 ) {
-    private val sessionRuntime = ScrcpyClientSessionRuntime(context)
+    private val _decoderResolutionRecoveryRequest =
+        MutableStateFlow<DecoderResolutionRecoveryRequest?>(null)
+    val decoderResolutionRecoveryRequest: StateFlow<DecoderResolutionRecoveryRequest?> =
+        _decoderResolutionRecoveryRequest
+
+    private val sessionRuntime =
+        ScrcpyClientSessionRuntime(context) { request ->
+            _decoderResolutionRecoveryRequest.value = request
+        }
     val sessionManager = sessionRuntime.sessionManager
     private val issueTracker = SessionIssueTracker()
 
@@ -46,6 +58,8 @@ class ScrcpyClient(
     private val sessionContext: SessionContext = sessionRuntime.sessionContext
 
     init {
+        ScrcpyDiagnosticsRegistry.register(this)
+
         // 加载 Native 库
         try {
             System.loadLibrary("scrcpy_adb_bridge")
@@ -99,6 +113,24 @@ class ScrcpyClient(
 
     private val _videoResolution = MutableStateFlow<Pair<Int, Int>?>(null)
     val videoResolution: StateFlow<Pair<Int, Int>?> = _videoResolution
+
+    private val _compatibilityFrame = MutableStateFlow<Bitmap?>(null)
+    val compatibilityFrame: StateFlow<Bitmap?> = _compatibilityFrame
+
+    private val compatibilityModeController =
+        CompatibilityModeController(
+            context = context,
+            adbConnectionManager = adbConnectionManager,
+            getDeviceId = ::getCurrentDeviceId,
+            getCaptureSettings = {
+                getCurrentSessionOptions()?.config?.compatibilityCaptureSettings()
+            },
+            onFrame = { frame -> _compatibilityFrame.value = frame },
+            onResolution = { width, height -> _videoResolution.value = width to height },
+            onCaptureFailure = { message ->
+                _connectionState.value = ConnectionState.Error(message)
+            },
+        )
 
     // 事件处理器
     private val eventHandler =
@@ -164,17 +196,39 @@ class ScrcpyClient(
         sessionId: String,
         options: ScrcpyOptions,
         isReconnecting: Boolean = false,
-    ): Result<Boolean> = connectionCoordinator.connect(sessionId, options, isReconnecting)
+    ): Result<Boolean> {
+        compatibilityModeController.stop()
+        val result = connectionCoordinator.connect(sessionId, options, isReconnecting)
+        if (result.isSuccess && options.config.compatibilityMode) {
+            compatibilityModeController.start()
+        }
+        return result
+    }
 
     /**
      * 断开连接（完整清理）
      */
-    suspend fun disconnect(): Result<Boolean> = connectionCoordinator.disconnect()
+    suspend fun disconnect(): Result<Boolean> {
+        compatibilityModeController.stop()
+        return connectionCoordinator.disconnect()
+    }
 
     /**
      * 取消连接（部分清理）
      */
-    suspend fun cancelConnect(): Result<Boolean> = connectionCoordinator.cancelConnect()
+    suspend fun cancelConnect(): Result<Boolean> {
+        compatibilityModeController.stop()
+        return connectionCoordinator.cancelConnect()
+    }
+
+    fun confirmDecoderResolutionRecovery() {
+        sessionManager.currentOrNull?.handleEvent(SessionEvent.ConfirmDecoderResolutionRecovery)
+    }
+
+    fun dismissDecoderResolutionRecovery() {
+        sessionManager.currentOrNull?.handleEvent(SessionEvent.DismissDecoderResolutionRecovery)
+            ?: run { _decoderResolutionRecoveryRequest.value = null }
+    }
 
     /**
      * 控制方法委托
@@ -187,18 +241,38 @@ class ScrcpyClient(
         screenWidth: Int,
         screenHeight: Int,
         pressure: Float = 1.0f,
-    ): Result<Boolean> = controller.sendTouchEvent(action, pointerId, x, y, screenWidth, screenHeight, pressure)
+    ): Result<Boolean> =
+        if (isCompatibilityMode()) {
+            compatibilityModeController.sendTouchEvent(action, pointerId, x, y)
+        } else {
+            controller.sendTouchEvent(action, pointerId, x, y, screenWidth, screenHeight, pressure)
+        }
 
     suspend fun sendKeyEvent(
         keyCode: Int,
         action: Int = -1,
         repeat: Int = 0,
         metaState: Int = 0,
-    ): Result<Boolean> = controller.sendKeyEvent(keyCode, action, repeat, metaState)
+    ): Result<Boolean> =
+        if (isCompatibilityMode()) {
+            compatibilityModeController.sendKeyEvent(keyCode, action)
+        } else {
+            controller.sendKeyEvent(keyCode, action, repeat, metaState)
+        }
 
-    suspend fun sendText(text: String): Result<Boolean> = controller.sendText(text)
+    suspend fun sendText(text: String): Result<Boolean> =
+        if (isCompatibilityMode()) {
+            compatibilityModeController.sendText(text)
+        } else {
+            controller.sendText(text)
+        }
 
-    suspend fun setClipboardAndPaste(text: String): Result<Boolean> = controller.setClipboardAndPaste(text)
+    suspend fun setClipboardAndPaste(text: String): Result<Boolean> =
+        if (isCompatibilityMode()) {
+            compatibilityModeController.sendText(text)
+        } else {
+            controller.setClipboardAndPaste(text)
+        }
 
     private fun updateLocalClipboard(text: String) {
         Handler(Looper.getMainLooper()).post {
@@ -208,6 +282,9 @@ class ScrcpyClient(
     }
 
     suspend fun wakeUpScreen(): Result<Boolean> {
+        if (isCompatibilityMode()) {
+            return compatibilityModeController.wakeUpScreen()
+        }
         val resolution = videoResolution.value
         return if (resolution != null) {
             val (width, height) = resolution
@@ -255,6 +332,9 @@ class ScrcpyClient(
         lifecycle.activeDeviceId ?: sessionManager.currentOrNull?.adbConnection?.deviceId
 
     fun getCurrentSessionOptions(): ScrcpyOptions? = sessionManager.currentOrNull?.options
+
+    private fun isCompatibilityMode(): Boolean =
+        getCurrentSessionOptions()?.config?.compatibilityMode == true
 
     fun createSessionContext(): SessionContext = sessionRuntime.createBoundContext()
 }

@@ -10,18 +10,27 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.GroupRepository
 import com.screen.remote.android.core.domain.model.AppSettings
+import com.screen.remote.android.core.domain.model.AppLanguage
+import com.screen.remote.android.core.domain.model.ThemeMode
+import com.screen.remote.android.app.deeplink.requireBoolean
+import com.screen.remote.android.app.deeplink.toUrlRuntimeSession
+import com.screen.remote.android.app.deeplink.UrlSetting
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
+import com.screen.remote.android.core.data.storage.SessionStorage
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.domain.model.ScrcpyAction
-import com.screen.remote.android.core.update.parseAppVersion
+import com.screen.remote.android.core.update.UpdateChannel
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.data.repository.toData
 import com.screen.remote.android.core.domain.model.markConnectionCandidateSuccess
 import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
+import com.screen.remote.android.feature.session.update.hasUnseenRecentUpdateContent
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
+import com.screen.remote.android.feature.device.viewmodel.AdbKeysViewModel
 import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -73,8 +82,7 @@ internal fun resolveSessionOnboardingState(
 ): SessionOnboardingState =
     when {
         lastSeenVersion == null -> SessionOnboardingState.INTRODUCTION
-        parseAppVersion(lastSeenVersion) == null -> SessionOnboardingState.RECENT_UPDATES
-        lastSeenVersion != currentVersion -> SessionOnboardingState.RECENT_UPDATES
+        hasUnseenRecentUpdateContent(lastSeenVersion, currentVersion) -> SessionOnboardingState.RECENT_UPDATES
         else -> SessionOnboardingState.HIDDEN
     }
 
@@ -109,6 +117,8 @@ class MainViewModel(
     val connectionViewModel = ConnectionViewModel(scrcpyClient, sessionRepository)
     val settingsViewModel = SettingsViewModel(dependencies.preferencesManager)
     val controlViewModel = ControlViewModel(scrcpyClient, dependencies.adbConnectionManager)
+    private val _urlSessionData = MutableStateFlow<SessionData?>(null)
+    val urlSessionData: StateFlow<SessionData?> = _urlSessionData.asStateFlow()
 
     // ============ 会话数据（直接委托，避免重复订阅） ============
 
@@ -162,8 +172,9 @@ class MainViewModel(
 
     val showAddSessionDialog: StateFlow<Boolean> get() = sessionViewModel.showAddSessionDialog
     val editingSessionId: StateFlow<String?> get() = sessionViewModel.editingSessionId
+    val newSessionPrefill: StateFlow<NewSessionPrefill> get() = sessionViewModel.newSessionPrefill
 
-    fun showAddSessionDialog() = sessionViewModel.showAddSessionDialog()
+    fun showAddSessionDialog(prefill: NewSessionPrefill = NewSessionPrefill()) = sessionViewModel.showAddSessionDialog(prefill)
 
     fun completeSessionOnboarding() {
         viewModelScope.launch {
@@ -218,6 +229,24 @@ class MainViewModel(
 
     fun connectSession(sessionId: String) = connectionViewModel.connectSession(sessionId)
 
+    fun connectUrlSession(
+        sessionData: SessionData,
+        parameters: Map<String, String>,
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val effectiveOptions = SessionStorage(dependencies.appContext).getOptions(sessionData.id)
+            sessionData
+                .toUrlRuntimeSession(
+                    runtimeId = "url:${java.util.UUID.randomUUID()}",
+                    parameters = parameters,
+                    effectiveOptions = effectiveOptions,
+                ).onSuccess(connectionViewModel::connectSession)
+                .onFailure { error ->
+                    LogManager.w(LogTags.CONNECTION_VM, "Invalid scrcpy URL parameters: ${error.message}")
+                }
+        }
+    }
+
     fun clearConnectStatus() = connectionViewModel.clearConnectStatus()
 
     fun disconnectFromDevice() = connectionViewModel.disconnectFromDevice()
@@ -237,6 +266,50 @@ class MainViewModel(
             managementConnection.connect(sessionId)
         }
     }
+
+    fun connectManagementSession(sessionData: SessionData) {
+        _urlSessionData.value = sessionData
+        managementConnectJob?.cancel()
+        managementConnectJob = viewModelScope.launch(Dispatchers.IO) {
+            managementConnection.connect(sessionData)
+        }
+    }
+
+    fun generateAdbKeys() {
+        viewModelScope.launch {
+            AdbKeysViewModel(dependencies.appContext, dependencies.adbConnectionManager)
+                .generateAdbKeys()
+        }
+    }
+
+    fun applyUrlSetting(
+        setting: String,
+        value: String,
+    ): Boolean =
+        runCatching {
+            val current = settingsViewModel.settings.value
+            val urlSetting = UrlSetting.fromName(setting) ?: error("Unsupported URL setting: $setting")
+            val updated =
+                when (urlSetting) {
+                    UrlSetting.DEBUG_MODE -> current.copy(enableDebugMode = value.requireBoolean(setting))
+                    UrlSetting.ACTIVITY_LOG -> current.copy(enableActivityLog = value.requireBoolean(setting))
+                    UrlSetting.AUDIO_LOG -> current.copy(enableAudioStreamLog = value.requireBoolean(setting))
+                    UrlSetting.VIDEO_LOG -> current.copy(enableVideoStreamLog = value.requireBoolean(setting))
+                    UrlSetting.CONTROL_LOG -> current.copy(enableControlStreamLog = value.requireBoolean(setting))
+                    UrlSetting.EVENT_LOG -> current.copy(enableEventStreamLog = value.requireBoolean(setting))
+                    UrlSetting.SHELL_LOG -> current.copy(enableShellStreamLog = value.requireBoolean(setting))
+                    UrlSetting.MANAGEMENT_LOG -> current.copy(enableManagementLog = value.requireBoolean(setting))
+                    UrlSetting.HAPTIC -> current.copy(enableFloatingHapticFeedback = value.requireBoolean(setting))
+                    UrlSetting.PERFORMANCE_STATS -> current.copy(showPerformanceStats = value.requireBoolean(setting))
+                    UrlSetting.AUTO_UPDATE -> current.copy(autoCheckUpdates = value.requireBoolean(setting))
+                    UrlSetting.UPDATE_CHANNEL -> current.copy(updateChannel = UpdateChannel.valueOf(value.uppercase()))
+                    UrlSetting.THEME -> current.copy(themeMode = ThemeMode.valueOf(value.uppercase()))
+                    UrlSetting.LANGUAGE -> current.copy(language = AppLanguage.valueOf(value.uppercase()))
+                }
+            settingsViewModel.updateSettings(updated)
+        }.onFailure { error ->
+            LogManager.w(LogTags.SETTINGS_VM, "Failed to apply URL setting: ${error.message}")
+        }.isSuccess
 
     fun cancelManagementConnect(sessionId: String) {
         managementConnectJob?.cancel()
@@ -392,6 +465,17 @@ private class ManagementAdbSessionController(
     val deviceId: StateFlow<String?> = _deviceId.asStateFlow()
 
     suspend fun connect(sessionId: String) {
+        val sessionData = sessionRepository.getSessionData(sessionId)
+        if (sessionData == null) {
+            LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId session does not exist")
+            _status.value = ManagementConnectStatus.Failed(sessionId)
+            return
+        }
+        connect(sessionData)
+    }
+
+    suspend fun connect(sessionData: SessionData) {
+        val sessionId = sessionData.id
         val generation = connectGeneration.incrementAndGet()
         LogManager.i(LogTags.MANAGEMENT, "Start establishing a management connection: sessionId=$sessionId generation=$generation")
         val existingStatus = _status.value
@@ -422,14 +506,6 @@ private class ManagementAdbSessionController(
         }
 
         _status.value = ManagementConnectStatus.Connecting(sessionId)
-
-        val sessionData = sessionRepository.getSessionData(sessionId)
-        if (connectGeneration.get() != generation) return
-        if (sessionData == null) {
-            LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId session does not exist")
-            _status.value = ManagementConnectStatus.Failed(sessionId)
-            return
-        }
 
         if (!existingConnectionHandled && existingDeviceId != null) {
             val candidateDeviceIds =

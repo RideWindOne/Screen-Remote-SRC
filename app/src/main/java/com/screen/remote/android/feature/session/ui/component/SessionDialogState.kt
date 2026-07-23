@@ -14,10 +14,12 @@ import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.domain.model.formatSessionAddress
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.domain.model.parseTcpHostPort
 import com.screen.remote.android.core.domain.model.toAddressEndpoint
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import java.util.UUID
 
 /**
@@ -26,15 +28,21 @@ import java.util.UUID
 @Suppress("unused")
 class SessionDialogState(
     sessionData: SessionData? = null,
+    initialPrefill: NewSessionPrefill = NewSessionPrefill(),
 ) {
-    private val initialConfig = sessionData?.config ?: ScrcpyConfig()
+    private val initialConfig = sessionData?.config ?: initialPrefill.initialConfig()
     private val initialCapabilityCache = sessionData?.capabilityCache ?: DeviceCapabilityCache()
     private val initialPrimaryCandidate =
         sessionData?.toConnectionCandidates()?.minByOrNull(ConnectionCandidate::priority)
-    var deviceType by mutableStateOf(SessionDeviceType.from(sessionData))
+            ?: initialPrefill.address?.let(::parseSessionAddressCandidate)
+    var deviceType by mutableStateOf(SessionDeviceType.from(sessionData, initialPrimaryCandidate))
 
     // 基本信息
-    var sessionName by mutableStateOf(sessionData?.name ?: "")
+    var sessionName by mutableStateOf(
+        sessionData?.name
+            ?: initialPrefill.name
+            ?: initialPrefill.address.orEmpty(),
+    )
     var host by mutableStateOf(
         when (initialPrimaryCandidate?.transport) {
             ConnectionTransport.USB -> ""
@@ -50,10 +58,17 @@ class SessionDialogState(
             ?.toString()
             ?: "0",
     )
-    var color by mutableStateOf(sessionData?.color ?: "BLUE")
-    var profileId by mutableStateOf(sessionData?.profileId ?: "")
-    var useProfileDefaults by mutableStateOf(sessionData?.useProfileDefaults ?: false)
-    var backupEndpoints by mutableStateOf(backupEndpointsFrom(sessionData))
+    var color by mutableStateOf(sessionData?.color ?: initialPrefill.color ?: "BLUE")
+    var profileId by mutableStateOf(sessionData?.profileId ?: initialPrefill.profileId.orEmpty())
+    var useProfileDefaults by mutableStateOf(
+        sessionData?.useProfileDefaults
+            ?: initialPrefill.useProfileDefaults
+            ?: false,
+    )
+    var backupEndpoints by mutableStateOf(
+        sessionData?.let(::backupEndpointsFrom)
+            ?: initialPrefill.backupAddresses,
+    )
 
     // USB 模式
     var isUsbMode: Boolean
@@ -66,7 +81,7 @@ class SessionDialogState(
     )
 
     // 分组
-    var selectedGroupIds by mutableStateOf(sessionData?.groupIds ?: emptyList())
+    var selectedGroupIds by mutableStateOf(sessionData?.groupIds ?: initialPrefill.groupIds)
 
     // 会话级配置和设备能力各自保持单一状态对象，避免在 UI 草稿层再次展开整套字段。
     var config by mutableStateOf(initialConfig)
@@ -101,6 +116,9 @@ class SessionDialogState(
     var showRemoteAppSelector by mutableStateOf(false)
 
     init {
+        if (config.compatibilityMode) {
+            normalizeCompatibilityMode()
+        }
         if (config.gameMode) {
             config = config.copy(useFullScreen = false)
             normalizeGameVideoSettings()
@@ -110,6 +128,13 @@ class SessionDialogState(
     @Suppress("unused", "UNUSED_PARAMETER")
     fun updateConfig(transform: ScrcpyConfig.() -> ScrcpyConfig) {
         config = config.transform()
+        if (config.compatibilityMode && (config.enableAudio || config.clipboardSync)) {
+            config =
+                config.copy(
+                    enableAudio = false,
+                    clipboardSync = false,
+                )
+        }
     }
 
     @Suppress("unused", "UNUSED_PARAMETER")
@@ -119,11 +144,41 @@ class SessionDialogState(
 
     fun updateGameMode(enabled: Boolean) {
         if (config.gameMode == enabled) return
-        config = config.copy(gameMode = enabled)
+        config = config.copy(
+            gameMode = enabled,
+            compatibilityMode = config.compatibilityMode && !enabled,
+        )
         if (enabled) {
             config = config.copy(useFullScreen = false)
             normalizeGameVideoSettings()
         }
+    }
+
+    fun updateCompatibilityMode(enabled: Boolean) {
+        if (config.compatibilityMode == enabled) return
+        config = config.copy(compatibilityMode = enabled)
+        if (enabled) {
+            normalizeCompatibilityMode()
+        }
+    }
+
+    private fun normalizeCompatibilityMode() {
+        config =
+            config.copy(
+                gameMode = false,
+                useFullScreen = false,
+                enableHardwareDecoding = false,
+                tunnelMode = ScrcpyTunnelMode.DIRECT_ADB,
+                enableAudio = false,
+                clipboardSync = false,
+                turnScreenOff = false,
+                powerOffOnClose = false,
+                cleanupOnDisconnect = false,
+                stayAwake = false,
+                ignoreVideoEncoderConstraints = false,
+                newDisplayEnabled = false,
+                showTouches = false,
+            )
     }
 
     private fun normalizeGameVideoSettings() {
@@ -169,15 +224,41 @@ class SessionDialogState(
                     videoBitRate = parseBitrateBitsPerSecond(videoBitrate) ?: ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
                     maxFps = maxFps.toIntOrNull() ?: 60,
                     newDisplay =
-                        if (config.newDisplayEnabled) {
+                        if (config.newDisplayEnabled && !config.compatibilityMode) {
                             buildNewDisplay(newDisplayWidth, newDisplayHeight, newDisplayDpi)
                         } else {
                             ""
                         },
                     audioBitRate = parseBitrateBitsPerSecond(audioBitrate) ?: 128000,
-                    stayAwake = config.stayAwake && config.cleanupOnDisconnect,
-                    useFullScreen = config.useFullScreen && !config.gameMode,
-                    startApp = if (config.newDisplayEnabled) config.startApp.trim() else "",
+                    enableHardwareDecoding = config.enableHardwareDecoding && !config.compatibilityMode,
+                    tunnelMode =
+                        if (config.compatibilityMode) {
+                            ScrcpyTunnelMode.DIRECT_ADB
+                        } else {
+                            config.tunnelMode
+                        },
+                    useFullScreen = config.useFullScreen && !config.gameMode && !config.compatibilityMode,
+                    enableAudio = config.enableAudio && !config.compatibilityMode,
+                    clipboardSync = config.clipboardSync && !config.compatibilityMode,
+                    turnScreenOff = config.turnScreenOff && !config.compatibilityMode,
+                    powerOffOnClose =
+                        config.powerOffOnClose &&
+                            config.cleanupOnDisconnect &&
+                            !config.compatibilityMode,
+                    cleanupOnDisconnect = config.cleanupOnDisconnect && !config.compatibilityMode,
+                    stayAwake =
+                        config.stayAwake &&
+                            config.cleanupOnDisconnect &&
+                            !config.compatibilityMode,
+                    ignoreVideoEncoderConstraints = config.ignoreVideoEncoderConstraints && !config.compatibilityMode,
+                    newDisplayEnabled = config.newDisplayEnabled && !config.compatibilityMode,
+                    showTouches = config.showTouches && !config.compatibilityMode,
+                    startApp =
+                        if (config.newDisplayEnabled && !config.compatibilityMode) {
+                            config.startApp.trim()
+                        } else {
+                            ""
+                        },
                 ),
             tcpPortForwardRules = tcpPortForwardRules ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),
             capabilityCache =
@@ -311,24 +392,6 @@ class SessionDialogState(
     }
 }
 
-internal val GAME_MAX_SIZE_OPTIONS = listOf(720, 1080, 1920)
-
-/**
- * 高帧率游戏场景需要为复杂画面保留码率余量，避免编码器因缺少码率而持续抬高 QP。
- * 建议来源：https://github.com/Genymobile/scrcpy/pull/6954#issuecomment-5022877392
- */
-internal val GAME_VIDEO_BITRATE_OPTIONS = listOf(1_000_000, 2_000_000, 4_000_000, 8_000_000, 12_000_000, 20_000_000)
-internal const val GAME_VIDEO_BITRATE_DEFAULT = 2_000_000
-internal val GAME_MAX_FPS_OPTIONS = listOf(60, 90, 120)
-
-internal fun closestGameOption(
-    value: Int?,
-    options: List<Int>,
-    defaultValue: Int,
-): Int =
-    value?.let { current -> options.minByOrNull { option -> kotlin.math.abs(option.toLong() - current.toLong()) } }
-        ?: defaultValue
-
 private fun parseBitrateBitsPerSecond(value: String): Int? {
     val normalized = value.trim().lowercase()
     if (normalized.isBlank()) return null
@@ -372,14 +435,35 @@ enum class SessionDeviceType {
     ;
 
     companion object {
-        fun from(sessionData: SessionData?): SessionDeviceType =
+        fun from(
+            sessionData: SessionData?,
+            candidate: ConnectionCandidate? = null,
+        ): SessionDeviceType =
             when {
-                sessionData?.isUsbConnection() == true -> USB
-                sessionData?.isMdnsConnection() == true -> MDNS
+                sessionData?.isUsbConnection() == true || candidate?.transport == ConnectionTransport.USB -> USB
+                sessionData?.isMdnsConnection() == true || candidate?.transport == ConnectionTransport.MDNS -> MDNS
                 else -> TCP
             }
     }
 }
+
+internal val GAME_MAX_SIZE_OPTIONS = listOf(720, 1080, 1920)
+
+/**
+ * 高帧率游戏场景需要为复杂画面保留码率余量，避免编码器因缺少码率而持续抬高 QP。
+ * 建议来源：https://github.com/Genymobile/scrcpy/pull/6954#issuecomment-5022877392
+ */
+internal val GAME_VIDEO_BITRATE_OPTIONS = listOf(1_000_000, 2_000_000, 4_000_000, 8_000_000, 12_000_000, 20_000_000)
+internal const val GAME_VIDEO_BITRATE_DEFAULT = 2_000_000
+internal val GAME_MAX_FPS_OPTIONS = listOf(60, 90, 120)
+
+internal fun closestGameOption(
+    value: Int?,
+    options: List<Int>,
+    defaultValue: Int,
+): Int =
+    value?.let { current -> options.minByOrNull { option -> kotlin.math.abs(option.toLong() - current.toLong()) } }
+        ?: defaultValue
 
 internal data class NewDisplayParts(
     val width: String = "",

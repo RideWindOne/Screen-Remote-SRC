@@ -88,6 +88,20 @@ data class DecoderIssue(
         get() = detail
 }
 
+data class DecoderResolutionRecoveryRequest(
+    val width: Int,
+    val height: Int,
+    val suggestedMaxSize: Int,
+    val decoderName: String,
+    val source: VideoResolutionRecoverySource = VideoResolutionRecoverySource.Decoder,
+    val detail: String = "",
+)
+
+enum class VideoResolutionRecoverySource {
+    Decoder,
+    ServerCapture,
+}
+
 enum class DecoderIssueKind {
     CreateFailed,
     UnsupportedSize,

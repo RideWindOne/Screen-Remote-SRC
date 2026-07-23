@@ -7,9 +7,16 @@
 
 package com.screen.remote.android.core.common.util.compat
 
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Build
+import android.view.Surface
+import androidx.annotation.RequiresApi
 
 /**
  * 获取视频编解码器的 MIME 类型（兼容不同 API 级别）
@@ -88,6 +95,97 @@ fun getPcmEncodingOrDefault(
     } else {
         defaultEncoding
     }
+
+fun createAudioTrackCompat(
+    sampleRate: Int,
+    channelMask: Int,
+    encoding: Int,
+    bufferSize: Int,
+): AudioTrack =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        Api23Media.createAudioTrack(sampleRate, channelMask, encoding, bufferSize)
+    } else {
+        @Suppress("DEPRECATION")
+        AudioTrack(
+            AudioManager.STREAM_MUSIC,
+            sampleRate,
+            channelMask,
+            encoding,
+            bufferSize,
+            AudioTrack.MODE_STREAM,
+        )
+    }
+
+fun writeAudioTrackBlockingCompat(
+    audioTrack: AudioTrack,
+    data: ByteArray,
+    offset: Int,
+    size: Int,
+): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        Api23Media.writeBlocking(audioTrack, data, offset, size)
+    } else {
+        audioTrack.write(data, offset, size)
+    }
+
+/**
+ * API 21-22 cannot replace a configured codec's output Surface.
+ * Returns false so the caller can retain the target for the next codec configuration.
+ */
+fun setOutputSurfaceCompat(
+    codec: MediaCodec,
+    surface: Surface,
+): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
+    Api23Media.setOutputSurface(codec, surface)
+    return true
+}
+
+@RequiresApi(Build.VERSION_CODES.M)
+private object Api23Media {
+    fun createAudioTrack(
+        sampleRate: Int,
+        channelMask: Int,
+        encoding: Int,
+        bufferSize: Int,
+    ): AudioTrack {
+        val builder =
+            AudioTrack
+                .Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                ).setAudioFormat(
+                    AudioFormat
+                        .Builder()
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(channelMask)
+                        .setEncoding(encoding)
+                        .build(),
+                ).setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+        }
+        return builder.build()
+    }
+
+    fun writeBlocking(
+        audioTrack: AudioTrack,
+        data: ByteArray,
+        offset: Int,
+        size: Int,
+    ): Int = audioTrack.write(data, offset, size, AudioTrack.WRITE_BLOCKING)
+
+    fun setOutputSurface(
+        codec: MediaCodec,
+        surface: Surface,
+    ) {
+        codec.setOutputSurface(surface)
+    }
+}
 
 /**
  * 安全地从 MediaFormat 获取裁剪区域

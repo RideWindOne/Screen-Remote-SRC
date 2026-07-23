@@ -9,6 +9,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionR
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.processEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.stopMonitor
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionComponentStateSnapshot
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
@@ -34,6 +35,7 @@ class Session(
     private var _options: ScrcpyOptions,
     internal val storage: SessionStorage,
     val onVideoResolution: (Int, Int) -> Unit,
+    private val onDecoderResolutionRecoveryRequest: (DecoderResolutionRecoveryRequest?) -> Unit,
 ) {
     private val optionsLock = Any()
     private val rejectedDecoderLock = Any()
@@ -43,6 +45,7 @@ class Session(
     internal val runtime = SessionRuntimeState()
     internal var adbConnection: AdbConnection? = null
     internal var monitorBus: ScrcpyMonitorBus? = null
+    private var pendingDecoderResolutionRecovery: DecoderResolutionRecoveryRequest? = null
 
     init {
         eventScope.launch {
@@ -110,6 +113,25 @@ class Session(
         }
     }
 
+    internal fun publishDecoderResolutionRecovery(request: DecoderResolutionRecoveryRequest) {
+        pendingDecoderResolutionRecovery = request
+        onDecoderResolutionRecoveryRequest(request)
+    }
+
+    internal fun consumeDecoderResolutionRecovery(): DecoderResolutionRecoveryRequest? =
+        pendingDecoderResolutionRecovery.also {
+            pendingDecoderResolutionRecovery = null
+            onDecoderResolutionRecoveryRequest(null)
+        }
+
+    internal fun clearDecoderResolutionRecovery() {
+        pendingDecoderResolutionRecovery = null
+        onDecoderResolutionRecoveryRequest(null)
+    }
+
+    internal fun hasPendingDecoderResolutionRecovery(): Boolean =
+        pendingDecoderResolutionRecovery != null
+
     fun handleEvent(event: SessionEvent) {
         if (eventChannel.trySend(QueuedSessionEvent(event)).isFailure) {
             LogManager.w(LogTags.SCRCPY_CLIENT, "Session stopped, event ignored: ${event::class.simpleName}")
@@ -135,6 +157,7 @@ class Session(
         }
         monitorBus = null
         adbConnection = null
+        clearDecoderResolutionRecovery()
         synchronized(rejectedDecoderLock) { runtimeRejectedDecoderNamesByKey.clear() }
         eventChannel.close()
         eventScope.cancel()

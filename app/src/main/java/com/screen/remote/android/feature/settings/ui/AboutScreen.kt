@@ -26,20 +26,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
@@ -68,10 +68,14 @@ import androidx.core.net.toUri
 import com.screen.remote.android.R
 import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.AppDimens
+import com.screen.remote.android.core.common.IosDesignTokens
+import com.screen.remote.android.core.designsystem.component.IOSSwitch
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
+import com.screen.remote.android.core.telemetry.TelemetryPreferences
+import com.screen.remote.android.core.telemetry.TelemetryJournal
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.AppUpdateDownloader
@@ -90,11 +94,14 @@ fun AboutScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val updateChecker = remember { GitHubReleaseUpdateChecker() }
     val preferencesManager = remember(context) { PreferencesManager(context.applicationContext) }
+    val telemetryPreferences = remember(context) { TelemetryPreferences(context.applicationContext) }
     var showWechatGroupDialog by remember { mutableStateOf(false) }
     var showDonateDialog by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
     var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     var autoCheckUpdates by remember { mutableStateOf<Boolean?>(null) }
+    var telemetryEnabled by remember { mutableStateOf<Boolean?>(null) }
+    var showTelemetryConsentDialog by remember { mutableStateOf(false) }
 
     fun checkForUpdate() {
         if (checkingUpdate) return
@@ -122,6 +129,7 @@ fun AboutScreen(onBack: () -> Unit) {
     LaunchedEffect(preferencesManager) {
         val settings = preferencesManager.settingsFlow.first()
         autoCheckUpdates = settings.autoCheckUpdates
+        telemetryEnabled = telemetryPreferences.stateFlow.first().enabled
     }
 
     DialogPage(
@@ -154,68 +162,6 @@ fun AboutScreen(onBack: () -> Unit) {
                 textAlign = TextAlign.Center,
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = { checkForUpdate() },
-                    enabled = !checkingUpdate,
-                ) {
-                    if (checkingUpdate) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(modifier = Modifier.size(8.dp))
-                    }
-                    Text(
-                        if (checkingUpdate) {
-                            SettingsTexts.ABOUT_CHECKING_UPDATE.get()
-                        } else {
-                            SettingsTexts.ABOUT_CHECK_UPDATE.get()
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-
-                Row(
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(enabled = autoCheckUpdates != null) {
-                                val enabled = autoCheckUpdates != true
-                                autoCheckUpdates = enabled
-                                scope.launch {
-                                    val settings = preferencesManager.settingsFlow.first()
-                                    preferencesManager.updateSettings(settings.copy(autoCheckUpdates = enabled))
-                                }
-                            },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(
-                        checked = autoCheckUpdates == true,
-                        onCheckedChange = null,
-                        enabled = autoCheckUpdates != null,
-                        modifier =
-                            Modifier
-                                .requiredSize(26.dp)
-                                .scale(0.72f),
-                    )
-                    Spacer(modifier = Modifier.size(2.dp))
-                    Text(
-                        text = SettingsTexts.ABOUT_AUTO_CHECK_UPDATE.get(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -258,6 +204,91 @@ fun AboutScreen(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(AppDimens.cardCornerRadius),
+            colors =
+                CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        ) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(AppDimens.listItemHeight)
+                        .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = SettingsTexts.ABOUT_AUTO_CHECK_UPDATE.get(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactInlineSpacing),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { checkForUpdate() },
+                        enabled = !checkingUpdate,
+                        modifier = Modifier.size(AppDimens.listItemHeight),
+                    ) {
+                        if (checkingUpdate) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(IosDesignTokens.externalIconSize),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = SettingsTexts.ABOUT_CHECK_UPDATE.get(),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(IosDesignTokens.externalIconSize),
+                            )
+                        }
+                    }
+                    IOSSwitch(
+                        checked = autoCheckUpdates == true,
+                        enabled = autoCheckUpdates != null,
+                        onCheckedChange = { enabled ->
+                            autoCheckUpdates = enabled
+                            scope.launch {
+                                val settings = preferencesManager.settingsFlow.first()
+                                preferencesManager.updateSettings(settings.copy(autoCheckUpdates = enabled))
+                            }
+                        },
+                    )
+                }
+            }
+
+            SettingsDivider()
+
+            SettingsSwitch(
+                title = SettingsTexts.ABOUT_TELEMETRY.get(),
+                checked = telemetryEnabled == true,
+                enabled = telemetryEnabled != null,
+                helpText = SettingsTexts.ABOUT_TELEMETRY_HELP.get(),
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        showTelemetryConsentDialog = true
+                    } else {
+                        telemetryEnabled = false
+                        TelemetryJournal.setEnabled(false)
+                        scope.launch { telemetryPreferences.setEnabled(false) }
+                    }
+                },
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -408,6 +439,35 @@ fun AboutScreen(onBack: () -> Unit) {
         if (showDonateDialog) {
             DonateDialog(
                 onDismiss = { showDonateDialog = false },
+            )
+        }
+
+        if (showTelemetryConsentDialog) {
+            AlertDialog(
+                onDismissRequest = { showTelemetryConsentDialog = false },
+                title = {
+                    Text(SettingsTexts.ABOUT_TELEMETRY_CONSENT_TITLE.get())
+                },
+                text = {
+                    Text(SettingsTexts.ABOUT_TELEMETRY_CONSENT.get())
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showTelemetryConsentDialog = false
+                            telemetryEnabled = true
+                            TelemetryJournal.setEnabled(true)
+                            scope.launch { telemetryPreferences.setEnabled(true) }
+                        },
+                    ) {
+                        Text(SettingsTexts.ABOUT_TELEMETRY_ENABLE.get())
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTelemetryConsentDialog = false }) {
+                        Text(SettingsTexts.ABOUT_TELEMETRY_CANCEL.get())
+                    }
+                },
             )
         }
 

@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.view.Surface
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.compat.setOutputSurfaceCompat
 
 internal class VideoDecoderSurfaceController(
     initialSurface: Surface?,
@@ -93,7 +94,12 @@ internal class VideoDecoderSurfaceController(
                         return
                     }
                     pendingSurface = targetSurface
-                    decoder.setOutputSurface(targetSurface)
+                    if (!setOutputSurfaceCompat(decoder, targetSurface)) {
+                        VideoDebugLog.d(LogTags.VIDEO_DECODER) {
+                            "Output Surface switch deferred until codec reconfiguration on API ${android.os.Build.VERSION.SDK_INT}"
+                        }
+                        return
+                    }
                     appliedSurface = targetSurface
                     pendingSurface = null
 
@@ -132,7 +138,12 @@ internal class VideoDecoderSurfaceController(
 
             val targetSurface = pendingSurface ?: return
             runCatching {
-                codec.setOutputSurface(targetSurface)
+                if (!setOutputSurfaceCompat(codec, targetSurface)) {
+                    // API 21-22 configure new codecs with currentSurface/currentDummySurface.
+                    appliedSurface = targetSurface
+                    pendingSurface = null
+                    return@runCatching
+                }
                 appliedSurface = targetSurface
                 pendingSurface = null
                 VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Delayed Surface switching applied" }

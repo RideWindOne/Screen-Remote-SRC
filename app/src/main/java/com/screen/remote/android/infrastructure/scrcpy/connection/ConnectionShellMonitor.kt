@@ -266,6 +266,11 @@ class ConnectionShellMonitor(
         LogManager.d(LogTags.SCRCPY_SERVER, line)
 
         if (isRuntimeMonitoringEnabled()) {
+            if (line.contains("Capture/encoding error:", ignoreCase = true)) {
+                issueTracker.record("server.video_capture", line)
+                sessionContext.emit(SessionEvent.ServerVideoCaptureError(line))
+                return
+            }
             if (line.contains("error", ignoreCase = true) ||
                 line.contains("exception", ignoreCase = true) ||
                 line.contains("failed", ignoreCase = true)

@@ -140,13 +140,14 @@ internal fun SessionManagementProcessPage(
         helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
     }
 
-    LaunchedEffect(cacheReady, refreshToken) {
-        if (!cacheReady) return@LaunchedEffect
+    LaunchedEffect(cacheReady, helperJar, refreshToken) {
+        val localHelperJar = helperJar
+        if (!cacheReady || localHelperJar == null) return@LaunchedEffect
         val canKeepCurrentContent = processSnapshot.entries.isNotEmpty() && processSnapshot.errorMessage == null
         processRefreshing = true
         val (nextSnapshot, nextMemorySnapshot) =
             coroutineScope {
-                val processDeferred = async { loadProcessListSnapshot() }
+                val processDeferred = async { loadProcessListSnapshot(localHelperJar) }
                 val memoryDeferred = async { loadProcessMemorySnapshot() }
                 processDeferred.await() to memoryDeferred.await()
             }
@@ -901,7 +902,7 @@ private suspend fun loadProcessMemorySnapshot(): ProcessMemorySnapshot? {
     }
 }
 
-private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
+private suspend fun loadProcessListSnapshot(helperJar: java.io.File): ProcessListSnapshot {
     val connection =
         SessionManagementAdbConnection.current()
             ?: return ProcessListSnapshot.loading().copy(
@@ -910,18 +911,22 @@ private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
             )
 
     return runCatching {
-        val output =
+        val processes =
             connection
-                .executeShell(
-                    "ps -A -o PID,RSS,NAME 2>/dev/null || ps -A",
-                    retryOnFailure = false,
-                ).getOrThrow()
+                .loadProcessesWithHelper(localHelperJar = helperJar)
+                .getOrThrow()
 
         val entries =
             withContext(Dispatchers.Default) {
-                output
-                    .lineSequence()
-                    .mapNotNull(::parseProcessLine)
+                processes
+                    .asSequence()
+                    .map { process ->
+                        RawProcessEntry(
+                            name = process.name,
+                            pid = process.pid.toString(),
+                            memoryBytes = process.rssBytes,
+                        )
+                    }
                     .filter { it.name.isAppProcessName() }
                     .groupBy { it.name.substringBefore(':') }
                     .map { (packageName, processes) ->
@@ -963,33 +968,6 @@ private suspend fun loadProcessListSnapshot(): ProcessListSnapshot {
             errorMessage = error.message ?: ManagementTexts.Processes.COULDN_T_LOAD_PROCESS_LIST.get(),
         )
     }
-}
-
-private fun parseProcessLine(line: String): RawProcessEntry? {
-    val tokens = line.trim().split(Regex("\\s+"))
-    if (tokens.size < 3 || tokens.first().equals("PID", ignoreCase = true)) return null
-
-    val compactPid = tokens.getOrNull(0)?.takeIf { it.all(Char::isDigit) }
-    val compactRssKb = tokens.getOrNull(1)?.toLongOrNull()
-    val compactName = tokens.drop(2).joinToString(" ").trim()
-    if (compactPid != null && compactRssKb != null && compactName.isNotBlank()) {
-        return RawProcessEntry(
-            name = compactName,
-            pid = compactPid,
-            memoryBytes = compactRssKb * 1024,
-        )
-    }
-
-    val defaultPid = tokens.getOrNull(1)?.takeIf { it.all(Char::isDigit) } ?: return null
-    val defaultRssKb = tokens.getOrNull(4)?.toLongOrNull() ?: return null
-    val defaultName = tokens.lastOrNull()?.trim().orEmpty()
-    if (defaultName.isBlank()) return null
-
-    return RawProcessEntry(
-        name = defaultName,
-        pid = defaultPid,
-        memoryBytes = defaultRssKb * 1024,
-    )
 }
 
 private fun String.isAppProcessName(): Boolean {

@@ -23,6 +23,7 @@ object AppConstants {
     const val APP_VERSION = BuildConfig.APP_VERSION
     const val SCRCPY_VERSION = BuildConfig.SCRCPY_VERSION
     const val SCRCPY_SERVER_SHA256 = BuildConfig.SCRCPY_SERVER_SHA256
+    const val TELEMETRY_BASE_URL = BuildConfig.TELEMETRY_BASE_URL
     const val SCRCPY_SERVER_PATH = "/data/local/tmp/scrcpy-server.jar"
     const val TELEGRAM_CHANNEL = "https://t.me/joinchat/I_HBlFpB27RkZTRl"
     const val GITHUB_REPO = "https://github.com/XRSec/Screen-Remote"

@@ -10,7 +10,7 @@ import java.util.ArrayDeque
  * evicting its key frame and replaying an undecodable tail.
  */
 internal class VideoDecoderBootstrapCache(
-    private val maxBytes: Int = DEFAULT_MAX_BYTES,
+    private val maxBytes: Int = VideoMemoryPolicy.maxBootstrapCacheBytes(),
 ) {
     private var latestConfig: VideoDecoderBootstrapPacket? = null
     private val frames = ArrayDeque<VideoDecoderBootstrapPacket>()
@@ -76,10 +76,6 @@ internal class VideoDecoderBootstrapCache(
 
     private fun VideoDecoderBootstrapPacket.copyPacket(): VideoDecoderBootstrapPacket =
         copy(data = data.copyOf())
-
-    private companion object {
-        const val DEFAULT_MAX_BYTES = 16 * 1024 * 1024
-    }
 }
 
 internal data class VideoDecoderBootstrapSnapshot(

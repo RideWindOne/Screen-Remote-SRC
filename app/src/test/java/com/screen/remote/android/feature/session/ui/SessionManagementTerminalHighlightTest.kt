@@ -70,6 +70,47 @@ class SessionManagementTerminalHighlightTest {
     }
 
     @Test
+    fun preservesPtyOutputThatUsesCrLfLineEndings() {
+        val result =
+            appendTerminalTextChunk(
+                currentOutput = "$ ls\n",
+                incomingText = "Download\r\nPictures\r\n",
+            )
+
+        assertEquals("$ ls\nDownload\nPictures\n", result.output)
+        assertEquals(false, result.pendingCarriageReturn)
+    }
+
+    @Test
+    fun preservesCrLfSplitAcrossShellPackets() {
+        val first =
+            appendTerminalTextChunk(
+                currentOutput = "$ getprop\n",
+                incomingText = "value\r",
+            )
+        val second =
+            appendTerminalTextChunk(
+                currentOutput = first.output,
+                incomingText = "\nnext\r\n",
+                pendingCarriageReturn = first.pendingCarriageReturn,
+            )
+
+        assertEquals("$ getprop\nvalue\nnext\n", second.output)
+        assertEquals(false, second.pendingCarriageReturn)
+    }
+
+    @Test
+    fun standaloneCarriageReturnStillReplacesCurrentLine() {
+        val result =
+            appendTerminalTextChunk(
+                currentOutput = "$ task\nprogress 10%",
+                incomingText = "\rprogress 20%",
+            )
+
+        assertEquals("$ task\nprogress 20%", result.output)
+    }
+
+    @Test
     fun blocksInteractiveFullScreenCommandsButAllowsStreamingCommands() {
         assertEquals("vim", unsupportedInteractiveCommand("vim /sdcard/test.txt"))
         assertEquals("vi", unsupportedInteractiveCommand("busybox vi /sdcard/test.txt"))

@@ -8,6 +8,7 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.data.repository.SessionRepository
+import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedAudioDecoder
@@ -15,6 +16,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.internal.remember
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -60,6 +62,10 @@ class ConnectionViewModel(
 
     private val _connectedSessionId = MutableStateFlow<String?>(null)
     val connectedSessionId: StateFlow<String?> = _connectedSessionId.asStateFlow()
+    private val _activeSessionData = MutableStateFlow<SessionData?>(null)
+    val activeSessionData: StateFlow<SessionData?> = _activeSessionData.asStateFlow()
+    val decoderResolutionRecoveryRequest: StateFlow<DecoderResolutionRecoveryRequest?> =
+        scrcpyClient.decoderResolutionRecoveryRequest
 
     // 连接进度状态
     val connectionProgress: StateFlow<List<ConnectionProgress>> =
@@ -73,12 +79,33 @@ class ConnectionViewModel(
     // ============ 连接操作 ============
 
     fun connectSession(sessionId: String) {
+        launchConnection { sessionRepository.getSessionData(sessionId) }
+    }
+
+    fun connectSession(sessionData: SessionData) {
+        launchConnection { sessionData }
+    }
+
+    fun reconnectActiveSession() {
+        val sessionData = _activeSessionData.value
+        if (sessionData != null) {
+            connectSession(sessionData)
+        } else {
+            _connectedSessionId.value?.let(::connectSession)
+        }
+    }
+
+    fun confirmDecoderResolutionRecovery() = scrcpyClient.confirmDecoderResolutionRecovery()
+
+    fun dismissDecoderResolutionRecovery() = scrcpyClient.dismissDecoderResolutionRecovery()
+
+    private fun launchConnection(resolveSession: suspend () -> SessionData?) {
         // 取消之前的连接任务
         connectJob?.cancel()
 
         connectJob =
             viewModelScope.launch(Dispatchers.IO) {
-                val sessionData = sessionRepository.getSessionData(sessionId)
+                val sessionData = resolveSession()
                 if (sessionData == null) {
                     withContext(Dispatchers.Main) {
                         _connectStatus.value = ConnectStatus.Failed
@@ -86,6 +113,7 @@ class ConnectionViewModel(
                     }
                     return@launch
                 }
+                val sessionId = sessionData.id
 
                 // 判断是否为重连（已经有 connectedSessionId）
                 val isReconnecting = _connectedSessionId.value != null
@@ -93,6 +121,7 @@ class ConnectionViewModel(
                 // 立即设置 connectedSessionId，让 RemoteDisplayScreen 显示（即使连接失败也能看到进度）
                 withContext(Dispatchers.Main) {
                     _connectedSessionId.value = sessionId
+                    _activeSessionData.value = sessionData
                     _connectStatus.value =
                         ConnectStatus.Connecting(sessionId)
                 }
@@ -136,6 +165,7 @@ class ConnectionViewModel(
                 withContext(Dispatchers.Main) {
                     _connectStatus.value = ConnectStatus.Idle
                     _connectedSessionId.value = null
+                    _activeSessionData.value = null
                 }
             } catch (e: Exception) {
                 LogManager.e(LogTags.CONNECTION_VM, "Connection cancellation exception: ${e.message}", e)
@@ -146,6 +176,7 @@ class ConnectionViewModel(
     fun clearConnectStatus() {
         _connectStatus.value = ConnectStatus.Idle
         _connectedSessionId.value = null
+        _activeSessionData.value = null
     }
 
     fun disconnectFromDevice() {
@@ -167,6 +198,7 @@ class ConnectionViewModel(
                 withContext(Dispatchers.Main) {
                     _connectStatus.value = ConnectStatus.Idle
                     _connectedSessionId.value = null
+                    _activeSessionData.value = null
                 }
             } catch (e: Exception) {
                 LogManager.e(LogTags.CONNECTION_VM, "End session exception: ${e.message}", e)
@@ -221,6 +253,8 @@ class ConnectionViewModel(
     fun getAudioStream() = scrcpyClient.audioStreamState
 
     fun getVideoResolution() = scrcpyClient.videoResolution
+
+    fun getCompatibilityFrame() = scrcpyClient.compatibilityFrame
 
     fun getCurrentSessionOptions(): ScrcpyOptions? = scrcpyClient.getCurrentSessionOptions()
 

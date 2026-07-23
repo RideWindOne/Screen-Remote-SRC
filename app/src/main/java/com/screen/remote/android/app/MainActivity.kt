@@ -3,6 +3,7 @@ package com.screen.remote.android.app
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,24 +20,46 @@ import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
 import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.common.util.compat.canDrawOverlaysCompat
 import com.screen.remote.android.core.common.manager.LanguageManager
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.feature.session.ui.MainScreen
+import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHandler
+import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHost
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
 import com.screen.remote.android.feature.settings.ui.DebugLogOverlay
 import com.screen.remote.android.core.designsystem.theme.ScreenRemoteTheme
+import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
+import com.screen.remote.android.app.deeplink.parseScreenRemoteDeepLink
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
     private val overlayPermissionGranted = mutableStateOf(false)
+    private val pendingDeepLink = mutableStateOf<ScreenRemoteDeepLink?>(null)
+    private var remoteHardwareKeyEventHandler: RemoteHardwareKeyEventHandler? = null
+
+    override fun setRemoteHardwareKeyEventHandler(handler: RemoteHardwareKeyEventHandler?) {
+        remoteHardwareKeyEventHandler = handler
+    }
+
+    override fun onKeyDown(
+        keyCode: Int,
+        event: KeyEvent,
+    ): Boolean = remoteHardwareKeyEventHandler?.onKeyEvent(event) == true || super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(
+        keyCode: Int,
+        event: KeyEvent,
+    ): Boolean = remoteHardwareKeyEventHandler?.onKeyEvent(event) == true || super.onKeyUp(keyCode, event)
 
     override fun onResume() {
         super.onResume()
-        overlayPermissionGranted.value = Settings.canDrawOverlays(this)
+        overlayPermissionGranted.value = canDrawOverlaysCompat(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        acceptDeepLink(intent)
 
         runCatching {
             val startupHooksClass = Class.forName("com.screen.remote.android.debug.DebugUsbAdbCommands")
@@ -57,13 +80,14 @@ class MainActivity : ComponentActivity() {
             val settings by settingsViewModel.settings.collectAsState()
             val runtimeLoggingSuppressed by LogManager.runtimeLoggingSuppressed.collectAsState()
             val canDrawOverlays by overlayPermissionGranted
+            val deepLink by pendingDeepLink
             val overlayPermissionLauncher =
                 rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-                    overlayPermissionGranted.value = Settings.canDrawOverlays(this)
+                    overlayPermissionGranted.value = canDrawOverlaysCompat(this)
                 }
 
             LaunchedEffect(settings.enableDebugMode) {
-                val permissionGranted = Settings.canDrawOverlays(this@MainActivity)
+                val permissionGranted = canDrawOverlaysCompat(this@MainActivity)
                 overlayPermissionGranted.value = permissionGranted
                 if (settings.enableDebugMode && !permissionGranted) {
                     overlayPermissionLauncher.launch(
@@ -86,7 +110,10 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        MainScreen()
+                        MainScreen(
+                            deepLink = deepLink,
+                            onDeepLinkConsumed = { pendingDeepLink.value = null },
+                        )
                         DebugLogOverlay(
                             enabled = settings.enableDebugMode && canDrawOverlays && !runtimeLoggingSuppressed,
                         )
@@ -94,5 +121,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        acceptDeepLink(intent)
+    }
+
+    private fun acceptDeepLink(source: Intent) {
+        val data = source.dataString ?: return
+        val parsed = parseScreenRemoteDeepLink(data)
+        if (parsed == null) {
+            LogManager.w("DeepLink", "Unsupported Screen Remote URL: $data")
+            return
+        }
+        pendingDeepLink.value = parsed
+        setIntent(Intent(source).setData(null))
+        LogManager.i("DeepLink", "Accepted Screen Remote URL: $data")
     }
 }

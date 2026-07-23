@@ -64,7 +64,8 @@ class ControlViewModel(
         keyCode: Int,
         action: Int,
         metaState: Int,
-    ): Result<Boolean> = scrcpyClient.sendKeyEvent(keyCode, action, 0, metaState)
+        repeat: Int = 0,
+    ): Result<Boolean> = scrcpyClient.sendKeyEvent(keyCode, action, repeat, metaState)
 
     suspend fun sendText(text: String): Result<Boolean> = scrcpyClient.sendText(text)
 

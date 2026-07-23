@@ -41,13 +41,16 @@ import kotlinx.coroutines.launch
 internal fun SessionManagementScreen(
     sessionData: SessionData,
     dataProvider: SessionManagementDataProvider,
+    initialSection: SessionManagementSection = SessionManagementSection.DeviceInfo,
+    initialFilePath: String? = null,
+    initialCommand: String = "",
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val scope = rememberCoroutineScope()
-    var selectedSection by remember(sessionData.id) {
-        mutableStateOf(SessionManagementSection.DeviceInfo)
+    var selectedSection by remember(sessionData.id, initialSection) {
+        mutableStateOf(initialSection)
     }
     var drawerOpen by remember(sessionData.id) { mutableStateOf(false) }
     var dashboardRefreshTick by remember(sessionData.id) { mutableIntStateOf(0) }
@@ -67,7 +70,7 @@ internal fun SessionManagementScreen(
     var fileAddMenuOpenTick by remember(sessionData.id) { mutableIntStateOf(0) }
     var appAddMenuOpenTick by remember(sessionData.id) { mutableIntStateOf(0) }
     var fileSelectionMode by remember(sessionData.id) { mutableStateOf(false) }
-    var commandInput by remember(sessionData.id) { mutableStateOf("") }
+    var commandInput by remember(sessionData.id, initialCommand) { mutableStateOf(initialCommand) }
     var commandPresetDialogOpen by remember(sessionData.id) { mutableStateOf(false) }
     val commandTerminalSession = remember(sessionData.id) { ManagementTerminalSession(scope) }
     val snapshot =
@@ -75,6 +78,11 @@ internal fun SessionManagementScreen(
             ?: DeviceDashboardSnapshot.loading(sessionData).copy(
                 errorMessage = dataProvider.deviceErrorMessage,
             )
+    val connectionEndpoint =
+        managementConnectionEndpoint(
+            sessionData = sessionData,
+            activeDeviceId = SessionManagementAdbConnection.current()?.deviceId,
+        )
     val snapshotRefreshing = dataProvider.deviceRefreshing
     val fileBrowserState = dataProvider.fileBrowserState
 
@@ -100,6 +108,12 @@ internal fun SessionManagementScreen(
                     message = nextSnapshot.errorMessage,
                     isSuccess = false,
                 )
+        }
+    }
+
+    LaunchedEffect(sessionData.id, initialFilePath) {
+        initialFilePath?.takeIf { it.isNotBlank() }?.let { path ->
+            dataProvider.loadFileInformation(context, sessionData.id, path)
         }
     }
 
@@ -368,6 +382,7 @@ internal fun SessionManagementScreen(
         if (drawerOpen) {
             SessionManagementDrawer(
                 sessionData = sessionData,
+                connectionEndpoint = connectionEndpoint,
                 selectedSection = selectedSection,
                 onDismiss = { drawerOpen = false },
                 onSectionSelected = {

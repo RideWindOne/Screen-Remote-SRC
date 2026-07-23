@@ -327,7 +327,10 @@ object SessionTexts {
     val SWITCH_FULL_SCREEN = TextPair("全屏模式", "Full Screen")
     val SWITCH_SHOW_FLOATING_BALL = TextPair("显示悬浮球", "Show Floating Ball")
     val SWITCH_ENABLE_HARDWARE_DECODING = TextPair("启用硬件解码", "Enable Hardware Decoding")
-    val SWITCH_FOLLOW_ORIENTATION = TextPair("跟随设备旋转变化", "Follow Remote Orientation Change")
+    val SWITCH_COMPATIBILITY_MODE = TextPair("兼容模式", "Compatibility Mode")
+    val LABEL_FOLLOW_ROTATION = TextPair("跟随旋转", "Follow Rotation")
+    val OPTION_ROTATION_LOCAL = TextPair("本机", "Local")
+    val OPTION_ROTATION_TARGET = TextPair("目标", "Target")
     val SWITCH_USE_ADB_FORWARD = TextPair("使用 ADB 转发建立连接", "Connect via ADB Forwarding")
 
     // 会话对话框 - 音频配置
@@ -458,10 +461,20 @@ object SessionTexts {
             "使用硬件解码器解码视频，可以降低 CPU 占用和发热，但部分设备可能不支持或有兼容性问题。",
             "Use hardware decoder to decode video, which can reduce CPU usage and heat, but some devices may not support it or have compatibility issues.",
         )
+    val HELP_COMPATIBILITY_MODE =
+        TextPair(
+            "通过 ADB 截图显示低帧率画面，并使用 ADB 命令控制设备；可绕过 scrcpy 编码兼容问题，但不支持音频和粘贴板同步，且延迟更高。",
+            "Uses low-frame-rate ADB screenshots and ADB input commands. This bypasses scrcpy encoding issues, but audio and clipboard sync are unavailable, and latency is higher.",
+        )
+    val HELP_COMPATIBILITY_REQUIRES_SCRCPY =
+        TextPair(
+            "兼容模式会跳过 scrcpy-server，此选项不可用。",
+            "Compatibility mode skips scrcpy-server, so this option is unavailable.",
+        )
     val HELP_FOLLOW_ORIENTATION =
         TextPair(
-            "自动跟随远程设备的屏幕旋转方向。关闭后本地画面方向保持固定。",
-            "Automatically follow the remote device's screen rotation. When turned off, the local screen orientation remains fixed.",
+            "本机：旋转不限制，由本机方向决定。目标：限制本机方向并跟随目标设备旋转。",
+            "Local: rotation is unrestricted and follows this device. Target: restrict this device's orientation to follow the target device.",
         )
     val HELP_USE_ADB_FORWARD =
         TextPair(
@@ -489,6 +502,11 @@ object SessionTexts {
         TextPair(
             "在数值方块内上下滑动，可选 720、1080、1920、原始和自定义。原始表示不限制最大尺寸；停在自定义后会自动要求输入，未输入则回到原始。",
             "Swipe vertically inside the value box to choose 720, 1080, 1920, Original, or Custom. Original applies no max-size limit. Stopping on Custom opens an editor; leaving it empty returns to Original.",
+        )
+    val HELP_COMPATIBILITY_QUALITY =
+        TextPair(
+            "与 scrcpy 的最大尺寸规则一致：宽、高都不超过所选数值并保持原始比例。兼容模式自动使用 JPEG 画质：720 为 55、1080 为 60、1920 为 65、原始为 70。对于 4K 电视，选择 1920 会输出约 1920×1080。",
+            "Uses the same max-size rule as scrcpy: neither dimension exceeds the selected value and the native aspect ratio is preserved. Compatibility mode automatically uses JPEG quality 55 at 720, 60 at 1080, 65 at 1920, and 70 at native size. For a 4K TV, selecting 1920 produces roughly 1920×1080.",
         )
     val HELP_NORMAL_VIDEO_BITRATE =
         TextPair(
@@ -537,6 +555,11 @@ object SessionTexts {
             "启用音频传输。需要设备支持音频捕获（Android 11+）。音频传输会增加带宽占用。",
             "Enable audio transmission. Requires device to support audio capture (Android 11+). Audio transmission will increase bandwidth usage.",
         )
+    val HELP_COMPATIBILITY_AUDIO_DISABLED =
+        TextPair(
+            "兼容模式没有音频输出，音频传输会保持关闭。",
+            "Compatibility mode has no audio output, so audio transmission remains disabled.",
+        )
     val HELP_AUDIO_BITRATE_PICKER =
         TextPair(
             "在数值方块内上下滑动，可选 128K、192K、256K 和自定义。停在自定义后自动弹出输入框；未输入则保留之前的音频码率。",
@@ -574,6 +597,11 @@ object SessionTexts {
             "允许 scrcpy 与远程设备同步剪贴板内容。关闭后仍可使用文本输入，但不会自动交换剪贴板。",
             "Allow scrcpy to synchronize clipboard contents with the remote device. When disabled, text input still works, but clipboards are not exchanged automatically.",
         )
+    val HELP_COMPATIBILITY_CLIPBOARD_DISABLED =
+        TextPair(
+            "兼容模式没有 scrcpy 控制通道，无法自动同步粘贴板；文本输入和粘贴仍可使用。",
+            "Compatibility mode has no scrcpy control channel, so automatic clipboard sync is unavailable; text input and paste still work.",
+        )
     val HELP_TURN_SCREEN_OFF =
         TextPair(
             "连接成功后立即关闭远程设备的屏幕显示，但镜像画面仍然传输。适合需要隐私或省电的场景。",
@@ -581,8 +609,8 @@ object SessionTexts {
         )
     val HELP_POWER_OFF_ON_CLOSE =
         TextPair(
-            "断开连接时自动锁定远程设备屏幕（相当于按电源键）。适合远程控制后需要锁屏的场景。",
-            "Automatically lock the remote device screen when disconnecting (equivalent to pressing power button). Suitable for scenarios requiring screen lock after remote control.",
+            "断开连接时自动锁定远程设备屏幕（相当于按电源键）。此功能依赖 scrcpy 清理进程，因此关闭“断开后清理”时不可用。",
+            "Automatically lock the remote device screen when disconnecting (equivalent to pressing power button). This requires the scrcpy cleanup process, so it is unavailable when cleanup on disconnect is disabled.",
         )
     val HELP_CLEANUP_ON_DISCONNECT =
         TextPair(

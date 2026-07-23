@@ -40,6 +40,7 @@
         <activity
             android:name=".app.MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.ScreenRemote"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
@@ -47,6 +48,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="screen-remote" android:host="open" />
+                <data android:scheme="screen-remote" android:host="session" />
+                <data android:scheme="screen-remote" android:host="diagnostics" />
+                <data android:scheme="screen-remote" android:host="remote" />
+                <data android:scheme="screen-remote" android:host="setting" />
+                <data android:scheme="screen-remote" android:host="adb" />
             </intent-filter>
         </activity>
 
@@ -69,4 +83,3 @@
     </application>
 
 </manifest>
-

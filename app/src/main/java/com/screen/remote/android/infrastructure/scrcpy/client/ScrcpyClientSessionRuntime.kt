@@ -6,6 +6,7 @@ import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionStateMachine
 import com.screen.remote.android.infrastructure.scrcpy.session.SessionManager
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.observeComponentSnapshot
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.createMonitorBus
@@ -16,8 +17,9 @@ import kotlinx.coroutines.launch
 
 internal class ScrcpyClientSessionRuntime(
     private val context: Context,
+    onDecoderResolutionRecoveryRequest: (DecoderResolutionRecoveryRequest?) -> Unit,
 ) {
-    val sessionManager = SessionManager()
+    val sessionManager = SessionManager(onDecoderResolutionRecoveryRequest)
     val sessionContext: SessionContext = sessionManager.createContext()
 
     private var sessionMonitorInitialized = false

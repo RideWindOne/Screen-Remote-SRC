@@ -1,9 +1,11 @@
 package com.screen.remote.android.feature.remote.widget.video
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.View
+import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -17,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.viewinterop.AndroidView
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import com.screen.remote.android.feature.remote.presentation.VideoDecoderManager
@@ -30,6 +33,7 @@ fun VideoDisplayArea(
     videoAspectRatio: Float,
     videoWidth: Int,
     videoHeight: Int,
+    compatibilityFrame: Bitmap?,
     configuration: android.content.res.Configuration,
     onSurfaceHolderChanged: (SurfaceHolder?) -> Unit,
     onRenderSurfaceChanged: (Surface?) -> Unit,
@@ -81,7 +85,21 @@ fun VideoDisplayArea(
                     matchHeightConstraintsFirst = matchHeightFirst,
                 ),
         ) {
-            if (useFullScreen) {
+            if (sessionData?.config?.compatibilityMode == true) {
+                AndroidView(
+                    factory = { context ->
+                        ImageView(context).apply {
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            setBackgroundColor(android.graphics.Color.BLACK)
+                        }
+                    },
+                    update = { imageView ->
+                        imageView.setAccessibleOnTouchListener(handleTouch)
+                        imageView.setImageBitmap(compatibilityFrame)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (useFullScreen) {
                 var renderSurface by remember { mutableStateOf<Surface?>(null) }
 
                 DisposableEffect(Unit) {

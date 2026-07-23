@@ -1120,6 +1120,7 @@ internal class ManagementTerminalSession(
     private var completionJob: Job? = null
     private var completionCycle: ShellCompletionCycle? = null
     private var pendingMarkerText = ""
+    private var pendingCarriageReturn = false
     private var closeRequested = false
     private var userRequestedExit = false
     private var hasEverConnected = false
@@ -1315,6 +1316,7 @@ internal class ManagementTerminalSession(
     fun clear() {
         output = ""
         pendingMarkerText = ""
+        pendingCarriageReturn = false
     }
 
     fun close(clearHistory: Boolean = true) {
@@ -1331,6 +1333,7 @@ internal class ManagementTerminalSession(
         }
         shellStream = null
         pendingMarkerText = ""
+        pendingCarriageReturn = false
         if (clearHistory) {
             commandHistory = emptyList()
         }
@@ -1361,27 +1364,16 @@ internal class ManagementTerminalSession(
     }
 
     private fun appendTerminalText(text: String) {
-        var nextOutput = output
         val incomingText = pendingMarkerText + SESSION_MANAGEMENT_ANSI_PATTERN.replace(text, "")
         pendingMarkerText = ""
-        incomingText.forEach { char ->
-                nextOutput =
-                    when (char) {
-                        '\r' -> {
-                            val lineStart = nextOutput.lastIndexOf('\n') + 1
-                            nextOutput.take(lineStart)
-                        }
-
-                        '\b' -> {
-                            nextOutput.dropLast(1)
-                        }
-
-                        else -> {
-                            nextOutput + char
-                        }
-                    }
-            }
-        val partition = partitionTerminalMarkerTail(nextOutput)
+        val appended =
+            appendTerminalTextChunk(
+                currentOutput = output,
+                incomingText = incomingText,
+                pendingCarriageReturn = pendingCarriageReturn,
+            )
+        pendingCarriageReturn = appended.pendingCarriageReturn
+        val partition = partitionTerminalMarkerTail(appended.output)
         pendingMarkerText = partition.pending
         output = partition.visible.takeLast(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT)
     }
@@ -1397,6 +1389,70 @@ internal class ManagementTerminalSession(
             appendTerminalText(text)
         }
     }
+}
+
+internal data class TerminalTextAppendResult(
+    val output: String,
+    val pendingCarriageReturn: Boolean,
+)
+
+internal fun appendTerminalTextChunk(
+    currentOutput: String,
+    incomingText: String,
+    pendingCarriageReturn: Boolean = false,
+): TerminalTextAppendResult {
+    val result = StringBuilder(currentOutput.length + incomingText.length).append(currentOutput)
+    var index = 0
+    var hasPendingCarriageReturn = pendingCarriageReturn
+
+    fun applyCarriageReturn() {
+        val lineStart = result.lastIndexOf("\n") + 1
+        result.setLength(lineStart)
+    }
+
+    if (hasPendingCarriageReturn) {
+        if (incomingText.startsWith('\n')) {
+            result.append('\n')
+            index = 1
+        } else {
+            applyCarriageReturn()
+        }
+        hasPendingCarriageReturn = false
+    }
+
+    while (index < incomingText.length) {
+        when (val char = incomingText[index]) {
+            '\r' -> {
+                if (index + 1 >= incomingText.length) {
+                    hasPendingCarriageReturn = true
+                    index += 1
+                } else if (incomingText[index + 1] == '\n') {
+                    result.append('\n')
+                    index += 2
+                } else {
+                    applyCarriageReturn()
+                    index += 1
+                }
+            }
+
+            '\b' -> {
+                if (result.isNotEmpty()) {
+                    result.setLength(result.length - 1)
+                }
+                index += 1
+            }
+
+            else -> {
+                result.append(char)
+                index += 1
+            }
+        }
+    }
+
+    return TerminalTextAppendResult(
+        output = result.toString(),
+        pendingCarriageReturn = hasPendingCarriageReturn,
+    )
 }
 
 internal data class TerminalMarkerPartition(

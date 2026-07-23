@@ -1,13 +1,13 @@
 package com.screen.remote.android.infrastructure.media.audio
 
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaFormat
-import android.os.Build
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.common.util.compat.createAudioTrackCompat
+import com.screen.remote.android.core.common.util.compat.writeAudioTrackBlockingCompat
 import java.nio.ByteBuffer
 
 /**
@@ -53,29 +53,13 @@ class AudioTrackManager(
             }
             val bufferSize = minBufferSize * 2
 
-            val trackBuilder =
-                AudioTrack
-                    .Builder()
-                    .setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .build(),
-                    )
-                    .setAudioFormat(
-                        AudioFormat
-                            .Builder()
-                            .setSampleRate(sampleRate)
-                            .setChannelMask(channelConfig)
-                            .setEncoding(encoding)
-                            .build(),
-                    )
-                    .setBufferSizeInBytes(bufferSize)
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                trackBuilder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-            }
-            val track = trackBuilder.build()
+            val track =
+                createAudioTrackCompat(
+                    sampleRate = sampleRate,
+                    channelMask = channelConfig,
+                    encoding = encoding,
+                    bufferSize = bufferSize,
+                )
 
             audioTrack = track
             trackConfig = config
@@ -241,7 +225,7 @@ class AudioTrackManager(
         var offset = 0
         while (offset < data.size) {
             val written =
-                track.write(data, offset, data.size - offset, AudioTrack.WRITE_BLOCKING)
+                writeAudioTrackBlockingCompat(track, data, offset, data.size - offset)
             if (written < 0) return written
             if (written == 0) continue
             offset += written

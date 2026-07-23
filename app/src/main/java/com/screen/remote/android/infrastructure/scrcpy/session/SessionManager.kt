@@ -6,6 +6,7 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.storage.SessionStorage
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 
 /**
  * 活跃会话管理器。
@@ -13,7 +14,9 @@ import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionCo
  * 当前只维护一个运行中的会话实例，但保留实例化形态，
  * 为后续多会话运行时留出扩展空间。
  */
-class SessionManager {
+class SessionManager(
+    private val onDecoderResolutionRecoveryRequest: (DecoderResolutionRecoveryRequest?) -> Unit = {},
+) {
     @Volatile
     private var activeSession: Session? = null
 
@@ -37,7 +40,12 @@ class SessionManager {
             ScrcpyEventBus.clearDeviceState(previousDeviceId)
         }
 
-        return Session(options, storage, onVideoResolution).also { activeSession = it }
+        return Session(
+            options,
+            storage,
+            onVideoResolution,
+            onDecoderResolutionRecoveryRequest,
+        ).also { activeSession = it }
     }
 
     fun stop() {

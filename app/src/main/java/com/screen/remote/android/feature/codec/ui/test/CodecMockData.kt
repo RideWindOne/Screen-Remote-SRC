@@ -13,6 +13,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.compat.createAudioTrackCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -31,18 +32,12 @@ internal fun playRawAudio(
     val channelConfig = if (channelCount == 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
     val bufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT) * 2
     val audioTrack =
-        AudioTrack
-            .Builder()
-            .setAudioFormat(
-                AudioFormat
-                    .Builder()
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(channelConfig)
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .build(),
-            ).setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
+        createAudioTrackCompat(
+            sampleRate = sampleRate,
+            channelMask = channelConfig,
+            encoding = AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize = bufferSize,
+        )
 
     audioTrack.play()
     audioTrack.write(pcmData, 0, pcmData.size)

@@ -12,6 +12,7 @@ enum class ScrcpyTunnelMode {
 /** 用户可编辑、可持久化的 scrcpy 配置。 */
 @Serializable
 data class ScrcpyConfig(
+    val compatibilityMode: Boolean = false,
     val gameMode: Boolean = false,
     val useFullScreen: Boolean = false,
     val showFloatingBall: Boolean = true,
@@ -43,6 +44,21 @@ data class ScrcpyConfig(
     val showTouches: Boolean = false,
     val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
 )
+
+data class CompatibilityCaptureSettings(
+    val maxSize: Int,
+    val jpegQuality: Int,
+)
+
+fun ScrcpyConfig.compatibilityCaptureSettings(): CompatibilityCaptureSettings =
+    maxSize.coerceIn(0, 8192).let { boundedMaxSize ->
+        when {
+            boundedMaxSize == 0 -> CompatibilityCaptureSettings(maxSize = 0, jpegQuality = 70)
+            boundedMaxSize <= 720 -> CompatibilityCaptureSettings(maxSize = boundedMaxSize, jpegQuality = 55)
+            boundedMaxSize <= 1080 -> CompatibilityCaptureSettings(maxSize = boundedMaxSize, jpegQuality = 60)
+            else -> CompatibilityCaptureSettings(maxSize = boundedMaxSize, jpegQuality = 65)
+        }
+    }
 
 /** 连接过程自动生成的设备能力缓存，不属于用户配置。 */
 @Serializable

@@ -8,6 +8,7 @@ import android.util.DisplayMetrics
 import android.view.WindowInsets
 import android.view.WindowManager
 import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.common.util.compat.getRootWindowInsetsCompat
 
 internal data class FloatingMenuWindowBounds(
     val left: Int,
@@ -39,7 +40,7 @@ internal class FloatingMenuWindowBoundsProvider(context: Context) {
      * 球体本身仍可贴物理顶部；只有展开菜单时使用这个真实窗口顶部。
      */
     fun currentApplicationWindowTop(): Int {
-        activity?.window?.decorView?.rootWindowInsets?.let { insets ->
+        activity?.window?.decorView?.let(::getRootWindowInsetsCompat)?.let { insets ->
             return insets.applicationWindowTopInset()
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -56,7 +57,7 @@ internal class FloatingMenuWindowBoundsProvider(context: Context) {
             return createBounds(
                 width = decorWidth,
                 height = decorHeight,
-                insets = decorView?.rootWindowInsets.safeFloatingInsets(),
+                insets = decorView?.let(::getRootWindowInsetsCompat).safeFloatingInsets(),
             )
         }
 

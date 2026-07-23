@@ -215,12 +215,13 @@ internal fun buildScrcpyCommand(
             "max_fps=${config.maxFps}",
             "video_codec=$videoCodec",
             "stay_awake=${config.stayAwake}",
-            "power_off_on_close=${config.powerOffOnClose}",
+            "power_off_on_close=${config.powerOffOnClose && config.cleanupOnDisconnect}",
             "tunnel_forward=true",
             "send_device_meta=true",
             "send_stream_meta=true",
             "send_frame_meta=true",
             "send_dummy_byte=true",
+            "downsize_on_error=false",
         ),
     )
 

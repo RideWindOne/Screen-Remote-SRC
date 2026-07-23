@@ -72,6 +72,20 @@ object SettingsTexts {
     val ABOUT_UPDATE_LATER = TextPair("稍后", "Later")
     val ABOUT_UPDATE_LATEST = TextPair("当前已是最新版本", "You're up to date")
     val ABOUT_UPDATE_FAILED = TextPair("检查更新失败，请稍后重试", "Update check failed. Please try again later")
+    val ABOUT_TELEMETRY = TextPair("遥测诊断", "Telemetry diagnostics")
+    val ABOUT_TELEMETRY_HELP =
+        TextPair(
+            "开启后，应用启动时会上传前一天的应用日志；若已上传则仅发送一次 ping。服务端会取得请求 IP，用于诊断服务连接错误和汇总匿名使用情况。日志可能包含连接地址等诊断信息。",
+            "When enabled, the app uploads the previous day's app logs at startup. If already uploaded, it only sends one ping. The server receives the request IP to diagnose service connection errors and summarize anonymous usage. Logs may contain connection addresses and other diagnostic details.",
+        )
+    val ABOUT_TELEMETRY_CONSENT_TITLE = TextPair("开启遥测诊断？", "Enable telemetry diagnostics?")
+    val ABOUT_TELEMETRY_CONSENT =
+        TextPair(
+            "Screen Remote 将每天上传前一天的应用日志，并由服务端取得本次请求的 IP 地址。日志用于分析功能使用情况和连接错误，不会上传截图或远程画面。你可以随时在此关闭。",
+            "Screen Remote will upload the previous day's app logs daily, and the server will receive the request IP address. Logs are used to analyze feature usage and connection errors. Screenshots and remote video are not uploaded. You can turn this off at any time.",
+        )
+    val ABOUT_TELEMETRY_ENABLE = TextPair("同意并开启", "Agree and enable")
+    val ABOUT_TELEMETRY_CANCEL = TextPair("取消", "Cancel")
     val ABOUT_DESCRIPTION =
         TextPair(
             "Screen Remote 是一款基于 ADB 协议的远程桌面工具，通常用于连接具有公网 IP 地址的服务或同一局域网内的服务。",

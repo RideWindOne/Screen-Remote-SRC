@@ -92,18 +92,22 @@ internal class ScrcpyClientConnectionCoordinator(
                 }
                 issueTracker.updateDeviceId(activeDeviceId)
 
-                if (!controller.isRunning()) {
+                if (!options.config.compatibilityMode && !controller.isRunning()) {
                     controller.start(activeDeviceId, gameMode = options.config.gameMode)
                 }
 
-                options.config.startApp.trim().takeIf(String::isNotEmpty)?.let { startApp ->
+                options.config.startApp
+                    .takeUnless { options.config.compatibilityMode }
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?.let { startApp ->
                     controller.startApp(startApp)
                         .onFailure { error ->
                             LogManager.w(LogTags.SCRCPY_CLIENT, "Request to launch app on virtual display failed: ${error.message}")
                         }
                 }
 
-                if (options.config.turnScreenOff) {
+                if (options.config.turnScreenOff && !options.config.compatibilityMode) {
                     controller.turnDisplayOff()
                         .onFailure { error ->
                             LogManager.w(LogTags.SCRCPY_CLIENT, "Request to close device screen failed: ${error.message}")

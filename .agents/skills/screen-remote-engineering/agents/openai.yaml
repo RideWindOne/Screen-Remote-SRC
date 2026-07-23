@@ -1,4 +1,4 @@
 interface:
   display_name: "Screen Remote Engineering"
-  short_description: "仅面向 Screen-Remote 子仓库的工程与知识同步"
-  default_prompt: "Use $screen-remote-engineering to make a scoped, verified change and keep project knowledge current."
+  short_description: "Screen Remote 工程、dadb 审读与 Wiki 同步"
+  default_prompt: "Use $screen-remote-engineering to make a scoped, verified app change and keep Wiki knowledge aligned with the app range and latest dadb commit."

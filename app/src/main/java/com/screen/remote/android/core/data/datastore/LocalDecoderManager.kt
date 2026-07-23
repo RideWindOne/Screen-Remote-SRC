@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import com.screen.remote.android.core.common.util.compat.getSecurityPatchCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -71,7 +72,7 @@ class LocalDecoderManager(
                 contentResolver,
                 Settings.Secure.ANDROID_ID,
             ).orEmpty()
-        return listOf(androidId, Build.FINGERPRINT, Build.VERSION.SDK_INT, Build.VERSION.SECURITY_PATCH).joinToString("|")
+        return listOf(androidId, Build.FINGERPRINT, Build.VERSION.SDK_INT, getSecurityPatchCompat()).joinToString("|")
     }
 
     /**

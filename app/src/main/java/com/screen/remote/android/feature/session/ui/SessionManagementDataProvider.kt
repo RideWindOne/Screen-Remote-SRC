@@ -62,7 +62,7 @@ internal class SessionManagementDataProvider {
         activate(sessionData.id)
         val scope = checkNotNull(sessionScope)
         scope.launch { loadDeviceInformation(context, sessionData) }
-        scope.launch { prefetchRootFileInformation(sessionData.id) }
+        scope.launch { prefetchRootFileInformation(context, sessionData.id) }
         scope.launch {
             loadApplicationInformation(
                 context = context,
@@ -101,21 +101,25 @@ internal class SessionManagementDataProvider {
         }
 
     suspend fun loadFileInformation(
+        context: Context,
         sessionId: String,
         path: String,
         forceRefresh: Boolean = false,
     ): FileBrowserSnapshot? {
         if (activeSessionId != sessionId) return null
         val state = fileBrowserState
-        val result = state.loadSnapshot(path, forceRefresh)
+        val result = state.loadSnapshot(context, path, forceRefresh)
         return result.takeIf { activeSessionId == sessionId && state === fileBrowserState }
     }
 
     @SuppressLint("SdCardPath")
-    private suspend fun prefetchRootFileInformation(sessionId: String): FileBrowserSnapshot? {
+    private suspend fun prefetchRootFileInformation(
+        context: Context,
+        sessionId: String,
+    ): FileBrowserSnapshot? {
         if (activeSessionId != sessionId) return null
         val state = fileBrowserState
-        val result = state.prefetchSnapshot("/sdcard")
+        val result = state.prefetchSnapshot(context, "/sdcard")
         return result.takeIf { activeSessionId == sessionId && state === fileBrowserState }
     }
 

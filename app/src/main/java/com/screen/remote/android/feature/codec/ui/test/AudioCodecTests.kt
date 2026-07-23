@@ -16,6 +16,7 @@ import android.media.MediaFormat
 import android.speech.tts.TextToSpeech
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.compat.createAudioTrackCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
@@ -174,18 +175,12 @@ suspend fun testAudioDecoder(
             val bufferSize =
                 AudioTrack.getMinBufferSize(targetSampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT) * 2
             val activeAudioTrack =
-                AudioTrack
-                    .Builder()
-                    .setAudioFormat(
-                        AudioFormat
-                            .Builder()
-                            .setSampleRate(targetSampleRate)
-                            .setChannelMask(channelConfig)
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .build(),
-                    ).setBufferSizeInBytes(bufferSize)
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-                    .build()
+                createAudioTrackCompat(
+                    sampleRate = targetSampleRate,
+                    channelMask = channelConfig,
+                    encoding = AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize = bufferSize,
+                )
             audioTrack = activeAudioTrack
 
             activeAudioTrack.play()

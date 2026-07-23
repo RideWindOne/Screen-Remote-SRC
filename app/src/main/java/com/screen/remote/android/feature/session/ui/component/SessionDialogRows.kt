@@ -1,6 +1,7 @@
 package com.screen.remote.android.feature.session.ui.component
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
@@ -20,19 +24,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
+import com.screen.remote.android.core.common.constants.AppColors
 import com.screen.remote.android.core.designsystem.component.HelpIcon
 import com.screen.remote.android.core.designsystem.component.IOSSwitch
 
 private val DialogRowLabelMaxWidth = IosDesignTokens.dialogLabelMaxWidth
 private val DialogRowSpacing = IosDesignTokens.compactSpacing
 private val DialogTrailingActionHorizontalPadding = IosDesignTokens.dialogHeaderHorizontalPadding
+private val DialogBinaryChoiceWidth = 116.dp
+private val DialogBinaryChoiceHeight = 32.dp
+private val DialogBinaryChoiceInset = 2.dp
 
 @Composable
 fun CompactSwitchRow(
@@ -63,6 +73,101 @@ fun CompactSwitchRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
+        )
+    }
+}
+
+@Composable
+fun CompactBinaryChoiceRow(
+    text: String,
+    firstChoice: String,
+    secondChoice: String,
+    secondChoiceSelected: Boolean,
+    onChoiceChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    helpText: String? = null,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(AppDimens.listItemHeight)
+                .padding(horizontal = IosDesignTokens.compactHorizontalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DialogRowLabel(
+            label = text,
+            helpText = helpText,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(end = DialogRowSpacing),
+        )
+
+        Row(
+            modifier =
+                Modifier
+                    .width(DialogBinaryChoiceWidth)
+                    .height(DialogBinaryChoiceHeight)
+                    .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .selectableGroup()
+                    .padding(DialogBinaryChoiceInset),
+        ) {
+            BinaryChoiceButton(
+                text = firstChoice,
+                selected = !secondChoiceSelected,
+                onClick = { onChoiceChange(false) },
+                modifier = Modifier.weight(1f),
+            )
+            BinaryChoiceButton(
+                text = secondChoice,
+                selected = secondChoiceSelected,
+                onClick = { onChoiceChange(true) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BinaryChoiceButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val backgroundColor =
+        if (selected) {
+            AppColors.success
+        } else {
+            Color.Transparent
+        }
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(IosDesignTokens.segmentedControlChipCornerRadius))
+                .background(backgroundColor)
+                .selectable(
+                    selected = selected,
+                    onClick = onClick,
+                    role = Role.RadioButton,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color =
+                if (selected) {
+                    AppColors.lightTextPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

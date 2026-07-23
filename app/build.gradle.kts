@@ -33,6 +33,10 @@ val appDisplayVersion = "$appVersionName.$appVersionCode"
 val appId = "com.screen.remote.android"
 val scrcpyServerVersion = "4.1"
 val scrcpyServerSha256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"
+val telemetryBaseUrl =
+    providers.gradleProperty("TELEMETRY_BASE_URL").orElse("").get()
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
 val scrcpyServerAsset = layout.projectDirectory.file("src/main/assets/scrcpy-server.jar")
 val scrcpyServerDownloadUrl =
     "https://github.com/Genymobile/scrcpy/releases/download/v$scrcpyServerVersion/scrcpy-server-v$scrcpyServerVersion"
@@ -73,6 +77,7 @@ android {
         buildConfigField("String", "APP_VERSION", "\"$appDisplayVersion\"")
         buildConfigField("String", "SCRCPY_VERSION", "\"$scrcpyServerVersion\"")
         buildConfigField("String", "SCRCPY_SERVER_SHA256", "\"$scrcpyServerSha256\"")
+        buildConfigField("String", "TELEMETRY_BASE_URL", "\"$telemetryBaseUrl\"")
 
         vectorDrawables.useSupportLibrary = true
 
