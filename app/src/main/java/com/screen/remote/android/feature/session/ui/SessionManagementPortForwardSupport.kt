@@ -137,7 +137,7 @@ internal object SessionManagementPortForwardManager {
     ): Result<Unit> =
         runCatching {
             val helperJar = ensureLocalDadbHelperJar(context)
-            connection.prepareAppIconHelper(helperJar).getOrThrow()
+            connection.prepareDadbHelper(helperJar).getOrThrow()
         }
 
     private suspend fun stopRemoteProcess(connection: AdbConnection): Result<Unit> =

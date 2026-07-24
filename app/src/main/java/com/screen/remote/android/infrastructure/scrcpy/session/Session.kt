@@ -115,6 +115,7 @@ class Session(
 
     internal fun publishDecoderResolutionRecovery(request: DecoderResolutionRecoveryRequest) {
         pendingDecoderResolutionRecovery = request
+        runtime.invokeCancelReconnectCallback()
         onDecoderResolutionRecoveryRequest(request)
     }
 

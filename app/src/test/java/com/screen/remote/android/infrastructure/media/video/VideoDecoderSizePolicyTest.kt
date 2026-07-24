@@ -31,7 +31,7 @@ class VideoDecoderSizePolicyTest {
     @Test
     fun fallbackCandidatesAreStrictlyBelowCurrentLongEdge() {
         assertEquals(
-            listOf(2048, 1920, 1600, 1280, 1080, 720),
+            listOf(2048, 1920, 1600, 1280, 1080, 720, 540),
             decoderFallbackLongEdges(currentLongEdge = 2400),
         )
     }

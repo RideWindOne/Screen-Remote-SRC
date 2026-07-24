@@ -14,6 +14,7 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionMana
 import com.screen.remote.android.infrastructure.adb.helper.DadbHelperAsset
 import dadb.helper.RemoteScreenshotStream
 import dadb.helper.RemoteScreenshotCaptureBackend
+import dadb.helper.RemoteTouchStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,7 +25,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.math.abs
 
 internal class CompatibilityModeController(
     private val context: Context,
@@ -40,12 +40,16 @@ internal class CompatibilityModeController(
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var captureJob: Job? = null
+    private var touchDispatchJob: Job? = null
     @Volatile
     private var activeCaptureStream: RemoteScreenshotStream? = null
+    @Volatile
+    private var activeTouchStream: RemoteTouchStream? = null
     private val touchLock = Any()
     private val inputMutex = Mutex()
     private var activePointerId: Long? = null
-    private var touchStart: TouchSample? = null
+    private val liveTouchQueue = CompatibilityLiveTouchQueue()
+    private var liveTouchDispatchRunning = false
     @Volatile
     private var isStarted = false
     @Volatile
@@ -53,11 +57,16 @@ internal class CompatibilityModeController(
     @Volatile
     private var remoteHeight = 0
 
-    suspend fun start() {
+    suspend fun start(): Result<Boolean> {
+        isStarted = false
         activeCaptureStream?.close()
         activeCaptureStream = null
         captureJob?.cancelAndJoin()
         captureJob = null
+        activeTouchStream?.close()
+        activeTouchStream = null
+        touchDispatchJob?.cancelAndJoin()
+        touchDispatchJob = null
         resetTouchState()
         remoteWidth = 0
         remoteHeight = 0
@@ -75,6 +84,27 @@ internal class CompatibilityModeController(
                     "Compatibility mode wake-up command failed: ${error.message}",
                 )
             }
+        val touchStreamResult = openTouchHelperStream()
+        val touchStream = touchStreamResult.getOrNull()
+        if (touchStream == null) {
+            val error =
+                touchStreamResult.exceptionOrNull()
+                    ?: IllegalStateException("Compatibility live touch stream failed without an error")
+            LogManager.w(
+                LogTags.SCRCPY_CLIENT,
+                "Compatibility live touch stream failed to start and will retry: ${error.message}",
+            )
+            touchDispatchJob =
+                scope.launch {
+                    recoverTouchStream(error)
+                }
+        } else {
+            activeTouchStream = touchStream
+            LogManager.i(
+                LogTags.SCRCPY_CLIENT,
+                "Compatibility live touch stream started",
+            )
+        }
         captureJob =
             scope.launch {
                 var loggedCaptureBackend: RemoteScreenshotCaptureBackend? = null
@@ -146,10 +176,15 @@ internal class CompatibilityModeController(
                     }
                 }
             }
+        return Result.success(true)
     }
 
     suspend fun stop() {
         isStarted = false
+        activeTouchStream?.close()
+        activeTouchStream = null
+        touchDispatchJob?.cancelAndJoin()
+        touchDispatchJob = null
         activeCaptureStream?.close()
         activeCaptureStream = null
         captureJob?.cancelAndJoin()
@@ -173,69 +208,99 @@ internal class CompatibilityModeController(
         if (currentConnection() == null) {
             return Result.failure(IllegalStateException("ADB connection is unavailable"))
         }
+        if (activeTouchStream == null) {
+            return Result.failure(IllegalStateException("Compatibility live touch stream is unavailable"))
+        }
 
-        val sample = TouchSample(clampX(x), clampY(y), System.currentTimeMillis())
+        val sample = TouchSample(clampX(x), clampY(y))
         when (action) {
             MotionEvent.ACTION_DOWN -> {
+                var shouldLaunchDispatcher = false
                 val accepted =
                     synchronized(touchLock) {
                         if (activePointerId == null) {
                             activePointerId = pointerId
-                            touchStart = sample
+                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                            if (!liveTouchDispatchRunning) {
+                                liveTouchDispatchRunning = true
+                                shouldLaunchDispatcher = true
+                            }
                             true
                         } else {
                             activePointerId == pointerId
                         }
                     }
+                if (shouldLaunchDispatcher) {
+                    launchLiveTouchDispatcher()
+                }
                 return Result.success(accepted)
             }
 
-            MotionEvent.ACTION_MOVE -> Unit
-
-            MotionEvent.ACTION_UP -> {
-                val gesture =
+            MotionEvent.ACTION_MOVE -> {
+                var shouldLaunchDispatcher = false
+                val accepted =
                     synchronized(touchLock) {
                         if (activePointerId != pointerId) {
-                            null
+                            false
                         } else {
-                            val start = touchStart
-                            activePointerId = null
-                            touchStart = null
-                            start?.let { it to sample }
+                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                            if (!liveTouchDispatchRunning) {
+                                liveTouchDispatchRunning = true
+                                shouldLaunchDispatcher = true
+                            }
+                            true
                         }
                     }
-                gesture?.let { (start, end) ->
-                    scope.launch {
-                        val command =
-                            if (abs(end.x - start.x) <= TAP_SLOP_PX && abs(end.y - start.y) <= TAP_SLOP_PX) {
-                                "input tap ${end.x} ${end.y}"
-                            } else {
-                                val duration = (end.timeMs - start.timeMs).coerceIn(MIN_SWIPE_DURATION_MS, MAX_SWIPE_DURATION_MS)
-                                "input swipe ${start.x} ${start.y} ${end.x} ${end.y} $duration"
-                            }
-                        executeInput(command)
-                            .onFailure { error ->
-                                LogManager.w(
-                                    LogTags.SCRCPY_CLIENT,
-                                    "Compatibility touch command failed: ${error.message}",
-                                )
-                            }
-                    }
+                if (shouldLaunchDispatcher) {
+                    launchLiveTouchDispatcher()
                 }
-                return Result.success(gesture != null)
+                return Result.success(accepted)
             }
 
-            MotionEvent.ACTION_CANCEL ->
-                synchronized(touchLock) {
-                    if (activePointerId == pointerId) {
-                        activePointerId = null
-                        touchStart = null
+            MotionEvent.ACTION_UP -> {
+                var shouldLaunchDispatcher = false
+                val accepted =
+                    synchronized(touchLock) {
+                        if (activePointerId != pointerId) {
+                            false
+                        } else {
+                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                            if (!liveTouchDispatchRunning) {
+                                liveTouchDispatchRunning = true
+                                shouldLaunchDispatcher = true
+                            }
+                            true
+                        }
                     }
+                if (shouldLaunchDispatcher) {
+                    launchLiveTouchDispatcher()
                 }
+                return Result.success(accepted)
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                var shouldLaunchDispatcher = false
+                val accepted =
+                    synchronized(touchLock) {
+                        if (activePointerId != pointerId) {
+                            false
+                        } else {
+                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                            if (!liveTouchDispatchRunning) {
+                                liveTouchDispatchRunning = true
+                                shouldLaunchDispatcher = true
+                            }
+                            true
+                        }
+                    }
+                if (shouldLaunchDispatcher) {
+                    launchLiveTouchDispatcher()
+                }
+                return Result.success(accepted)
+            }
 
             else -> return Result.success(false)
         }
-        return Result.success(true)
     }
 
     suspend fun sendKeyEvent(
@@ -292,6 +357,108 @@ internal class CompatibilityModeController(
                 "Compatibility screenshot helper is unavailable: ${error.message}",
             )
         }
+    }
+
+    private suspend fun openTouchHelperStream(): Result<RemoteTouchStream> {
+        val connection =
+            currentConnection()
+                ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
+        return connection.openRemoteTouchStream(localHelperJar = helperJar)
+    }
+
+    private fun launchLiveTouchDispatcher() {
+        touchDispatchJob =
+            scope.launch {
+                while (isActive) {
+                    val event =
+                        synchronized(touchLock) {
+                            liveTouchQueue.poll()
+                                ?: run {
+                                    liveTouchDispatchRunning = false
+                                    null
+                                }
+                        } ?: return@launch
+                    val stream =
+                        activeTouchStream
+                            ?: run {
+                                synchronized(touchLock) {
+                                    liveTouchDispatchRunning = false
+                                }
+                                return@launch
+                            }
+                    val result =
+                        runCatching {
+                            stream.sendTouch(
+                                action = event.action,
+                                x = event.x,
+                                y = event.y,
+                            )
+                        }
+                    if (result.isFailure) {
+                        val error = result.exceptionOrNull()
+                        stream.close()
+                        if (activeTouchStream === stream) {
+                            activeTouchStream = null
+                        }
+                        resetTouchState()
+                        if (isStarted) {
+                            LogManager.w(
+                                LogTags.SCRCPY_CLIENT,
+                                "Compatibility live touch stream was interrupted and will retry: ${error?.message}",
+                            )
+                            recoverTouchStream(error)
+                        }
+                        return@launch
+                    }
+                    if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                        synchronized(touchLock) {
+                            if (activePointerId == event.pointerId) {
+                                activePointerId = null
+                            }
+                        }
+                    }
+                }
+            }
+    }
+
+    private suspend fun recoverTouchStream(initialError: Throwable?): Boolean {
+        var latestError =
+            initialError ?: IllegalStateException("Compatibility live touch stream failed without an error")
+        repeat(MAX_TOUCH_RECOVERY_ATTEMPTS) { attempt ->
+            if (!isStarted) return false
+            val retryDelayMs =
+                (TOUCH_RETRY_DELAY_MS * (attempt + 1)).coerceAtMost(MAX_TOUCH_RETRY_DELAY_MS)
+            delay(retryDelayMs)
+            if (!isStarted) return false
+
+            val result = openTouchHelperStream()
+            val stream = result.getOrNull()
+            if (stream != null) {
+                activeTouchStream = stream
+                if (!isStarted) {
+                    if (activeTouchStream === stream) {
+                        activeTouchStream = null
+                    }
+                    stream.close()
+                    return false
+                }
+                LogManager.i(
+                    LogTags.SCRCPY_CLIENT,
+                    "Compatibility live touch stream recovered after attempt ${attempt + 1}",
+                )
+                return true
+            }
+            latestError =
+                result.exceptionOrNull()
+                    ?: IllegalStateException("Compatibility live touch stream retry failed without an error")
+        }
+
+        LogManager.w(
+            LogTags.SCRCPY_CLIENT,
+            "Compatibility live touch is unavailable after $MAX_TOUCH_RECOVERY_ATTEMPTS recovery attempts: " +
+                latestError.message,
+        )
+        return false
     }
 
     private fun captureHelperFrame(stream: RemoteScreenshotStream): CapturedFrame? {
@@ -373,7 +540,8 @@ internal class CompatibilityModeController(
     private fun resetTouchState() {
         synchronized(touchLock) {
             activePointerId = null
-            touchStart = null
+            liveTouchQueue.clear()
+            liveTouchDispatchRunning = false
         }
     }
 
@@ -386,7 +554,17 @@ internal class CompatibilityModeController(
     private data class TouchSample(
         val x: Int,
         val y: Int,
-        val timeMs: Long,
+    )
+
+    private fun liveTouchEvent(
+        action: Int,
+        pointerId: Long,
+        sample: TouchSample,
+    ) = CompatibilityLiveTouchEvent(
+        action = action,
+        pointerId = pointerId,
+        x = sample.x,
+        y = sample.y,
     )
 
     private data class CapturedFrame(
@@ -399,14 +577,14 @@ internal class CompatibilityModeController(
     )
 
     private companion object {
-        const val TAP_SLOP_PX = 12
-        const val MIN_SWIPE_DURATION_MS = 80L
-        const val MAX_SWIPE_DURATION_MS = 1_000L
         const val FIRST_FRAME_TIMEOUT_MS = 3_000L
         val ASCII_PRINTABLE_RANGE = 0x20..0x7e
         const val MAX_CONSECUTIVE_CAPTURE_FAILURES = 3
         const val CAPTURE_RETRY_DELAY_MS = 500L
         const val MAX_CAPTURE_RETRY_DELAY_MS = 2_000L
+        const val MAX_TOUCH_RECOVERY_ATTEMPTS = 2
+        const val TOUCH_RETRY_DELAY_MS = 300L
+        const val MAX_TOUCH_RETRY_DELAY_MS = 1_000L
         const val INPUT_EXIT_MARKER = "__SCREEN_REMOTE_INPUT_EXIT__="
         val DEFAULT_CAPTURE_SETTINGS = CompatibilityCaptureSettings(maxSize = 720, jpegQuality = 55)
     }

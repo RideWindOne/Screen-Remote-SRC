@@ -3,7 +3,7 @@ package com.screen.remote.android.infrastructure.adb.helper
 import android.content.Context
 import java.io.File
 
-private const val DADB_HELPER_ASSET_NAME = "dadb-device-helper.jar"
+private const val DADB_HELPER_ASSET_NAME = "dadb-helper.jar"
 
 internal object DadbHelperAsset {
     private val extractionLock = Any()

@@ -220,9 +220,13 @@ internal class ScrcpyClientReconnect(
     }
 
     fun cancelPending() {
+        val hadActiveReconnect = reconnectJob?.isActive == true
         reconnectJob?.cancel()
         reconnectJob = null
         reset()
+        if (hadActiveReconnect) {
+            LogManager.d(LogTags.SCRCPY_CLIENT, "Pending automatic reconnect canceled")
+        }
     }
 
     private fun computeReconnectDelay(attempt: Int): Long =

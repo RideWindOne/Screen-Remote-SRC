@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,7 +52,6 @@ import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.designsystem.component.MessageItem
 import com.screen.remote.android.core.designsystem.component.MessageListState
 import com.screen.remote.android.core.designsystem.component.rememberMessageListState
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.getDisplayText
@@ -76,6 +74,7 @@ import com.screen.remote.android.feature.remote.presentation.rememberAudioDecode
 import com.screen.remote.android.feature.remote.presentation.rememberVideoDecoderManager
 import com.screen.remote.android.feature.remote.ui.internal.RemoteLayoutInspectorOverlay
 import com.screen.remote.android.feature.remote.widget.connection.ConnectionStateOverlay
+import com.screen.remote.android.feature.remote.widget.connection.ConnectionActionOverlay
 import com.screen.remote.android.feature.remote.widget.floating.AutoFloatingMenu
 import com.screen.remote.android.feature.remote.widget.floating.FloatingMenuActions
 import com.screen.remote.android.feature.remote.widget.touch.KeyboardInputHandler
@@ -901,6 +900,7 @@ private fun RemoteDisplayScreenContent(
                         compatibilityMode = routeState.sessionData?.config?.compatibilityMode == true,
                         compatibilityFrameAvailable = routeState.compatibilityFrame != null,
                     ),
+                sessionName = routeState.sessionData?.name.orEmpty(),
                 messageListState = routeState.messageListState,
                 onReconnect = connectionViewModel::reconnectActiveSession,
                 onClose = onClose,
@@ -918,16 +918,19 @@ private fun RemoteDisplayScreenContent(
     }
 
     routeState.decoderResolutionRecoveryRequest?.let { request ->
-        DecoderResolutionRecoveryDialog(
+        DecoderResolutionRecoveryOverlay(
             request = request,
             onConfirm = connectionViewModel::confirmDecoderResolutionRecovery,
-            onDismiss = connectionViewModel::dismissDecoderResolutionRecovery,
+            onDismiss = {
+                connectionViewModel.dismissDecoderResolutionRecovery()
+                onClose()
+            },
         )
     }
 }
 
 @Composable
-private fun DecoderResolutionRecoveryDialog(
+private fun DecoderResolutionRecoveryOverlay(
     request: DecoderResolutionRecoveryRequest,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -944,33 +947,23 @@ private fun DecoderResolutionRecoveryDialog(
     val confirm = rememberText(RemoteTexts.REMOTE_DECODER_SIZE_RECOVERY_CONFIRM)
     val cancel = rememberText(RemoteTexts.REMOTE_DECODER_SIZE_RECOVERY_CANCEL)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Text(
-                if (isServerCaptureFailure) {
-                    RemoteTexts.REMOTE_CAPTURE_SIZE_UNSUPPORTED_MESSAGE.format(request.suggestedMaxSize)
-                } else {
-                    RemoteTexts.REMOTE_DECODER_SIZE_UNSUPPORTED_MESSAGE.format(
-                        request.decoderName,
-                        request.width,
-                        request.height,
-                        request.suggestedMaxSize,
-                    )
-                },
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(confirm)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(cancel)
-            }
-        },
+    ConnectionActionOverlay(
+        title = title,
+        message =
+            if (isServerCaptureFailure) {
+                RemoteTexts.REMOTE_CAPTURE_SIZE_UNSUPPORTED_MESSAGE.format(request.suggestedMaxSize)
+            } else {
+                RemoteTexts.REMOTE_DECODER_SIZE_UNSUPPORTED_MESSAGE.format(
+                    request.decoderName,
+                    request.width,
+                    request.height,
+                    request.suggestedMaxSize,
+                )
+            },
+        confirmText = confirm,
+        dismissText = cancel,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
     )
 }
 

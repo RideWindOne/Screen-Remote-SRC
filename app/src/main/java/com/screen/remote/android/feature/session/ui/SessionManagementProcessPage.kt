@@ -187,12 +187,23 @@ internal fun SessionManagementProcessPage(
             0f
         }
     val processEntries = processSnapshot.entries
-    val processPackageNames by remember {
-        derivedStateOf { processSnapshot.entries.map { it.packageName } }
-    }
-    val processInventoryEntries by remember {
-        derivedStateOf { processSnapshot.entries.map { it.toAppInventoryEntry() } }
-    }
+    val appCacheRevision = SessionManagementAppCache.revision()
+    val processInventoryEntries =
+        remember(processEntries, appCacheRevision) {
+            val inventoryByPackage =
+                SessionManagementAppCache.snapshot()
+                    ?.apps
+                    .orEmpty()
+                    .associateBy(AppInventoryEntry::packageName)
+            processEntries.map { process ->
+                val inventoryEntry = inventoryByPackage[process.packageName]
+                process.toAppInventoryEntry().copy(
+                    versionCode = inventoryEntry?.versionCode ?: 0L,
+                    versionName = inventoryEntry?.versionName.orEmpty(),
+                    lastUpdateTime = inventoryEntry?.lastUpdateTime ?: 0L,
+                )
+            }
+        }
     val normalizedSearchQuery by remember {
         derivedStateOf { submittedSearchQuery.trim().lowercase(Locale.getDefault()) }
     }
@@ -207,7 +218,7 @@ internal fun SessionManagementProcessPage(
         derivedStateOf { processSnapshot.entries.sumOf { 1 + it.children.size } }
     }
 
-    LaunchedEffect(helperReady, processPackageNames) {
+    LaunchedEffect(helperReady, processInventoryEntries) {
         if (processEntries.isEmpty()) {
             return@LaunchedEffect
         }

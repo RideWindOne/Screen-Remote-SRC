@@ -45,6 +45,7 @@ internal class ScrcpyClientSessionRuntime(
     fun ensureMonitor(
         stateMachine: ConnectionStateMachine,
         onReconnect: () -> Unit,
+        onCancelReconnect: () -> Unit,
         observerScope: CoroutineScope,
         onSessionStateChanged: (SessionState) -> Unit,
     ) {
@@ -55,6 +56,7 @@ internal class ScrcpyClientSessionRuntime(
         session.initMonitor(
             stateMachine = stateMachine,
             onReconnect = onReconnect,
+            onCancelReconnect = onCancelReconnect,
         )
 
         sessionStateObserverJob?.cancel()

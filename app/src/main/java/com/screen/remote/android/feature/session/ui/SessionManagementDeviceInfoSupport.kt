@@ -14,6 +14,7 @@ import com.screen.remote.android.core.designsystem.component.SectionCard
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import dadb.helper.RemoteDeviceField
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.util.Locale
@@ -37,72 +38,6 @@ private data class WifiMetrics(
     val linkSpeed: String,
 )
 
-private val dashboardHelperCommands =
-    listOf(
-        "getprop ro.product.model",
-        "getprop ro.product.manufacturer",
-        "getprop ro.soc.model",
-        "getprop ro.build.version.release",
-        $$"cat /proc/uptime | awk '{print $1}'",
-        "getprop gsm.version.baseband",
-        "getprop ro.product.device",
-        "getprop ro.build.version.security_patch",
-        "getprop ro.serialno",
-        "wm size | grep -E 'Physical|Override' | tail -n 1",
-        "wm density | grep -E 'Physical|Override' | tail -n 1",
-        "dumpsys display | grep -E 'xDpi=|yDpi=|density .* dpi' | head -n 4",
-        "dumpsys display | grep -m 1 'DisplayDeviceInfo{'",
-        "ip -o -4 addr show 2>/dev/null; ifconfig 2>/dev/null",
-        "ip -4 route show default 2>/dev/null; cat /proc/net/route 2>/dev/null",
-        "getprop gsm.network.type",
-        "getprop gsm.operator.alpha",
-        "dumpsys telephony.registry | grep -m 1 'mSignalStrength='",
-        "dumpsys telephony.registry | grep -m 1 'mCellIdentity='",
-        "dumpsys wifi | grep -m 1 'mWifiInfo SSID:'",
-        "cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'",
-        "df /data | tail -n 1",
-        $$"""
-        for path in /sys/class/power_supply/battery/cycle_count /sys/class/power_supply/bq_bms/cycle_count
-        do
-            if [ -r "$path" ]; then
-                value=$(cat "$path" 2>/dev/null)
-                if [ -n "$value" ]; then
-                    echo "$value"
-                    break
-                fi
-            fi
-        done
-        """.trimIndent(),
-        "dumpsys battery | grep -E 'level:|status:|health:|voltage:|temperature:|current now:|current average:'",
-        "cat /sys/class/power_supply/battery/voltage_now 2>/dev/null",
-        "cmd battery get -f current_now 2>/dev/null",
-        "cmd battery get -f current_average 2>/dev/null",
-        $$"""
-        for path in \
-            /sys/class/power_supply/battery/current_now \
-            /sys/class/power_supply/battery/current_avg \
-            /sys/class/power_supply/bms/current_now \
-            /sys/class/power_supply/main/current_now \
-            /sys/class/power_supply/battery/constant_charge_current \
-            /sys/class/power_supply/usb/current_max
-        do
-            if [ -r "$path" ]; then
-                value=$(cat "$path" 2>/dev/null)
-                if [ -n "$value" ]; then
-                    echo "$value"
-                    break
-                fi
-            fi
-        done
-        """.trimIndent(),
-        "getprop ro.product.cpu.abilist",
-        "getprop ro.product.board",
-        "getprop ro.build.fingerprint",
-        "getprop service.adb.tcp.port",
-        "cat /proc/cpuinfo | grep -c processor",
-        "cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null",
-    )
-
 internal suspend fun loadDeviceDashboardSnapshot(
     context: Context,
     sessionData: SessionData,
@@ -114,35 +49,37 @@ internal suspend fun loadDeviceDashboardSnapshot(
             errorMessage = ManagementTexts.DeviceInfo.NO_CONNECTION_FOR_OVERVIEW.get(),
         )
 
-    val queryKeys = dashboardHelperCommands.mapIndexed { index, command -> command to "dashboard_$index" }.toMap()
     val helperResult =
         runCatching {
             val helperJar = ensureLocalDadbHelperJar(context)
             connection
-                .runQueriesWithHelper(
-                    queries = queryKeys.entries.associate { (command, key) -> key to command },
-                    localHelperJar = helperJar,
-                ).getOrThrow()
+                .loadDeviceSnapshotWithHelper(localHelperJar = helperJar)
+                .getOrThrow()
         }.getOrElse { error ->
             return DeviceDashboardSnapshot.loading(sessionData).copy(
                 isLoading = false,
                 errorMessage = error.message ?: ManagementTexts.DeviceInfo.OVERVIEW_LOAD_FAILED.get(),
             )
         }
-    val failedKeys =
-        helperResult.filterValues { it.error.isNotBlank() }.keys +
-            (queryKeys.values - helperResult.keys)
-    if (failedKeys.isNotEmpty()) {
+    val failedFields =
+        buildMap {
+            helperResult.fields.forEach { (field, result) ->
+                if (result.error.isNotBlank()) put(field.wireName, result.error)
+            }
+            (RemoteDeviceField.entries - helperResult.fields.keys).forEach { field ->
+                put(field.wireName, "Missing helper response")
+            }
+        }
+    if (failedFields.isNotEmpty()) {
         LogManager.w(
             LogTags.ADB_CONNECTION,
-            "Dashboard helper completed with ${failedKeys.size} failed fields: ${
-                failedKeys.sorted().joinToString(",")
+            "Dashboard helper completed with ${failedFields.size} failed fields: ${
+                failedFields.toSortedMap().entries.joinToString("; ") { (key, error) -> "$key=$error" }
             }",
         )
     }
 
-    fun shell(command: String): String =
-        queryKeys[command]?.let(helperResult::get)?.value?.trim().orEmpty()
+    fun field(field: RemoteDeviceField): String = helperResult.fields[field]?.value?.trim().orEmpty()
 
     val cachedDeviceInfo = connection.deviceInfo
     val cachedPreflight = connection.getCachedCandidatePreflight().takeIf { preferCachedConnectionInfo }
@@ -153,106 +90,55 @@ internal suspend fun loadDeviceDashboardSnapshot(
 
     return runCatching {
         coroutineScope {
-            val modelDeferred = async { cachedValue(cachedDeviceInfo.model) ?: shell("getprop ro.product.model") }
+            val modelDeferred = async { cachedValue(cachedDeviceInfo.model) ?: field(RemoteDeviceField.Model) }
             val manufacturerDeferred =
-                async { cachedValue(cachedDeviceInfo.manufacturer) ?: shell("getprop ro.product.manufacturer") }
-            val socModelDeferred = async { shell("getprop ro.soc.model") }
+                async { cachedValue(cachedDeviceInfo.manufacturer) ?: field(RemoteDeviceField.Manufacturer) }
+            val socModelDeferred = async { field(RemoteDeviceField.SocModel) }
             val androidVersionDeferred =
-                async { cachedValue(cachedDeviceInfo.androidVersion) ?: shell("getprop ro.build.version.release") }
-            val uptimeDeferred = async { shell($$"cat /proc/uptime | awk '{print $1}'") }
-            val basebandDeferred = async { shell("getprop gsm.version.baseband") }
-            val productCodeNameDeferred = async { shell("getprop ro.product.device") }
-            val securityPatchDeferred = async { shell("getprop ro.build.version.security_patch") }
+                async { cachedValue(cachedDeviceInfo.androidVersion) ?: field(RemoteDeviceField.AndroidVersion) }
+            val uptimeDeferred = async { field(RemoteDeviceField.Uptime) }
+            val basebandDeferred = async { field(RemoteDeviceField.Baseband) }
+            val productCodeNameDeferred = async { field(RemoteDeviceField.ProductCodeName) }
+            val securityPatchDeferred = async { field(RemoteDeviceField.SecurityPatch) }
             val serialDeferred =
-                async { cachedValue(cachedDeviceInfo.serialNumber) ?: shell("getprop ro.serialno") }
+                async { cachedValue(cachedDeviceInfo.serialNumber) ?: field(RemoteDeviceField.Serial) }
             val resolutionDeferred =
                 async {
                     cachedDisplayInfo?.let { "${it.currentWidth}x${it.currentHeight}" }
-                        ?: shell("wm size | grep -E 'Physical|Override' | tail -n 1")
+                        ?: field(RemoteDeviceField.Resolution)
                 }
             val dpiDeferred =
                 async {
                     cachedDisplayInfo?.currentDensityDpi?.toString()
-                        ?: shell("wm density | grep -E 'Physical|Override' | tail -n 1")
+                        ?: field(RemoteDeviceField.Density)
                 }
-            val displayMetricsDeferred =
-                async { shell("dumpsys display | grep -E 'xDpi=|yDpi=|density .* dpi' | head -n 4") }
-            val displayRefreshDeferred = async { shell("dumpsys display | grep -m 1 'DisplayDeviceInfo{'") }
-            val networkInterfacesDeferred =
-                async {
-                    shell("ip -o -4 addr show 2>/dev/null; ifconfig 2>/dev/null")
-                }
-            val defaultRouteDeferred =
-                async {
-                    shell("ip -4 route show default 2>/dev/null; cat /proc/net/route 2>/dev/null")
-                }
-            val mobileNetworkTypeDeferred = async { shell("getprop gsm.network.type") }
-            val carrierNamesDeferred = async { shell("getprop gsm.operator.alpha") }
-            val signalStrengthDeferred = async { shell("dumpsys telephony.registry | grep -m 1 'mSignalStrength='") }
-            val cellIdentityDeferred = async { shell("dumpsys telephony.registry | grep -m 1 'mCellIdentity='") }
-            val wifiInfoDeferred = async { shell("dumpsys wifi | grep -m 1 'mWifiInfo SSID:'") }
-            val memoryDeferred = async { shell("cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'") }
-            val dataDfDeferred = async { shell("df /data | tail -n 1") }
-            val batteryCycleDeferred =
-                async {
-                    shell(
-                        $$"""
-                        for path in /sys/class/power_supply/battery/cycle_count /sys/class/power_supply/bq_bms/cycle_count
-                        do
-                            if [ -r "$path" ]; then
-                                value=$(cat "$path" 2>/dev/null)
-                                if [ -n "$value" ]; then
-                                    echo "$value"
-                                    break
-                                fi
-                            fi
-                        done
-                        """.trimIndent(),
-                    )
-                }
-            val batteryDeferred =
-                async {
-                    shell(
-                        "dumpsys battery | grep -E 'level:|status:|health:|voltage:|temperature:|current now:|current average:'",
-                    )
-                }
-            val voltageNowDeferred = async { shell("cat /sys/class/power_supply/battery/voltage_now 2>/dev/null") }
-            val batteryCurrentNowDeferred = async { shell("cmd battery get -f current_now 2>/dev/null") }
-            val batteryCurrentAverageDeferred = async { shell("cmd battery get -f current_average 2>/dev/null") }
-            val currentNowDeferred =
-                async {
-                    shell(
-                        $$"""
-                        for path in \
-                            /sys/class/power_supply/battery/current_now \
-                            /sys/class/power_supply/battery/current_avg \
-                            /sys/class/power_supply/bms/current_now \
-                            /sys/class/power_supply/main/current_now \
-                            /sys/class/power_supply/battery/constant_charge_current \
-                            /sys/class/power_supply/usb/current_max
-                        do
-                            if [ -r "$path" ]; then
-                                value=$(cat "$path" 2>/dev/null)
-                                if [ -n "$value" ]; then
-                                    echo "$value"
-                                    break
-                                fi
-                            fi
-                        done
-                        """.trimIndent(),
-                    )
-                }
-            val abiDeferred = async { shell("getprop ro.product.cpu.abilist") }
-            val boardDeferred = async { shell("getprop ro.product.board") }
+            val displayMetricsDeferred = async { field(RemoteDeviceField.DisplayMetrics) }
+            val displayRefreshDeferred = async { field(RemoteDeviceField.DisplayInfo) }
+            val networkInterfacesDeferred = async { field(RemoteDeviceField.NetworkInterfaces) }
+            val defaultRouteDeferred = async { field(RemoteDeviceField.DefaultRoute) }
+            val mobileNetworkTypeDeferred = async { field(RemoteDeviceField.MobileNetworkType) }
+            val carrierNamesDeferred = async { field(RemoteDeviceField.CarrierNames) }
+            val signalStrengthDeferred = async { field(RemoteDeviceField.SignalStrength) }
+            val cellIdentityDeferred = async { field(RemoteDeviceField.CellIdentity) }
+            val wifiInfoDeferred = async { field(RemoteDeviceField.WifiInfo) }
+            val memoryDeferred = async { field(RemoteDeviceField.Memory) }
+            val dataDfDeferred = async { field(RemoteDeviceField.DataFilesystem) }
+            val batteryCycleDeferred = async { field(RemoteDeviceField.BatteryCycle) }
+            val batteryDeferred = async { field(RemoteDeviceField.Battery) }
+            val voltageNowDeferred = async { field(RemoteDeviceField.VoltageNow) }
+            val batteryCurrentNowDeferred = async { field(RemoteDeviceField.BatteryCurrentNow) }
+            val batteryCurrentAverageDeferred = async { field(RemoteDeviceField.BatteryCurrentAverage) }
+            val currentNowDeferred = async { field(RemoteDeviceField.SysfsCurrent) }
+            val abiDeferred = async { field(RemoteDeviceField.Abi) }
+            val boardDeferred = async { field(RemoteDeviceField.Board) }
             val fingerprintDeferred =
                 async {
                     cachedPreflight?.buildFingerprint?.takeIf { it.isNotBlank() }
-                        ?: shell("getprop ro.build.fingerprint")
+                        ?: field(RemoteDeviceField.Fingerprint)
                 }
-            val wirelessPortDeferred = async { shell("getprop service.adb.tcp.port") }
-            val cpuCountDeferred = async { shell("cat /proc/cpuinfo | grep -c processor") }
-            val cpuFreqDeferred =
-                async { shell("cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null") }
+            val wirelessPortDeferred = async { field(RemoteDeviceField.WirelessPort) }
+            val cpuCountDeferred = async { field(RemoteDeviceField.CpuCount) }
+            val cpuFreqDeferred = async { field(RemoteDeviceField.CpuMaxFrequency) }
 
             val memoryMap = parseKeyValueBlock(memoryDeferred.await())
             val batteryMap = parseKeyValueBlock(batteryDeferred.await())
@@ -824,12 +710,7 @@ private fun formatSinrMetric(value: String): String {
 }
 
 private fun formatUptime(raw: String): String {
-    val seconds =
-        raw
-            .substringBefore(" ")
-            .trim()
-            .toDoubleOrNull()
-            ?.toLong() ?: return ""
+    val seconds = parseProcUptimeSeconds(raw) ?: return ""
     val days = seconds / 86_400
     val hours = (seconds % 86_400) / 3_600
     val minutes = (seconds % 3_600) / 60
@@ -840,6 +721,13 @@ private fun formatUptime(raw: String): String {
         else -> ManagementTexts.DeviceInfo.UPTIME_MINUTES.format(minutes)
     }
 }
+
+internal fun parseProcUptimeSeconds(raw: String): Long? =
+    raw
+        .substringBefore(" ")
+        .trim()
+        .toDoubleOrNull()
+        ?.toLong()
 
 private fun formatMemValue(raw: String?): String {
     val kb = raw?.split(Regex("\\s+"))?.firstOrNull()?.toLongOrNull() ?: return ""

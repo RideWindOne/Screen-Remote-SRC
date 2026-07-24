@@ -71,6 +71,7 @@ internal class ScrcpyClientConnectionCoordinator(
                 sessionRuntime.ensureMonitor(
                     stateMachine = stateMachine,
                     onReconnect = { reconnectManager.triggerReconnect() },
+                    onCancelReconnect = { reconnectManager.cancelPending() },
                     observerScope = observerScope,
                     onSessionStateChanged = onSessionStateChanged,
                 )

@@ -26,14 +26,17 @@ internal class SessionRuntimeState {
     private var reconnectAttempts = 0
     private var decoderRecoveryAttempts = 0
     private var reconnectCallback: (() -> Unit)? = null
+    private var cancelReconnectCallback: (() -> Unit)? = null
     private var stateMachine: ConnectionStateMachine? = null
 
     fun bind(
         stateMachine: ConnectionStateMachine?,
         reconnectCallback: (() -> Unit)?,
+        cancelReconnectCallback: (() -> Unit)?,
     ) {
         this.stateMachine = stateMachine
         this.reconnectCallback = reconnectCallback
+        this.cancelReconnectCallback = cancelReconnectCallback
     }
 
     fun updateProgress(
@@ -93,6 +96,10 @@ internal class SessionRuntimeState {
 
     fun invokeReconnectCallback() {
         reconnectCallback?.invoke()
+    }
+
+    fun invokeCancelReconnectCallback() {
+        cancelReconnectCallback?.invoke()
     }
 
     fun expectedSocketCount(): Int = expectedSocketCount

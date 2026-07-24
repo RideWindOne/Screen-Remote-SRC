@@ -206,7 +206,7 @@ android {
 val syncDadbHelperAsset = tasks.register<SyncDadbHelperAssetTask>("syncDadbHelperAsset") {
     val generatedDir = layout.buildDirectory.dir("generated/assets/dadbHelper")
     dependsOn(gradle.includedBuild("dadb").task(":dadb-helper:dexJar"))
-    from(rootProject.file("../external/dadb/dadb-helper/build/libs/dadb-device-helper.jar"))
+    from(rootProject.file("../external/dadb/dadb-helper/build/libs/dadb-helper.jar"))
     outputDir.set(generatedDir)
     into(generatedDir)
 }

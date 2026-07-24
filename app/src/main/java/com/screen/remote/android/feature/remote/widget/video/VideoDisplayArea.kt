@@ -95,7 +95,11 @@ fun VideoDisplayArea(
                     },
                     update = { imageView ->
                         imageView.setAccessibleOnTouchListener(handleTouch)
-                        imageView.setImageBitmap(compatibilityFrame)
+                        if (compatibilityFrame == null) {
+                            imageView.setImageDrawable(null)
+                        } else {
+                            imageView.setImageBitmap(compatibilityFrame)
+                        }
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

@@ -5,6 +5,7 @@ import android.view.View
 import android.view.WindowManager
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.infrastructure.adb.shell.EXPAND_NOTIFICATIONS_COMMAND
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -91,7 +92,7 @@ internal class FloatingMenuGestureCompletionHandler(
                 FloatingMenuGestureState.Direction.RIGHT -> dispatchKeyEvent(187, "Gesture recent apps key failed")
                 FloatingMenuGestureState.Direction.UP -> dispatchKeyEvent(3, "Gesture home key failed")
                 FloatingMenuGestureState.Direction.DOWN -> {
-                    actions.controlViewModel.executeShellCommand("cmd statusbar expand-notifications")
+                    actions.controlViewModel.executeShellCommand(EXPAND_NOTIFICATIONS_COMMAND)
                 }
             }
         }

@@ -200,7 +200,11 @@ class ScrcpyClient(
         compatibilityModeController.stop()
         val result = connectionCoordinator.connect(sessionId, options, isReconnecting)
         if (result.isSuccess && options.config.compatibilityMode) {
-            compatibilityModeController.start()
+            val compatibilityResult = compatibilityModeController.start()
+            if (compatibilityResult.isFailure) {
+                connectionCoordinator.disconnect()
+                return compatibilityResult
+            }
         }
         return result
     }

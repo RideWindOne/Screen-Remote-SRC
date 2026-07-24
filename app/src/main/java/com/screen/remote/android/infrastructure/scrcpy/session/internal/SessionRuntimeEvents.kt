@@ -105,13 +105,18 @@ fun Session.createMonitorBus(deviceIdentifier: String = this.deviceIdentifier) {
 fun Session.initMonitor(
     stateMachine: ConnectionStateMachine,
     onReconnect: () -> Unit,
+    onCancelReconnect: () -> Unit,
 ) {
-    runtime.bind(stateMachine, onReconnect)
+    runtime.bind(stateMachine, onReconnect, onCancelReconnect)
     LogManager.d(LogTags.SCRCPY_CLIENT, "Initialize session monitor")
 }
 
 fun Session.stopMonitor() {
-    runtime.bind(stateMachine = null, reconnectCallback = null)
+    runtime.bind(
+        stateMachine = null,
+        reconnectCallback = null,
+        cancelReconnectCallback = null,
+    )
     runtime.clearComponentStates()
     runtime.resetReconnectAttempts()
     LogManager.d(LogTags.SCRCPY_CLIENT, "Stop session monitor: $deviceIdentifier")
@@ -167,6 +172,10 @@ internal fun Session.handleServerStarted(context: ServerStartContext) {
 }
 
 internal fun Session.handleServerFailed(issue: ServerIssue) {
+    if (runtime.sessionState.value is SessionState.Failed) {
+        LogManager.d(LogTags.SCRCPY_CLIENT, "Ignore server failure after the session entered a terminal failure state")
+        return
+    }
     if (hasPendingDecoderResolutionRecovery() && issue.kind == ServerIssueKind.ProcessExited) {
         LogManager.w(LogTags.SCRCPY_CLIENT, "scrcpy-server exited while waiting for video size recovery confirmation")
         return
@@ -278,9 +287,6 @@ internal fun Session.handleRequestCleanup(trigger: CleanupTrigger) {
 }
 
 internal fun Session.handleDecoderStarted(decoderType: DecoderType) {
-    if (decoderType == DecoderType.Video) {
-        clearDecoderResolutionRecovery()
-    }
     runtime.updateComponentState(decoderType.toComponent(), ComponentState.Running)
     LogManager.d(LogTags.SCRCPY_CLIENT, "Decoder started: ${decoderType.name}")
 }
@@ -304,15 +310,16 @@ internal fun Session.handleDecoderError(issue: DecoderIssue) {
                 failedLongEdge = failedLongEdge,
             )
         if (suggestedMaxSize == null) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "Decoding size is not supported and no recovery size is available")
+            failVideoResolutionRecovery(
+                "Video decoding failed and no lower recovery maxSize is available",
+            )
             return
         }
 
         val currentOptions = options
         if (currentOptions.config.maxSize in 1..suggestedMaxSize) {
-            LogManager.e(
-                LogTags.SCRCPY_CLIENT,
-                "The recommended downgrade size is not lower than the current maxSize, stop retrying: current=${currentOptions.config.maxSize} suggested=$suggestedMaxSize",
+            failVideoResolutionRecovery(
+                "Video decoding failed and the suggested maxSize is not lower than the current value: current=${currentOptions.config.maxSize} suggested=$suggestedMaxSize",
             )
             return
         }
@@ -345,7 +352,7 @@ internal fun Session.handleDecoderError(issue: DecoderIssue) {
 
 internal fun Session.handleConfirmDecoderResolutionRecovery() {
     val request = consumeDecoderResolutionRecovery() ?: return
-    if (!runtime.tryConsumeDecoderRecoveryAttempt(MAX_DECODER_RECOVERY_ATTEMPTS)) {
+    if (!runtime.tryConsumeDecoderRecoveryAttempt(VIDEO_RECOVERY_MAX_SIZE_TIERS.size)) {
         LogManager.e(LogTags.SCRCPY_CLIENT, "Decoder size recovery has reached the retry limit")
         return
     }
@@ -389,31 +396,49 @@ internal fun Session.handleDismissDecoderResolutionRecovery() {
 }
 
 internal fun Session.handleServerVideoCaptureError(detail: String) {
-    val suggestedMaxSize = nextVideoRecoveryMaxSize(options.config.maxSize)
-    if (suggestedMaxSize == null) {
-        handleServerFailed(
-            ServerIssue(
-                kind = ServerIssueKind.RuntimeStdOut,
-                detail = detail,
-            ),
-        )
-        return
+    if (!isDefinitiveVideoEncoderFailure(detail)) {
+        val suggestedMaxSize = nextVideoRecoveryMaxSize(options.config.maxSize)
+        if (suggestedMaxSize != null) {
+            publishDecoderResolutionRecovery(
+                DecoderResolutionRecoveryRequest(
+                    width = 0,
+                    height = 0,
+                    suggestedMaxSize = suggestedMaxSize,
+                    decoderName = "",
+                    source = VideoResolutionRecoverySource.ServerCapture,
+                    detail = detail,
+                ),
+            )
+            LogManager.w(
+                LogTags.SCRCPY_CLIENT,
+                "Video capture size recovery requires user confirmation: currentMaxSize=${options.config.maxSize} suggestedMaxSize=$suggestedMaxSize",
+            )
+            return
+        }
     }
 
-    publishDecoderResolutionRecovery(
-        DecoderResolutionRecoveryRequest(
-            width = 0,
-            height = 0,
-            suggestedMaxSize = suggestedMaxSize,
-            decoderName = "",
-            source = VideoResolutionRecoverySource.ServerCapture,
-            detail = detail,
+    failVideoEncoderRuntime(detail)
+}
+
+private fun Session.failVideoEncoderRuntime(detail: String) {
+    val encoderName = options.getFinalVideoEncoder().ifBlank { "default" }
+    val encoderDisplayName =
+        options.getFinalVideoEncoder().ifBlank {
+            RemoteTexts.REMOTE_DEFAULT_VIDEO_ENCODER.get()
+        }
+    runtime.invokeCancelReconnectCallback()
+    handleSessionError(
+        SessionIssue(
+            kind = SessionIssueKind.RuntimeFailure,
+            detail = "Video encoder runtime failure: encoder=$encoderName detail=$detail",
+            userMessage = RemoteTexts.REMOTE_VIDEO_ENCODER_RUNTIME_FAILED.format(encoderDisplayName),
         ),
     )
-    LogManager.w(
-        LogTags.SCRCPY_CLIENT,
-        "Video capture size recovery requires user confirmation: currentMaxSize=${options.config.maxSize} suggestedMaxSize=$suggestedMaxSize",
-    )
+}
+
+internal fun isDefinitiveVideoEncoderFailure(detail: String): Boolean {
+    val normalized = detail.lowercase()
+    return DEFINITIVE_VIDEO_ENCODER_FAILURE_MARKERS.any(normalized::contains)
 }
 
 internal fun nextVideoRecoveryMaxSize(
@@ -429,8 +454,28 @@ internal fun nextVideoRecoveryMaxSize(
     return VIDEO_RECOVERY_MAX_SIZE_TIERS.firstOrNull { it < upperExclusive }
 }
 
-private const val MAX_DECODER_RECOVERY_ATTEMPTS = 3
-private val VIDEO_RECOVERY_MAX_SIZE_TIERS = listOf(1920, 1080, 720)
+private fun Session.failVideoResolutionRecovery(detail: String) {
+    runtime.invokeCancelReconnectCallback()
+    handleSessionError(
+        SessionIssue(
+            kind = SessionIssueKind.RuntimeFailure,
+            detail = detail,
+            userMessage = RemoteTexts.REMOTE_VIDEO_SIZE_RECOVERY_EXHAUSTED.get(),
+        ),
+    )
+}
+
+private val VIDEO_RECOVERY_MAX_SIZE_TIERS = listOf(1920, 1600, 1280, 1080, 720, 540)
+private val DEFINITIVE_VIDEO_ENCODER_FAILURE_MARKERS =
+    listOf(
+        "encoder not found",
+        "no encoder found",
+        "cannot find encoder",
+        "could not create encoder",
+        "failed to create encoder",
+        "unknown encoder",
+        "invalid encoder",
+    )
 
 internal fun handleVideoEncoderDetecting(context: CodecDetectionContext) {
     val source = if (context.reusedUploadedServer) "reused uploaded server" else "pushed server again"

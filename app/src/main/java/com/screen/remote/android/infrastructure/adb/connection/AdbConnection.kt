@@ -29,27 +29,28 @@ import dadb.DadbRoute
 import dadb.DadbSession
 import dadb.PortForwarder
 import dadb.helper.RemoteAppIconBatchData
-import dadb.helper.RemoteAppIconBatchRequest
 import dadb.helper.RemoteAppIconData
 import dadb.helper.RemoteAppData
 import dadb.helper.RemoteAppListItem
 import dadb.helper.RemoteDirectoryEntry
+import dadb.helper.RemoteDeviceSnapshot
 import dadb.helper.RemoteHelperFileState
 import dadb.helper.RemoteHelperProbeResult
-import dadb.helper.RemoteHelperQueryResult
 import dadb.helper.RemoteProcessEntry
 import dadb.helper.RemoteScreenshotStream
+import dadb.helper.RemoteTouchStream
 import dadb.helper.loadAppIconBatchWithHelper
 import dadb.helper.loadAppIconWithHelper
 import dadb.helper.loadAppsWithHelper
 import dadb.helper.loadAppListPageWithHelper
 import dadb.helper.loadDirectoryWithHelper
+import dadb.helper.loadDeviceSnapshotWithHelper
 import dadb.helper.loadProcessesWithHelper
 import dadb.helper.injectRemoteTextWithHelper
-import dadb.helper.prepareRemoteAppIconHelper
+import dadb.helper.prepareRemoteDadbHelper
 import dadb.helper.runRemoteAppHelperProbe
-import dadb.helper.runQueriesWithHelper
 import dadb.helper.openRemoteScreenshotStreamWithHelper
+import dadb.helper.openRemoteTouchStreamWithHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -260,6 +261,15 @@ class AdbConnection(
             }
         }
 
+    suspend fun openRemoteTouchStream(localHelperJar: File): Result<RemoteTouchStream> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                streamingDadb().openRemoteTouchStreamWithHelper(
+                    localHelperJar = localHelperJar,
+                )
+            }
+        }
+
     suspend fun injectRemoteText(
         localHelperJar: File,
         text: String,
@@ -327,11 +337,11 @@ class AdbConnection(
                 onFailure = { error -> Result.failure(error) },
             )
 
-    suspend fun prepareAppIconHelper(localHelperJar: File): Result<RemoteHelperFileState> =
+    suspend fun prepareDadbHelper(localHelperJar: File): Result<RemoteHelperFileState> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) { "helper preparation jar=${localHelperJar.absolutePath}" }
             runCatching {
-                dadb.prepareRemoteAppIconHelper(localHelperJar)
+                dadb.prepareRemoteDadbHelper(localHelperJar)
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
@@ -381,17 +391,15 @@ class AdbConnection(
 
     suspend fun loadAppIconWithHelper(
         packageName: String,
-        localHash: String?,
         localHelperJar: File,
     ): Result<RemoteAppIconData> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) {
-                "helper icon request: package=$packageName localHash=${localHash ?: "<none>"} jar=${localHelperJar.absolutePath}"
+                "helper icon request: package=$packageName jar=${localHelperJar.absolutePath}"
             }
             runCatching {
                 dadb.loadAppIconWithHelper(
                     packageName = packageName,
-                    localHash = localHash,
                     localHelperJar = localHelperJar,
                 )
             }.onFailure { error ->
@@ -430,23 +438,22 @@ class AdbConnection(
         }
 
     suspend fun loadAppIconBatchWithHelper(
-        requests: List<RemoteAppIconBatchRequest>,
+        packageNames: List<String>,
         localHelperJar: File,
     ): Result<RemoteAppIconBatchData> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) {
-                "helper batch icon request: count=${requests.size} jar=${localHelperJar.absolutePath}"
+                "helper batch icon request: count=${packageNames.size} jar=${localHelperJar.absolutePath}"
             }
             runCatching {
                 dadb.loadAppIconBatchWithHelper(
-                    requests = requests,
+                    packageNames = packageNames,
                     localHelperJar = localHelperJar,
                 )
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "Helper batch icon request failed count=${requests.size}: ${error.message}",
-                    error,
+                    "Helper batch icon request failed count=${packageNames.size}: ${error.message}",
                 )
             }
         }
@@ -507,23 +514,17 @@ class AdbConnection(
             }
         }
 
-    suspend fun runQueriesWithHelper(
-        queries: Map<String, String>,
-        localHelperJar: File,
-    ): Result<Map<String, RemoteHelperQueryResult>> =
+    suspend fun loadDeviceSnapshotWithHelper(localHelperJar: File): Result<RemoteDeviceSnapshot> =
         withContext(Dispatchers.IO) {
             dManagement(LogTags.ADB_CONNECTION) {
-                "helper query batch request: count=${queries.size}"
+                "helper device snapshot request"
             }
             runCatching {
-                dadb.runQueriesWithHelper(
-                    queries = queries,
-                    localHelperJar = localHelperJar,
-                )
+                dadb.loadDeviceSnapshotWithHelper(localHelperJar = localHelperJar)
             }.onFailure { error ->
                 LogManager.e(
                     LogTags.ADB_CONNECTION,
-                    "Helper query batch request failed: ${error.message}",
+                    "Helper device snapshot request failed: ${error.message}",
                     error,
                 )
             }

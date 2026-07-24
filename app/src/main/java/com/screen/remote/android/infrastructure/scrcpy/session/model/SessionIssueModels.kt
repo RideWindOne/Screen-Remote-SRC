@@ -113,6 +113,7 @@ enum class DecoderIssueKind {
 data class SessionIssue(
     val kind: SessionIssueKind,
     val detail: String,
+    val userMessage: String? = null,
 ) {
     val message: String
         get() = detail

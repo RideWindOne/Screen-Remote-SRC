@@ -68,6 +68,6 @@ sealed class SessionState {
         val issue: SessionIssue,
     ) : SessionState() {
         val reason: String
-            get() = issue.message
+            get() = issue.userMessage ?: issue.message
     }
 }

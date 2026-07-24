@@ -90,9 +90,9 @@ object RemoteTexts {
             "The fixed decoder %s cannot decode %d×%d. Reconnect temporarily with maxSize=%d? This will not change the session configuration.",
         )
     val REMOTE_DECODER_SIZE_RECOVERY_CONFIRM =
-        TextPair("降低尺寸并重连", "Reduce size and reconnect")
+        TextPair("降低尺寸", "Reduce Size")
     val REMOTE_DECODER_SIZE_RECOVERY_CANCEL =
-        TextPair("保持当前设置", "Keep current settings")
+        TextPair("取消连接", "Cancel")
     val REMOTE_CAPTURE_SIZE_UNSUPPORTED_TITLE =
         TextPair("原画采集失败", "Native-resolution capture failed")
     val REMOTE_CAPTURE_SIZE_UNSUPPORTED_MESSAGE =
@@ -100,6 +100,18 @@ object RemoteTexts {
             "目标设备无法以当前尺寸启动视频采集或编码。是否使用 maxSize=%d 临时重新连接？此操作不会修改会话配置。",
             "The target device could not start video capture or encoding at the current size. Reconnect temporarily with maxSize=%d? This will not change the session configuration.",
         )
+    val REMOTE_VIDEO_SIZE_RECOVERY_EXHAUSTED =
+        TextPair(
+            "目标设备在最低恢复尺寸 maxSize=540 下仍无法完成视频解码。请更换视频编码器或解码器，或在会话设置中启用兼容模式。",
+            "Video decoding still failed at the minimum recovery size maxSize=540. Choose another video encoder or decoder, or enable compatibility mode in the session settings.",
+        )
+    val REMOTE_DEFAULT_VIDEO_ENCODER = TextPair("默认视频编码器", "default video encoder")
+    val REMOTE_VIDEO_ENCODER_RUNTIME_FAILED =
+        TextPair(
+            "视频编码器 %s 在目标设备上运行失败。请在会话设置中更换视频编码器；如果其他编码器仍不可用，请启用兼容模式。",
+            "Video encoder %s failed on the target device. Choose another video encoder in the session settings; if no encoder works, enable compatibility mode.",
+        )
+    val REMOTE_SESSION_CONNECTION_FAILED_TITLE = TextPair("%s 连接失败", "%s connection failed")
 
     // ScrcpyClient
     val SCRCPY_NATIVE_LIB_LOAD_FAILED = TextPair("Native 库加载失败", "Native library load failed")

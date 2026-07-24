@@ -309,7 +309,7 @@ internal data class ScaledVideoSize(
 )
 
 internal fun decoderFallbackLongEdges(currentLongEdge: Int): List<Int> =
-    listOf(3840, 2560, 2048, 1920, 1600, 1280, 1080, 720).filter { it < currentLongEdge }
+    listOf(3840, 2560, 2048, 1920, 1600, 1280, 1080, 720, 540).filter { it < currentLongEdge }
 
 internal fun scaleVideoSizeToLongEdge(
     width: Int,

@@ -7,6 +7,11 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+internal const val EXPAND_NOTIFICATIONS_COMMAND =
+    "if command -v cmd >/dev/null 2>&1; then " +
+        "cmd statusbar expand-notifications; " +
+        "else service call statusbar 1; fi"
+
 /**
  * ADB Shell 命令管理器
  *
@@ -99,7 +104,7 @@ object AdbShellManager {
      * 展开通知栏
      */
     suspend fun expandNotifications(connection: AdbConnection): Result<String> =
-        execute(connection, "cmd statusbar expand-notifications")
+        execute(connection, EXPAND_NOTIFICATIONS_COMMAND)
 
     /**
      * 设置剪贴板

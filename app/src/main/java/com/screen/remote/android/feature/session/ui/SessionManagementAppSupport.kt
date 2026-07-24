@@ -10,7 +10,6 @@ import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.compat.putIfAbsentCompat
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import dadb.helper.RemoteAppField
-import dadb.helper.RemoteAppIconBatchRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -34,6 +33,7 @@ internal data class AppInventoryEntry(
     val apkPath: String,
     val isEnabled: Boolean,
     val versionCode: Long = 0L,
+    val versionName: String = "",
     val lastUpdateTime: Long = 0L,
     val apkSizeBytes: Long? = null,
 )
@@ -110,9 +110,21 @@ internal data class AppListSortSelection(
 }
 
 @Serializable
+internal data class AppIconCacheMetadata(
+    val versionCode: Long,
+    val versionName: String,
+    val lastUpdateTime: Long,
+)
+
+internal fun AppIconCacheMetadata.matches(entry: AppInventoryEntry): Boolean =
+    entry.lastUpdateTime > 0L &&
+        versionCode == entry.versionCode &&
+        versionName == entry.versionName &&
+        lastUpdateTime == entry.lastUpdateTime
+
+@Serializable
 private data class AppIconIndexSnapshot(
-    val hashes: Map<String, String> = emptyMap(),
-    val titles: Map<String, String> = emptyMap(),
+    val entries: Map<String, AppIconCacheMetadata> = emptyMap(),
 )
 
 internal fun resolveAppListTitle(
@@ -149,15 +161,13 @@ private fun sanitizeAppTitle(
 
 internal object SessionManagementAppCache {
     private var activeScopeKey: String? = null
-    private var activeStorageScopeName: String? = null
-    private var scopePrepared = false
+    private var iconIndexPrepared = false
     private var snapshot: AppInventorySnapshot? = null
     private val filteredSnapshots = mutableMapOf<Set<AppListFilter>, AppInventorySnapshot>()
     private val detailCache = mutableMapOf<String, AppDetailSnapshot>()
     private val detailLoadMutexes = mutableMapOf<String, Mutex>()
     private val iconCache = mutableMapOf<String, Bitmap?>()
-    private val iconGenerationCache = mutableMapOf<String, Int>()
-    private val iconHashCache = mutableMapOf<String, String>()
+    private val iconMetadataCache = mutableMapOf<String, AppIconCacheMetadata>()
     private val titleCache = mutableMapOf<String, String>()
     private var iconHelperUnavailableReason: String? = null
     private var iconHelperDiagnosticsCaptured = false
@@ -173,15 +183,10 @@ internal object SessionManagementAppCache {
         synchronized(this) {
             if (activeScopeKey == scopeKey) return
             activeScopeKey = scopeKey
-            activeStorageScopeName = "session-${sha256(scopeKey.toByteArray(Charsets.UTF_8)).take(16)}"
-            scopePrepared = false
             snapshot = null
             filteredSnapshots.clear()
             detailCache.clear()
             detailLoadMutexes.clear()
-            iconCache.clear()
-            iconGenerationCache.clear()
-            iconHashCache.clear()
             titleCache.clear()
             iconHelperUnavailableReason = null
             iconHelperDiagnosticsCaptured = false
@@ -194,15 +199,10 @@ internal object SessionManagementAppCache {
         synchronized(this) {
             if (activeScopeKey != scopeKey) return
             activeScopeKey = null
-            activeStorageScopeName = null
-            scopePrepared = false
             snapshot = null
             filteredSnapshots.clear()
             detailCache.clear()
             detailLoadMutexes.clear()
-            iconCache.clear()
-            iconGenerationCache.clear()
-            iconHashCache.clear()
             titleCache.clear()
             iconHelperUnavailableReason = null
             iconHelperDiagnosticsCaptured = false
@@ -218,26 +218,20 @@ internal object SessionManagementAppCache {
         selectScope(scopeKey)
         val shouldLoad =
             synchronized(this) {
-                activeScopeKey == scopeKey && !scopePrepared
+                !iconIndexPrepared
             }
         if (!shouldLoad) return
 
         val indexSnapshot = withContext(Dispatchers.IO) { readIconIndex(context) }
         synchronized(this) {
-            if (activeScopeKey == scopeKey && !scopePrepared) {
+            if (!iconIndexPrepared) {
                 indexSnapshot?.let { snapshot ->
-                    iconHashCache.putAll(snapshot.hashes)
-                    titleCache.putAll(snapshot.titles)
+                    iconMetadataCache.putAll(snapshot.entries)
                 }
-                scopePrepared = true
+                iconIndexPrepared = true
             }
         }
     }
-
-    fun storageScopeName(): String =
-        synchronized(this) {
-            checkNotNull(activeStorageScopeName) { "Session management cache scope is not selected" }
-        }
 
     fun snapshot(): AppInventorySnapshot? =
         synchronized(this) {
@@ -294,6 +288,11 @@ internal object SessionManagementAppCache {
         value: AppInventorySnapshot,
     ) {
         synchronized(this) {
+            value.apps.forEach { entry ->
+                if (!iconMetadataMatchesLocked(entry)) {
+                    iconCache.remove(entry.packageName)
+                }
+            }
             filteredSnapshots[filters.toSet()] = value
             snapshot = value
             value.apps.forEach { entry ->
@@ -382,32 +381,18 @@ internal object SessionManagementAppCache {
             iconCache[packageName]
         }
 
-    fun hasIcon(packageName: String): Boolean =
+    fun hasValidIcon(entry: AppInventoryEntry): Boolean =
         synchronized(this) {
-            iconCache.containsKey(packageName)
+            iconCache[entry.packageName] != null && iconMetadataMatchesLocked(entry)
         }
 
     fun updateIcon(
         packageName: String,
         icon: Bitmap?,
-        generation: Int = 0,
     ) {
         synchronized(this) {
             iconCache[packageName] = icon
-            iconGenerationCache[packageName] = generation
             bumpRevision()
-        }
-    }
-
-    fun iconGeneration(packageName: String): Int? =
-        synchronized(this) {
-            iconGenerationCache[packageName]
-        }
-
-    fun clearIcons() {
-        synchronized(this) {
-            iconCache.clear()
-            iconGenerationCache.clear()
         }
     }
 
@@ -435,21 +420,13 @@ internal object SessionManagementAppCache {
         }
     }
 
-    fun cachedIconHash(packageName: String): String? =
+    fun iconMetadataMatches(entry: AppInventoryEntry): Boolean =
         synchronized(this) {
-            iconHashCache[packageName]
+            iconMetadataMatchesLocked(entry)
         }
 
-    fun updateIconHash(
-        context: Context,
-        packageName: String,
-        hash: String,
-    ) {
-        synchronized(this) {
-            iconHashCache[packageName] = hash
-            writeIconIndex(context)
-        }
-    }
+    private fun iconMetadataMatchesLocked(entry: AppInventoryEntry): Boolean =
+        iconMetadataCache[entry.packageName]?.matches(entry) == true
 
     private fun readIconIndex(context: Context): AppIconIndexSnapshot? {
         val file = getIconIndexFile(context)
@@ -465,37 +442,17 @@ internal object SessionManagementAppCache {
         file.writeText(
             json.encodeToString(
                 AppIconIndexSnapshot(
-                    hashes = iconHashCache.toSortedMap(),
-                    titles = titleCache.toSortedMap(),
+                    entries = iconMetadataCache.toSortedMap(),
                 ),
             ),
         )
     }
 
     fun updateIconMetadataBatch(
-        hashes: Map<String, String>,
-        titles: Map<String, String> = emptyMap(),
-        persist: Boolean = true,
-        context: Context? = null,
+        entries: Map<String, AppIconCacheMetadata>,
     ) {
         synchronized(this) {
-            var changed = false
-            hashes.forEach { (packageName, hash) ->
-                if (iconHashCache[packageName] != hash) {
-                    iconHashCache[packageName] = hash
-                    changed = true
-                }
-            }
-            titles.forEach { (packageName, title) ->
-                if (title.isNotBlank() && titleCache[packageName] != title) {
-                    titleCache[packageName] = title
-                    changed = true
-                }
-            }
-            if (changed && persist) {
-                requireNotNull(context) { "context is required when persist=true" }
-                writeIconIndex(context)
-            }
+            iconMetadataCache.putAll(entries)
         }
     }
 
@@ -641,6 +598,8 @@ private fun remoteAppDataToInventoryEntry(
             app.valueOrFallback(RemoteAppField.Enabled, app.enabled, false, fallback?.isEnabled),
         versionCode =
             app.valueOrFallback(RemoteAppField.VersionCode, app.versionCode, 0L, fallback?.versionCode),
+        versionName =
+            app.valueOrFallback(RemoteAppField.VersionName, app.versionName, "", fallback?.versionName),
         lastUpdateTime =
             app.valueOrFallback(RemoteAppField.LastUpdateTime, app.lastUpdateTime, 0L, fallback?.lastUpdateTime),
         apkSizeBytes =
@@ -778,7 +737,7 @@ private val sessionManagementAppPipelineMutex = Mutex()
 
 /**
  * The single entry point for application data. Results are deliberately published in three
- * sequential stages: the basic package inventory, icons and localized titles, then full details.
+ * stages: publish the basic package inventory first, then load icons and full details concurrently.
  */
 internal suspend fun loadSessionManagementAppData(
     context: Context,
@@ -843,19 +802,27 @@ internal suspend fun loadSessionManagementAppData(
             ),
         )
 
-        runCatching { warmAndPrefetchAppPresentations(context, apps) }
-            .onFailure { error -> if (error is CancellationException) throw error }
-        if (!SessionManagementAppCache.isActiveScope(scopeKey)) return@withLock
-
         val detailApps =
-            loadAppDetailsWithHelper(
-                context = context,
-                apps = apps,
-                includeUser = includeUser,
-                includeSystem = includeSystem,
-                includeEnabled = includeEnabled,
-                includeDisabled = includeDisabled,
-            )
+            coroutineScope {
+                val iconJob =
+                    async {
+                        runCatching { warmAndPrefetchAppPresentations(context, apps) }
+                            .onFailure { error -> if (error is CancellationException) throw error }
+                    }
+                val detailJob =
+                    async {
+                        loadAppDetailsWithHelper(
+                            context = context,
+                            apps = apps,
+                            includeUser = includeUser,
+                            includeSystem = includeSystem,
+                            includeEnabled = includeEnabled,
+                            includeDisabled = includeDisabled,
+                        )
+                    }
+                iconJob.await()
+                detailJob.await()
+            }
         if (!SessionManagementAppCache.isActiveScope(scopeKey)) return@withLock
 
         if (detailApps.isNotEmpty()) {
@@ -973,14 +940,13 @@ internal data class RemoteAppPresentation(
     val icon: Bitmap?,
 )
 
-private const val DADB_HELPER_ASSET_NAME = "dadb-device-helper.jar"
+private const val DADB_HELPER_ASSET_NAME = "dadb-helper.jar"
 private const val APP_HELPER_BATCH_SIZE = 50
 private const val APP_HELPER_CONCURRENCY = 3
 
 private data class AppIconChunkResult(
-    val changedCount: Int,
-    val updatedHashes: Map<String, String>,
-    val updatedTitles: Map<String, String>,
+    val fetchedCount: Int,
+    val updatedMetadata: Map<String, AppIconCacheMetadata>,
     val updatedPackages: List<String>,
 )
 
@@ -1005,7 +971,7 @@ internal suspend fun loadCachedAppPresentation(
         }
 
         val cachedIcon = SessionManagementAppCache.cachedIcon(entry.packageName)
-        if (cachedIcon != null) {
+        if (cachedIcon != null && SessionManagementAppCache.iconMetadataMatches(entry)) {
             return@withContext RemoteAppPresentation(
                 title = resolvedTitle,
                 icon = cachedIcon,
@@ -1014,7 +980,7 @@ internal suspend fun loadCachedAppPresentation(
 
         val iconFile = getAppIconFile(context, entry.packageName)
         val bitmap =
-            if (iconFile.exists()) {
+            if (SessionManagementAppCache.iconMetadataMatches(entry) && iconFile.exists()) {
                 runCatching { BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull()
             } else {
                 null
@@ -1040,8 +1006,11 @@ internal suspend fun warmCachedAppPresentations(
         }
 
         entries
-            .filterNot { SessionManagementAppCache.hasIcon(it.packageName) }
+            .filterNot(SessionManagementAppCache::hasValidIcon)
             .mapNotNull { entry ->
+                if (!SessionManagementAppCache.iconMetadataMatches(entry)) {
+                    return@mapNotNull null
+                }
                 val iconFile = getAppIconFile(context, entry.packageName)
                 if (!iconFile.exists()) {
                     return@mapNotNull null
@@ -1057,7 +1026,7 @@ private suspend fun warmAndPrefetchAppPresentations(
     entries: List<AppInventoryEntry>,
 ) {
     warmCachedAppPresentations(context, entries, packageNameOnlyMode = false)
-    val missingIconApps = entries.filterNot { SessionManagementAppCache.hasIcon(it.packageName) }
+    val missingIconApps = entries.filterNot(SessionManagementAppCache::hasValidIcon)
     if (missingIconApps.isEmpty()) return
 
     val helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
@@ -1072,8 +1041,7 @@ internal suspend fun prefetchAppIconsWithHelper(
 ): Int =
     withContext(Dispatchers.IO) {
         val helperGateway = AppIconHelperGateway.current(helperJar) ?: return@withContext 0
-        val allUpdatedHashes = linkedMapOf<String, String>()
-        val allUpdatedTitles = linkedMapOf<String, String>()
+        val allUpdatedMetadata = linkedMapOf<String, AppIconCacheMetadata>()
         entries
             .chunked(APP_HELPER_BATCH_SIZE)
             .chunked(APP_HELPER_CONCURRENCY)
@@ -1099,23 +1067,20 @@ internal suspend fun prefetchAppIconsWithHelper(
                         }.awaitAll()
                         .filterNotNull()
                         .sumOf { result ->
-                            if (result.updatedHashes.isNotEmpty() || result.updatedTitles.isNotEmpty()) {
+                            if (result.updatedMetadata.isNotEmpty()) {
                                 SessionManagementAppCache.updateIconMetadataBatch(
-                                    hashes = result.updatedHashes,
-                                    titles = result.updatedTitles,
-                                    persist = false,
+                                    entries = result.updatedMetadata,
                                 )
-                                allUpdatedHashes.putAll(result.updatedHashes)
-                                allUpdatedTitles.putAll(result.updatedTitles)
+                                allUpdatedMetadata.putAll(result.updatedMetadata)
                                 withContext(Dispatchers.Main) {
                                     onChunkApplied(result.updatedPackages)
                                 }
                             }
-                            result.changedCount
+                            result.fetchedCount
                         }
                 }
             }.also {
-                if (allUpdatedHashes.isNotEmpty() || allUpdatedTitles.isNotEmpty()) {
+                if (allUpdatedMetadata.isNotEmpty()) {
                     SessionManagementAppCache.persistIconMetadata(context)
                 }
             }
@@ -1126,55 +1091,39 @@ private suspend fun prefetchAppIconChunkWithHelper(
     helperGateway: AppIconHelperGateway,
     chunk: List<AppInventoryEntry>,
 ): AppIconChunkResult {
-    val requests =
-        chunk.map { entry ->
-            val iconFile = getAppIconFile(context, entry.packageName)
-            RemoteAppIconBatchRequest(
-                packageName = entry.packageName,
-                localHash =
-                    SessionManagementAppCache
-                        .cachedIconHash(entry.packageName)
-                        ?.takeIf { iconFile.exists() },
-            )
-        }
+    val result = helperGateway.loadIconBatch(chunk.map(AppInventoryEntry::packageName))
 
-    val result = helperGateway.loadIconBatch(requests)
-
-    val updatedHashes = linkedMapOf<String, String>()
-    val updatedTitles = linkedMapOf<String, String>()
+    val updatedMetadata = linkedMapOf<String, AppIconCacheMetadata>()
     val updatedPackages = mutableListOf<String>()
-    var changedCount = 0
 
-    result.entries.forEach { changedIcon ->
-        updatedHashes[changedIcon.packageName] = changedIcon.iconHash
-        updatedTitles[changedIcon.packageName] = sanitizeAppTitle(changedIcon.label, changedIcon.packageName)
-        updatedPackages += changedIcon.packageName
-
-        val imageBytes = changedIcon.imageBytes
-        if (imageBytes != null) {
-            val iconFile = getAppIconFile(context, changedIcon.packageName)
-            iconFile.parentFile?.mkdirs()
-            iconFile.writeBytes(imageBytes)
-            val bitmap =
-                BitmapFactory.decodeByteArray(
-                    imageBytes,
-                    0,
-                    imageBytes.size,
-                )
-            SessionManagementAppCache.updateIcon(changedIcon.packageName, bitmap)
-            changedCount += 1
-        } else {
-            SessionManagementAppCache.updateIcon(
-                changedIcon.packageName,
-                SessionManagementAppCache.cachedIcon(changedIcon.packageName),
+    result.entries.forEach { remoteIcon ->
+        updatedMetadata[remoteIcon.packageName] =
+            AppIconCacheMetadata(
+                versionCode = remoteIcon.versionCode,
+                versionName = remoteIcon.versionName,
+                lastUpdateTime = remoteIcon.lastUpdateTime,
             )
-        }
+        sanitizeAppTitle(remoteIcon.label, remoteIcon.packageName)
+            .takeIf(String::isNotBlank)
+            ?.let { title -> SessionManagementAppCache.updateAppTitle(remoteIcon.packageName, title) }
+        updatedPackages += remoteIcon.packageName
+
+        val imageBytes = remoteIcon.imageBytes
+        val iconFile = getAppIconFile(context, remoteIcon.packageName)
+        iconFile.parentFile?.mkdirs()
+        iconFile.writeBytes(imageBytes)
+        val bitmap =
+            BitmapFactory.decodeByteArray(
+                imageBytes,
+                0,
+                imageBytes.size,
+            )
+        SessionManagementAppCache.updateIcon(remoteIcon.packageName, bitmap)
     }
 
     return AppIconChunkResult(
-        changedCount = changedCount,
-        updatedHashes = updatedHashes,
-        updatedTitles = updatedTitles,
+        fetchedCount = updatedPackages.size,
+        updatedMetadata = updatedMetadata,
         updatedPackages = updatedPackages,
     )
 }
@@ -1185,11 +1134,8 @@ private fun getAppIconFile(
 ): File {
     val iconDir =
         File(
-            File(
-                context.filesDir,
-                com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR,
-            ),
-            SessionManagementAppCache.storageScopeName(),
+            context.filesDir,
+            com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR,
         )
     if (!iconDir.exists()) {
         iconDir.mkdirs()
@@ -1199,10 +1145,7 @@ private fun getAppIconFile(
 
 private fun getIconIndexFile(context: Context): File =
     File(
-        File(
-            File(context.filesDir, com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR),
-            SessionManagementAppCache.storageScopeName(),
-        ),
+        File(context.filesDir, com.screen.remote.android.core.common.constants.FilePathConstants.APP_ICONS_DIR),
         "index.json",
     )
 
@@ -1256,22 +1199,12 @@ private class AppIconHelperGateway(
     private val connection: AdbConnection,
     private val helperJar: File,
 ) {
-    suspend fun loadIconBatch(requests: List<RemoteAppIconBatchRequest>) =
+    suspend fun loadIconBatch(packageNames: List<String>) =
         connection
             .loadAppIconBatchWithHelper(
-                requests = requests,
+                packageNames = packageNames,
                 localHelperJar = helperJar,
             ).getOrThrow()
-
-    suspend fun loadIcon(
-        packageName: String,
-        localHash: String?,
-    ) = connection
-        .loadAppIconWithHelper(
-            packageName = packageName,
-            localHash = localHash,
-            localHelperJar = helperJar,
-        ).getOrThrow()
 
     suspend fun runProbe(
         command: String,
@@ -1286,66 +1219,6 @@ private class AppIconHelperGateway(
 
         fun current(context: Context): AppIconHelperGateway? =
             current(ensureLocalDadbHelperJar(context))
-    }
-}
-
-private suspend fun fetchAndSaveAppPresentationWithHelper(
-    context: Context,
-    entry: AppInventoryEntry,
-    localHash: String?,
-): RemoteAppPresentation? {
-    return runCatching {
-        val helperGateway = AppIconHelperGateway.current(context) ?: return null
-        val helperResult = helperGateway.loadIcon(entry.packageName, localHash)
-
-        val resolvedTitle =
-            sanitizeAppTitle(helperResult.label, entry.packageName)
-                .takeIf { it.isNotBlank() }
-                ?: SessionManagementAppCache.appTitle(entry.packageName, entry.appTitle)
-
-        val iconFile = getAppIconFile(context, entry.packageName)
-        val bitmap =
-            if (helperResult.changed) {
-                val bytes = helperResult.imageBytes ?: error("Helper returned changed icon without bytes")
-                iconFile.parentFile?.mkdirs()
-                iconFile.writeBytes(bytes)
-                SessionManagementAppCache.updateIconHash(context, entry.packageName, helperResult.iconHash)
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } else {
-                if (!iconFile.exists()) {
-                    null
-                } else {
-                    SessionManagementAppCache.updateIconHash(context, entry.packageName, helperResult.iconHash)
-                    BitmapFactory.decodeFile(iconFile.absolutePath)
-                }
-            }
-
-        RemoteAppPresentation(
-            title = resolvedTitle,
-            icon = bitmap,
-        )
-    }.getOrElse { error ->
-        if (SessionManagementAppCache.shouldCaptureIconHelperDiagnostics()) {
-            runCatching {
-                captureAppHelperDiagnostics(
-                    context = context,
-                    packageName = entry.packageName,
-                )
-            }
-            SessionManagementAppCache.markIconHelperDiagnosticsCaptured()
-        }
-        if (error.message?.contains("RuntimeInit", ignoreCase = true) == true ||
-            error.message?.contains("Killed", ignoreCase = true) == true
-        ) {
-            SessionManagementAppCache.markIconHelperUnavailable(error.message ?: "icon helper unavailable")
-        }
-        runCatching {
-            com.screen.remote.android.core.common.manager.LogManager.w(
-                com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                "Helper failed to obtain application icon ${entry.packageName}: ${error.message}",
-            )
-        }
-        null
     }
 }
 
