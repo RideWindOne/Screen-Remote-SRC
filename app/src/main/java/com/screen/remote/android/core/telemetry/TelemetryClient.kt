@@ -11,13 +11,13 @@ internal class TelemetryClient(
     fun isConfigured(): Boolean = baseUrl.isNotBlank()
 
     fun uploadLog(
-        installationId: String,
+        identity: TelemetryIdentity,
         logDate: String,
         payload: TelemetryLogPayload,
     ) {
         request(
             path = "/v1/logs?date=$logDate",
-            installationId = installationId,
+            identity = identity,
             contentType = "application/gzip",
             body = payload.compressedBytes,
             extraHeaders =
@@ -29,14 +29,14 @@ internal class TelemetryClient(
     }
 
     fun ping(
-        installationId: String,
+        identity: TelemetryIdentity,
         logDate: String,
         reason: String,
     ) {
         val body = """{"logDate":"$logDate","reason":"$reason"}""".toByteArray(Charsets.UTF_8)
         request(
             path = "/v1/ping",
-            installationId = installationId,
+            identity = identity,
             contentType = "application/json",
             body = body,
         )
@@ -44,7 +44,7 @@ internal class TelemetryClient(
 
     private fun request(
         path: String,
-        installationId: String,
+        identity: TelemetryIdentity,
         contentType: String,
         body: ByteArray,
         extraHeaders: Map<String, String> = emptyMap(),
@@ -59,7 +59,10 @@ internal class TelemetryClient(
                 setRequestProperty("Content-Type", contentType)
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("User-Agent", "Screen-Remote/${AppConstants.APP_VERSION}")
-                setRequestProperty("X-Installation-ID", installationId)
+                setRequestProperty("X-Installation-ID", identity.installationId)
+                identity.originalInstallationId?.let {
+                    setRequestProperty("X-Original-Installation-ID", it)
+                }
                 setRequestProperty("X-App-Version", AppConstants.APP_VERSION)
                 for ((name, value) in extraHeaders) {
                     setRequestProperty(name, value)

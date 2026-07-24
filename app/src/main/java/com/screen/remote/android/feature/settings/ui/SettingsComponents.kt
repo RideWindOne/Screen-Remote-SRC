@@ -205,6 +205,7 @@ fun SettingsSwitch(
     checked: Boolean,
     enabled: Boolean = true,
     helpText: String? = null,
+    trailingAction: (@Composable () -> Unit)? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -237,10 +238,15 @@ fun SettingsSwitch(
                 HelpIcon(helpText = helpText)
             }
         }
-        IOSSwitch(
-            checked = checked,
-            enabled = enabled,
-            onCheckedChange = onCheckedChange,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            trailingAction?.invoke()
+            IOSSwitch(
+                checked = checked,
+                enabled = enabled,
+                onCheckedChange = onCheckedChange,
+            )
+        }
     }
 }

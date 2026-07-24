@@ -93,17 +93,21 @@ object SettingsTexts {
     val ABOUT_TELEMETRY = TextPair("遥测诊断", "Telemetry diagnostics")
     val ABOUT_TELEMETRY_HELP =
         TextPair(
-            "开启后，应用启动时会上传前一天的应用日志；若已上传则仅发送一次 ping。服务端会取得请求 IP，用于诊断服务连接错误和汇总匿名使用情况。日志可能包含连接地址等诊断信息。",
-            "When enabled, the app uploads the previous day's app logs at startup. If already uploaded, it only sends one ping. The server receives the request IP to diagnose service connection errors and summarize anonymous usage. Logs may contain connection addresses and other diagnostic details.",
+            "开启后，应用每次启动都会发送一次 ping，并上传尚未上传的前一天应用日志。右侧上传图标可立即覆盖上传今日和昨日日志。服务端会取得请求 IP，用于诊断服务连接错误和汇总匿名使用情况。日志可能包含连接地址等诊断信息。",
+            "When enabled, the app sends one ping on every startup and uploads the previous day's app logs if they have not been uploaded. Use the upload icon on the right to immediately replace today's and yesterday's uploads. The server receives the request IP to diagnose service connection errors and summarize anonymous usage. Logs may contain connection addresses and other diagnostic details.",
         )
     val ABOUT_TELEMETRY_CONSENT_TITLE = TextPair("开启遥测诊断？", "Enable telemetry diagnostics?")
     val ABOUT_TELEMETRY_CONSENT =
         TextPair(
-            "Screen Remote 将每天上传前一天的应用日志，并由服务端取得本次请求的 IP 地址。日志用于分析功能使用情况和连接错误，不会上传截图或远程画面。你可以随时在此关闭。",
-            "Screen Remote will upload the previous day's app logs daily, and the server will receive the request IP address. Logs are used to analyze feature usage and connection errors. Screenshots and remote video are not uploaded. You can turn this off at any time.",
+            "Screen Remote 将在每次应用启动时发送一次 ping，并每天上传前一天的应用日志；服务端会取得请求 IP 地址。日志用于分析功能使用情况和连接错误，不会上传截图或远程画面。你可以随时在此关闭。",
+            "Screen Remote will send one ping on every app startup and upload the previous day's app logs daily; the server will receive the request IP address. Logs are used to analyze feature usage and connection errors. Screenshots and remote video are not uploaded. You can turn this off at any time.",
         )
     val ABOUT_TELEMETRY_ENABLE = TextPair("同意并开启", "Agree and enable")
     val ABOUT_TELEMETRY_CANCEL = TextPair("取消", "Cancel")
+    val ABOUT_TELEMETRY_UPLOAD = TextPair("立即上传今日日志和昨日日志", "Upload today's and yesterday's logs now")
+    val ABOUT_TELEMETRY_UPLOAD_SUCCESS = TextPair("日志上传完成", "Log upload completed")
+    val ABOUT_TELEMETRY_UPLOAD_PARTIAL = TextPair("部分日志上传失败", "Some logs failed to upload")
+    val ABOUT_TELEMETRY_UPLOAD_EMPTY = TextPair("今日和昨日没有可上传的日志", "No logs are available for today or yesterday")
     val ABOUT_DESCRIPTION =
         TextPair(
             "Screen Remote 是一款基于 ADB 协议的远程桌面工具，通常用于连接具有公网 IP 地址的服务或同一局域网内的服务。",

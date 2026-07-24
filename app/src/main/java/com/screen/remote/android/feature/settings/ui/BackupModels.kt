@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 internal data class BackupData(
     val version: Int,
+    val installationId: String? = null,
     val sessions: List<SessionData>,
     val groups: List<BackupGroupData>,
     val settings: AppSettings,

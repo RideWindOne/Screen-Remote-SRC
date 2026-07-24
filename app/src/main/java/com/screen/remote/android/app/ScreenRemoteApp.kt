@@ -11,6 +11,7 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionMana
 import com.screen.remote.android.infrastructure.adb.key.core.adb.AdbKeyManager
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import com.screen.remote.android.core.telemetry.TelemetryJournal
+import com.screen.remote.android.core.telemetry.TelemetryManager
 import com.screen.remote.android.core.telemetry.TelemetryPreferences
 import dadb.android.runtime.ExperimentalDadbAndroidApi
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +42,9 @@ class ScreenRemoteApp : Application() {
             TelemetryPreferences(this@ScreenRemoteApp).stateFlow.collectLatest { telemetry ->
                 TelemetryJournal.setEnabled(telemetry.enabled)
             }
+        }
+        appScope.launch {
+            TelemetryManager.pingOnStartup(this@ScreenRemoteApp)
         }
 
         // 初始化触感反馈管理器

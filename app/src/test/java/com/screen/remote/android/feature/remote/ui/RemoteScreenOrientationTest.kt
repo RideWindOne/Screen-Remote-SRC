@@ -64,4 +64,20 @@ class RemoteScreenOrientationTest {
             ),
         )
     }
+
+    @Test
+    fun `leaving remote screen reapplies the user orientation policy`() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_USER,
+            requestedOrientationAfterRemoteSession(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED),
+        )
+    }
+
+    @Test
+    fun `leaving remote screen preserves an explicit original orientation`() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            requestedOrientationAfterRemoteSession(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT),
+        )
+    }
 }

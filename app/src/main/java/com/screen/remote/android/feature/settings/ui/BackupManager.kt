@@ -6,6 +6,7 @@ import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.i18n.CommonTexts
+import com.screen.remote.android.core.telemetry.TelemetryPreferences
 import com.screen.remote.android.feature.device.data.PairingEndpointMetadataManager
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
 import com.screen.remote.android.infrastructure.adb.AdbEndpointTlsDataStore
@@ -41,10 +42,12 @@ internal object BackupManager {
             val settings = viewModel.settingsViewModel.settings.first()
             val pairingEndpointMetadata = PairingEndpointMetadataManager(context).exportBackup()
             val adbKeys = readAdbKeys(context)
+            val installationId = TelemetryPreferences(context).getOrCreateInstallationId()
 
             val backupData =
                 BackupData(
-                    version = 5,
+                    version = 6,
+                    installationId = installationId,
                     sessions = sessions,
                     groups =
                         groups.map {
@@ -94,6 +97,7 @@ internal object BackupManager {
 
             restoreAdbKeys(context, backupData.adbKeys)
             PairingEndpointMetadataManager(context).importBackup(backupData.pairingEndpointMetadata)
+            TelemetryPreferences(context).setOriginalInstallationId(backupData.installationId)
             viewModel.settingsViewModel.updateSettings(backupData.settings)
             restoreGroupsAndSessions(viewModel, backupData)
 

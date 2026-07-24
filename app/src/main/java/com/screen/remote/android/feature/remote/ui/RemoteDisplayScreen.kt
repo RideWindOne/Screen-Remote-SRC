@@ -143,6 +143,13 @@ internal fun requestedOrientationForRotationPolicy(
         ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
+internal fun requestedOrientationAfterRemoteSession(originalRequestedOrientation: Int): Int =
+    if (originalRequestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+        ActivityInfo.SCREEN_ORIENTATION_USER
+    } else {
+        originalRequestedOrientation
+    }
+
 internal fun shouldCancelConnectionOnBack(
     connectionState: ConnectionState,
     connectStatus: ConnectStatus,
@@ -561,7 +568,8 @@ private fun RemoteDisplayScreenEffects(
 
     DisposableEffect(activity, originalRequestedOrientation) {
         onDispose {
-            activity?.requestedOrientation = originalRequestedOrientation
+            activity?.requestedOrientation =
+                requestedOrientationAfterRemoteSession(originalRequestedOrientation)
         }
     }
 

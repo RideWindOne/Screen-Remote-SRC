@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -76,6 +77,7 @@ import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
 import com.screen.remote.android.core.telemetry.TelemetryPreferences
 import com.screen.remote.android.core.telemetry.TelemetryJournal
+import com.screen.remote.android.core.telemetry.TelemetryManager
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.AppUpdateDownloader
@@ -101,6 +103,7 @@ fun AboutScreen(onBack: () -> Unit) {
     var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
     var autoCheckUpdates by remember { mutableStateOf<Boolean?>(null) }
     var telemetryEnabled by remember { mutableStateOf<Boolean?>(null) }
+    var uploadingTelemetry by remember { mutableStateOf(false) }
     var showTelemetryConsentDialog by remember { mutableStateOf(false) }
 
     fun checkForUpdate() {
@@ -279,6 +282,50 @@ fun AboutScreen(onBack: () -> Unit) {
                 checked = telemetryEnabled == true,
                 enabled = telemetryEnabled != null,
                 helpText = SettingsTexts.ABOUT_TELEMETRY_HELP.get(),
+                trailingAction = {
+                    IconButton(
+                        onClick = {
+                            if (uploadingTelemetry) return@IconButton
+                            uploadingTelemetry = true
+                            scope.launch {
+                                try {
+                                    val result = TelemetryManager.uploadTodayAndYesterday(context.applicationContext)
+                                    val message =
+                                        when {
+                                            result.failedCount > 0 -> SettingsTexts.ABOUT_TELEMETRY_UPLOAD_PARTIAL.get()
+                                            result.uploadedCount > 0 -> SettingsTexts.ABOUT_TELEMETRY_UPLOAD_SUCCESS.get()
+                                            else -> SettingsTexts.ABOUT_TELEMETRY_UPLOAD_EMPTY.get()
+                                        }
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                } catch (_: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        SettingsTexts.ABOUT_TELEMETRY_UPLOAD_PARTIAL.get(),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                } finally {
+                                    uploadingTelemetry = false
+                                }
+                            }
+                        },
+                        enabled = telemetryEnabled == true && !uploadingTelemetry,
+                        modifier = Modifier.size(AppDimens.listItemHeight),
+                    ) {
+                        if (uploadingTelemetry) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(IosDesignTokens.externalIconSize),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.CloudUpload,
+                                contentDescription = SettingsTexts.ABOUT_TELEMETRY_UPLOAD.get(),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(IosDesignTokens.externalIconSize),
+                            )
+                        }
+                    }
+                },
                 onCheckedChange = { enabled ->
                     if (enabled) {
                         showTelemetryConsentDialog = true
