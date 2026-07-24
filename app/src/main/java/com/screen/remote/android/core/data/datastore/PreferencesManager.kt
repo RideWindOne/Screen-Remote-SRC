@@ -10,12 +10,14 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.screen.remote.android.core.domain.model.AppLanguage
 import com.screen.remote.android.core.domain.model.AppSettings
+import com.screen.remote.android.core.domain.model.CustomShellCommand
 import com.screen.remote.android.core.domain.model.ThemeMode
 import com.screen.remote.android.core.update.UpdateChannel
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.UpdateCheckCache
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -41,6 +43,8 @@ class PreferencesManager(
         val LAST_UPDATE_CHECK_AT = longPreferencesKey("last_update_check_at")
         val LAST_UPDATE_VERSION = stringPreferencesKey("last_update_version")
         val LAST_UPDATE_RELEASE_URL = stringPreferencesKey("last_update_release_url")
+        val CUSTOM_SHELL_COMMANDS = stringPreferencesKey("custom_shell_commands")
+        val REPLACE_DEFAULT_SHELL_COMMANDS = booleanPreferencesKey("replace_default_shell_commands")
     }
 
     val lastSeenOnboardingVersionFlow: Flow<String?> =
@@ -114,6 +118,11 @@ class PreferencesManager(
                     preferences[Keys.UPDATE_CHANNEL]?.let {
                         runCatching { UpdateChannel.valueOf(it) }.getOrDefault(UpdateChannel.STABLE)
                     } ?: UpdateChannel.STABLE,
+                customShellCommands =
+                    preferences[Keys.CUSTOM_SHELL_COMMANDS]
+                        ?.let { encoded -> runCatching { Json.decodeFromString<List<CustomShellCommand>>(encoded) }.getOrNull() }
+                        .orEmpty(),
+                replaceDefaultShellCommands = preferences[Keys.REPLACE_DEFAULT_SHELL_COMMANDS] ?: false,
             )
         }
 
@@ -133,6 +142,8 @@ class PreferencesManager(
             preferences[Keys.SHOW_PERFORMANCE_STATS] = settings.showPerformanceStats
             preferences[Keys.AUTO_CHECK_UPDATES] = settings.autoCheckUpdates
             preferences[Keys.UPDATE_CHANNEL] = settings.updateChannel.name
+            preferences[Keys.CUSTOM_SHELL_COMMANDS] = Json.encodeToString(settings.customShellCommands)
+            preferences[Keys.REPLACE_DEFAULT_SHELL_COMMANDS] = settings.replaceDefaultShellCommands
         }
     }
 }

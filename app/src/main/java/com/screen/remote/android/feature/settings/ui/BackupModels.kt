@@ -19,7 +19,6 @@ internal data class BackupData(
 internal data class BackupGroupData(
     val id: String,
     val name: String,
-    val type: String,
     val path: String,
     val parentPath: String,
     val description: String,

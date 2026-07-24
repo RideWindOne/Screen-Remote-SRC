@@ -11,8 +11,6 @@ import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 sealed interface ScreenRemoteDeepLink {
     data object Sessions : ScreenRemoteDeepLink
 
-    data object Actions : ScreenRemoteDeepLink
-
     data class AddSession(
         val prefill: NewSessionPrefill = NewSessionPrefill(),
     ) : ScreenRemoteDeepLink
@@ -167,7 +165,6 @@ fun parseScreenRemoteDeepLink(value: String): ScreenRemoteDeepLink? =
 fun ScreenRemoteDeepLink.toUrl(): String =
     when (this) {
         ScreenRemoteDeepLink.Sessions -> "$SCHEME://open/sessions"
-        ScreenRemoteDeepLink.Actions -> "$SCHEME://open/actions"
         is ScreenRemoteDeepLink.AddSession -> "$SCHEME://session/new${prefill.toParameters().toQuery()}"
         is ScreenRemoteDeepLink.EditSession -> "$SCHEME://session/edit/${encodePathSegment(sessionSelector)}"
         is ScreenRemoteDeepLink.ScrcpySession ->
@@ -195,7 +192,6 @@ fun ScreenRemoteDeepLink.toUrl(): String =
 private fun parseOpenLink(segments: List<String>): ScreenRemoteDeepLink? =
     when (segments.joinToString("/")) {
         "sessions" -> ScreenRemoteDeepLink.Sessions
-        "actions" -> ScreenRemoteDeepLink.Actions
         SettingsDestination.ROOT.path -> ScreenRemoteDeepLink.Settings()
         SettingsDestination.ABOUT.path -> ScreenRemoteDeepLink.Settings(SettingsDestination.ABOUT)
         SettingsDestination.APPEARANCE.path -> ScreenRemoteDeepLink.Settings(SettingsDestination.APPEARANCE)

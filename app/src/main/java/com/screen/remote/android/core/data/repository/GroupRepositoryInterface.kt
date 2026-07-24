@@ -1,7 +1,6 @@
 package com.screen.remote.android.core.data.repository
 
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -14,11 +13,6 @@ interface GroupRepositoryInterface {
      * 获取所有分组的 Flow
      */
     val groupsFlow: Flow<List<DeviceGroup>>
-
-    /**
-     * 按类型过滤分组
-     */
-    fun getGroupsByType(type: GroupType): Flow<List<DeviceGroup>>
 
     /**
      * 添加新分组
@@ -35,8 +29,4 @@ interface GroupRepositoryInterface {
      */
     suspend fun updateGroup(groupData: GroupData)
 
-    /**
-     * 根据 ID 获取分组
-     */
-    suspend fun getGroup(id: String): DeviceGroup?
 }

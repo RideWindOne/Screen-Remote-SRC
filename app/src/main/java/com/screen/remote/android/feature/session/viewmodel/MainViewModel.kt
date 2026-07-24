@@ -19,8 +19,6 @@ import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.data.storage.SessionStorage
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
-import com.screen.remote.android.core.domain.model.GroupType
-import com.screen.remote.android.core.domain.model.ScrcpyAction
 import com.screen.remote.android.core.update.UpdateChannel
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
@@ -104,7 +102,6 @@ class MainViewModel(
     private val dependencies: MainViewModelDependencies,
 ) : ViewModel() {
     private var managementConnectJob: Job? = null
-    private val automationState = MainAutomationState()
     private val managementConnection = ManagementAdbSessionController(dependencies, viewModelScope)
 
     val sessionRepository = dependencies.sessionRepository
@@ -144,7 +141,6 @@ class MainViewModel(
 
     val groups: StateFlow<List<DeviceGroup>> get() = groupViewModel.groups
     val selectedGroupPath: StateFlow<String> get() = groupViewModel.selectedGroupPath
-    val selectedAutomationGroupPath: StateFlow<String> get() = groupViewModel.selectedAutomationGroupPath
     val filteredSessions: StateFlow<List<SessionData>> get() = groupViewModel.filteredSessions
     val mdnsSessionPresence get() = MdnsSessionDiscoveryManager.get().state
     val usbDevices get() = dependencies.adbConnectionManager.getUsbDevices()
@@ -154,13 +150,10 @@ class MainViewModel(
 
     fun selectGroup(groupPath: String) = groupViewModel.selectGroup(groupPath)
 
-    fun selectAutomationGroup(groupPath: String) = groupViewModel.selectAutomationGroup(groupPath)
-
     fun addGroup(
         name: String,
         parentPath: String,
-        type: GroupType = GroupType.SESSION,
-    ) = groupViewModel.addGroup(name, parentPath, type)
+    ) = groupViewModel.addGroup(name, parentPath)
 
     fun updateGroup(group: DeviceGroup) = groupViewModel.updateGroup(group)
 
@@ -367,19 +360,6 @@ class MainViewModel(
 
     suspend fun executeShellCommand(command: String) = controlViewModel.executeShellCommand(command)
 
-    // ============ 自动化功能（待拆分到 AutomationViewModel） ============
-
-    val actions: StateFlow<List<ScrcpyAction>> = automationState.actions
-    val showAddActionDialog: StateFlow<Boolean> = automationState.showAddActionDialog
-
-    fun showAddActionDialog() = automationState.showAddActionDialog()
-
-    fun hideAddActionDialog() = automationState.hideAddActionDialog()
-
-    fun addAction(action: ScrcpyAction) = automationState.addAction(action)
-
-    fun removeAction(id: String) = automationState.removeAction(id)
-
     // ============ Factory ============
 
     companion object {
@@ -421,31 +401,6 @@ data class MainViewModelDependencies(
                 scrcpyClient = ScrcpyClient(appContext, adbConnectionManager),
             )
         }
-    }
-}
-
-private class MainAutomationState {
-    private val _actions = MutableStateFlow<List<ScrcpyAction>>(emptyList())
-    val actions: StateFlow<List<ScrcpyAction>> = _actions.asStateFlow()
-
-    private val _showAddActionDialog = MutableStateFlow(false)
-    val showAddActionDialog: StateFlow<Boolean> = _showAddActionDialog.asStateFlow()
-
-    fun showAddActionDialog() {
-        _showAddActionDialog.value = true
-    }
-
-    fun hideAddActionDialog() {
-        _showAddActionDialog.value = false
-    }
-
-    fun addAction(action: ScrcpyAction) {
-        _actions.value = _actions.value + action
-        hideAddActionDialog()
-    }
-
-    fun removeAction(id: String) {
-        _actions.value = _actions.value.filter { it.id != id }
     }
 }
 

@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -29,19 +31,22 @@ fun IOSStyledDropdownMenu(
     modifier: Modifier = Modifier,
     offset: DpOffset = DpOffset(0.dp, 80.dp),
     alignment: Alignment = Alignment.TopCenter,
+    shadowElevation: Dp = 8.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!expanded) {
         return
     }
+    val density = LocalDensity.current
 
     Popup(
         alignment = alignment,
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true),
         offset =
-            androidx.compose.ui.unit
-                .IntOffset(offset.x.value.toInt(), offset.y.value.toInt()),
+            with(density) {
+                androidx.compose.ui.unit.IntOffset(offset.x.roundToPx(), offset.y.roundToPx())
+            },
     ) {
         Surface(
             modifier =
@@ -52,7 +57,7 @@ fun IOSStyledDropdownMenu(
                     .wrapContentSize(),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(IosDesignTokens.cardCornerRadius),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shadowElevation = 8.dp,
+            shadowElevation = shadowElevation,
         ) {
             Column(
                 modifier =

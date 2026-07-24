@@ -93,7 +93,6 @@ import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMe
 import com.screen.remote.android.core.designsystem.component.SectionTitle
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.CodecMediaType
@@ -305,7 +304,7 @@ fun AddSessionDialog(
 ) {
     val state = remember(sessionData, initialPrefill) { SessionDialogState(sessionData, initialPrefill) }
     val remoteAppCache = remember(state) { RemoteLaunchableAppCache() }
-    val sessionGroups = remember(availableGroups) { availableGroups.filter { it.type == GroupType.SESSION } }
+    val sessionGroups = availableGroups
     val mdnsManager = rememberMdnsSessionDiscoveryManager()
     val mdnsState by mdnsManager.state.collectAsState()
 

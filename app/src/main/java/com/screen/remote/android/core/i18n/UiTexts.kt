@@ -73,7 +73,7 @@ object LogTexts {
     val LOG_FILE_COUNT = TextPair("文件总数", "File Count")
     val LOG_TOTAL_SIZE = TextPair("总大小", "Total Size")
     val LOG_CURRENT_SIZE = TextPair("当前日志大小", "Current Log Size")
-    val LOG_QUICK_ACTIONS = TextPair("快捷自动化", "Quick Actions")
+    val LOG_QUICK_ACTIONS = TextPair("快捷操作", "Quick Actions")
     val LOG_CLEAR_OLD_LOGS = TextPair("清除旧日志", "Clear Old Logs")
     val LOG_KEEP_CURRENT_ONLY = TextPair("仅保留当前", "Keep Current Only")
     val LOG_FILES_SECTION = TextPair("日志文件", "Log Files")

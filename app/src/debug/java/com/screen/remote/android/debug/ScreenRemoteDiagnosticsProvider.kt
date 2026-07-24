@@ -199,7 +199,6 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
                 JSONArray(
                     listOf(
                         linkJson("sessions", ScreenRemoteDeepLink.Sessions.toUrl()),
-                        linkJson("actions", ScreenRemoteDeepLink.Actions.toUrl()),
                         linkJson("newSession", ScreenRemoteDeepLink.AddSession().toUrl()),
                         *SettingsDestination.entries
                             .map { destination ->

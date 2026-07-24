@@ -113,7 +113,7 @@ fun LogManagementScreen(onDismiss: () -> Unit) {
             )
         }
 
-        // 快捷自动化
+        // 快捷操作
         LogSection(title = LogTexts.LOG_QUICK_ACTIONS.get()) {
             Row(
                 modifier =

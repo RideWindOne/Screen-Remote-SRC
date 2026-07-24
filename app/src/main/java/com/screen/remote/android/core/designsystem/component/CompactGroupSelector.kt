@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import com.screen.remote.android.core.common.constants.AppColors
 import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.domain.model.DefaultGroups
@@ -35,7 +36,7 @@ import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 
 /**
- * 紧凑分组选择器（显示在 Tab 栏右侧）
+ * 紧凑分组选择器
  * 只显示上一级和当前级别
  */
 @Composable
@@ -43,6 +44,7 @@ fun CompactGroupSelector(
     groups: List<DeviceGroup>,
     selectedGroupPath: String,
     onGroupSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val state = rememberCompactGroupSelectorState()
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -56,7 +58,7 @@ fun CompactGroupSelector(
 
     Row(
         modifier =
-            Modifier
+            modifier
                 .height(IosDesignTokens.segmentedControlHeight)
                 .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
                 .background(MaterialTheme.colorScheme.surface)
@@ -151,6 +153,8 @@ private fun CompactGroupChip(
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color =
                     if (selected) {
                         MaterialTheme.colorScheme.onSurface
@@ -173,7 +177,9 @@ internal fun ParentLevelMenu(
 ) {
     IOSStyledDropdownMenu(
         expanded = state.isExpanded(CompactGroupSelectorLevel.Parent),
-        offset = DpOffset(0.dp, 98.dp),
+        alignment = Alignment.BottomStart,
+        offset = DpOffset(0.dp, -IosDesignTokens.segmentedControlHeight),
+        shadowElevation = 2.dp,
         onDismissRequest = state::close,
     ) {
         if (pathInfo.pathParts.isEmpty()) {
@@ -245,7 +251,9 @@ internal fun CurrentLevelMenu(
     onGroupSelected: (String) -> Unit,
 ) {
     IOSStyledDropdownMenu(
-        offset = DpOffset(0.dp, 98.dp),
+        alignment = Alignment.BottomStart,
+        offset = DpOffset(0.dp, -IosDesignTokens.segmentedControlHeight),
+        shadowElevation = 2.dp,
         expanded = state.isExpanded(CompactGroupSelectorLevel.Current),
         onDismissRequest = state::close,
     ) {

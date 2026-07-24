@@ -13,6 +13,7 @@ import com.screen.remote.android.feature.settings.ui.SettingsCard
 import com.screen.remote.android.feature.settings.ui.SettingsDivider
 import com.screen.remote.android.feature.settings.ui.SettingsItem
 import com.screen.remote.android.feature.settings.ui.SettingsSwitch
+import com.screen.remote.android.core.i18n.SettingsTexts
 
 @Composable
 internal fun SettingsScreenContent(
@@ -27,6 +28,7 @@ internal fun SettingsScreenContent(
     onNavigateToLogManagement: () -> Unit,
     onNavigateToGroupManagement: () -> Unit,
     onNavigateToBackupRestore: () -> Unit,
+    onNavigateToCustomCommands: () -> Unit,
     onUpdateSettings: (AppSettings) -> Unit,
     onOpenIssueTracker: () -> Unit,
     onOpenUserGuide: () -> Unit,
@@ -49,6 +51,7 @@ internal fun SettingsScreenContent(
             onNavigateToAbout = onNavigateToAbout,
             onNavigateToGroupManagement = onNavigateToGroupManagement,
             onNavigateToBackupRestore = onNavigateToBackupRestore,
+            onNavigateToCustomCommands = onNavigateToCustomCommands,
             onUpdateSettings = onUpdateSettings,
         )
 
@@ -101,6 +104,7 @@ private fun GeneralSettingsSection(
     onNavigateToAbout: () -> Unit,
     onNavigateToGroupManagement: () -> Unit,
     onNavigateToBackupRestore: () -> Unit,
+    onNavigateToCustomCommands: () -> Unit,
     onUpdateSettings: (AppSettings) -> Unit,
 ) {
     SettingsCard(title = texts.general) {
@@ -113,6 +117,12 @@ private fun GeneralSettingsSection(
             title = texts.groupManage,
             helpText = texts.helpGroupManage,
             onClick = onNavigateToGroupManagement,
+        )
+        SettingsDivider()
+        SettingsItem(
+            title = SettingsTexts.SETTINGS_CUSTOM_COMMANDS.get(),
+            helpText = SettingsTexts.SETTINGS_CUSTOM_COMMANDS_HELP.get(),
+            onClick = onNavigateToCustomCommands,
         )
         SettingsDivider()
         SettingsItem(

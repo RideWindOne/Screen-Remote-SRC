@@ -7,9 +7,7 @@ object SessionTexts {
     // 主页面
     val MAIN_TITLE_SESSIONS = TextPair("Scrcpy Sessions", "Scrcpy Sessions")
     val MAIN_TAB_SESSIONS = TextPair("会话", "Sessions")
-    val MAIN_TAB_ACTIONS = TextPair("自动化", "Actions")
     val MAIN_ADD_SESSION = TextPair("添加会话", "Add Session")
-    val MAIN_ADD_ACTION = TextPair("添加自动化", "Add Action")
 
     // 会话列表
     val SESSION_NO_SESSIONS = TextPair("没有 Scrcpy Sessions", "No Scrcpy Sessions")
@@ -27,6 +25,7 @@ object SessionTexts {
     val SESSION_DELETE_SESSION = TextPair("删除会话", "Delete Session")
     val SESSION_CONNECT = TextPair("连接会话", "Connect Session")
     val SESSION_COPY = TextPair("复制会话", "Copy Session")
+    val SESSION_COPY_URL = TextPair("复制 URL", "Copy URL")
     val SESSION_MANAGE = TextPair("管理功能", "Manage")
     val SESSION_GAME_MODE_BADGE = TextPair("游戏", "Game")
     val SESSION_RESET_CONNECTION = TextPair("重置连接并重新检测", "Reset Connection and Redetect")
@@ -252,15 +251,6 @@ object SessionTexts {
     val GROUP_PATH_PREVIEW = TextPair("完整路径预览", "Full Path Preview")
     val GROUP_SELECT_PATH = TextPair("选择路径", "Select Path")
     val GROUP_ROOT = TextPair("首页", "Home")
-    val GROUP_TYPE = TextPair("分组类型", "Group Type")
-
-    // 自动化页面
-    val ACTIONS_NO_ACTIONS = TextPair("没有自动化", "No Actions")
-    val ACTIONS_EMPTY_HINT =
-        TextPair(
-            "点击右上角 + 按钮创建新的 Scrcpy Action。\nAction 用于启动 Scrcpy 会话并自动执行自定义动作。",
-            "Tap the + button in the top right to create a new Scrcpy Action.\nActions are used to start Scrcpy sessions and automatically execute custom operations.",
-        )
 
     // 会话对话框
     val DIALOG_CREATE_SESSION = TextPair("创建会话", "Create Session")

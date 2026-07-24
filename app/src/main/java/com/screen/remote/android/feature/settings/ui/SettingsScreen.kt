@@ -26,6 +26,7 @@ fun SettingsScreen(
     onNavigateToLogManagement: () -> Unit = {},
     onNavigateToGroupManagement: () -> Unit = {},
     onNavigateToBackupRestore: () -> Unit = {},
+    onNavigateToCustomCommands: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
@@ -44,6 +45,7 @@ fun SettingsScreen(
         onNavigateToLogManagement = onNavigateToLogManagement,
         onNavigateToGroupManagement = onNavigateToGroupManagement,
         onNavigateToBackupRestore = onNavigateToBackupRestore,
+        onNavigateToCustomCommands = onNavigateToCustomCommands,
         onUpdateSettings = viewModel::updateSettings,
         onOpenIssueTracker = { launchExternalLink(context, AppConstants.GITHUB_ISSUES) },
         onOpenUserGuide = { launchExternalLink(context, AppConstants.GITHUB_USER_GUIDE) },

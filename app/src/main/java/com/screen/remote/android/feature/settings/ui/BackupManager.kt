@@ -5,7 +5,6 @@ import android.net.Uri
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.repository.SessionData
-import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.feature.device.data.PairingEndpointMetadataManager
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
@@ -45,14 +44,13 @@ internal object BackupManager {
 
             val backupData =
                 BackupData(
-                    version = 4,
+                    version = 5,
                     sessions = sessions,
                     groups =
                         groups.map {
                             BackupGroupData(
                                 id = it.id,
                                 name = it.name,
-                                type = it.type.name,
                                 path = it.path,
                                 parentPath = it.parentPath,
                                 description = it.description,
@@ -184,7 +182,6 @@ internal object BackupManager {
             viewModel.groupViewModel.addGroup(
                 groupData.name,
                 groupData.parentPath,
-                GroupType.valueOf(groupData.type),
             )
         }
 

@@ -70,8 +70,8 @@ private fun release4438UpdatePages(isDark: Boolean): List<WelcomePage> {
             icon = Icons.Default.AutoAwesome,
             eyebrow =
                 updateText(
-                    "${RecentUpdateContent.RELEASE_4_4_3_8.version} · AI / MCP 自动化",
-                    "${RecentUpdateContent.RELEASE_4_4_3_8.version} · AI / MCP AUTOMATION",
+                    "${RecentUpdateContent.RELEASE_4_4_3_8.version} · AI / MCP 链接",
+                    "${RecentUpdateContent.RELEASE_4_4_3_8.version} · AI / MCP LINKS",
                 ),
             title = updateText("通过 URL Scheme 调用 Screen Remote", "Call Screen Remote through URL schemes"),
             description =
@@ -102,8 +102,8 @@ private fun release4438UpdatePages(isDark: Boolean): List<WelcomePage> {
                         Icons.Default.Tune,
                         updateText("参数随链接传入", "Pass options in the link"),
                         updateText(
-                            "连接、显示、音视频与应用设置参数可随链接一起传入，便于 AI / MCP 组合自动化流程。",
-                            "Connection, display, media, and app settings can travel with the link for AI / MCP automation workflows.",
+                            "连接、显示、音视频与应用设置参数可随链接一起传入，便于 AI / MCP 组合调用。",
+                            "Connection, display, media, and app settings can travel with the link for composed AI / MCP calls.",
                         ),
                     ),
                 ),

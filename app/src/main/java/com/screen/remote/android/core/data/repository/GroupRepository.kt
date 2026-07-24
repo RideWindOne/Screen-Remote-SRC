@@ -8,9 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.screen.remote.android.core.domain.model.DefaultGroups
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -21,7 +19,6 @@ private val Context.groupDataStore: DataStore<Preferences> by preferencesDataSto
 data class GroupData(
     val id: String,
     val name: String,
-    val type: String = "SESSION",
     val path: String,
     val parentPath: String = "/",
     val description: String = "",
@@ -51,9 +48,6 @@ class GroupRepository(
                 emptyList()
             }
         }
-
-    override fun getGroupsByType(type: GroupType): Flow<List<DeviceGroup>> =
-        groupsFlow.map { groups -> groups.filter { it.type == type } }
 
     override suspend fun addGroup(groupData: GroupData) {
         context.groupDataStore.edit { preferences ->
@@ -102,32 +96,10 @@ class GroupRepository(
         }
     }
 
-    override suspend fun getGroup(id: String): DeviceGroup? {
-        val currentJson =
-            context.groupDataStore.data
-                .map { preferences ->
-                    preferences[Keys.GROUPS] ?: "[]"
-                }.first()
-        return try {
-            json
-                .decodeFromString<List<GroupData>>(currentJson)
-                .find { it.id == id }
-                ?.toDeviceGroup()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     private fun GroupData.toDeviceGroup() =
         DeviceGroup(
             id = id,
             name = name,
-            type =
-                try {
-                    GroupType.valueOf(type)
-                } catch (_: Exception) {
-                    GroupType.SESSION
-                },
             path = path,
             parentPath = parentPath,
             description = description,

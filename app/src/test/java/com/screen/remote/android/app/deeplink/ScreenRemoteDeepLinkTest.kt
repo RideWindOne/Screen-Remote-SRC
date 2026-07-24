@@ -8,7 +8,6 @@ class ScreenRemoteDeepLinkTest {
     @Test
     fun `parses navigation links`() {
         assertEquals(ScreenRemoteDeepLink.Sessions, parseScreenRemoteDeepLink("screen-remote://open/sessions"))
-        assertEquals(ScreenRemoteDeepLink.Actions, parseScreenRemoteDeepLink("screen-remote://open/actions"))
         assertEquals(
             ScreenRemoteDeepLink.Settings(SettingsDestination.LOGS),
             parseScreenRemoteDeepLink("screen-remote://open/settings/logs"),

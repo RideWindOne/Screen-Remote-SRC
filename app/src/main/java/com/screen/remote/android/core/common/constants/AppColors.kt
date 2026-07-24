@@ -18,9 +18,6 @@ object AppColors {
     /** 浅色次级填充与选中背景 */
     val lightSurfaceMuted = Color(0xFFE9E9EE)
 
-    /** 浅色分组类型切换的低对比度边缘 */
-    val lightGroupTypeBorder = Color(0xFFE0E0E0)
-
     /** 浅色主文字 */
     val lightTextPrimary = Color(0xFF1C1C1E)
 
@@ -131,9 +128,6 @@ object AppColors {
 
     /** 深色模式 - 分割线 */
     val darkDivider = Color(0xFF545458)
-
-    /** 深色分组类型切换的低对比度边缘 */
-    val darkGroupTypeBorder = Color(0xFF2C2C2C)
 
     /** 深色模式 - 图标/箭头 */
     val darkIcon = Color(0xFF8A8A8A)

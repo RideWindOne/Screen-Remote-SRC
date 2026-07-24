@@ -1,7 +1,6 @@
 package com.screen.remote.android.core.designsystem.component
 
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -56,7 +55,6 @@ class GroupSelectorDialogStateTest {
     ) = DeviceGroup(
         id = id,
         name = name,
-        type = GroupType.SESSION,
         path = "/$name",
         parentPath = "/",
         description = "",

@@ -5,7 +5,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,8 +27,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,35 +46,28 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 
 /**
  * 添加/编辑分组对话框
- * 支持选择父路径和分组类型
+ * 支持选择父路径
  */
 @Composable
 fun AddGroupDialog(
     groups: List<DeviceGroup>,
     initialName: String = "",
     initialParentPath: String = "/",
-    initialType: GroupType = GroupType.SESSION,
     isEditMode: Boolean = false,
-    onConfirm: (name: String, parentPath: String, type: GroupType) -> Unit,
+    onConfirm: (name: String, parentPath: String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var parentPath by remember { mutableStateOf(initialParentPath) }
-    var groupType by remember { mutableStateOf(initialType) }
     var showPathSelector by remember { mutableStateOf(false) }
-    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val groupTypeBorderColor =
-        if (isDarkTheme) AppColors.darkGroupTypeBorder else AppColors.lightGroupTypeBorder
 
     // 计算完整路径预览
     val fullPath = if (parentPath == "/") "/$name" else "$parentPath/$name"
@@ -89,14 +78,13 @@ fun AddGroupDialog(
             if (initialParentPath == "/") "/$initialName" else "$initialParentPath/$initialName"
         }
 
-    // 检查路径是否重复（忽略大小写，同类型分组）
+    // 检查路径是否重复（忽略大小写）
     val isDuplicate =
-        remember(name, parentPath, groupType, groups) {
+        remember(name, parentPath, groups) {
             if (name.isBlank()) return@remember false
             val targetPath = fullPath.lowercase()
             groups.any { group ->
                 group.path.lowercase() == targetPath &&
-                    group.type == groupType &&
                     (!isEditMode || group.path.lowercase() != initialFullPath.lowercase())
             }
         }
@@ -115,75 +103,12 @@ fun AddGroupDialog(
         rightButtonEnabled = name.isNotBlank() && !isDuplicate,
         onRightButtonClick = {
             if (name.isNotBlank() && !isDuplicate) {
-                onConfirm(name, parentPath, groupType)
+                onConfirm(name, parentPath)
             }
         },
         enableScroll = false,
     ) {
         AddGroupSettingsCard(title = SessionTexts.GROUP_OPTION.get()) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    FilterChip(
-                        selected = groupType == GroupType.SESSION,
-                        onClick = { groupType = GroupType.SESSION },
-                        label = { Text(SessionTexts.MAIN_TAB_SESSIONS.get()) },
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(AppDimens.listItemHeight),
-                        border =
-                            if (groupType == GroupType.SESSION) {
-                                null
-                            } else {
-                                BorderStroke(1.dp, groupTypeBorderColor)
-                            },
-                        colors =
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor =
-                                    if (isDarkTheme) {
-                                        AppColors.darkIOSSelectedBackground
-                                    } else {
-                                        AppColors.iOSSelectedBackground
-                                    },
-                                selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-                            ),
-                    )
-                    FilterChip(
-                        selected = groupType == GroupType.AUTOMATION,
-                        onClick = { groupType = GroupType.AUTOMATION },
-                        label = { Text(SessionTexts.MAIN_TAB_ACTIONS.get()) },
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(AppDimens.listItemHeight),
-                        border =
-                            if (groupType == GroupType.AUTOMATION) {
-                                null
-                            } else {
-                                BorderStroke(1.dp, groupTypeBorderColor)
-                            },
-                        colors =
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor =
-                                    if (isDarkTheme) {
-                                        AppColors.darkIOSSelectedBackground
-                                    } else {
-                                        AppColors.iOSSelectedBackground
-                                    },
-                                selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-                            ),
-                    )
-                }
-            }
-            AddGroupSettingsDivider()
             AddGroupInputRow(
                 label = SessionTexts.GROUP_NAME.get(),
                 value = name,

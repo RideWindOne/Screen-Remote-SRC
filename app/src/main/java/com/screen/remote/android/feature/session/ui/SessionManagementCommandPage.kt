@@ -77,6 +77,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import com.screen.remote.android.core.i18n.ManagementTexts
+import com.screen.remote.android.core.i18n.SettingsTexts
+import com.screen.remote.android.core.domain.model.CustomShellCommand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -187,6 +189,8 @@ internal fun SessionManagementCommandPage(
     onCommandInputChange: (String) -> Unit,
     showPresetDialog: Boolean,
     onShowPresetDialogChange: (Boolean) -> Unit,
+    customCommands: List<CustomShellCommand>,
+    replaceDefaultCommands: Boolean,
 ) {
     var historyCursor by remember(terminalSession) { mutableStateOf<Int?>(null) }
     var inputBeforeHistory by remember(terminalSession) { mutableStateOf("") }
@@ -257,6 +261,8 @@ internal fun SessionManagementCommandPage(
     if (showPresetDialog) {
         SessionManagementCommandPresetDialog(
             isExecuting = !terminalSession.canWrite,
+            customCommands = customCommands,
+            replaceDefaultCommands = replaceDefaultCommands,
             onExecuteCommand = { command ->
                 sendCommand(command)
                 onShowPresetDialogChange(false)
@@ -1005,10 +1011,22 @@ private fun SessionManagementTerminalInputLine(
 @Composable
 private fun SessionManagementCommandPresetDialog(
     isExecuting: Boolean,
+    customCommands: List<CustomShellCommand>,
+    replaceDefaultCommands: Boolean,
     onExecuteCommand: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val presets = remember { managementCommandPresets() }
+    val defaultPresets = managementCommandPresets()
+    val customPresets =
+        customCommands.map { custom ->
+            ManagementCommandPreset(
+                title = custom.name,
+                description = SettingsTexts.SETTINGS_CUSTOM_COMMANDS.get(),
+                command = custom.command,
+                icon = Icons.Default.Code,
+            )
+        }
+    val presets = combineShellCommandPresets(defaultPresets, customPresets, replaceDefaultCommands)
 
     SessionManagementCenteredDialog(
         title = ManagementTexts.Commands.QUICK_COMMANDS.get(),
@@ -1023,9 +1041,19 @@ private fun SessionManagementCommandPresetDialog(
                     .heightIn(max = 420.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (presets.isEmpty()) {
+                item {
+                    Text(
+                        text = SettingsTexts.CUSTOM_COMMANDS_EMPTY.get(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
             itemsIndexed(
                 items = presets,
-                key = { _, preset -> preset.command },
+                key = { index, preset -> "$index:${preset.command}" },
             ) { _, preset ->
                 SessionManagementCommandPresetCard(
                     preset = preset,
@@ -1037,6 +1065,12 @@ private fun SessionManagementCommandPresetDialog(
         }
     }
 }
+
+internal fun <T> combineShellCommandPresets(
+    defaultCommands: List<T>,
+    customCommands: List<T>,
+    replaceDefaultCommands: Boolean,
+): List<T> = if (replaceDefaultCommands) customCommands else defaultCommands + customCommands
 
 @Composable
 private fun SessionManagementCommandPresetCard(
@@ -1235,7 +1269,7 @@ internal class ManagementTerminalSession(
                     userRequestedExit = true
                     stream.write("$line\n")
                 } else {
-                    stream.write($$"$$line\nprintf '\\n$$SESSION_MANAGEMENT_COMMAND_DONE_MARKER:%s\\n' \"$?\"\n")
+                    stream.write(buildManagementShellPayload(line))
                 }
             } catch (error: Exception) {
                 withContext(Dispatchers.Main) {
@@ -1390,6 +1424,9 @@ internal class ManagementTerminalSession(
         }
     }
 }
+
+internal fun buildManagementShellPayload(command: String): String =
+    $$"$$command\nprintf '\\n$$SESSION_MANAGEMENT_COMMAND_DONE_MARKER:%s\\n' \"$?\"\n"
 
 internal data class TerminalTextAppendResult(
     val output: String,

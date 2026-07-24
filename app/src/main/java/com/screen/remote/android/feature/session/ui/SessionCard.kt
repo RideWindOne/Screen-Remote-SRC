@@ -70,6 +70,7 @@ fun SessionCard(
     onManage: () -> Unit = {},
     onEdit: () -> Unit = {},
     onCopy: (SessionData) -> Unit = {},
+    onCopyUrl: (SessionData) -> Unit = {},
     isResettingConnection: Boolean = false,
     onResetConnection: () -> Unit = {},
     onDelete: () -> Unit = {},
@@ -85,6 +86,7 @@ fun SessionCard(
     val txtDeleteSession = rememberText(SessionTexts.SESSION_DELETE_SESSION)
     val txtConnect = rememberText(SessionTexts.SESSION_CONNECT)
     val txtCopySession = rememberText(SessionTexts.SESSION_COPY)
+    val txtCopyUrl = rememberText(SessionTexts.SESSION_COPY_URL)
     val txtManage = rememberText(SessionTexts.SESSION_MANAGE)
     val txtGameModeBadge = rememberText(SessionTexts.SESSION_GAME_MODE_BADGE)
     val txtResetConnection = rememberText(SessionTexts.SESSION_RESET_CONNECTION)
@@ -227,6 +229,13 @@ fun SessionCard(
                             onClick = {
                                 showMenu = false
                                 onCopy(sessionData)
+                            },
+                        )
+                        IOSStyledDropdownMenuItem(
+                            text = txtCopyUrl,
+                            onClick = {
+                                showMenu = false
+                                onCopyUrl(sessionData)
                             },
                         )
                         IOSStyledDropdownMenuItem(

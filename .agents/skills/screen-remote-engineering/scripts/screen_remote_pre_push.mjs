@@ -7,7 +7,7 @@ import process from "node:process";
 
 const ZERO_SHA = "0".repeat(40);
 const REVIEW_MARKER = "Screen-Remote-Review: confirmed";
-const CODEX_MODEL = "gpt-5.6-sol";
+const CODEX_MODEL = "gpt-5.3-codex-spark";
 const CODEX_REASONING_EFFORT = "medium";
 
 function run(cwd, args) {
@@ -66,8 +66,8 @@ function resolveBase(appRepo, remoteName, remoteRef, remoteSha, localSha) {
   return git(appRepo, "rev-parse", `${localSha}^`);
 }
 
-function wikiStatus(wikiRepo) {
-  return git(wikiRepo, "status", "--porcelain");
+function repoStatus(repo) {
+  return git(repo, "status", "--porcelain");
 }
 
 function showMessage(messagePath) {
@@ -126,13 +126,9 @@ function createSessionRecorder({ baseSha, contextPath, dadbSha, localSha }) {
   };
 }
 
-function finishReview(result, { contextPath, messagePath, wikiRepo }) {
+function finishReview(result, { contextPath, messagePath }) {
   if (!isCompleteResult(result)) throw new Error("Codex pre-push 未生成有效结果");
   if (result.wiki_action === "blocked") throw new Error(result.wiki_reason);
-
-  const wikiDirty = wikiStatus(wikiRepo);
-  if (result.wiki_action === "updated" && !wikiDirty) throw new Error("Codex 报告 Wiki 已更新，但外层 external/wiki/ 没有修改");
-  if (result.wiki_action === "no_update" && wikiDirty) throw new Error("Codex 报告无需更新 Wiki，但外层 external/wiki/ 出现了修改");
 
   const subject = withoutReviewMarker(result.commit_subject);
   const body = withoutReviewMarker(result.commit_body);
@@ -179,7 +175,7 @@ async function resumeInterruptedReview() {
   console.log(`  Wiki：${wikiRepo}\n`);
   const [code] = await runStreaming(wikiRepo, ["codex", "exec", "resume", "--model", CODEX_MODEL, "--config", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`, "--output-schema", schemaPath, "--output-last-message", resultPath, context.session_id, resumePrompt]);
   const result = readJson(resultPath);
-  finishReview(result, { contextPath, messagePath, wikiRepo });
+  finishReview(result, { contextPath, messagePath });
   if (code !== 0) console.warn("\n警告：Codex 返回非零状态，但已生成有效结果；继续处理本次结果。");
   console.log("\n恢复完成。请检查 Wiki 和生成的 commit message；该命令不会执行 git push。");
   return 0;
@@ -232,8 +228,12 @@ async function main() {
     console.log(`self-test: would analyze app ${baseSha.slice(0, 12)}..${localSha.slice(0, 12)} (${outgoingCount} commits) and dadb ${dadbSha.slice(0, 12)}^..${dadbSha.slice(0, 12)}`);
     return 0;
   }
-  if (wikiStatus(wikiRepo)) {
-    console.error("push 已暂停：外层 external/wiki/ 已有未提交修改，无法安全区分本轮同步。");
+  if (repoStatus(appRepo)) {
+    console.error("push 已暂停：当前 Screen-Remote 仓库有未提交修改，无法安全同步。");
+    return 1;
+  }
+  if (repoStatus(dadbRepo)) {
+    console.error("push 已暂停：外层 external/dadb 有未提交修改，无法安全同步。");
     return 1;
   }
   const [codexCode] = run(appRepo, ["codex", "--version"]);
@@ -263,7 +263,7 @@ async function main() {
   const recordSession = createSessionRecorder({ baseSha, contextPath, dadbSha, localSha });
   const [code] = await runStreaming(wikiRepo, ["codex", "exec", "--model", CODEX_MODEL, "--config", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`, "--sandbox", "workspace-write", "--cd", wikiRepo, "--output-schema", schemaPath, "--output-last-message", resultPath, "--color", "always", prompt], recordSession);
   const result = readJson(resultPath);
-  finishReview(result, { contextPath, messagePath, wikiRepo });
+  finishReview(result, { contextPath, messagePath });
   if (code !== 0) console.warn("\n警告：Codex 返回非零状态，但已生成有效结果；继续处理本次结果。");
 
   console.log(`\n请先 rebase/squash，然后编辑上述 message（保留最后的 ${REVIEW_MARKER}）。`);

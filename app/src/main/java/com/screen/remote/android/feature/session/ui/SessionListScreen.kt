@@ -1,5 +1,8 @@
 package com.screen.remote.android.feature.session.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
+import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
+import com.screen.remote.android.app.deeplink.toUrl
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.ConnectionTransport
@@ -61,6 +66,7 @@ fun SessionsScreen(
     var resettingConnectionSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val connectionResetSuccess = rememberText(SessionTexts.SESSION_RESET_CONNECTION_SUCCESS)
     val connectionResetFailed = rememberText(SessionTexts.SESSION_RESET_CONNECTION_FAILED)
+    val sessionUrlCopied = rememberText(SessionTexts.SESSION_URL_COPIED)
 
     SessionDeleteDialog(
         sessionToDelete = sessionToDelete,
@@ -77,7 +83,7 @@ fun SessionsScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 itemsIndexed(filteredSessions) { index, sessionData ->
@@ -108,6 +114,12 @@ fun SessionsScreen(
                         onManage = { onManageSession(sessionData) },
                         onEdit = { viewModel.showEditSessionDialog(sessionData.id) },
                         onCopy = { data -> viewModel.copySession(data) },
+                        onCopyUrl = { data ->
+                            val url = ScreenRemoteDeepLink.ScrcpySession(data.id).toUrl()
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Screen Remote session URL", url))
+                            Toast.makeText(context, sessionUrlCopied, Toast.LENGTH_SHORT).show()
+                        },
                         onResetConnection = {
                             if (sessionData.id !in resettingConnectionSessionIds) {
                                 resettingConnectionSessionIds += sessionData.id

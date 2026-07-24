@@ -6,27 +6,23 @@ import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,8 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,18 +51,13 @@ import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.app.deeplink.resolveSessionTarget
 import com.screen.remote.android.app.deeplink.SettingsDestination as DeepLinkSettingsDestination
 import com.screen.remote.android.core.common.util.ApiCompatHelper
-import com.screen.remote.android.core.common.constants.AppColors
-import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
-import com.screen.remote.android.core.designsystem.component.AddActionDialog
 import com.screen.remote.android.core.designsystem.component.CompactGroupSelector
 import com.screen.remote.android.core.designsystem.component.GroupManagementDialog
-import com.screen.remote.android.core.designsystem.component.PathBreadcrumb
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.domain.model.SessionColor
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.data.repository.toData
@@ -87,23 +76,12 @@ import com.screen.remote.android.feature.session.viewmodel.SessionOnboardingStat
 import com.screen.remote.android.feature.settings.ui.AboutScreen
 import com.screen.remote.android.feature.settings.ui.AppearanceScreen
 import com.screen.remote.android.feature.settings.ui.BackupRestoreScreen
+import com.screen.remote.android.feature.settings.ui.CustomCommandsScreen
 import com.screen.remote.android.feature.settings.ui.LanguageScreen
 import com.screen.remote.android.feature.settings.ui.LogManagementScreen
 import com.screen.remote.android.feature.settings.ui.SettingsScreen
 import com.screen.remote.android.feature.settings.ui.UpdateAvailableDialog
 import kotlinx.coroutines.flow.first
-
-private val MainScreenHeaderPadding = 16.dp
-private val MainScreenTabSelectorWidth = 132.dp
-private val MainScreenSessionsTabWidth = 70.dp
-private val MainScreenActionsTabWidth = 60.dp
-private val MainScreenTabSelectorInset = 2.dp
-private val MainScreenTabButtonCornerRadius = 15.dp
-
-private enum class MainScreenTab {
-    SESSIONS,
-    ACTIONS,
-}
 
 private enum class MainScreenSettingsDestination {
     ROOT,
@@ -114,12 +92,10 @@ private enum class MainScreenSettingsDestination {
     GROUP_MANAGEMENT,
     ADB_KEYS,
     BACKUP_RESTORE,
+    CUSTOM_COMMANDS,
 }
 
 private class MainScreenRouteState {
-    var selectedTab by mutableStateOf(MainScreenTab.SESSIONS)
-        private set
-
     var settingsDestination by mutableStateOf<MainScreenSettingsDestination?>(null)
         private set
 
@@ -140,10 +116,6 @@ private class MainScreenRouteState {
 
     var managementParameters by mutableStateOf<Map<String, String>>(emptyMap())
         private set
-
-    fun selectTab(tab: MainScreenTab) {
-        selectedTab = tab
-    }
 
     fun openSettings() {
         settingsDestination = MainScreenSettingsDestination.ROOT
@@ -219,13 +191,12 @@ fun MainScreen(
         remember(sessionDataList, urlSessionData) {
             sessionDataList + listOfNotNull(urlSessionData?.takeIf { url -> sessionDataList.none { it.id == url.id } })
         }
-    val showAddActionDialog by viewModel.showAddActionDialog.collectAsState()
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
     val groups by viewModel.groups.collectAsState()
     val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
-    val selectedAutomationGroupPath by viewModel.selectedAutomationGroupPath.collectAsState()
     val onboardingState by viewModel.sessionOnboardingState.collectAsState()
+    val settings by viewModel.settings.collectAsState()
     val updatePreferences = remember(context) { PreferencesManager(context.applicationContext) }
     val updateChecker = remember { GitHubReleaseUpdateChecker() }
     val managementDataProvider = remember { SessionManagementDataProvider() }
@@ -244,8 +215,7 @@ fun MainScreen(
                     else -> emptyList()
                 }
             when (link) {
-                ScreenRemoteDeepLink.Sessions -> routeState.selectTab(MainScreenTab.SESSIONS)
-                ScreenRemoteDeepLink.Actions -> routeState.selectTab(MainScreenTab.ACTIONS)
+                ScreenRemoteDeepLink.Sessions -> Unit
                 is ScreenRemoteDeepLink.AddSession -> viewModel.showAddSessionDialog(link.prefill)
                 is ScreenRemoteDeepLink.EditSession -> {
                     val session = storedSessions.resolveDeepLinkSession(link.sessionSelector)
@@ -361,6 +331,8 @@ fun MainScreen(
                 initialSection = routeState.managementDestination.section.toManagementSection(),
                 initialFilePath = routeState.managementDestination.filePath,
                 initialCommand = routeState.managementParameters["command"].orEmpty(),
+                customCommands = settings.customShellCommands,
+                replaceDefaultCommands = settings.replaceDefaultShellCommands,
                 onBack = {
                     routeState.closeSessionManagement()
                 },
@@ -389,7 +361,6 @@ fun MainScreen(
             viewModel = viewModel,
             groups = groups,
             selectedGroupPath = selectedGroupPath,
-            selectedAutomationGroupPath = selectedAutomationGroupPath,
         )
 
         if (onboardingState == SessionOnboardingState.HIDDEN) {
@@ -400,7 +371,6 @@ fun MainScreen(
                 editingSessionId = editingSessionId,
                 newSessionPrefill = newSessionPrefill,
                 sessionDataList = sessionDataList,
-                showAddActionDialog = showAddActionDialog,
                 groups = groups,
             )
 
@@ -571,15 +541,9 @@ private fun MainScreenContent(
     viewModel: MainViewModel,
     groups: List<DeviceGroup>,
     selectedGroupPath: String,
-    selectedAutomationGroupPath: String,
 ) {
     val txtTitle = rememberText(SessionTexts.MAIN_TITLE_SESSIONS)
-    val txtTabSessions = rememberText(SessionTexts.MAIN_TAB_SESSIONS)
-    val txtTabActions = rememberText(SessionTexts.MAIN_TAB_ACTIONS)
     val txtAddSession = rememberText(SessionTexts.MAIN_ADD_SESSION)
-    val txtAddAction = rememberText(SessionTexts.MAIN_ADD_ACTION)
-    val selectedTab = routeState.selectedTab
-    val isSessionTab = selectedTab == MainScreenTab.SESSIONS
 
     Scaffold(
         topBar = {
@@ -606,17 +570,11 @@ private fun MainScreenContent(
                 },
                 actions = {
                     IconButton(
-                        onClick = {
-                            if (isSessionTab) {
-                                viewModel.showAddSessionDialog()
-                            } else {
-                                viewModel.showAddActionDialog()
-                            }
-                        },
+                        onClick = { viewModel.showAddSessionDialog() },
                     ) {
                         Icon(
                             Icons.Default.Add,
-                            contentDescription = if (isSessionTab) txtAddSession else txtAddAction,
+                            contentDescription = txtAddSession,
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
@@ -635,72 +593,31 @@ private fun MainScreenContent(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(
-                            horizontal = MainScreenHeaderPadding,
-                            vertical = MainScreenHeaderPadding,
-                        ),
-                contentAlignment = Alignment.Center,
+                        .weight(1f),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactSpacing),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MainScreenTabSelector(
-                        selectedTab = selectedTab,
-                        tabSessionsText = txtTabSessions,
-                        tabActionsText = txtTabActions,
-                        onTabSelected = routeState::selectTab,
-                    )
-
-                    CompactGroupSelector(
-                        groups =
-                            groups.filter {
-                                it.type == if (isSessionTab) GroupType.SESSION else GroupType.AUTOMATION
-                            },
-                        selectedGroupPath =
-                            if (isSessionTab) {
-                                selectedGroupPath
-                            } else {
-                                selectedAutomationGroupPath
-                            },
-                        onGroupSelected = {
-                            if (isSessionTab) {
-                                viewModel.selectGroup(it)
-                            } else {
-                                viewModel.selectAutomationGroup(it)
-                            }
-                        },
-                    )
-                }
+                SessionsScreen(
+                    viewModel = viewModel,
+                    onManageSession = { sessionData ->
+                        routeState.requestSessionManagement(sessionData.id)
+                        viewModel.connectManagementSession(sessionData.id)
+                    },
+                )
             }
 
-            Box(
+            BoxWithConstraints(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                contentAlignment = Alignment.BottomStart,
             ) {
-                when (selectedTab) {
-                    MainScreenTab.SESSIONS ->
-                        SessionsScreen(
-                            viewModel = viewModel,
-                            onManageSession = { sessionData ->
-                                routeState.requestSessionManagement(sessionData.id)
-                                viewModel.connectManagementSession(sessionData.id)
-                            },
-                        )
-                    MainScreenTab.ACTIONS -> ActionsScreen(viewModel)
-                }
+                CompactGroupSelector(
+                    groups = groups,
+                    selectedGroupPath = selectedGroupPath,
+                    onGroupSelected = viewModel::selectGroup,
+                    modifier = Modifier.widthIn(max = maxWidth / 2),
+                )
             }
-
-            PathBreadcrumb(
-                selectedGroupPath =
-                    if (isSessionTab) {
-                        selectedGroupPath
-                    } else {
-                        selectedAutomationGroupPath
-                    },
-            )
         }
     }
 }
@@ -713,7 +630,6 @@ private fun MainScreenDialogs(
     editingSessionId: String?,
     newSessionPrefill: NewSessionPrefill,
     sessionDataList: List<SessionData>,
-    showAddActionDialog: Boolean,
     groups: List<DeviceGroup>,
 ) {
     if (showAddDialog) {
@@ -730,13 +646,6 @@ private fun MainScreenDialogs(
                 onConfirm = viewModel::saveSessionData,
             )
         }
-    }
-
-    if (showAddActionDialog) {
-        AddActionDialog(
-            onDismiss = viewModel::hideAddActionDialog,
-            onConfirm = viewModel::addAction,
-        )
     }
 
     when (routeState.settingsDestination) {
@@ -765,6 +674,9 @@ private fun MainScreenDialogs(
                 },
                 onNavigateToBackupRestore = {
                     routeState.navigateToSettings(MainScreenSettingsDestination.BACKUP_RESTORE)
+                },
+                onNavigateToCustomCommands = {
+                    routeState.navigateToSettings(MainScreenSettingsDestination.CUSTOM_COMMANDS)
                 },
             )
         }
@@ -813,100 +725,12 @@ private fun MainScreenDialogs(
                 onBack = routeState::returnToSettingsRoot,
             )
         }
-    }
-}
 
-@Composable
-private fun MainScreenTabSelector(
-    selectedTab: MainScreenTab,
-    tabSessionsText: String,
-    tabActionsText: String,
-    onTabSelected: (MainScreenTab) -> Unit,
-) {
-    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-
-    Box(
-        modifier =
-            Modifier
-                .width(MainScreenTabSelectorWidth)
-                .height(IosDesignTokens.segmentedControlHeight)
-                .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(MainScreenTabSelectorInset),
-    ) {
-        MainScreenTabButton(
-            modifier =
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .width(MainScreenSessionsTabWidth),
-            isDarkTheme = isDarkTheme,
-            selected = selectedTab == MainScreenTab.SESSIONS,
-            text = tabSessionsText,
-            onClick = { onTabSelected(MainScreenTab.SESSIONS) },
-        )
-
-        MainScreenTabButton(
-            modifier =
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .width(MainScreenActionsTabWidth),
-            isDarkTheme = isDarkTheme,
-            selected = selectedTab == MainScreenTab.ACTIONS,
-            text = tabActionsText,
-            onClick = { onTabSelected(MainScreenTab.ACTIONS) },
-        )
-    }
-}
-
-@Composable
-private fun MainScreenTabButton(
-    modifier: Modifier,
-    isDarkTheme: Boolean,
-    selected: Boolean,
-    text: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(MainScreenTabButtonCornerRadius))
-                .background(
-                    if (selected) {
-                        if (isDarkTheme) {
-                            AppColors.darkIOSSelectedBackground
-                        } else {
-                            AppColors.iOSSelectedBackground
-                        }
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    },
-                ).then(
-                    if (selected) {
-                        Modifier.zIndex(1f)
-                    } else {
-                        Modifier
-                    },
-                ),
-        contentAlignment = Alignment.Center,
-    ) {
-        TextButton(
-            onClick = onClick,
-            modifier = Modifier.fillMaxSize(),
-            colors =
-                ButtonDefaults.textButtonColors(
-                    contentColor =
-                        if (selected) {
-                            MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                ),
-            contentPadding = PaddingValues(0.dp),
-        ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
+        MainScreenSettingsDestination.CUSTOM_COMMANDS -> {
+            CustomCommandsScreen(
+                settings = viewModel.settings.collectAsState().value,
+                onBack = routeState::returnToSettingsRoot,
+                onUpdateSettings = viewModel::updateSettings,
             )
         }
     }

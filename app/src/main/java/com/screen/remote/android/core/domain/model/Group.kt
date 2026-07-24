@@ -1,20 +1,11 @@
 package com.screen.remote.android.core.domain.model
 
 /**
- * 分组类型
- */
-enum class GroupType {
-    SESSION, // 会话分组
-    AUTOMATION, // 自动化分组
-}
-
-/**
  * 设备分组
  */
 data class DeviceGroup(
     val id: String,
     val name: String,
-    val type: GroupType = GroupType.SESSION,
     val path: String = "/",
     val parentPath: String = "/",
     val description: String = "",

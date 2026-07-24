@@ -23,6 +23,13 @@ enum class AppLanguage {
     ENGLISH, // English
 }
 
+@Serializable
+data class CustomShellCommand(
+    val id: String,
+    val name: String,
+    val command: String,
+)
+
 /**
  * 应用设置
  */
@@ -42,4 +49,6 @@ data class AppSettings(
     val showPerformanceStats: Boolean = false,
     val autoCheckUpdates: Boolean = true,
     val updateChannel: UpdateChannel = UpdateChannel.STABLE,
+    val customShellCommands: List<CustomShellCommand> = emptyList(),
+    val replaceDefaultShellCommands: Boolean = false,
 )

@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.domain.model.CustomShellCommand
 import com.screen.remote.android.core.i18n.ManagementTexts
 import kotlinx.coroutines.launch
 
@@ -44,6 +45,8 @@ internal fun SessionManagementScreen(
     initialSection: SessionManagementSection = SessionManagementSection.DeviceInfo,
     initialFilePath: String? = null,
     initialCommand: String = "",
+    customCommands: List<CustomShellCommand> = emptyList(),
+    replaceDefaultCommands: Boolean = false,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -274,6 +277,8 @@ internal fun SessionManagementScreen(
                                 commandInput = commandInput,
                                 commandPresetDialogOpen = commandPresetDialogOpen,
                                 commandTerminalSession = commandTerminalSession,
+                                customCommands = customCommands,
+                                replaceDefaultCommands = replaceDefaultCommands,
                                 onFileSelectionModeChanged = { fileSelectionMode = it },
                                 onCommandInputChange = { commandInput = it },
                                 onCommandPresetDialogChange = { commandPresetDialogOpen = it },
@@ -644,6 +649,8 @@ private fun SessionManagementDetailPane(
     commandInput: String,
     commandPresetDialogOpen: Boolean,
     commandTerminalSession: ManagementTerminalSession,
+    customCommands: List<CustomShellCommand>,
+    replaceDefaultCommands: Boolean,
     onFileSelectionModeChanged: (Boolean) -> Unit,
     onCommandInputChange: (String) -> Unit,
     onCommandPresetDialogChange: (Boolean) -> Unit,
@@ -750,6 +757,8 @@ private fun SessionManagementDetailPane(
                 onCommandInputChange = onCommandInputChange,
                 showPresetDialog = commandPresetDialogOpen,
                 onShowPresetDialogChange = onCommandPresetDialogChange,
+                customCommands = customCommands,
+                replaceDefaultCommands = replaceDefaultCommands,
             )
         }
     }

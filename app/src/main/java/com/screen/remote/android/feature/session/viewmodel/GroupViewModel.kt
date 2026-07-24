@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.domain.model.DefaultGroups
 import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.GroupType
 import com.screen.remote.android.core.data.repository.GroupData
 import com.screen.remote.android.core.data.repository.GroupRepository
 import com.screen.remote.android.core.data.repository.SessionData
@@ -43,10 +42,6 @@ class GroupViewModel(
     // 当前选中的分组路径（用于首页筛选）
     private val _selectedGroupPath = MutableStateFlow(DefaultGroups.ALL_DEVICES)
     val selectedGroupPath: StateFlow<String> = _selectedGroupPath.asStateFlow()
-
-    // 自动化页面的分组路径（独立管理）
-    private val _selectedAutomationGroupPath = MutableStateFlow(DefaultGroups.ALL_DEVICES)
-    val selectedAutomationGroupPath: StateFlow<String> = _selectedAutomationGroupPath.asStateFlow()
 
     // ============ 筛选后的会话列表 ============
 
@@ -103,13 +98,6 @@ class GroupViewModel(
         _selectedGroupPath.value = groupPath
     }
 
-    /**
-     * 选择自动化分组路径
-     */
-    fun selectAutomationGroup(groupPath: String) {
-        _selectedAutomationGroupPath.value = groupPath
-    }
-
     // ============ 分组 CRUD ============
 
     /**
@@ -118,7 +106,6 @@ class GroupViewModel(
     fun addGroup(
         name: String,
         parentPath: String,
-        type: GroupType = GroupType.SESSION,
     ) {
         viewModelScope.launch {
             val path = if (parentPath == "/") "/$name" else "$parentPath/$name"
@@ -126,7 +113,6 @@ class GroupViewModel(
                 GroupData(
                     id = UUID.randomUUID().toString(),
                     name = name,
-                    type = type.name,
                     path = path,
                     parentPath = parentPath,
                     description = "",
@@ -140,15 +126,10 @@ class GroupViewModel(
      */
     fun updateGroup(group: DeviceGroup) {
         viewModelScope.launch {
-            val previousGroup = groupRepository.getGroup(group.id)
-            if (previousGroup?.type == GroupType.SESSION && group.type != GroupType.SESSION) {
-                sessionRepository.removeGroupReferences(group.id)
-            }
             val groupData =
                 GroupData(
                     id = group.id,
                     name = group.name,
-                    type = group.type.name,
                     path = group.path,
                     parentPath = group.parentPath,
                     description = group.description,
