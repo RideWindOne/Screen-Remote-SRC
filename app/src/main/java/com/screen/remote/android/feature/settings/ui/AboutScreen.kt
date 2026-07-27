@@ -321,7 +321,7 @@ fun AboutScreen(onBack: () -> Unit) {
                                 imageVector = Icons.Default.CloudUpload,
                                 contentDescription = SettingsTexts.ABOUT_TELEMETRY_UPLOAD.get(),
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(IosDesignTokens.externalIconSize),
+                                modifier = Modifier.size(IosDesignTokens.trailingIconSize),
                             )
                         }
                     }

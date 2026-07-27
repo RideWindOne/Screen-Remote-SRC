@@ -300,15 +300,16 @@ private fun SessionCardStatusBadge(
     val statusColor =
         when (endpointStatus) {
             SessionEndpointStatus.ADB_CONNECTED -> Color(0xFF00C853)
-            SessionEndpointStatus.DISCOVERED,
-            SessionEndpointStatus.UNAVAILABLE,
-            -> Color(0xFFFFD700)
+            SessionEndpointStatus.DISCOVERED -> Color(0xFFFFD700)
+            SessionEndpointStatus.CONFIRMING -> MaterialTheme.colorScheme.onSurfaceVariant
+            SessionEndpointStatus.UNAVAILABLE -> Color(0xFFFFD700)
         }
     val statusDescription =
         when (endpointStatus) {
-            SessionEndpointStatus.ADB_CONNECTED -> "ADB connected"
-            SessionEndpointStatus.DISCOVERED -> "Device discovered"
-            SessionEndpointStatus.UNAVAILABLE -> "Unavailable"
+            SessionEndpointStatus.ADB_CONNECTED -> SessionTexts.ENDPOINT_STATUS_ADB_CONNECTED.get()
+            SessionEndpointStatus.DISCOVERED -> SessionTexts.ENDPOINT_STATUS_NEARBY.get()
+            SessionEndpointStatus.CONFIRMING -> SessionTexts.ENDPOINT_STATUS_CONFIRMING.get()
+            SessionEndpointStatus.UNAVAILABLE -> SessionTexts.ENDPOINT_STATUS_UNAVAILABLE.get()
         }
 
     Row(
@@ -336,6 +337,7 @@ private fun SessionCardStatusBadge(
                         when (endpointStatus) {
                             SessionEndpointStatus.ADB_CONNECTED -> Icons.Default.FlashOn
                             SessionEndpointStatus.DISCOVERED -> Icons.Default.FlashOn
+                            SessionEndpointStatus.CONFIRMING -> Icons.Default.Refresh
                             SessionEndpointStatus.UNAVAILABLE -> Icons.Default.Warning
                         },
                     contentDescription = statusDescription,

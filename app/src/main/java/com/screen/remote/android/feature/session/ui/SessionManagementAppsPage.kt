@@ -3,7 +3,9 @@ package com.screen.remote.android.feature.session.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +39,49 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+
+private enum class AppBatchAction {
+    Enable,
+    Disable,
+    ForceStop,
+    Uninstall,
+}
+
+private val AppBatchAction.label: String
+    get() =
+        when (this) {
+            AppBatchAction.Enable -> ManagementTexts.Apps.BATCH_ENABLE.get()
+            AppBatchAction.Disable -> ManagementTexts.Apps.BATCH_DISABLE.get()
+            AppBatchAction.ForceStop -> ManagementTexts.Apps.BATCH_FORCE_STOP.get()
+            AppBatchAction.Uninstall -> ManagementTexts.Apps.BATCH_UNINSTALL.get()
+        }
+
+private fun AppBatchAction.command(packageName: String): String =
+    when (this) {
+        AppBatchAction.Enable -> "pm enable $packageName"
+        AppBatchAction.Disable -> "pm disable-user --user 0 $packageName"
+        AppBatchAction.ForceStop -> "am force-stop $packageName"
+        AppBatchAction.Uninstall -> "pm uninstall $packageName"
+    }
+
+internal fun packageActionFailure(output: String): String? {
+    val normalized = output.trim()
+    return normalized.takeIf {
+        it.startsWith("Failure", ignoreCase = true) ||
+            it.startsWith("Error", ignoreCase = true) ||
+            it.contains("Unknown package", ignoreCase = true) ||
+            it.contains("not installed", ignoreCase = true)
+    }
+}
+
+private suspend fun runPackageAction(
+    command: String,
+    successMessage: String,
+): Result<String> =
+    runShellAction(command, successMessage).mapCatching { output ->
+        packageActionFailure(output)?.let(::error)
+        output
+    }
 
 private data class AppListProjectionRequest(
     val apps: List<AppInventoryEntry>,
@@ -91,7 +136,13 @@ internal fun SessionManagementAppsPage(
     var packageNameOnlyMode by remember { mutableStateOf(false) }
     var selectedAppForActions by remember { mutableStateOf<AppInventoryEntry?>(null) }
     var selectedAppForDetails by remember { mutableStateOf<AppInventoryEntry?>(null) }
+    var forceStopAppState by remember { mutableStateOf<AppInventoryEntry?>(null) }
+    var clearDataAppState by remember { mutableStateOf<AppInventoryEntry?>(null) }
     var pendingApkExport by remember { mutableStateOf<AppInventoryEntry?>(null) }
+    var runningPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var batchDialogOpen by remember { mutableStateOf(false) }
+    var pendingBatchAction by remember { mutableStateOf<AppBatchAction?>(null) }
     var uninstallAppState by remember { mutableStateOf<AppInventoryEntry?>(null) }
     var appActionProgress by remember { mutableStateOf<String?>(null) }
     var appActionResult by remember { mutableStateOf<String?>(null) }
@@ -129,6 +180,11 @@ internal fun SessionManagementAppsPage(
         inventoryLoading = result == null
         inventoryRefreshing = false
         inventoryError = result?.errorMessage
+        selectedPackages = selectedPackages.intersect(inventoryApps.mapTo(mutableSetOf(), AppInventoryEntry::packageName))
+    }
+
+    LaunchedEffect(cacheScopeKey, refreshToken, listRefreshTick) {
+        loadRunningAppPackages(context).onSuccess { runningPackages = it }
     }
 
     LaunchedEffect(appCacheRevision) {
@@ -219,7 +275,7 @@ internal fun SessionManagementAppsPage(
 
     val apkExportLauncher =
         FilePickerHelper.rememberExportFileLauncher(
-            mimeType = "application/vnd.android.package-archive",
+            mimeType = "application/octet-stream",
             initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
         ) { destinationUri ->
             val entry = pendingApkExport
@@ -232,6 +288,20 @@ internal fun SessionManagementAppsPage(
                         destinationUri = destinationUri,
                     )
                 }
+            }
+        }
+
+    val batchExportLauncher =
+        FilePickerHelper.rememberExportFileLauncher(
+            mimeType = "application/zip",
+            initialDirectoryUri = FilePickerHelper.DOWNLOADS_DIRECTORY_URI,
+        ) { destinationUri ->
+            if (destinationUri != null) {
+                val packages = selectedPackages.sorted()
+                launchAppAction(progress = ManagementTexts.Apps.BATCH_PROGRESS.format(packages.size)) {
+                    exportPackagesArchive(context, packages, destinationUri)
+                }
+                selectedPackages = emptySet()
             }
         }
 
@@ -281,6 +351,34 @@ internal fun SessionManagementAppsPage(
                             placeholder = ManagementTexts.Apps.SEARCH_APPS_PACKAGES.get(),
                             contentDescription = ManagementTexts.Apps.SEARCH.get(),
                         )
+                        if (selectedPackages.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = ManagementTexts.Apps.SELECT_ALL.get(),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable { selectedPackages = visibleApps.mapTo(linkedSetOf(), AppInventoryEntry::packageName) },
+                                )
+                                Text(
+                                    text = ManagementTexts.Apps.BATCH_ACTIONS.get(),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.clickable { batchDialogOpen = true },
+                                )
+                                Text(
+                                    text = ManagementTexts.Apps.CLEAR_SELECTION.get(),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.clickable { selectedPackages = emptySet() },
+                                )
+                            }
+                            Text(
+                                text = ManagementTexts.Apps.SELECTED_COUNT.format(selectedPackages.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
@@ -354,7 +452,19 @@ internal fun SessionManagementAppsPage(
                                     entry = entry,
                                     packageNameOnlyMode = packageNameOnlyMode,
                                     presentationVersion = appCacheRevision,
-                                    onClick = { selectedAppForActions = entry },
+                                    isRunning = entry.packageName in runningPackages,
+                                    selectionMode = selectedPackages.isNotEmpty(),
+                                    selected = entry.packageName in selectedPackages,
+                                    onClick = {
+                                        if (selectedPackages.isNotEmpty()) {
+                                            selectedPackages =
+                                                if (entry.packageName in selectedPackages) selectedPackages - entry.packageName
+                                                else selectedPackages + entry.packageName
+                                        } else {
+                                            selectedAppForActions = entry
+                                        }
+                                    },
+                                    onLongClick = { selectedPackages = selectedPackages + entry.packageName },
                                 )
                             }
                         }
@@ -449,6 +559,7 @@ internal fun SessionManagementAppsPage(
     selectedAppForActions?.let { entry ->
         SessionManagementAppActionDialog(
             entry = entry,
+            isRunning = entry.packageName in runningPackages,
             onDismiss = { selectedAppForActions = null },
             onDetails = {
                 selectedAppForActions = null
@@ -457,7 +568,7 @@ internal fun SessionManagementAppsPage(
             onLaunch = {
                 selectedAppForActions = null
                 launchAppAction(progress = ManagementTexts.Apps.LAUNCHING.format(entry.appTitle)) {
-                    runShellAction(
+                    runPackageAction(
                         command = "monkey -p ${entry.packageName} -c android.intent.category.LAUNCHER 1",
                         successMessage = ManagementTexts.Apps.TRIED_LAUNCH_DEVICE.format(entry.packageName),
                     )
@@ -473,7 +584,7 @@ internal fun SessionManagementAppsPage(
                             ManagementTexts.Apps.ENABLING.format(entry.appTitle)
                         },
                 ) {
-                    runShellAction(
+                    runPackageAction(
                         command =
                             if (entry.isEnabled) {
                                 "pm disable-user --user 0 ${entry.packageName}"
@@ -495,17 +606,29 @@ internal fun SessionManagementAppsPage(
             },
             onClearData = {
                 selectedAppForActions = null
-                launchAppAction(progress = ManagementTexts.Apps.CLEARING_DATA.format(entry.appTitle)) {
-                    runShellAction(
-                        command = "pm clear ${entry.packageName}",
-                        successMessage = ManagementTexts.Apps.CLEARED_DATA.format(entry.packageName),
-                    )
-                }
+                clearDataAppState = entry
+            },
+            onForceStop = {
+                selectedAppForActions = null
+                forceStopAppState = entry
             },
             onDownloadApk = {
                 selectedAppForActions = null
-                pendingApkExport = entry
-                apkExportLauncher.launch("${entry.packageName}.apk")
+                scope.launch {
+                    appActionProgress = ManagementTexts.Apps.EXPORTING_APK.format(entry.appTitle)
+                    val result = runCatching {
+                        val connection = SessionManagementAdbConnection.current()
+                            ?: error(ManagementTexts.Apps.NO_ADB_CONNECTION_AVAILABLE.get())
+                        queryPackageApkPaths(connection, entry.packageName)
+                    }
+                    appActionProgress = null
+                    result.onSuccess { paths ->
+                        pendingApkExport = entry
+                        apkExportLauncher.launch(packageExportFileName(entry.packageName, paths))
+                    }.onFailure { error ->
+                        appActionResult = error.message ?: ManagementTexts.Files.COULDN_T_FIND_APK_PATH.get()
+                    }
+                }
             },
         )
     }
@@ -513,7 +636,86 @@ internal fun SessionManagementAppsPage(
     selectedAppForDetails?.let { entry ->
         SessionManagementAppDetailDialog(
             entry = entry,
+            isRunning = entry.packageName in runningPackages,
             onDismiss = { selectedAppForDetails = null },
+        )
+    }
+
+    clearDataAppState?.let { entry ->
+        SessionManagementAppConfirmDialog(
+            title = ManagementTexts.Apps.CLEAR_DATA.get(),
+            message = ManagementTexts.Apps.CONFIRM_CLEAR_DATA.format(entry.packageName),
+            confirmText = ManagementTexts.Apps.CLEAR_DATA.get(),
+            onDismiss = { clearDataAppState = null },
+            onConfirm = {
+                clearDataAppState = null
+                launchAppAction(progress = ManagementTexts.Apps.CLEARING_DATA.format(entry.appTitle)) {
+                    runPackageAction(
+                        command = "pm clear ${entry.packageName}",
+                        successMessage = ManagementTexts.Apps.CLEARED_DATA.format(entry.packageName),
+                    )
+                }
+            },
+        )
+    }
+
+    forceStopAppState?.let { entry ->
+        SessionManagementAppConfirmDialog(
+            title = ManagementTexts.Apps.FORCE_STOP.get(),
+            message = ManagementTexts.Apps.BATCH_CONFIRM.format(1, entry.packageName),
+            confirmText = ManagementTexts.Apps.FORCE_STOP.get(),
+            onDismiss = { forceStopAppState = null },
+            onConfirm = {
+                forceStopAppState = null
+                launchAppAction(progress = ManagementTexts.Apps.FORCE_STOPPING.format(entry.appTitle)) {
+                    runPackageAction(
+                        command = "am force-stop ${entry.packageName}",
+                        successMessage = ManagementTexts.Apps.FORCE_STOPPED.format(entry.packageName),
+                    )
+                }
+            },
+        )
+    }
+
+    if (batchDialogOpen) {
+        SessionManagementAppBatchDialog(
+            selectedCount = selectedPackages.size,
+            onDismiss = { batchDialogOpen = false },
+            onEnable = { batchDialogOpen = false; pendingBatchAction = AppBatchAction.Enable },
+            onDisable = { batchDialogOpen = false; pendingBatchAction = AppBatchAction.Disable },
+            onForceStop = { batchDialogOpen = false; pendingBatchAction = AppBatchAction.ForceStop },
+            onUninstall = { batchDialogOpen = false; pendingBatchAction = AppBatchAction.Uninstall },
+            onExport = {
+                batchDialogOpen = false
+                batchExportLauncher.launch("screen-remote-apps.zip")
+            },
+        )
+    }
+
+    pendingBatchAction?.let { action ->
+        SessionManagementAppConfirmDialog(
+            title = action.label,
+            message = ManagementTexts.Apps.BATCH_CONFIRM.format(selectedPackages.size, action.label),
+            confirmText = action.label,
+            onDismiss = { pendingBatchAction = null },
+            onConfirm = {
+                val entries = inventoryApps.filter { it.packageName in selectedPackages }
+                pendingBatchAction = null
+                selectedPackages = emptySet()
+                appActionProgress = ManagementTexts.Apps.BATCH_PROGRESS.format(entries.size)
+                scope.launch {
+                    var successCount = 0
+                    var failureCount = 0
+                    entries.forEach { entry ->
+                        runPackageAction(action.command(entry.packageName), action.label)
+                            .onSuccess { successCount++ }
+                            .onFailure { failureCount++ }
+                    }
+                    appActionProgress = null
+                    appActionResult = ManagementTexts.Apps.BATCH_RESULT.format(successCount, failureCount)
+                    refreshInventory(manual = true)
+                }
+            },
         )
     }
 
@@ -524,7 +726,7 @@ internal fun SessionManagementAppsPage(
             onConfirm = { keepData ->
                 uninstallAppState = null
                 launchAppAction(progress = ManagementTexts.Apps.UNINSTALLING.format(entry.appTitle)) {
-                    runShellAction(
+                    runPackageAction(
                         command = "pm uninstall ${if (keepData) "-k " else ""}${entry.packageName}",
                         successMessage = ManagementTexts.Apps.TRIED_UNINSTALL.format(entry.packageName),
                     )

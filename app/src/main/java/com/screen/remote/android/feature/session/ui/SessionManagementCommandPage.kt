@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
@@ -227,6 +228,7 @@ internal fun SessionManagementCommandPage(
         onExecuteCommand = ::sendCommand,
         historyPreviousEnabled = availableHistory.isNotEmpty() && (historyCursor == null || historyCursor!! < availableHistory.lastIndex),
         historyNextEnabled = historyCursor != null,
+        isCompletionLoading = terminalSession.isCompletionLoading,
         onInterrupt = terminalSession::interrupt,
         onComplete = {
             historyCursor = null
@@ -284,6 +286,7 @@ private fun SessionManagementTerminalDisplay(
     onExecuteCommand: (String) -> Unit,
     historyPreviousEnabled: Boolean,
     historyNextEnabled: Boolean,
+    isCompletionLoading: Boolean,
     onInterrupt: () -> Unit,
     onComplete: () -> Unit,
     onHistoryPrevious: () -> Unit,
@@ -345,6 +348,7 @@ private fun SessionManagementTerminalDisplay(
                     interruptEnabled = inputEnabled,
                     previousEnabled = historyPreviousEnabled,
                     nextEnabled = historyNextEnabled,
+                    isCompletionLoading = isCompletionLoading,
                     onInterrupt = onInterrupt,
                     onComplete = onComplete,
                     onPrevious = onHistoryPrevious,
@@ -391,6 +395,7 @@ private fun SessionManagementTerminalHistoryActions(
     interruptEnabled: Boolean,
     previousEnabled: Boolean,
     nextEnabled: Boolean,
+    isCompletionLoading: Boolean,
     onInterrupt: () -> Unit,
     onComplete: () -> Unit,
     onPrevious: () -> Unit,
@@ -421,21 +426,33 @@ private fun SessionManagementTerminalHistoryActions(
         }
         TextButton(
             onClick = onComplete,
-            enabled = interruptEnabled,
+            enabled = interruptEnabled && !isCompletionLoading,
             modifier = Modifier.heightIn(min = 30.dp),
         ) {
-            Text(
-                text = ManagementTexts.Commands.COMPLETE.get(),
-                color =
-                    if (interruptEnabled) {
-                        SessionManagementCommandPromptColor
-                    } else {
-                        SessionManagementCommandHintColor.copy(alpha = 0.32f)
-                    },
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = SessionManagementTerminalTextTokens.monospace,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = ManagementTexts.Commands.COMPLETE.get(),
+                    color =
+                        if (interruptEnabled) {
+                            SessionManagementCommandPromptColor
+                        } else {
+                            SessionManagementCommandHintColor.copy(alpha = 0.32f)
+                        },
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = SessionManagementTerminalTextTokens.monospace,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (isCompletionLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = SessionManagementCommandPromptColor,
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.weight(1f))
         IconButton(
@@ -1147,12 +1164,15 @@ internal class ManagementTerminalSession(
         private set
     var commandHistory by mutableStateOf<List<String>>(emptyList())
         private set
+    var isCompletionLoading by mutableStateOf(false)
+        private set
 
     private var shellStream: ManagementShellStream? = null
     private var readJob: Job? = null
     private var keepAliveJob: Job? = null
     private var completionJob: Job? = null
     private var completionCycle: ShellCompletionCycle? = null
+    private var completionRequestId = 0L
     private var pendingMarkerText = ""
     private var pendingCarriageReturn = false
     private var closeRequested = false
@@ -1302,32 +1322,43 @@ internal class ManagementTerminalSession(
 
         val target = shellCompletionTarget(input) ?: return
         completionJob?.cancel()
+        val requestId = ++completionRequestId
+        isCompletionLoading = true
         completionJob =
             scope.launch {
-                val candidates = loadShellCompletionCandidates(target)
-                if (candidates.isEmpty()) {
-                    completionCycle = null
-                    return@launch
-                }
-                val completed = applyShellCompletion(input, target, candidates, candidateIndex = 0)
-                completionCycle =
-                    ShellCompletionCycle(
-                        sourceInput = input,
-                        target = target,
-                        candidates = candidates,
-                        selectedIndex = 0,
-                        completedInput = completed,
-                    )
-                if (completed != input) {
-                    onCompleted(completed)
+                try {
+                    val candidates = loadShellCompletionCandidates(target)
+                    if (candidates.isEmpty()) {
+                        completionCycle = null
+                        return@launch
+                    }
+                    val completed = applyShellCompletion(input, target, candidates, candidateIndex = 0)
+                    completionCycle =
+                        ShellCompletionCycle(
+                            sourceInput = input,
+                            target = target,
+                            candidates = candidates,
+                            selectedIndex = 0,
+                            completedInput = completed,
+                        )
+                    if (completed != input) {
+                        onCompleted(completed)
+                    }
+                } finally {
+                    if (completionRequestId == requestId) {
+                        isCompletionLoading = false
+                        completionJob = null
+                    }
                 }
             }
     }
 
     fun resetCompletion() {
+        completionRequestId += 1
         completionJob?.cancel()
         completionJob = null
         completionCycle = null
+        isCompletionLoading = false
     }
 
     fun interrupt() {

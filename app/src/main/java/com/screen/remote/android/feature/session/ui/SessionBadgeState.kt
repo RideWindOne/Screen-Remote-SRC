@@ -12,6 +12,7 @@ internal data class SessionBadgeState(
 enum class SessionEndpointStatus {
     ADB_CONNECTED,
     DISCOVERED,
+    CONFIRMING,
     UNAVAILABLE,
 }
 
@@ -19,6 +20,7 @@ internal fun resolveSessionBadgeState(
     sessionData: SessionData,
     connectedAdbDeviceIds: Set<String>,
     discoveredDeviceIds: Set<String>,
+    confirmingDeviceIds: Set<String> = emptySet(),
 ): SessionBadgeState {
     val candidates = sessionData.toConnectionCandidates().sortedBy(ConnectionCandidate::priority)
     val mainCandidate =
@@ -29,14 +31,17 @@ internal fun resolveSessionBadgeState(
             candidate.matchesAny(connectedAdbDeviceIds)
         }
     val discoveredCandidate = candidates.firstOrNull { candidate -> candidate.matchesAny(discoveredDeviceIds) }
+    val confirmingCandidate = candidates.firstOrNull { candidate -> candidate.matchesAny(confirmingDeviceIds) }
     val displayCandidate =
         adbConnectedCandidates.firstOrNull()
             ?: discoveredCandidate
+            ?: confirmingCandidate
             ?: mainCandidate
     val status =
         when {
             adbConnectedCandidates.isNotEmpty() -> SessionEndpointStatus.ADB_CONNECTED
             discoveredCandidate != null -> SessionEndpointStatus.DISCOVERED
+            confirmingCandidate != null -> SessionEndpointStatus.CONFIRMING
             else -> SessionEndpointStatus.UNAVAILABLE
         }
 

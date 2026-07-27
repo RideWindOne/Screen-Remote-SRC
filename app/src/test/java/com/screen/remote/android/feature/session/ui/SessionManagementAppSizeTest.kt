@@ -1,9 +1,33 @@
 package com.screen.remote.android.feature.session.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class SessionManagementAppSizeTest {
+    @Test
+    fun `loading detail keeps inventory values as field fallbacks`() {
+        val detail =
+            AppDetailSnapshot.loading(
+                AppInventoryEntry(
+                    packageName = "com.example.app",
+                    appTitle = "Example",
+                    isSystemApp = false,
+                    apkPath = "/data/app/com.example.app/base.apk",
+                    isEnabled = false,
+                    versionCode = 42L,
+                    versionName = "4.2",
+                    apkSizeBytes = 20L * 1024 * 1024,
+                ),
+            )
+
+        assertEquals("20.00 M", detail.apkSize)
+        assertEquals("4.2", detail.versionName)
+        assertEquals("42", detail.versionCode)
+        assertEquals("/data/app/com.example.app/base.apk", detail.apkPath)
+        assertFalse(detail.isEnabled)
+    }
+
     @Test
     fun `sizes below one gibibyte use megabytes`() {
         assertEquals("20.00 M", formatAppSize(20L * 1024 * 1024))

@@ -33,6 +33,18 @@ class MdnsSessionPresenceTest {
     }
 
     @Test
+    fun endpointResolutionTemporarilyOverridesGameModePause() {
+        assertTrue(
+            shouldMonitorMdnsDiscovery(
+                gameModePaused = true,
+                hasTrackedSessions = true,
+                interactiveDiscoveryConsumers = 0,
+                resolutionConsumers = 1,
+            ),
+        )
+    }
+
+    @Test
     fun buildsFullMdnsNameFromDiscoveredServiceInstance() {
         val service =
             AdbMdnsService(
@@ -77,6 +89,119 @@ class MdnsSessionPresenceTest {
         assertTrue(!services[0].requiresPairing)
         assertTrue(services[1].previouslyPaired)
         assertTrue(services[1].requiresPairing)
+    }
+
+    @Test
+    fun refreshRetainsOldServiceAsConfirmingUntilItIsRediscovered() {
+        val old =
+            AdbMdnsService(
+                name = "adb-old-device-nonce",
+                host = "192.0.2.20",
+                port = 37123,
+                serviceType = AdbMdnsServiceType.TLS_CONNECT,
+            )
+
+        val services =
+            discoveredMdnsServices(
+                connectServices = emptyList(),
+                pairingServices = emptyList(),
+                pairedDeviceKeys = emptySet(),
+                retainedServices = listOf(old),
+                refreshing = true,
+            )
+
+        assertEquals(1, services.size)
+        assertTrue(services.single().confirming)
+        assertEquals("192.0.2.20", services.single().host)
+        assertEquals(37123, services.single().port)
+    }
+
+    @Test
+    fun rediscoveredServiceReplacesConfirmingSnapshot() {
+        val old =
+            AdbMdnsService(
+                name = "adb-phone-nonce",
+                host = "192.0.2.20",
+                port = 37123,
+                serviceType = AdbMdnsServiceType.TLS_CONNECT,
+            )
+        val current = old.copy(host = "192.0.2.21", port = 38123)
+
+        val service =
+            discoveredMdnsServices(
+                connectServices = listOf(current),
+                pairingServices = emptyList(),
+                pairedDeviceKeys = emptySet(),
+                retainedServices = listOf(old),
+                refreshing = true,
+            ).single()
+
+        assertFalse(service.confirming)
+        assertEquals("192.0.2.21", service.host)
+        assertEquals(38123, service.port)
+    }
+
+    @Test
+    fun rediscoveredDeviceWithNewInstanceNonceReplacesOldSnapshot() {
+        val old =
+            AdbMdnsService(
+                name = "adb-R5CW730QLKB-oldNonce",
+                host = "192.0.2.20",
+                port = 37123,
+                serviceType = AdbMdnsServiceType.TLS_CONNECT,
+            )
+        val current = old.copy(name = "adb-R5CW730QLKB-newNonce", host = "192.0.2.21", port = 38123)
+
+        val services =
+            discoveredMdnsServices(
+                connectServices = listOf(current),
+                pairingServices = emptyList(),
+                pairedDeviceKeys = emptySet(),
+                retainedServices = listOf(old),
+                refreshing = true,
+            )
+
+        assertEquals(1, services.size)
+        assertFalse(services.single().confirming)
+        assertEquals("192.0.2.21", services.single().host)
+    }
+
+    @Test
+    fun completedRefreshDropsServicesThatWereNotRediscovered() {
+        val old =
+            AdbMdnsService(
+                name = "adb-offline-device-nonce",
+                host = "192.0.2.20",
+                port = 37123,
+                serviceType = AdbMdnsServiceType.TLS_CONNECT,
+            )
+
+        val services =
+            discoveredMdnsServices(
+                connectServices = emptyList(),
+                pairingServices = emptyList(),
+                pairedDeviceKeys = emptySet(),
+                retainedServices = listOf(old),
+                refreshing = false,
+            )
+
+        assertTrue(services.isEmpty())
+    }
+
+    @Test
+    fun retryDelayUsesBoundedBackoff() {
+        assertEquals(500L, mdnsRetryDelayMillis(1))
+        assertEquals(1_000L, mdnsRetryDelayMillis(2))
+        assertEquals(2_000L, mdnsRetryDelayMillis(3))
+        assertEquals(5_000L, mdnsRetryDelayMillis(4))
+        assertEquals(5_000L, mdnsRetryDelayMillis(20))
+    }
+
+    @Test
+    fun freshnessPolicyRefreshesOnlyWhenSnapshotIsOld() {
+        assertTrue(shouldRefreshMdns(nowMillis = 100L, lastRefreshStartedAtMillis = 0L, freshnessWindowMillis = 15L))
+        assertFalse(shouldRefreshMdns(nowMillis = 110L, lastRefreshStartedAtMillis = 100L, freshnessWindowMillis = 15L))
+        assertTrue(shouldRefreshMdns(nowMillis = 115L, lastRefreshStartedAtMillis = 100L, freshnessWindowMillis = 15L))
     }
 
     @Test

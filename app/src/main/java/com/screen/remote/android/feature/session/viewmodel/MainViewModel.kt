@@ -4,6 +4,13 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
+import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
+import com.screen.remote.android.app.deeplink.UrlSetting
+import com.screen.remote.android.app.deeplink.requireBoolean
+import com.screen.remote.android.app.deeplink.toUrl
+import com.screen.remote.android.app.deeplink.toUrlParameters
+import com.screen.remote.android.app.deeplink.toUrlRuntimeSession
 import com.screen.remote.android.core.common.constants.AppConstants
 import com.screen.remote.android.core.common.constants.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
@@ -12,10 +19,6 @@ import com.screen.remote.android.core.data.repository.GroupRepository
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.AppLanguage
 import com.screen.remote.android.core.domain.model.ThemeMode
-import com.screen.remote.android.app.deeplink.requireBoolean
-import com.screen.remote.android.app.deeplink.toUrlRuntimeSession
-import com.screen.remote.android.app.deeplink.UrlSetting
-import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.data.storage.SessionStorage
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
@@ -221,6 +224,15 @@ class MainViewModel(
     val connectionProgress get() = connectionViewModel.connectionProgress
 
     fun connectSession(sessionId: String) = connectionViewModel.connectSession(sessionId)
+
+    suspend fun createSessionUrl(sessionId: String): String? {
+        val effectiveOptions = SessionStorage(dependencies.appContext).getOptions(sessionId) ?: return null
+        return ScreenRemoteDeepLink
+            .ScrcpySession(
+                sessionSelector = sessionId,
+                parameters = effectiveOptions.config.toUrlParameters(),
+            ).toUrl()
+    }
 
     fun connectUrlSession(
         sessionData: SessionData,

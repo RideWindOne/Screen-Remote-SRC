@@ -696,25 +696,112 @@ internal suspend fun exportPackageApk(
 
     return withContext(Dispatchers.IO) {
         runCatching {
-            val remotePath =
-                connection
-                    .executeShell("pm path $packageName | head -n 1", retryOnFailure = false)
-                    .getOrThrow()
-                    .removePrefix("package:")
-                    .trim()
-                    .ifBlank { error(ManagementTexts.Files.COULDN_T_FIND_APK_PATH.get()) }
-
-            val exportDir = File(context.cacheDir, "session-management/apks").apply { mkdirs() }
-            val localFile = File(exportDir, "${packageName.substringAfterLast('.')}.apk")
-            connection.pullFile(remotePath, localFile.absolutePath).getOrThrow()
-            runCatching {
-                context.contentResolver.openOutputStream(destinationUri, "w")?.use { output ->
-                    localFile.inputStream().use { input -> input.copyTo(output) }
-                } ?: error(ManagementTexts.Files.COULDN_T_WRITE_APK.get())
-            }.onFailure {
-                runCatching { context.contentResolver.delete(destinationUri, null, null) }
-            }.getOrThrow()
+            val remotePaths = queryPackageApkPaths(connection, packageName)
+            writePackageApks(context, connection, packageName, remotePaths, destinationUri)
             ManagementTexts.Files.APK_SAVED.get()
+        }
+    }
+}
+
+internal fun parsePackageApkPaths(output: String): List<String> =
+    output
+        .lineSequence()
+        .map(String::trim)
+        .filter { it.startsWith("package:") }
+        .map { it.removePrefix("package:").trim() }
+        .filter(String::isNotBlank)
+        .distinct()
+        .toList()
+
+internal fun packageExportFileName(
+    packageName: String,
+    apkPaths: List<String>,
+): String = "$packageName.${if (apkPaths.size > 1) "apks" else "apk"}"
+
+internal suspend fun queryPackageApkPaths(
+    connection: AdbConnection,
+    packageName: String,
+): List<String> =
+    connection
+        .executeShell("pm path $packageName", retryOnFailure = false)
+        .getOrThrow()
+        .let(::parsePackageApkPaths)
+        .ifEmpty { error(ManagementTexts.Files.COULDN_T_FIND_APK_PATH.get()) }
+
+private suspend fun writePackageApks(
+    context: Context,
+    connection: AdbConnection,
+    packageName: String,
+    remotePaths: List<String>,
+    destinationUri: Uri,
+) {
+    val exportDir = File(context.cacheDir, "session-management/apks/$packageName").apply {
+        deleteRecursively()
+        mkdirs()
+    }
+    val localFiles =
+        remotePaths.mapIndexed { index, remotePath ->
+            val remoteName = remotePath.substringAfterLast('/').ifBlank { "split-$index.apk" }
+            val uniqueName = if (index == 0 || remotePaths.take(index).none { it.substringAfterLast('/') == remoteName }) {
+                remoteName
+            } else {
+                "$index-$remoteName"
+            }
+            File(exportDir, uniqueName).also { localFile ->
+                connection.pullFile(remotePath, localFile.absolutePath).getOrThrow()
+            }
+        }
+
+    runCatching {
+        context.contentResolver.openOutputStream(destinationUri, "w")?.use { output ->
+            if (localFiles.size == 1) {
+                localFiles.single().inputStream().use { input -> input.copyTo(output) }
+            } else {
+                ZipOutputStream(output).use { zip ->
+                    localFiles.forEach { localFile ->
+                        zip.putNextEntry(ZipEntry(localFile.name))
+                        localFile.inputStream().use { input -> input.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+        } ?: error(ManagementTexts.Files.COULDN_T_WRITE_APK.get())
+    }.onFailure {
+        runCatching { context.contentResolver.delete(destinationUri, null, null) }
+    }.getOrThrow()
+}
+
+internal suspend fun exportPackagesArchive(
+    context: Context,
+    packageNames: List<String>,
+    destinationUri: Uri,
+): Result<String> {
+    val connection =
+        SessionManagementAdbConnection.current()
+            ?: return Result.failure(IllegalStateException(ManagementTexts.Files.NO_ADB_CONNECTION_AVAILABLE.get()))
+    return withContext(Dispatchers.IO) {
+        runCatching {
+            val exportRoot = File(context.cacheDir, "session-management/batch-apks").apply {
+                deleteRecursively()
+                mkdirs()
+            }
+            context.contentResolver.openOutputStream(destinationUri, "w")?.use { output ->
+                ZipOutputStream(output).use { zip ->
+                    packageNames.distinct().forEach { packageName ->
+                        queryPackageApkPaths(connection, packageName).forEachIndexed { index, remotePath ->
+                            val remoteName = remotePath.substringAfterLast('/').ifBlank { "split-$index.apk" }
+                            val localFile = File(exportRoot, "${packageName.hashCode()}-$index.apk")
+                            connection.pullFile(remotePath, localFile.absolutePath).getOrThrow()
+                            zip.putNextEntry(ZipEntry("$packageName/$remoteName"))
+                            localFile.inputStream().use { input -> input.copyTo(zip) }
+                            zip.closeEntry()
+                        }
+                    }
+                }
+            } ?: error(ManagementTexts.Files.COULDN_T_WRITE_APK.get())
+            ManagementTexts.Apps.BATCH_EXPORT_COMPLETE.format(packageNames.distinct().size)
+        }.onFailure {
+            runCatching { context.contentResolver.delete(destinationUri, null, null) }
         }
     }
 }

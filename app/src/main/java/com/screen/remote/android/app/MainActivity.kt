@@ -32,6 +32,7 @@ import com.screen.remote.android.feature.settings.ui.DebugLogOverlay
 import com.screen.remote.android.core.designsystem.theme.ScreenRemoteTheme
 import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
 import com.screen.remote.android.app.deeplink.parseScreenRemoteDeepLink
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 
 class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
     private val overlayPermissionGranted = mutableStateOf(false)
@@ -55,6 +56,12 @@ class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
     override fun onResume() {
         super.onResume()
         overlayPermissionGranted.value = canDrawOverlaysCompat(this)
+        MdnsSessionDiscoveryManager.get().onAppForegrounded()
+    }
+
+    override fun onPause() {
+        MdnsSessionDiscoveryManager.get().onAppBackgrounded()
+        super.onPause()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

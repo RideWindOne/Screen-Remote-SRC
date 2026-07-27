@@ -45,6 +45,45 @@ internal val SCRCPY_URL_PARAMETER_NAMES =
         "tunnelMode",
     )
 
+internal fun ScrcpyConfig.toUrlParameters(): Map<String, String> =
+    linkedMapOf(
+        "compatibilityMode" to compatibilityMode.toUrlBoolean(),
+        "gameMode" to gameMode.toUrlBoolean(),
+        "useFullScreen" to useFullScreen.toUrlBoolean(),
+        "showFloatingBall" to showFloatingBall.toUrlBoolean(),
+        "enableHardwareDecoding" to enableHardwareDecoding.toUrlBoolean(),
+        "followRemoteOrientation" to followRemoteOrientation.toUrlBoolean(),
+        "tunnelMode" to
+            when (tunnelMode) {
+                ScrcpyTunnelMode.DIRECT_ADB -> "direct_adb"
+                ScrcpyTunnelMode.ADB_FORWARD -> "adb_forward"
+            },
+        "maxSize" to maxSize.toString(),
+        "videoBitRate" to videoBitRate.toString(),
+        "maxFps" to maxFps.toString(),
+        "videoEncoder" to userVideoEncoder,
+        "videoDecoder" to userVideoDecoder,
+        "enableAudio" to enableAudio.toUrlBoolean(),
+        "audioBitRate" to audioBitRate.toString(),
+        "audioEncoder" to userAudioEncoder,
+        "audioDecoder" to userAudioDecoder,
+        "clipboardSync" to clipboardSync.toUrlBoolean(),
+        "turnScreenOff" to turnScreenOff.toUrlBoolean(),
+        "powerOffOnClose" to powerOffOnClose.toUrlBoolean(),
+        "cleanupOnDisconnect" to cleanupOnDisconnect.toUrlBoolean(),
+        "keepDeviceAwake" to keepDeviceAwake.toUrlBoolean(),
+        "stayAwake" to stayAwake.toUrlBoolean(),
+        "ignoreVideoEncoderConstraints" to ignoreVideoEncoderConstraints.toUrlBoolean(),
+        "newDisplay" to newDisplay,
+        "newDisplayEnabled" to newDisplayEnabled.toUrlBoolean(),
+        "virtualDisplaySystemDecorations" to virtualDisplaySystemDecorations.toUrlBoolean(),
+        "preserveVirtualDisplayContent" to preserveVirtualDisplayContent.toUrlBoolean(),
+        "startApp" to startApp,
+        "displayId" to displayId.toString(),
+        "showTouches" to showTouches.toUrlBoolean(),
+        "codecOptions" to codecOptions,
+    )
+
 internal fun ScrcpyConfig.withUrlParameters(parameters: Map<String, String>): Result<ScrcpyConfig> =
     runCatching {
         normalizeScrcpyUrlParameters(parameters)
@@ -141,3 +180,5 @@ private fun String.requirePositiveInt(key: String): Int =
 
 private fun String.requireNonNegativeInt(key: String): Int =
     toIntOrNull()?.takeIf { it >= 0 } ?: error("Invalid non-negative integer for $key: $this")
+
+private fun Boolean.toUrlBoolean(): String = if (this) "on" else "off"

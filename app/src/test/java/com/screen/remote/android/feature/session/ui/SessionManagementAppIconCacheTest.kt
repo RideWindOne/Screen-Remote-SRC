@@ -10,6 +10,8 @@ class SessionManagementAppIconCacheTest {
             versionCode = 42L,
             versionName = "4.2",
             lastUpdateTime = 123456789L,
+            renderSizePx = 96,
+            renderRevision = 3,
         )
 
     @Test
@@ -27,6 +29,41 @@ class SessionManagementAppIconCacheTest {
     @Test
     fun `missing update time never validates a global icon`() {
         assertFalse(metadata.matches(app(versionCode = 42L, lastUpdateTime = 0L)))
+    }
+
+    @Test
+    fun `cached icons from older render sizes are invalidated`() {
+        val entry = app(versionCode = 42L, lastUpdateTime = 123456789L)
+
+        assertFalse(
+            metadata
+                .copy(renderSizePx = 144)
+                .matches(entry),
+        )
+        assertFalse(
+            metadata
+                .copy(renderSizePx = 128)
+                .matches(entry),
+        )
+        assertFalse(
+            metadata
+                .copy(renderSizePx = 112)
+                .matches(entry),
+        )
+        assertFalse(
+            metadata
+                .copy(renderSizePx = 48)
+                .matches(entry),
+        )
+    }
+
+    @Test
+    fun `a cached icon from an older render revision is invalidated`() {
+        assertFalse(
+            metadata
+                .copy(renderRevision = 2)
+                .matches(app(versionCode = 42L, lastUpdateTime = 123456789L)),
+        )
     }
 
     private fun app(

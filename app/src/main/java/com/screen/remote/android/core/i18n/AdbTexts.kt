@@ -199,7 +199,8 @@ object AdbTexts {
     val PAIRING_DISCOVERY_EMPTY = TextPair("暂无发现，仍可手动输入", "No devices found yet. You can still enter details manually.")
     val PAIRING_DISCOVERY_PAIRABLE = TextPair("可配对", "Available to pair")
     val PAIRING_DISCOVERY_RECORDED = TextPair("曾配对", "Previously paired")
-    val PAIRING_DISCOVERY_DISCOVERED = TextPair("已发现", "Discovered")
+    val PAIRING_DISCOVERY_DISCOVERED = TextPair("附近可见", "Nearby")
+    val PAIRING_DISCOVERY_CONFIRMING = TextPair("正在确认", "Confirming")
 
     // 配对信息标签
     val PAIRING_INFO_TITLE = TextPair("配对信息", "Pairing Information")

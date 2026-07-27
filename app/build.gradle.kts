@@ -3,6 +3,14 @@ import com.android.build.api.variant.FilterConfiguration
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Properties
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 
 plugins {
     alias(libs.plugins.android.application)
@@ -16,6 +24,39 @@ abstract class SyncDadbHelperAssetTask : Sync() {
 
     init {
         outputs.upToDateWhen { false }
+    }
+}
+
+abstract class VerifyScrcpyServerTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val serverFile: RegularFileProperty
+
+    @get:Input
+    abstract val serverVersion: Property<String>
+
+    @get:Input
+    abstract val expectedSha256: Property<String>
+
+    @TaskAction
+    fun verify() {
+        val target = serverFile.get().asFile
+        check(target.isFile) { "Missing bundled scrcpy-server: ${target.absolutePath}" }
+        val actualSha256 =
+            target.inputStream().use { input ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+                digest.digest().joinToString("") { "%02x".format(it) }
+            }
+        check(actualSha256 == expectedSha256.get()) {
+            "Bundled scrcpy-server is not v${serverVersion.get()}: expected=${expectedSha256.get()} actual=$actualSha256. " +
+                "Run ./gradlew :app:updateScrcpyServer."
+        }
     }
 }
 
@@ -234,20 +275,12 @@ tasks.register("updateScrcpyServer") {
     }
 }
 
-val verifyScrcpyServerVersion = tasks.register("verifyScrcpyServerVersion") {
+val verifyScrcpyServerVersion = tasks.register<VerifyScrcpyServerTask>("verifyScrcpyServerVersion") {
     group = "verification"
     description = "Verify the bundled scrcpy-server version by its official SHA256"
-    inputs.file(scrcpyServerAsset)
-
-    doLast {
-        val target = scrcpyServerAsset.asFile
-        check(target.isFile) { "Missing bundled scrcpy-server: ${target.absolutePath}" }
-        val actualSha256 = sha256(target)
-        check(actualSha256 == scrcpyServerSha256) {
-            "Bundled scrcpy-server is not v$scrcpyServerVersion: expected=$scrcpyServerSha256 actual=$actualSha256. " +
-                "Run ./gradlew :app:updateScrcpyServer."
-        }
-    }
+    serverFile.set(scrcpyServerAsset)
+    serverVersion.set(scrcpyServerVersion)
+    expectedSha256.set(scrcpyServerSha256)
 }
 
 // 每次正常构建都先验证内置 server，避免版本常量、协议代码与 JAR 静默漂移。

@@ -374,10 +374,15 @@ object SessionTexts {
     val PLACEHOLDER_DEFAULT_ENCODER = TextPair("默认", "Default")
     val PLACEHOLDER_DEFAULT_AUDIO_ENCODER = TextPair("默认", "Default")
     val MDNS_CONNECT_SERVICES = TextPair("发现设备", "Discovered")
-    val MDNS_CONNECT_SCANNING = TextPair("正在扫描可连接设备...", "Scanning for connectable devices...")
-    val MDNS_CONNECT_EMPTY = TextPair("无", "None")
+    val MDNS_CONNECT_SCANNING = TextPair("正在确认附近设备...", "Confirming nearby devices...")
+    val MDNS_CONNECT_EMPTY = TextPair("暂未发现", "Not found")
+    val MDNS_DEVICE_CONFIRMING = TextPair("正在确认", "Confirming")
     val MDNS_DEVICE_UNPAIRED = TextPair("未配对", "Not paired")
     val MDNS_PAIRING_REQUIRED = TextPair("请前往 ADB 配对页面配对", "Please pair the device on the ADB pairing page")
+    val ENDPOINT_STATUS_ADB_CONNECTED = TextPair("ADB 已连接", "ADB connected")
+    val ENDPOINT_STATUS_NEARBY = TextPair("附近可见", "Nearby")
+    val ENDPOINT_STATUS_CONFIRMING = TextPair("正在确认设备", "Confirming device")
+    val ENDPOINT_STATUS_UNAVAILABLE = TextPair("未发现", "Unavailable")
 
     // 编码器选择对话框
     val ENCODER_REFRESH_BUTTON = TextPair("刷新编码器", "Refresh Encoders")

@@ -9,6 +9,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,7 +66,6 @@ private val AppsRowVerticalPadding = 4.dp
 private val AppsRowMetaSpacing = 2.dp
 private val AppsBadgeSpacing = 6.dp
 private val AppsAvatarSize = 40.dp
-private val AppsAvatarImageSize = 26.dp
 private val AppsAvatarFallbackIconSize = 20.dp
 private val AppsInfoCardHorizontalPadding = 14.dp
 private val AppsInfoCardVerticalPadding = 16.dp
@@ -151,7 +154,11 @@ internal fun SessionManagementAppRow(
     entry: AppInventoryEntry,
     packageNameOnlyMode: Boolean,
     presentationVersion: Int,
+    isRunning: Boolean = false,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
 ) {
     val appTitle =
         remember(entry.packageName, entry.appTitle, packageNameOnlyMode, presentationVersion) {
@@ -166,7 +173,7 @@ internal fun SessionManagementAppRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 .padding(vertical = AppsRowVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(AppsRowSpacing),
         verticalAlignment = Alignment.CenterVertically,
@@ -202,6 +209,19 @@ internal fun SessionManagementAppRow(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(AppsBadgeSpacing),
         ) {
+            if (selectionMode) {
+                SessionManagementUtilityBadge(
+                    text = if (selected) "✓" else "○",
+                    accent = MaterialTheme.colorScheme.primary,
+                    available = selected,
+                )
+            }
+            if (isRunning) {
+                SessionManagementUtilityBadge(
+                    text = ManagementTexts.Apps.RUNNING.get(),
+                    accent = MaterialTheme.colorScheme.primary,
+                )
+            }
             if (!entry.isEnabled) {
                 SessionManagementUtilityBadge(
                     text = ManagementTexts.Apps.DISABLED.get(),
@@ -241,7 +261,8 @@ internal fun SessionManagementAppAvatar(
                     Image(
                         bitmap = iconBitmap.asImageBitmap(),
                         contentDescription = packageName,
-                        modifier = Modifier.size(AppsAvatarImageSize),
+                        modifier = Modifier.size(AppsAvatarSize),
+                        contentScale = ContentScale.Fit,
                     )
                 }
 
@@ -271,12 +292,14 @@ internal fun SessionManagementAppAvatar(
 @Composable
 internal fun SessionManagementAppActionDialog(
     entry: AppInventoryEntry,
+    isRunning: Boolean,
     onDismiss: () -> Unit,
     onDetails: () -> Unit,
     onLaunch: () -> Unit,
     onToggleEnabled: () -> Unit,
     onUninstall: () -> Unit,
     onClearData: () -> Unit,
+    onForceStop: () -> Unit,
     onDownloadApk: () -> Unit,
 ) {
     val actionLabel = if (entry.isEnabled) ManagementTexts.Apps.DISABLE.get() else ManagementTexts.Apps.ENABLE.get()
@@ -294,6 +317,7 @@ internal fun SessionManagementAppActionDialog(
             packageName = entry.packageName,
             isSystemApp = entry.isSystemApp,
             isEnabled = entry.isEnabled,
+            isRunning = isRunning,
             iconBitmap = iconBitmap,
         )
         SessionManagementDialogCard {
@@ -309,6 +333,7 @@ internal fun SessionManagementAppActionDialog(
                 SessionManagementActionRow(icon = Icons.Default.VerifiedUser, label = actionLabel, onClick = onToggleEnabled)
                 SessionManagementActionRow(icon = Icons.Default.DeleteOutline, label = ManagementTexts.Apps.UNINSTALL.get(), onClick = onUninstall)
                 SessionManagementActionRow(icon = Icons.Default.Build, label = ManagementTexts.Apps.CLEAR_DATA.get(), onClick = onClearData)
+                SessionManagementActionRow(icon = Icons.Default.PowerSettingsNew, label = ManagementTexts.Apps.FORCE_STOP.get(), enabled = isRunning, onClick = onForceStop)
                 SessionManagementActionRow(icon = Icons.Default.Download, label = ManagementTexts.Apps.EXPORT_APK.get(), onClick = onDownloadApk)
             }
         }
@@ -399,6 +424,7 @@ internal fun SessionManagementAppOptionsMenu(
 @Composable
 internal fun SessionManagementAppDetailDialog(
     entry: AppInventoryEntry,
+    isRunning: Boolean,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -420,6 +446,7 @@ internal fun SessionManagementAppDetailDialog(
             packageName = detail.packageName,
             isSystemApp = detail.isSystemApp,
             isEnabled = entry.isEnabled,
+            isRunning = isRunning,
             iconBitmap = iconBitmap,
             showPackageName = false,
         )
@@ -429,7 +456,7 @@ internal fun SessionManagementAppDetailDialog(
                     .fillMaxWidth()
                     .height(AppsDetailContentHeight),
         ) {
-            SessionManagementAppDetailContent(detail)
+            SessionManagementAppDetailContent(detail, isRunning)
         }
     }
 }
@@ -538,6 +565,7 @@ private fun SessionManagementAppDialogHeader(
     packageName: String,
     isSystemApp: Boolean,
     isEnabled: Boolean,
+    isRunning: Boolean = false,
     iconBitmap: Bitmap?,
     packageNameMaxLines: Int = 2,
     showPackageName: Boolean = true,
@@ -576,6 +604,12 @@ private fun SessionManagementAppDialogHeader(
                 horizontalArrangement = Arrangement.spacedBy(AppsBadgeSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (isRunning) {
+                    SessionManagementUtilityBadge(
+                        text = ManagementTexts.Apps.RUNNING.get(),
+                        accent = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 if (!isEnabled) {
                     SessionManagementUtilityBadge(
                         text = ManagementTexts.Apps.DISABLED.get(),
@@ -600,6 +634,7 @@ private fun SessionManagementInfoLoadingCard(labels: List<String>) {
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(
                         horizontal = AppsInfoCardHorizontalPadding,
                         vertical = AppsInfoCardVerticalPadding,
@@ -621,7 +656,10 @@ private fun SessionManagementInfoLoadingCard(labels: List<String>) {
 }
 
 @Composable
-private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
+private fun SessionManagementAppDetailContent(
+    detail: AppDetailSnapshot,
+    isRunning: Boolean,
+) {
     val context = LocalContext.current
     when {
         detail.isLoading -> {
@@ -631,9 +669,15 @@ private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
                         ManagementTexts.Apps.PACKAGE.get(),
                         ManagementTexts.Apps.APK_SIZE.get(),
                         ManagementTexts.Apps.VERSION.get(),
+                        ManagementTexts.Apps.VERSION_CODE.get(),
+                        ManagementTexts.Apps.NATIVE_ABIS.get(),
+                        ManagementTexts.Apps.UID.get(),
+                        ManagementTexts.Apps.RUNNING_STATE.get(),
+                        ManagementTexts.Apps.ENABLED_STATE.get(),
                         ManagementTexts.Apps.SYSTEM_APP.get(),
                         ManagementTexts.Apps.MIN_SDK.get(),
                         ManagementTexts.Apps.TARGET_SDK.get(),
+                        ManagementTexts.Apps.APK_PATH.get(),
                         ManagementTexts.Apps.FIRST_INSTALLED.get(),
                         ManagementTexts.Apps.LAST_UPDATED.get(),
                     ),
@@ -651,19 +695,50 @@ private fun SessionManagementAppDetailContent(detail: AppDetailSnapshot) {
             val detailItems =
                 listOf(
                     AppDetailItem(ManagementTexts.Apps.PACKAGE.get(), detail.packageName, useSmallText = true),
-                    AppDetailItem(ManagementTexts.Apps.APK_SIZE.get(), detail.apkSize),
-                    AppDetailItem(ManagementTexts.Apps.VERSION.get(), detail.versionName),
-                    AppDetailItem(ManagementTexts.Apps.SYSTEM_APP.get(), if (detail.isSystemApp) ManagementTexts.Apps.YES.get() else ManagementTexts.Apps.NO.get()),
-                    AppDetailItem(ManagementTexts.Apps.MIN_SDK.get(), detail.minSdk),
-                    AppDetailItem(ManagementTexts.Apps.TARGET_SDK.get(), detail.targetSdk),
-                    AppDetailItem(ManagementTexts.Apps.FIRST_INSTALLED.get(), detail.firstInstallTime, useSmallText = true),
-                    AppDetailItem(ManagementTexts.Apps.LAST_UPDATED.get(), detail.lastUpdateTime, useSmallText = true),
-                )
+                    AppDetailItem(ManagementTexts.Apps.APK_SIZE.get(), detail.apkSize, fieldName = "apkSizeBytes"),
+                    AppDetailItem(ManagementTexts.Apps.VERSION.get(), detail.versionName, fieldName = "versionName"),
+                    AppDetailItem(ManagementTexts.Apps.VERSION_CODE.get(), detail.versionCode, fieldName = "versionCode"),
+                    AppDetailItem(ManagementTexts.Apps.NATIVE_ABIS.get(), detail.nativeAbis, fieldName = "nativeAbis"),
+                    AppDetailItem(ManagementTexts.Apps.UID.get(), detail.uid, fieldName = "uid"),
+                    AppDetailItem(
+                        ManagementTexts.Apps.RUNNING_STATE.get(),
+                        if (isRunning) ManagementTexts.Apps.RUNNING.get() else ManagementTexts.Apps.NOT_RUNNING.get(),
+                    ),
+                    AppDetailItem(
+                        ManagementTexts.Apps.ENABLED_STATE.get(),
+                        if (detail.isEnabled) ManagementTexts.Apps.ENABLED.get() else ManagementTexts.Apps.DISABLED.get(),
+                        fieldName = "enabled",
+                    ),
+                    AppDetailItem(ManagementTexts.Apps.SYSTEM_APP.get(), if (detail.isSystemApp) ManagementTexts.Apps.YES.get() else ManagementTexts.Apps.NO.get(), fieldName = "systemApp"),
+                    AppDetailItem(ManagementTexts.Apps.MIN_SDK.get(), detail.minSdk, fieldName = "minSdk"),
+                    AppDetailItem(ManagementTexts.Apps.TARGET_SDK.get(), detail.targetSdk, fieldName = "targetSdk"),
+                    AppDetailItem(ManagementTexts.Apps.APK_PATH.get(), detail.apkPath, useSmallText = true, fieldName = "sourceDir"),
+                    AppDetailItem(ManagementTexts.Apps.FIRST_INSTALLED.get(), detail.firstInstallTime, useSmallText = true, fieldName = "firstInstallTime"),
+                    AppDetailItem(ManagementTexts.Apps.LAST_UPDATED.get(), detail.lastUpdateTime, useSmallText = true, fieldName = "lastUpdateTime"),
+                ).map { item ->
+                    val issue = item.fieldName?.let(detail.fieldErrors::get)
+                    val issueLabel =
+                        when {
+                            item.fieldName == null || !detail.fieldErrors.containsKey(item.fieldName) -> null
+                            issue.isNullOrBlank() -> ManagementTexts.Apps.FIELD_NOT_REPORTED.get()
+                            else -> ManagementTexts.Apps.FIELD_READ_FAILED.format(issue)
+                        }
+                    item.copy(
+                        value =
+                            when {
+                                item.value.isNotBlank() && issueLabel != null -> "${item.value} · $issueLabel"
+                                item.value.isNotBlank() -> item.value
+                                issueLabel != null -> issueLabel
+                                else -> ManagementTexts.Apps.NOT_AVAILABLE.get()
+                            },
+                    )
+                }
             SessionManagementDialogCard {
                 Column(
                     modifier =
                         Modifier
                             .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                             .padding(
                                 horizontal = AppsInfoCardHorizontalPadding,
                                 vertical = AppsInfoCardVerticalPadding,
@@ -730,4 +805,51 @@ private data class AppDetailItem(
     val label: String,
     val value: String,
     val useSmallText: Boolean = false,
+    val fieldName: String? = null,
 )
+
+@Composable
+internal fun SessionManagementAppBatchDialog(
+    selectedCount: Int,
+    onDismiss: () -> Unit,
+    onEnable: () -> Unit,
+    onDisable: () -> Unit,
+    onForceStop: () -> Unit,
+    onUninstall: () -> Unit,
+    onExport: () -> Unit,
+) {
+    SessionManagementCenteredDialog(
+        title = ManagementTexts.Apps.SELECTED_COUNT.format(selectedCount),
+        onDismiss = onDismiss,
+        leftButtonText = ManagementTexts.Apps.CANCEL.get(),
+    ) {
+        SessionManagementDialogCard {
+            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                SessionManagementActionRow(Icons.Default.VerifiedUser, ManagementTexts.Apps.BATCH_ENABLE.get(), onClick = onEnable)
+                SessionManagementActionRow(Icons.Default.VerifiedUser, ManagementTexts.Apps.BATCH_DISABLE.get(), onClick = onDisable)
+                SessionManagementActionRow(Icons.Default.PowerSettingsNew, ManagementTexts.Apps.BATCH_FORCE_STOP.get(), onClick = onForceStop)
+                SessionManagementActionRow(Icons.Default.DeleteOutline, ManagementTexts.Apps.BATCH_UNINSTALL.get(), onClick = onUninstall)
+                SessionManagementActionRow(Icons.Default.Download, ManagementTexts.Apps.BATCH_EXPORT.get(), onClick = onExport)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SessionManagementAppConfirmDialog(
+    title: String,
+    message: String,
+    confirmText: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    SessionManagementCenteredDialog(
+        title = title,
+        onDismiss = onDismiss,
+        leftButtonText = ManagementTexts.Apps.CANCEL.get(),
+        rightButtonText = confirmText,
+        onRightButtonClick = onConfirm,
+    ) {
+        SessionManagementDialogMessage(message)
+    }
+}

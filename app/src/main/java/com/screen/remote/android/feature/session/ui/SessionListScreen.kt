@@ -24,8 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
-import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
-import com.screen.remote.android.app.deeplink.toUrl
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.ConnectionTransport
@@ -56,12 +54,10 @@ fun SessionsScreen(
         connectedAdbDevices.mapTo(linkedSetOf()) { it.deviceId }
     val discoveredDeviceIds =
         buildSet {
-            mdnsSessionPresence.connectServices
-                .mapNotNull { service -> service.deviceSerial.trim().takeIf(String::isNotEmpty) }
-                .map(DeviceTransportSerial::mdns)
-                .forEach(::add)
+            mdnsSessionPresence.onlineMdnsSerials.forEach(::add)
             usbDevices.toDeviceIdentifiers().forEach(::add)
         }
+    val confirmingDeviceIds = mdnsSessionPresence.confirmingMdnsSerials
     var sessionToDelete by remember { mutableStateOf<ScrcpySession?>(null) }
     var resettingConnectionSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val connectionResetSuccess = rememberText(SessionTexts.SESSION_RESET_CONNECTION_SUCCESS)
@@ -98,6 +94,7 @@ fun SessionsScreen(
                             sessionData = sessionData,
                             connectedAdbDeviceIds = connectedAdbDeviceIds,
                             discoveredDeviceIds = discoveredDeviceIds,
+                            confirmingDeviceIds = confirmingDeviceIds,
                         )
 
                     SessionCard(
@@ -115,10 +112,12 @@ fun SessionsScreen(
                         onEdit = { viewModel.showEditSessionDialog(sessionData.id) },
                         onCopy = { data -> viewModel.copySession(data) },
                         onCopyUrl = { data ->
-                            val url = ScreenRemoteDeepLink.ScrcpySession(data.id).toUrl()
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Screen Remote session URL", url))
-                            Toast.makeText(context, sessionUrlCopied, Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                val url = viewModel.createSessionUrl(data.id) ?: return@launch
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("Screen Remote session URL", url))
+                                Toast.makeText(context, sessionUrlCopied, Toast.LENGTH_SHORT).show()
+                            }
                         },
                         onResetConnection = {
                             if (sessionData.id !in resettingConnectionSessionIds) {

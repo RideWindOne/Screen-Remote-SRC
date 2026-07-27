@@ -1,11 +1,63 @@
 package com.screen.remote.android.app.deeplink
 
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
+import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ScrcpyUrlParametersTest {
+    @Test
+    fun `serializes every scrcpy config field and restores the same config`() {
+        val config =
+            ScrcpyConfig(
+                compatibilityMode = false,
+                gameMode = true,
+                useFullScreen = true,
+                showFloatingBall = false,
+                enableHardwareDecoding = false,
+                followRemoteOrientation = false,
+                tunnelMode = ScrcpyTunnelMode.ADB_FORWARD,
+                maxSize = 1440,
+                videoBitRate = 12_000_000,
+                maxFps = 120,
+                userVideoEncoder = "c2.vendor.encoder",
+                userVideoDecoder = "c2.vendor.decoder",
+                enableAudio = true,
+                audioBitRate = 256_000,
+                userAudioEncoder = "opus",
+                userAudioDecoder = "c2.android.opus.decoder",
+                clipboardSync = false,
+                turnScreenOff = false,
+                powerOffOnClose = true,
+                cleanupOnDisconnect = true,
+                keepDeviceAwake = true,
+                stayAwake = true,
+                ignoreVideoEncoderConstraints = true,
+                newDisplayEnabled = true,
+                virtualDisplaySystemDecorations = false,
+                preserveVirtualDisplayContent = true,
+                startApp = "com.example.app/.MainActivity",
+                newDisplay = "1920x1080/420",
+                displayId = 2,
+                showTouches = true,
+                codecOptions = "profile=1,level=2 & vendor=true",
+            )
+
+        val parameters = config.toUrlParameters()
+        val url = ScreenRemoteDeepLink.ScrcpySession("living room", parameters).toUrl()
+        val parsed = parseScreenRemoteDeepLink(url) as ScreenRemoteDeepLink.ScrcpySession
+
+        assertEquals(31, parameters.size)
+        assertEquals(config, ScrcpyConfig().withUrlParameters(parameters).getOrThrow())
+        assertEquals(parameters, parsed.parameters)
+        assertEquals(config, ScrcpyConfig().withUrlParameters(parsed.parameters).getOrThrow())
+        assertEquals(
+            ScrcpyConfig(),
+            ScrcpyConfig().withUrlParameters(ScrcpyConfig().toUrlParameters()).getOrThrow(),
+        )
+    }
+
     @Test
     fun `applies one-time scrcpy overrides`() {
         val result =

@@ -128,6 +128,20 @@ class SessionBadgeStateTest {
         assertEquals(ConnectionTransport.USB, state.displayTransport)
     }
 
+    @Test
+    fun retainedMdnsServiceUsesConfirmingStatusUntilRefreshCompletes() {
+        val state =
+            resolveSessionBadgeState(
+                sessionData = singleCandidateSession("MDNS", "R5CW730QLKB"),
+                connectedAdbDeviceIds = emptySet(),
+                discoveredDeviceIds = emptySet(),
+                confirmingDeviceIds = setOf("mdns:R5CW730QLKB"),
+            )
+
+        assertEquals(SessionEndpointStatus.CONFIRMING, state.status)
+        assertEquals(ConnectionTransport.MDNS, state.displayTransport)
+    }
+
     private fun singleCandidateSession(
         transport: String,
         host: String,

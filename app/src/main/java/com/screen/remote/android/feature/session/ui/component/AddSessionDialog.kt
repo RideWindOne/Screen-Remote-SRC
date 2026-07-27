@@ -1184,7 +1184,7 @@ private fun MdnsServiceItem(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
-                .clickable { onClick() },
+                .clickable(enabled = !service.confirming) { onClick() },
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 0.5.dp,
@@ -1208,14 +1208,16 @@ private fun MdnsServiceItem(
 
             Text(
                 text =
-                    if (service.previouslyPaired && !service.requiresPairing) {
+                    if (service.confirming) {
+                        SessionTexts.MDNS_DEVICE_CONFIRMING.get()
+                    } else if (service.previouslyPaired && !service.requiresPairing) {
                         AdbTexts.PAIRING_DISCOVERY_RECORDED.get()
                     } else {
                         SessionTexts.MDNS_DEVICE_UNPAIRED.get()
                     },
                 style = MaterialTheme.typography.bodySmall,
                 color =
-                    if (service.previouslyPaired && !service.requiresPairing) {
+                    if (service.confirming || service.previouslyPaired && !service.requiresPairing) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
                         MaterialTheme.colorScheme.error

@@ -239,6 +239,7 @@ fun SettingsSwitch(
             }
         }
         Row(
+            horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactInlineSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             trailingAction?.invoke()

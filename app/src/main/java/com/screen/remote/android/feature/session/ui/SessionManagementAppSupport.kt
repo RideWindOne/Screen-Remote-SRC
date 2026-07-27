@@ -114,10 +114,17 @@ internal data class AppIconCacheMetadata(
     val versionCode: Long,
     val versionName: String,
     val lastUpdateTime: Long,
+    val renderSizePx: Int,
+    val renderRevision: Int,
 )
+
+private const val APP_ICON_RENDER_SIZE_PX = 96
+private const val APP_ICON_RENDER_REVISION = 3
 
 internal fun AppIconCacheMetadata.matches(entry: AppInventoryEntry): Boolean =
     entry.lastUpdateTime > 0L &&
+        renderSizePx == APP_ICON_RENDER_SIZE_PX &&
+        renderRevision == APP_ICON_RENDER_REVISION &&
         versionCode == entry.versionCode &&
         versionName == entry.versionName &&
         lastUpdateTime == entry.lastUpdateTime
@@ -302,12 +309,23 @@ internal object SessionManagementAppCache {
         }
     }
 
-    fun clearSnapshot() {
+    fun replaceFilteredSnapshotAfterRefresh(
+        filters: Set<AppListFilter>,
+        value: AppInventorySnapshot,
+    ) {
         synchronized(this) {
-            snapshot = null
             filteredSnapshots.clear()
             detailCache.clear()
-            pipelineComplete = false
+            value.apps.forEach { entry ->
+                if (!iconMetadataMatchesLocked(entry)) {
+                    iconCache.remove(entry.packageName)
+                }
+            }
+            filteredSnapshots[filters.toSet()] = value
+            snapshot = value
+            value.apps.forEach { entry ->
+                titleCache.putIfAbsentCompat(entry.packageName, entry.appTitle)
+            }
             bumpRevision()
         }
     }
@@ -469,9 +487,14 @@ internal data class AppDetailSnapshot(
     val packageName: String,
     val apkSize: String,
     val versionName: String,
+    val versionCode: String,
+    val nativeAbis: String,
+    val uid: String,
+    val isEnabled: Boolean,
     val isSystemApp: Boolean,
     val minSdk: String,
     val targetSdk: String,
+    val apkPath: String,
     val firstInstallTime: String,
     val lastUpdateTime: String,
     val errorMessage: String? = null,
@@ -485,9 +508,14 @@ internal data class AppDetailSnapshot(
                 packageName = packageName,
                 apkSize = "",
                 versionName = "",
+                versionCode = "",
+                nativeAbis = "",
+                uid = "",
+                isEnabled = true,
                 isSystemApp = false,
                 minSdk = "",
                 targetSdk = "",
+                apkPath = "",
                 firstInstallTime = "",
                 lastUpdateTime = "",
             )
@@ -497,13 +525,18 @@ internal data class AppDetailSnapshot(
                 isLoading = true,
                 appTitle = resolveAppListTitle(entry, packageNameOnlyMode = false),
                 packageName = entry.packageName,
-                apkSize = "",
-                versionName = "",
+                apkSize = entry.apkSizeBytes?.let(::formatAppSize).orEmpty(),
+                versionName = entry.versionName,
+                versionCode = entry.versionCode.takeIf { it > 0L }?.toString().orEmpty(),
+                nativeAbis = "",
+                uid = "",
+                isEnabled = entry.isEnabled,
                 isSystemApp = entry.isSystemApp,
                 minSdk = "",
                 targetSdk = "",
+                apkPath = entry.apkPath,
                 firstInstallTime = "",
-                lastUpdateTime = "",
+                lastUpdateTime = formatAppTimestamp(entry.lastUpdateTime),
             )
     }
 }
@@ -634,6 +667,24 @@ private fun remoteAppDataToDetailSnapshot(
             ),
         versionName =
             app.valueOrFallback(RemoteAppField.VersionName, app.versionName, "", fallback?.versionName),
+        versionCode =
+            app.valueOrFallback(
+                RemoteAppField.VersionCode,
+                app.versionCode.toString(),
+                "",
+                fallback?.versionCode,
+            ),
+        nativeAbis =
+            app.valueOrFallback(
+                RemoteAppField.NativeAbis,
+                app.nativeAbis.replace(",", ", "),
+                "",
+                fallback?.nativeAbis,
+            ),
+        uid =
+            app.valueOrFallback(RemoteAppField.Uid, app.uid.toString(), "", fallback?.uid),
+        isEnabled =
+            app.valueOrFallback(RemoteAppField.Enabled, app.enabled, false, fallback?.isEnabled),
         isSystemApp =
             app.valueOrFallback(RemoteAppField.SystemApp, app.systemApp, false, fallback?.isSystemApp),
         minSdk =
@@ -650,6 +701,8 @@ private fun remoteAppDataToDetailSnapshot(
                 "",
                 fallback?.targetSdk,
             ),
+        apkPath =
+            app.valueOrFallback(RemoteAppField.SourceDir, app.sourceDir, "", fallback?.apkPath),
         firstInstallTime =
             app.valueOrFallback(
                 RemoteAppField.FirstInstallTime,
@@ -666,7 +719,11 @@ private fun remoteAppDataToDetailSnapshot(
             ),
         fieldErrors =
             app.fieldResults.mapNotNull { (field, result) ->
-                result.errorReason?.let { reason -> field.wireName to reason }
+                when (result.status) {
+                    dadb.helper.RemoteAppFieldStatus.Value -> null
+                    dadb.helper.RemoteAppFieldStatus.Missing -> field.wireName to ""
+                    dadb.helper.RemoteAppFieldStatus.Error -> field.wireName to result.errorReason.orEmpty()
+                }
             }.toMap(),
     )
 
@@ -747,7 +804,6 @@ internal suspend fun loadSessionManagementAppData(
 ) {
     sessionManagementAppPipelineMutex.withLock {
         SessionManagementAppCache.prepareForSession(context, scopeKey)
-        if (forceRefresh) SessionManagementAppCache.clearSnapshot()
         if (!forceRefresh) {
             SessionManagementAppCache.filteredSnapshot(selectedFilters)?.let { cached ->
                 SessionManagementAppCache.updateSnapshot(cached)
@@ -782,25 +838,30 @@ internal suspend fun loadSessionManagementAppData(
             }
         val inventoryApps = inventoryResult.getOrElse { error ->
             if (error is CancellationException) throw error
+            val previousSnapshot = SessionManagementAppCache.snapshot().takeIf { forceRefresh }
             SessionManagementAppCache.updateSnapshot(
-                AppInventorySnapshot.loading().copy(
+                (previousSnapshot ?: AppInventorySnapshot.loading()).copy(
                     isLoading = false,
                     errorMessage = error.message ?: ManagementTexts.Apps.APP_LIST_LOAD_FAILED.get(),
                 ),
             )
+            SessionManagementAppCache.markPipelineComplete(scopeKey)
             return@withLock
         }
         if (!SessionManagementAppCache.isActiveScope(scopeKey)) return@withLock
 
         val apps = inventoryApps.map(::remoteAppDataToInventoryEntry)
-        SessionManagementAppCache.updateFilteredSnapshot(
-            selectedFilters,
+        val refreshedSnapshot =
             AppInventorySnapshot(
                 isLoading = false,
                 apps = apps,
                 shizukuInstalled = apps.any { it.packageName == "moe.shizuku.privileged.api" },
-            ),
-        )
+            )
+        if (forceRefresh) {
+            SessionManagementAppCache.replaceFilteredSnapshotAfterRefresh(selectedFilters, refreshedSnapshot)
+        } else {
+            SessionManagementAppCache.updateFilteredSnapshot(selectedFilters, refreshedSnapshot)
+        }
 
         val detailApps =
             coroutineScope {
@@ -1102,6 +1163,8 @@ private suspend fun prefetchAppIconChunkWithHelper(
                 versionCode = remoteIcon.versionCode,
                 versionName = remoteIcon.versionName,
                 lastUpdateTime = remoteIcon.lastUpdateTime,
+                renderSizePx = APP_ICON_RENDER_SIZE_PX,
+                renderRevision = APP_ICON_RENDER_REVISION,
             )
         sanitizeAppTitle(remoteIcon.label, remoteIcon.packageName)
             .takeIf(String::isNotBlank)
@@ -1319,4 +1382,28 @@ internal fun formatAppSize(bytes: Long): String {
         return String.format(Locale.US, "%.2f M", mb)
     }
     return String.format(Locale.US, "%.2f G", mb / 1024.0)
+}
+
+internal fun runningPackagesFromProcessNames(processNames: Iterable<String>): Set<String> =
+    processNames
+        .asSequence()
+        .map { it.substringBefore(':').trim() }
+        .filter { packageName ->
+            packageName.contains('.') &&
+                packageName.none(Char::isWhitespace) &&
+                packageName.all { character -> character.isLetterOrDigit() || character == '.' || character == '_' }
+        }.toSet()
+
+internal suspend fun loadRunningAppPackages(context: Context): Result<Set<String>> {
+    val connection =
+        SessionManagementAdbConnection.current()
+            ?: return Result.failure(IllegalStateException(ManagementTexts.Apps.NO_ADB_CONNECTION_AVAILABLE.get()))
+    return runCatching {
+        val helperJar = withContext(Dispatchers.IO) { ensureLocalDadbHelperJar(context) }
+        connection
+            .loadProcessesWithHelper(localHelperJar = helperJar)
+            .getOrThrow()
+            .map { it.name }
+            .let(::runningPackagesFromProcessNames)
+    }
 }

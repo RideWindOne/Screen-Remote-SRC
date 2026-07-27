@@ -46,7 +46,6 @@ import com.screen.remote.android.core.common.AdbPairingConstants
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.common.util.parseHostPort
-import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.SectionTitle
@@ -57,8 +56,8 @@ import com.screen.remote.android.feature.device.data.PairingResult
 import com.screen.remote.android.feature.device.data.PairingStatus
 import com.screen.remote.android.feature.device.viewmodel.DevicePairingViewModel
 import com.screen.remote.android.feature.session.ui.component.LabeledTextField
-import dadb.android.wireless.AdbMdnsService
-import dadb.android.wireless.AdbMdnsServiceType
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -75,8 +74,8 @@ fun AdbPairingCodeDialog(
     val pairingStatus by viewModel.pairingStatus.collectAsState()
     val pairingResult by viewModel.pairingResult.collectAsState()
     val pairingHistory by viewModel.pairingHistory.collectAsState()
-    val pairedMdnsDeviceKeys by viewModel.pairedMdnsDeviceKeys.collectAsState()
-    val mdnsState by viewModel.mdnsState.collectAsState()
+    val mdnsManager = remember { MdnsSessionDiscoveryManager.get() }
+    val mdnsState by mdnsManager.state.collectAsState()
 
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var hostPort by remember { mutableStateOf("") }
@@ -86,12 +85,12 @@ fun AdbPairingCodeDialog(
 
     LaunchedEffect(Unit) {
         viewModel.loadPairingHistory(context)
-        viewModel.startMdnsPairingDiscovery()
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(mdnsManager) {
+        val lease = mdnsManager.acquireInteractiveDiscovery()
         onDispose {
-            viewModel.stopMdnsPairingDiscovery()
+            lease.close()
         }
     }
 
@@ -153,11 +152,10 @@ fun AdbPairingCodeDialog(
         SectionTitle(AdbTexts.PAIRING_DISCOVERY_TITLE.get())
         PairingDiscoveryCard(
             loading = mdnsState.loading,
-            services = mdnsState.pairingServices + mdnsState.connectServices,
-            pairedMdnsDeviceKeys = pairedMdnsDeviceKeys,
+            services = mdnsState.connectServices,
             onSelectService = { service ->
                 hostPort = formatHostPort(service.host, service.port.toString())
-                selectedMdnsDeviceSerial = DeviceTransportSerial.mdnsDeviceSerial(service.name)
+                selectedMdnsDeviceSerial = service.deviceSerial
                 errorMessage = ""
             },
         )
@@ -195,9 +193,8 @@ fun AdbPairingCodeDialog(
 @Composable
 internal fun PairingDiscoveryCard(
     loading: Boolean,
-    services: List<AdbMdnsService>,
-    pairedMdnsDeviceKeys: Set<String> = emptySet(),
-    onSelectService: (AdbMdnsService) -> Unit,
+    services: List<MdnsDiscoveredConnectService>,
+    onSelectService: (MdnsDiscoveredConnectService) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -216,7 +213,7 @@ internal fun PairingDiscoveryCard(
                                     .fillMaxWidth()
                                     .height(AppDimens.listItemHeight)
                                     .then(
-                                        if (service.serviceType == AdbMdnsServiceType.TLS_PAIRING) {
+                                        if (service.requiresPairing && !service.confirming) {
                                             Modifier.clickable { onSelectService(service) }
                                         } else {
                                             Modifier
@@ -227,16 +224,18 @@ internal fun PairingDiscoveryCard(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = DeviceTransportSerial.mdnsDisplayName(service.name),
+                                text = service.name,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
                                 text =
-                                    if (service.serviceType == AdbMdnsServiceType.TLS_PAIRING) {
+                                    if (service.confirming) {
+                                        AdbTexts.PAIRING_DISCOVERY_CONFIRMING.get()
+                                    } else if (service.requiresPairing) {
                                         AdbTexts.PAIRING_DISCOVERY_PAIRABLE.get()
-                                    } else if (DeviceTransportSerial.mdnsDeviceKey(service.name) in pairedMdnsDeviceKeys) {
+                                    } else if (service.previouslyPaired) {
                                         AdbTexts.PAIRING_DISCOVERY_RECORDED.get()
                                     } else {
                                         AdbTexts.PAIRING_DISCOVERY_DISCOVERED.get()
@@ -245,7 +244,7 @@ internal fun PairingDiscoveryCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp),
                             )
-                            if (service.serviceType == AdbMdnsServiceType.TLS_PAIRING) {
+                            if (service.requiresPairing && !service.confirming) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                                     contentDescription = null,
