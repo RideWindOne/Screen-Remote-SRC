@@ -20,9 +20,24 @@
         android:visibility="gone">
 
         <ImageButton
+            android:id="@+id/btn_rotate_target"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/floating_menu_rotate_target"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
+            android:rotation="90"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_refresh" />
+
+        <ImageButton
             android:id="@+id/btn_upload"
             android:layout_width="42dp"
             android:layout_height="42dp"
+            android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
             android:contentDescription="@string/floating_menu_upload"
             android:paddingStart="5dp"

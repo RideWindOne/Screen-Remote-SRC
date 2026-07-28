@@ -57,7 +57,7 @@ class AppUpdateDownloader(
             }
 
             val request =
-                DownloadManager.Request(asset.downloadUrl.toUri())
+                DownloadManager.Request(proxiedUpdateDownloadUrl(asset.downloadUrl).toUri())
                     .setTitle(asset.name)
                     .setDescription("Screen Remote update")
                     .setMimeType(APK_MIME_TYPE)
@@ -185,3 +185,12 @@ class AppUpdateDownloader(
         }
     }
 }
+
+internal fun proxiedUpdateDownloadUrl(downloadUrl: String): String =
+    if (downloadUrl.startsWith(UPDATE_DOWNLOAD_PROXY_PREFIX)) {
+        downloadUrl
+    } else {
+        UPDATE_DOWNLOAD_PROXY_PREFIX + downloadUrl
+    }
+
+private const val UPDATE_DOWNLOAD_PROXY_PREFIX = "https://v4.gh-proxy.org/"

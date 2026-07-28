@@ -128,6 +128,24 @@ class ScrcpyController(
             }
         }
 
+    suspend fun rotateDevice(): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            requireDeviceId() ?: return@withContext Result.failure(
+                Exception(AdbTexts.ERROR_DEVICE_NOT_CONNECTED.get()),
+            )
+
+            ensureControlSocketReady() ?: return@withContext Result.failure(
+                Exception(RemoteTexts.ERROR_CONTROL_NOT_READY.get()),
+            )
+
+            try {
+                transport.enqueueRotateDevice()
+            } catch (e: Exception) {
+                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to rotate target device: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
     suspend fun setClipboardAndPaste(text: String): Result<Boolean> =
         withContext(Dispatchers.IO) {
             requireDeviceId() ?: return@withContext Result.failure(

@@ -43,6 +43,7 @@ class PreferencesManager(
         val LAST_UPDATE_CHECK_AT = longPreferencesKey("last_update_check_at")
         val LAST_UPDATE_VERSION = stringPreferencesKey("last_update_version")
         val LAST_UPDATE_RELEASE_URL = stringPreferencesKey("last_update_release_url")
+        val SKIPPED_UPDATE_VERSION = stringPreferencesKey("skipped_update_version")
         val CUSTOM_SHELL_COMMANDS = stringPreferencesKey("custom_shell_commands")
         val REPLACE_DEFAULT_SHELL_COMMANDS = booleanPreferencesKey("replace_default_shell_commands")
     }
@@ -65,6 +66,7 @@ class PreferencesManager(
                 checkedAtEpochMillis = preferences[Keys.LAST_UPDATE_CHECK_AT] ?: 0,
                 latestVersion = preferences[Keys.LAST_UPDATE_VERSION],
                 releaseUrl = preferences[Keys.LAST_UPDATE_RELEASE_URL],
+                skippedVersion = preferences[Keys.SKIPPED_UPDATE_VERSION],
             )
         }
 
@@ -81,6 +83,12 @@ class PreferencesManager(
                 preferences[Keys.LAST_UPDATE_VERSION] = release.tagName
                 preferences[Keys.LAST_UPDATE_RELEASE_URL] = release.htmlUrl
             }
+        }
+    }
+
+    suspend fun markUpdateVersionSkipped(version: String) {
+        context.dataStore.edit { preferences ->
+            preferences[Keys.SKIPPED_UPDATE_VERSION] = version
         }
     }
 

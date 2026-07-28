@@ -3,6 +3,7 @@ package com.screen.remote.android.feature.session.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -66,6 +67,7 @@ import com.screen.remote.android.core.telemetry.TelemetryManager
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.isAutomaticUpdateCheckDue
+import com.screen.remote.android.core.update.shouldShowAutomaticUpdate
 import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.device.ui.component.AdbKeyManagementDialog
 import com.screen.remote.android.feature.remote.ui.RemoteDisplayScreen
@@ -99,6 +101,9 @@ private class MainScreenRouteState {
     var settingsDestination by mutableStateOf<MainScreenSettingsDestination?>(null)
         private set
 
+    var openDevicePairingOnSettingsEntry by mutableStateOf(false)
+        private set
+
     var pendingManagementSessionId by mutableStateOf<String?>(null)
         private set
 
@@ -118,6 +123,12 @@ private class MainScreenRouteState {
         private set
 
     fun openSettings() {
+        openDevicePairingOnSettingsEntry = false
+        settingsDestination = MainScreenSettingsDestination.ROOT
+    }
+
+    fun openDevicePairingSettings() {
+        openDevicePairingOnSettingsEntry = true
         settingsDestination = MainScreenSettingsDestination.ROOT
     }
 
@@ -131,6 +142,7 @@ private class MainScreenRouteState {
 
     fun closeSettings() {
         settingsDestination = null
+        openDevicePairingOnSettingsEntry = false
     }
 
     fun requestSessionManagement(
@@ -186,6 +198,7 @@ fun MainScreen(
     val editingSessionId by viewModel.editingSessionId.collectAsState()
     val newSessionPrefill by viewModel.newSessionPrefill.collectAsState()
     val sessionDataList by viewModel.sessionDataList.collectAsState()
+    val allSessionDataList by viewModel.sessionRepository.sessionDataFlow.collectAsState(initial = emptyList())
     val urlSessionData by viewModel.urlSessionData.collectAsState()
     val availableSessionData =
         remember(sessionDataList, urlSessionData) {
@@ -200,6 +213,7 @@ fun MainScreen(
     val updatePreferences = remember(context) { PreferencesManager(context.applicationContext) }
     val updateChecker = remember { GitHubReleaseUpdateChecker() }
     val managementDataProvider = remember { SessionManagementDataProvider() }
+    val nearbyAdbScanController = rememberNearbyAdbScanController(allSessionDataList)
     var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
 
     LaunchedEffect(deepLink, onboardingState, availableSessionData) {
@@ -292,7 +306,7 @@ fun MainScreen(
                 channel = settings.updateChannel,
             ).onSuccess { release ->
                 updatePreferences.recordUpdateCheck(now, release)
-                availableUpdate = release
+                availableUpdate = release?.takeIf { shouldShowAutomaticUpdate(it, cache) }
             }
     }
 
@@ -361,6 +375,7 @@ fun MainScreen(
             viewModel = viewModel,
             groups = groups,
             selectedGroupPath = selectedGroupPath,
+            nearbyAdbScanController = nearbyAdbScanController,
         )
 
         if (onboardingState == SessionOnboardingState.HIDDEN) {
@@ -541,6 +556,7 @@ private fun MainScreenContent(
     viewModel: MainViewModel,
     groups: List<DeviceGroup>,
     selectedGroupPath: String,
+    nearbyAdbScanController: NearbyAdbScanController,
 ) {
     val txtTitle = rememberText(SessionTexts.MAIN_TITLE_SESSIONS)
     val txtAddSession = rememberText(SessionTexts.MAIN_ADD_SESSION)
@@ -611,12 +627,23 @@ private fun MainScreenContent(
                         .padding(horizontal = 16.dp, vertical = 16.dp),
                 contentAlignment = Alignment.BottomStart,
             ) {
-                CompactGroupSelector(
-                    groups = groups,
-                    selectedGroupPath = selectedGroupPath,
-                    onGroupSelected = viewModel::selectGroup,
-                    modifier = Modifier.widthIn(max = maxWidth / 2),
-                )
+                val groupSelectorMaxWidth = maxWidth / 2
+                Row(
+                    modifier = Modifier.animateContentSize(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CompactGroupSelector(
+                        groups = groups,
+                        selectedGroupPath = selectedGroupPath,
+                        onGroupSelected = viewModel::selectGroup,
+                        modifier = Modifier.widthIn(max = groupSelectorMaxWidth),
+                    )
+                    NearbyAdbDevicesButton(
+                        controller = nearbyAdbScanController,
+                        onPairingRequired = routeState::openDevicePairingSettings,
+                    )
+                }
             }
         }
     }
@@ -654,6 +681,7 @@ private fun MainScreenDialogs(
             SettingsScreen(
                 viewModel = viewModel,
                 onBack = routeState::closeSettings,
+                openDevicePairingOnEntry = routeState.openDevicePairingOnSettingsEntry,
                 onNavigateToAbout = {
                     routeState.navigateToSettings(MainScreenSettingsDestination.ABOUT)
                 },

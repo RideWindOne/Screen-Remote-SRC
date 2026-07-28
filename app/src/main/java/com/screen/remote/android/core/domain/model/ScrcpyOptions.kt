@@ -9,6 +9,13 @@ enum class ScrcpyTunnelMode {
     ADB_FORWARD,
 }
 
+@Serializable
+enum class ScreenRotationPolicy {
+    NONE,
+    LOCAL,
+    TARGET,
+}
+
 /** 用户可编辑、可持久化的 scrcpy 配置。 */
 @Serializable
 data class ScrcpyConfig(
@@ -17,7 +24,7 @@ data class ScrcpyConfig(
     val useFullScreen: Boolean = false,
     val showFloatingBall: Boolean = true,
     val enableHardwareDecoding: Boolean = true,
-    val followRemoteOrientation: Boolean = true,
+    val screenRotationPolicy: ScreenRotationPolicy = ScreenRotationPolicy.NONE,
     val tunnelMode: ScrcpyTunnelMode = ScrcpyTunnelMode.DIRECT_ADB,
     val maxSize: Int = 0,
     val videoBitRate: Int = ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,

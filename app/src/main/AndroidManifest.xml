@@ -3,8 +3,10 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:ignore="RequestInstallPackagesPolicy" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -21,7 +23,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
+        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
 
     <!-- USB Host 权限 - 用于 USB 有线连接 -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
@@ -55,12 +57,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="screen-remote" android:host="open" />
-                <data android:scheme="screen-remote" android:host="session" />
-                <data android:scheme="screen-remote" android:host="diagnostics" />
-                <data android:scheme="screen-remote" android:host="remote" />
-                <data android:scheme="screen-remote" android:host="setting" />
-                <data android:scheme="screen-remote" android:host="adb" />
+                <data android:scheme="screen-remote" />
+                <data android:host="open" />
+                <data android:host="session" />
+                <data android:host="diagnostics" />
+                <data android:host="remote" />
+                <data android:host="setting" />
+                <data android:host="adb" />
             </intent-filter>
         </activity>
 

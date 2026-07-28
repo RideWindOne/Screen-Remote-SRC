@@ -14,6 +14,7 @@ serializationJson = "1.11.0"
 dadb = "2.0.0"
 bouncycastle = "1.85"
 junit = "4.13.2"
+annotationJvm = "1.10.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -46,3 +47,4 @@ dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 dadb-android = { module = "dev.mobile:dadb-android", version.ref = "dadb" }
 bouncycastle-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
 junit = { module = "junit:junit", version.ref = "junit" }
+androidx-annotation-jvm = { group = "androidx.annotation", name = "annotation-jvm", version.ref = "annotationJvm" }

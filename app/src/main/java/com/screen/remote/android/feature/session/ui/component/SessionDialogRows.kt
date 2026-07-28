@@ -41,6 +41,7 @@ private val DialogRowLabelMaxWidth = IosDesignTokens.dialogLabelMaxWidth
 private val DialogRowSpacing = IosDesignTokens.compactSpacing
 private val DialogTrailingActionHorizontalPadding = IosDesignTokens.dialogHeaderHorizontalPadding
 private val DialogBinaryChoiceWidth = 116.dp
+private val DialogTernaryChoiceWidth = 156.dp
 private val DialogBinaryChoiceHeight = 32.dp
 private val DialogBinaryChoiceInset = 2.dp
 
@@ -126,6 +127,54 @@ fun CompactBinaryChoiceRow(
                 onClick = { onChoiceChange(true) },
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+@Composable
+fun <T> CompactSegmentedChoiceRow(
+    text: String,
+    choices: List<Pair<T, String>>,
+    selectedChoice: T,
+    onChoiceChange: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    helpText: String? = null,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(AppDimens.listItemHeight)
+                .padding(horizontal = IosDesignTokens.compactHorizontalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DialogRowLabel(
+            label = text,
+            helpText = helpText,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(end = DialogRowSpacing),
+        )
+
+        Row(
+            modifier =
+                Modifier
+                    .width(DialogTernaryChoiceWidth)
+                    .height(DialogBinaryChoiceHeight)
+                    .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .selectableGroup()
+                    .padding(DialogBinaryChoiceInset),
+        ) {
+            choices.forEach { (choice, label) ->
+                BinaryChoiceButton(
+                    text = label,
+                    selected = choice == selectedChoice,
+                    onClick = { onChoiceChange(choice) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

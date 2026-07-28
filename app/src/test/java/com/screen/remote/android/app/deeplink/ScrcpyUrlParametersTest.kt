@@ -2,6 +2,7 @@ package com.screen.remote.android.app.deeplink
 
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,7 +17,7 @@ class ScrcpyUrlParametersTest {
                 useFullScreen = true,
                 showFloatingBall = false,
                 enableHardwareDecoding = false,
-                followRemoteOrientation = false,
+                screenRotationPolicy = ScreenRotationPolicy.LOCAL,
                 tunnelMode = ScrcpyTunnelMode.ADB_FORWARD,
                 maxSize = 1440,
                 videoBitRate = 12_000_000,
@@ -108,7 +109,7 @@ class ScrcpyUrlParametersTest {
                         "useFullScreen" to "on",
                         "showFloatingBall" to "off",
                         "enableHardwareDecoding" to "off",
-                        "followRemoteOrientation" to "off",
+                        "screenRotationPolicy" to "target",
                         "clipboardSync" to "off",
                         "newDisplayEnabled" to "off",
                     ),
@@ -118,7 +119,7 @@ class ScrcpyUrlParametersTest {
         assertEquals(true, overridden.useFullScreen)
         assertEquals(false, overridden.showFloatingBall)
         assertEquals(false, overridden.enableHardwareDecoding)
-        assertEquals(false, overridden.followRemoteOrientation)
+        assertEquals(ScreenRotationPolicy.TARGET, overridden.screenRotationPolicy)
         assertEquals(false, overridden.clipboardSync)
         assertEquals(false, overridden.newDisplayEnabled)
     }

@@ -71,6 +71,8 @@ class ControlViewModel(
 
     suspend fun setClipboardAndPaste(text: String): Result<Boolean> = scrcpyClient.setClipboardAndPaste(text)
 
+    suspend fun rotateTargetDevice(): Result<Boolean> = scrcpyClient.rotateDevice()
+
     // ============ 触摸控制 ============
 
     fun sendTouchEvent(

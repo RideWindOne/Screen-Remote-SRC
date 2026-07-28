@@ -114,7 +114,6 @@ object RemoteTexts {
     val REMOTE_SESSION_CONNECTION_FAILED_TITLE = TextPair("%s 连接失败", "%s connection failed")
 
     // ScrcpyClient
-    val SCRCPY_NATIVE_LIB_LOAD_FAILED = TextPair("Native 库加载失败", "Native library load failed")
     val SCRCPY_ADB_CONNECTION_UNAVAILABLE = TextPair("ADB 连接不可用", "ADB connection unavailable")
     val SCRCPY_AUDIO_METADATA_READ = TextPair("音频元数据读取完成", "Audio metadata read complete")
     val SCRCPY_AUDIO_SOCKET_CONNECTED = TextPair("音频 Socket 已连接", "Audio socket connected")

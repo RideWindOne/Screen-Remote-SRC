@@ -20,6 +20,7 @@ data class MdnsSessionPresenceState(
     val onlineMdnsSerials: Set<String> = emptySet(),
     val confirmingMdnsSerials: Set<String> = emptySet(),
     val connectServices: List<MdnsDiscoveredConnectService> = emptyList(),
+    val tcpServices: List<MdnsDiscoveredTcpService> = emptyList(),
 )
 
 data class MdnsDiscoveredConnectService(
@@ -29,6 +30,12 @@ data class MdnsDiscoveredConnectService(
     val port: Int = 0,
     val requiresPairing: Boolean,
     val previouslyPaired: Boolean,
+    val confirming: Boolean = false,
+)
+
+data class MdnsDiscoveredTcpService(
+    val host: String,
+    val port: Int,
     val confirming: Boolean = false,
 )
 
@@ -74,12 +81,37 @@ internal fun discoveredMdnsServices(
     refreshing: Boolean = false,
 ): List<MdnsDiscoveredConnectService> =
     mergeMdnsServices(
-        currentServices = connectServices + pairingServices,
-        retainedServices = retainedServices,
+        currentServices =
+            (connectServices + pairingServices).filter {
+                it.serviceType == AdbMdnsServiceType.TLS_CONNECT ||
+                    it.serviceType == AdbMdnsServiceType.TLS_PAIRING
+            },
+        retainedServices =
+            retainedServices.filter {
+                it.serviceType == AdbMdnsServiceType.TLS_CONNECT ||
+                    it.serviceType == AdbMdnsServiceType.TLS_PAIRING
+            },
         refreshing = refreshing,
     ).map { (service, confirming) ->
         service.toDiscoveredConnectService(
             previouslyPaired = DeviceTransportSerial.mdnsDeviceKey(service.name) in pairedDeviceKeys,
+            confirming = confirming,
+        )
+    }
+
+internal fun discoveredMdnsTcpServices(
+    connectServices: List<AdbMdnsService>,
+    retainedServices: List<AdbMdnsService> = emptyList(),
+    refreshing: Boolean = false,
+): List<MdnsDiscoveredTcpService> =
+    mergeMdnsServices(
+        currentServices = connectServices.filter { it.serviceType == AdbMdnsServiceType.ADB },
+        retainedServices = retainedServices.filter { it.serviceType == AdbMdnsServiceType.ADB },
+        refreshing = refreshing,
+    ).map { (service, confirming) ->
+        MdnsDiscoveredTcpService(
+            host = service.host,
+            port = service.port,
             confirming = confirming,
         )
     }

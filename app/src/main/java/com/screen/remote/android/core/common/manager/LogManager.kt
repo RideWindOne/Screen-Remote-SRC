@@ -215,15 +215,6 @@ object LogManager {
         messageWriter.writeRawLog(level, tag, message)
     }
 
-    @JvmStatic
-    fun writeRawLogJNI(
-        level: String,
-        tag: String,
-        message: String,
-    ) {
-        writeRawLog(level, tag, message)
-    }
-
     private fun isDebugLoggingEnabledForTag(tag: String): Boolean {
         if (state.runtimeLoggingSuppressed) return false
         val category = detailCategoryForTag(tag) ?: return true

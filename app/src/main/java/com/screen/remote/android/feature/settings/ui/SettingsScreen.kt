@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -27,11 +28,18 @@ fun SettingsScreen(
     onNavigateToGroupManagement: () -> Unit = {},
     onNavigateToBackupRestore: () -> Unit = {},
     onNavigateToCustomCommands: () -> Unit = {},
+    openDevicePairingOnEntry: Boolean = false,
 ) {
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
     val routeState = rememberSettingsScreenRouteState()
     val texts = rememberSettingsScreenTexts()
+
+    LaunchedEffect(openDevicePairingOnEntry) {
+        if (openDevicePairingOnEntry) {
+            routeState.openDevicePairingDialog()
+        }
+    }
 
     SettingsScreenContent(
         settings = settings,

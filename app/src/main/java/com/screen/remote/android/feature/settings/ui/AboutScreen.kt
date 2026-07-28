@@ -535,6 +535,7 @@ internal fun UpdateAvailableDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val downloader = remember(context) { AppUpdateDownloader(context.applicationContext) }
+    val preferencesManager = remember(context) { PreferencesManager(context.applicationContext) }
     val asset = remember(release) { selectApkAsset(release, Build.SUPPORTED_ABIS.toList()) }
     var downloadProgress by remember { mutableStateOf<Int?>(null) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
@@ -589,7 +590,7 @@ internal fun UpdateAvailableDialog(
             onDismiss()
         },
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.fillMaxWidth(AppDimens.WINDOW_WIDTH_RATIO),
+        modifier = Modifier.fillMaxWidth(AppDimens.WINDOW_WIDTH_SMALL_RATIO),
         title = {
             Text(
                 text = SettingsTexts.ABOUT_UPDATE_AVAILABLE.get(),
@@ -653,28 +654,47 @@ internal fun UpdateAvailableDialog(
             }
         },
         dismissButton = {
-            TextButton(
-                modifier = Modifier.height(36.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                onClick = {
-                    if (downloadJob != null) {
-                        downloadJob?.cancel()
-                    } else {
-                        val url = release.htmlUrl.ifBlank { RELEASES_URL }
-                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                        onDismiss()
-                    }
-                },
-            ) {
-                Text(
-                    text =
-                        if (downloadJob != null) {
-                            SettingsTexts.ABOUT_UPDATE_CANCEL_DOWNLOAD.get()
-                        } else {
-                            SettingsTexts.ABOUT_UPDATE_OPEN_RELEASES.get()
+            Row {
+                if (downloadJob == null) {
+                    TextButton(
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        onClick = {
+                            scope.launch {
+                                preferencesManager.markUpdateVersionSkipped(release.tagName)
+                                onDismiss()
+                            }
                         },
-                    style = MaterialTheme.typography.labelSmall,
-                )
+                    ) {
+                        Text(
+                            text = SettingsTexts.ABOUT_UPDATE_SKIP.get(),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+                TextButton(
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    onClick = {
+                        if (downloadJob != null) {
+                            downloadJob?.cancel()
+                        } else {
+                            val url = release.htmlUrl.ifBlank { RELEASES_URL }
+                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                            onDismiss()
+                        }
+                    },
+                ) {
+                    Text(
+                        text =
+                            if (downloadJob != null) {
+                                SettingsTexts.ABOUT_UPDATE_CANCEL_DOWNLOAD.get()
+                            } else {
+                                SettingsTexts.ABOUT_UPDATE_OPEN_RELEASES.get()
+                            },
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,

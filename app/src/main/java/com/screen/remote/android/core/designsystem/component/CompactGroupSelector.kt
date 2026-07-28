@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -34,6 +36,49 @@ import com.screen.remote.android.core.domain.model.DefaultGroups
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
+
+@Composable
+fun CompactSegmentedActionButton(
+    imageVector: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    Box(
+        modifier =
+            modifier
+                .size(IosDesignTokens.segmentedControlHeight)
+                .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(2.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(IosDesignTokens.segmentedControlChipCornerRadius))
+                    .background(
+                        if (isDarkTheme) {
+                            AppColors.darkIOSSelectedBackground
+                        } else {
+                            AppColors.iOSSelectedBackground
+                        },
+                    )
+                    .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(IosDesignTokens.trailingIconSize),
+            )
+        }
+    }
+}
 
 /**
  * 紧凑分组选择器

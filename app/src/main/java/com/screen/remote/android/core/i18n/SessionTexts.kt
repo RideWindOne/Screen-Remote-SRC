@@ -8,6 +8,25 @@ object SessionTexts {
     val MAIN_TITLE_SESSIONS = TextPair("Scrcpy Sessions", "Scrcpy Sessions")
     val MAIN_TAB_SESSIONS = TextPair("会话", "Sessions")
     val MAIN_ADD_SESSION = TextPair("添加会话", "Add Session")
+    val MAIN_SCAN_NEARBY_DEVICES = TextPair("扫描附近设备", "Scan Nearby Devices")
+    val MAIN_NEARBY_ADB_DEVICES = TextPair("附近的 ADB 设备", "Nearby ADB Devices")
+    val MAIN_MDNS_ADDRESS_COPIED = TextPair("mDNS 地址已复制", "mDNS Address Copied")
+    val MAIN_TCP_ADDRESS_COPIED = TextPair("TCP 地址已复制", "TCP Address Copied")
+    val MAIN_MDNS_CONNECTABLE = TextPair("mDNS 可连接", "mDNS Connectable")
+    val MAIN_MDNS_PAIRABLE = TextPair("ADB 可配对", "ADB Pairable")
+    val MAIN_TCP_ADB = TextPair("ADB TCP", "ADB TCP")
+    val MAIN_TLS_ADB = TextPair("ADB TLS", "ADB TLS")
+    val MAIN_SCAN_DISCOVERING_HOSTS = TextPair("正在发现局域网主机…", "Discovering LAN hosts…")
+    val MAIN_SCAN_CHECKING_HISTORY = TextPair("正在复查历史地址…", "Checking saved addresses…")
+    val MAIN_SCAN_CHECKING_COMMON_PORTS = TextPair("正在探测常用 ADB 端口…", "Checking common ADB ports…")
+    val MAIN_SCAN_CHECKING_DYNAMIC_PORTS = TextPair("正在探测动态端口…", "Checking dynamic ports…")
+    val MAIN_SCAN_COMPLETE = TextPair("扫描完成", "Scan Complete")
+    val MAIN_SCAN_FAILED = TextPair("扫描失败", "Scan Failed")
+    val MAIN_SCAN_NETWORK_CHANGED = TextPair("网络已变化，请刷新后重新扫描", "Network changed. Refresh to scan again.")
+    val MAIN_SCAN_PROGRESS = TextPair("%d / %d", "%d / %d")
+    val MAIN_REFRESH_SCAN = TextPair("重新扫描", "Scan Again")
+    val MAIN_LOCAL_NETWORK_PERMISSION_REQUIRED =
+        TextPair("需要局域网权限才能扫描设备", "Local network permission is required to scan devices")
 
     // 会话列表
     val SESSION_NO_SESSIONS = TextPair("没有 Scrcpy Sessions", "No Scrcpy Sessions")
@@ -318,7 +337,8 @@ object SessionTexts {
     val SWITCH_SHOW_FLOATING_BALL = TextPair("显示悬浮球", "Show Floating Ball")
     val SWITCH_ENABLE_HARDWARE_DECODING = TextPair("启用硬件解码", "Enable Hardware Decoding")
     val SWITCH_COMPATIBILITY_MODE = TextPair("兼容模式", "Compatibility Mode")
-    val LABEL_FOLLOW_ROTATION = TextPair("跟随旋转", "Follow Rotation")
+    val LABEL_SCREEN_ROTATION = TextPair("旋转屏幕", "Screen Rotation")
+    val OPTION_ROTATION_NONE = TextPair("无", "None")
     val OPTION_ROTATION_LOCAL = TextPair("本机", "Local")
     val OPTION_ROTATION_TARGET = TextPair("目标", "Target")
     val SWITCH_USE_ADB_FORWARD = TextPair("使用 ADB 转发建立连接", "Connect via ADB Forwarding")
@@ -399,6 +419,11 @@ object SessionTexts {
             "输入远程设备的主机地址，例如 IPv4、IPv6 或主机名。",
             "Enter the remote device host, such as an IPv4 address, IPv6 address, or hostname.",
         )
+    val HELP_TCP_DISCOVERY =
+        TextPair(
+            "发现通过 _adb._tcp 广播的附近设备，选择后自动填写主机和端口。",
+            "Discover nearby devices advertised through _adb._tcp and fill in the host and port.",
+        )
     val HELP_USB_SERIAL =
         TextPair(
             "输入 USB 设备序列号，也可以点击选择已连接的 USB 设备。",
@@ -468,8 +493,8 @@ object SessionTexts {
         )
     val HELP_FOLLOW_ORIENTATION =
         TextPair(
-            "本机：旋转不限制，由本机方向决定。目标：限制本机方向并跟随目标设备旋转。",
-            "Local: rotation is unrestricted and follows this device. Target: restrict this device's orientation to follow the target device.",
+            "无：不做特殊处理。本机：目标设备跟随本机旋转。目标：本机跟随目标设备旋转。",
+            "None: no special handling. Local: the target device follows this device. Target: this device follows the target device.",
         )
     val HELP_USE_ADB_FORWARD =
         TextPair(

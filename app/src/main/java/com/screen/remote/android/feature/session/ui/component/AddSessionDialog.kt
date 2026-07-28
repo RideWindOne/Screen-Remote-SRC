@@ -2,7 +2,11 @@ package com.screen.remote.android.feature.session.ui.component
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,6 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.AppTextSizes
 import com.screen.remote.android.core.common.PlaceholderTexts
@@ -92,11 +97,13 @@ import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMe
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.screen.remote.android.core.designsystem.component.SectionTitle
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
+import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.domain.model.parseTcpHostPort
 import com.screen.remote.android.core.domain.model.toAddressEndpoint
@@ -114,6 +121,7 @@ import com.screen.remote.android.feature.session.ui.ConnectionLatencyTestPage
 import com.screen.remote.android.feature.session.ui.SessionManagementCenteredDialog
 import com.screen.remote.android.feature.session.ui.quoteShellArg
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredTcpService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.app.deeplink.NewSessionPrefill
@@ -136,6 +144,7 @@ private val VideoPickerHeight = 42.dp
 private val VideoPickerInnerMargin = 2.dp
 private val VideoPickerItemGap = 2.dp
 private val VideoPickerDragThreshold = 50.dp
+private const val PRIMARY_TCP_DISCOVERY_TARGET = -1
 
 private class EditableSessionAddress(
     type: SessionDeviceType = SessionDeviceType.TCP,
@@ -234,8 +243,10 @@ private class SessionAddressDialogState(
     var showDeviceTypeMenu by mutableStateOf(false)
     var showUsbDeviceDialog by mutableStateOf(false)
     var showMdnsServiceDialog by mutableStateOf(false)
+    var showTcpServiceDialog by mutableStateOf(false)
     var selectedBackupUsbAddressIndex by mutableStateOf<Int?>(null)
     var selectedBackupMdnsAddressIndex by mutableStateOf<Int?>(null)
+    var selectedBackupTcpAddressIndex by mutableStateOf<Int?>(null)
 
     fun selectDeviceType(type: SessionDeviceType) {
         deviceType = type
@@ -258,6 +269,7 @@ private class SessionAddressDialogState(
         backupAddresses = backupAddresses.filterIndexed { itemIndex, _ -> itemIndex != index }
         selectedBackupUsbAddressIndex = selectedBackupUsbAddressIndex.adjustAfterRemoving(index)
         selectedBackupMdnsAddressIndex = selectedBackupMdnsAddressIndex.adjustAfterRemoving(index)
+        selectedBackupTcpAddressIndex = selectedBackupTcpAddressIndex.adjustAfterRemoving(index)
     }
 
     fun applyTo(target: SessionDialogState) {
@@ -325,7 +337,9 @@ fun AddSessionDialog(
         sessionId = sessionData?.id,
         availableGroups = sessionGroups,
         mdnsConnectServices = mdnsState.connectServices,
+        mdnsTcpServices = mdnsState.tcpServices,
         mdnsConnectLoading = mdnsState.loading,
+        mdnsTcpLoading = mdnsState.refreshing && mdnsState.tcpServices.isEmpty(),
         remoteAppCache = remoteAppCache,
     )
 
@@ -393,7 +407,9 @@ private fun AddSessionDialogOverlays(
     sessionId: String?,
     availableGroups: List<DeviceGroup>,
     mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsTcpServices: List<MdnsDiscoveredTcpService>,
     mdnsConnectLoading: Boolean,
+    mdnsTcpLoading: Boolean,
     remoteAppCache: RemoteLaunchableAppCache,
 ) {
     VideoEncoderSelectionOverlay(
@@ -419,7 +435,9 @@ private fun AddSessionDialogOverlays(
     SessionAddressOverlay(
         state = state,
         mdnsConnectServices = mdnsConnectServices,
+        mdnsTcpServices = mdnsTcpServices,
         mdnsConnectLoading = mdnsConnectLoading,
+        mdnsTcpLoading = mdnsTcpLoading,
     )
     RemoteAppSelectionOverlay(
         state = state,
@@ -535,13 +553,51 @@ private fun SessionDeviceType.displayText(): String =
 private fun SessionAddressOverlay(
     state: SessionDialogState,
     mdnsConnectServices: List<MdnsDiscoveredConnectService>,
+    mdnsTcpServices: List<MdnsDiscoveredTcpService>,
     mdnsConnectLoading: Boolean,
+    mdnsTcpLoading: Boolean,
 ) {
     if (!state.showSessionAddressDialog) {
         return
     }
 
     val editorState = remember(state.showSessionAddressDialog) { SessionAddressDialogState(state) }
+    val context = LocalContext.current
+    var pendingTcpDiscoveryTarget by remember { mutableStateOf<Int?>(null) }
+    val localNetworkPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                when (val target = pendingTcpDiscoveryTarget) {
+                    PRIMARY_TCP_DISCOVERY_TARGET -> editorState.showTcpServiceDialog = true
+                    null -> Unit
+                    else -> editorState.selectedBackupTcpAddressIndex = target
+                }
+            } else {
+                Toast.makeText(
+                    context,
+                    SessionTexts.MAIN_LOCAL_NETWORK_PERMISSION_REQUIRED.get(),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            pendingTcpDiscoveryTarget = null
+        }
+    val openTcpDiscovery: (Int) -> Unit = { target ->
+        if (Build.VERSION.SDK_INT < 37 ||
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.ACCESS_LOCAL_NETWORK,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            if (target == PRIMARY_TCP_DISCOVERY_TARGET) {
+                editorState.showTcpServiceDialog = true
+            } else {
+                editorState.selectedBackupTcpAddressIndex = target
+            }
+        } else {
+            pendingTcpDiscoveryTarget = target
+            localNetworkPermissionLauncher.launch(android.Manifest.permission.ACCESS_LOCAL_NETWORK)
+        }
+    }
 
     DialogPage(
         title = SessionTexts.DIALOG_SESSION_ADDRESS_TITLE.get(),
@@ -578,12 +634,18 @@ private fun SessionAddressOverlay(
             mdnsConnectServices = mdnsConnectServices,
             mdnsConnectLoading = mdnsConnectLoading,
             onUsbDeviceClick = { editorState.showUsbDeviceDialog = true },
+            mdnsTcpServices = mdnsTcpServices,
+            mdnsTcpLoading = mdnsTcpLoading,
+            onTcpDevicesClick = { openTcpDiscovery(PRIMARY_TCP_DISCOVERY_TARGET) },
         )
 
         BackupEndpointsEditor(
             state = editorState,
             mdnsConnectServices = mdnsConnectServices,
             mdnsConnectLoading = mdnsConnectLoading,
+            mdnsTcpServices = mdnsTcpServices,
+            mdnsTcpLoading = mdnsTcpLoading,
+            onTcpDevicesClick = openTcpDiscovery,
         )
 
         SessionAddressUsbDeviceSelectionOverlay(editorState)
@@ -592,11 +654,21 @@ private fun SessionAddressOverlay(
             services = mdnsConnectServices,
             loading = mdnsConnectLoading,
         )
+        SessionAddressTcpServiceSelectionOverlay(
+            state = editorState,
+            services = mdnsTcpServices,
+            loading = mdnsTcpLoading,
+        )
         BackupAddressUsbDeviceSelectionOverlay(editorState)
         BackupAddressMdnsServiceSelectionOverlay(
             state = editorState,
             services = mdnsConnectServices,
             loading = mdnsConnectLoading,
+        )
+        BackupAddressTcpServiceSelectionOverlay(
+            state = editorState,
+            services = mdnsTcpServices,
+            loading = mdnsTcpLoading,
         )
     }
 }
@@ -607,6 +679,9 @@ private fun PrimarySessionAddressCard(
     mdnsConnectServices: List<MdnsDiscoveredConnectService>,
     mdnsConnectLoading: Boolean,
     onUsbDeviceClick: () -> Unit,
+    mdnsTcpServices: List<MdnsDiscoveredTcpService>,
+    mdnsTcpLoading: Boolean,
+    onTcpDevicesClick: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -622,6 +697,9 @@ private fun PrimarySessionAddressCard(
             mdnsConnectServices = mdnsConnectServices,
             mdnsConnectLoading = mdnsConnectLoading,
             onUsbDeviceClick = onUsbDeviceClick,
+            mdnsTcpServices = mdnsTcpServices,
+            mdnsTcpLoading = mdnsTcpLoading,
+            onTcpDevicesClick = onTcpDevicesClick,
         )
     }
 }
@@ -715,6 +793,183 @@ private fun SessionAddressMdnsServiceSelectionOverlay(
 }
 
 @Composable
+private fun SessionAddressTcpServiceSelectionOverlay(
+    state: SessionAddressDialogState,
+    services: List<MdnsDiscoveredTcpService>,
+    loading: Boolean,
+) {
+    if (!state.showTcpServiceDialog) {
+        return
+    }
+
+    TcpMdnsDeviceSelectionDialog(
+        services = services,
+        loading = loading,
+        selectedHost = state.host,
+        selectedPort = state.port.toIntOrNull(),
+        onSelected = { service ->
+            state.deviceType = SessionDeviceType.TCP
+            state.host = service.host
+            state.port = service.port.toString()
+            state.showTcpServiceDialog = false
+        },
+        onDismiss = { state.showTcpServiceDialog = false },
+    )
+}
+
+@Composable
+private fun TcpMdnsDeviceSelectionDialog(
+    services: List<MdnsDiscoveredTcpService>,
+    loading: Boolean,
+    selectedHost: String,
+    selectedPort: Int?,
+    onSelected: (MdnsDiscoveredTcpService) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
+    ) {
+        DialogContainer {
+            DialogHeader(
+                title = SessionTexts.MDNS_CONNECT_SERVICES.get(),
+                onDismiss = onDismiss,
+                showBackButton = false,
+                leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
+                centerTitleInWindow = true,
+            )
+
+            DialogHeaderSpacer()
+
+            TcpMdnsServiceListContent(
+                services = services,
+                loading = loading,
+                selectedHost = selectedHost,
+                selectedPort = selectedPort,
+                onSelected = onSelected,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TcpMdnsServiceListContent(
+    services: List<MdnsDiscoveredTcpService>,
+    loading: Boolean,
+    selectedHost: String,
+    selectedPort: Int?,
+    onSelected: (MdnsDiscoveredTcpService) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = AppDimens.paddingStandard,
+                    end = AppDimens.paddingStandard,
+                    bottom = AppDimens.paddingStandard,
+                ),
+    ) {
+        if (services.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(150.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (loading) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = SessionTexts.MDNS_CONNECT_SCANNING.get(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = AppTextSizes.body,
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
+                    }
+                } else {
+                    Text(
+                        text = SessionTexts.MDNS_CONNECT_EMPTY.get(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = AppTextSizes.body,
+                    )
+                }
+            }
+        } else {
+            val selectedIndex = selectedTcpMdnsServiceIndex(services, selectedHost, selectedPort)
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                services.forEachIndexed { index, service ->
+                    TcpMdnsServiceItem(
+                        service = service,
+                        isSelected = index == selectedIndex,
+                        onClick = { onSelected(service) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal fun selectedTcpMdnsServiceIndex(
+    services: List<MdnsDiscoveredTcpService>,
+    selectedHost: String,
+    selectedPort: Int?,
+): Int =
+    services.indexOfFirst { service ->
+        service.host.equals(selectedHost.trim(), ignoreCase = true) && service.port == selectedPort
+    }
+
+@Composable
+private fun TcpMdnsServiceItem(
+    service: MdnsDiscoveredTcpService,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
+                .clickable(enabled = !service.confirming) { onClick() },
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.5.dp,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = formatHostPort(service.host, service.port),
+                fontSize = AppTextSizes.body,
+                maxLines = 1,
+                modifier = Modifier.weight(1f).padding(start = 4.dp, end = 12.dp),
+            )
+            Text(
+                text =
+                    if (service.confirming) {
+                        SessionTexts.MDNS_DEVICE_CONFIRMING.get()
+                    } else {
+                        SessionTexts.ENDPOINT_STATUS_NEARBY.get()
+                    },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp),
+            )
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BackupAddressMdnsServiceSelectionOverlay(
     state: SessionAddressDialogState,
     services: List<MdnsDiscoveredConnectService>,
@@ -737,11 +992,38 @@ private fun BackupAddressMdnsServiceSelectionOverlay(
 }
 
 @Composable
+private fun BackupAddressTcpServiceSelectionOverlay(
+    state: SessionAddressDialogState,
+    services: List<MdnsDiscoveredTcpService>,
+    loading: Boolean,
+) {
+    val selectedIndex = state.selectedBackupTcpAddressIndex ?: return
+    val address = state.backupAddresses.getOrNull(selectedIndex) ?: return
+
+    TcpMdnsDeviceSelectionDialog(
+        services = services,
+        loading = loading,
+        selectedHost = address.host,
+        selectedPort = address.port.toIntOrNull(),
+        onSelected = { service ->
+            address.selectType(SessionDeviceType.TCP)
+            address.host = service.host
+            address.port = service.port.toString()
+            state.selectedBackupTcpAddressIndex = null
+        },
+        onDismiss = { state.selectedBackupTcpAddressIndex = null },
+    )
+}
+
+@Composable
 private fun PrimarySessionAddressEditor(
     state: SessionAddressDialogState,
     mdnsConnectServices: List<MdnsDiscoveredConnectService>,
     mdnsConnectLoading: Boolean,
     onUsbDeviceClick: () -> Unit,
+    mdnsTcpServices: List<MdnsDiscoveredTcpService>,
+    mdnsTcpLoading: Boolean,
+    onTcpDevicesClick: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         SessionAddressDeviceTypeDropdownRow(state)
@@ -819,6 +1101,21 @@ private fun PrimarySessionAddressEditor(
                     keyboardType = KeyboardType.Number,
                     helpText = SessionTexts.HELP_PORT.get(),
                 )
+
+                AppDivider()
+
+                CompactClickableRow(
+                    text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
+                    trailingText =
+                        when {
+                            mdnsTcpServices.isNotEmpty() -> "${mdnsTcpServices.size}"
+                            mdnsTcpLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                        },
+                    onClick = onTcpDevicesClick,
+                    showArrow = true,
+                    helpText = SessionTexts.HELP_TCP_DISCOVERY.get(),
+                )
             }
         }
     }
@@ -829,6 +1126,9 @@ private fun BackupEndpointsEditor(
     state: SessionAddressDialogState,
     mdnsConnectServices: List<MdnsDiscoveredConnectService>,
     mdnsConnectLoading: Boolean,
+    mdnsTcpServices: List<MdnsDiscoveredTcpService>,
+    mdnsTcpLoading: Boolean,
+    onTcpDevicesClick: (Int) -> Unit,
 ) {
     if (state.backupAddresses.isEmpty()) {
         Text(
@@ -849,9 +1149,12 @@ private fun BackupEndpointsEditor(
                 address = address,
                 mdnsConnectServices = mdnsConnectServices,
                 mdnsConnectLoading = mdnsConnectLoading,
+                mdnsTcpServices = mdnsTcpServices,
+                mdnsTcpLoading = mdnsTcpLoading,
                 onRemove = { state.removeBackupEndpoint(index) },
                 onUsbDeviceClick = { state.selectedBackupUsbAddressIndex = index },
                 onMdnsServicesClick = { state.selectedBackupMdnsAddressIndex = index },
+                onTcpDevicesClick = { onTcpDevicesClick(index) },
             )
         }
     }
@@ -862,9 +1165,12 @@ private fun SessionAddressItemEditor(
     address: EditableSessionAddress,
     mdnsConnectServices: List<MdnsDiscoveredConnectService>,
     mdnsConnectLoading: Boolean,
+    mdnsTcpServices: List<MdnsDiscoveredTcpService>,
+    mdnsTcpLoading: Boolean,
     onRemove: () -> Unit,
     onUsbDeviceClick: () -> Unit,
     onMdnsServicesClick: () -> Unit,
+    onTcpDevicesClick: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -906,6 +1212,21 @@ private fun SessionAddressItemEditor(
                     placeholder = PlaceholderTexts.PORT,
                     keyboardType = KeyboardType.Number,
                     helpText = SessionTexts.HELP_PORT.get(),
+                )
+
+                AppDivider()
+
+                CompactClickableRow(
+                    text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
+                    trailingText =
+                        when {
+                            mdnsTcpServices.isNotEmpty() -> "${mdnsTcpServices.size}"
+                            mdnsTcpLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                        },
+                    onClick = onTcpDevicesClick,
+                    showArrow = true,
+                    helpText = SessionTexts.HELP_TCP_DISCOVERY.get(),
                 )
             }
 
@@ -1171,7 +1492,7 @@ internal fun selectedMdnsServiceIndex(
 }
 
 internal fun MdnsDiscoveredConnectService.requiresPairingPrompt(): Boolean =
-    requiresPairing || !previouslyPaired
+    requiresPairing
 
 @Composable
 private fun MdnsServiceItem(
@@ -1210,17 +1531,19 @@ private fun MdnsServiceItem(
                 text =
                     if (service.confirming) {
                         SessionTexts.MDNS_DEVICE_CONFIRMING.get()
-                    } else if (service.previouslyPaired && !service.requiresPairing) {
+                    } else if (service.requiresPairing) {
+                        SessionTexts.MDNS_DEVICE_UNPAIRED.get()
+                    } else if (service.previouslyPaired) {
                         AdbTexts.PAIRING_DISCOVERY_RECORDED.get()
                     } else {
-                        SessionTexts.MDNS_DEVICE_UNPAIRED.get()
+                        AdbTexts.PAIRING_DISCOVERY_DISCOVERED.get()
                     },
                 style = MaterialTheme.typography.bodySmall,
                 color =
-                    if (service.confirming || service.previouslyPaired && !service.requiresPairing) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
+                    if (service.requiresPairing && !service.confirming) {
                         MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 modifier = Modifier.padding(end = 8.dp),
             )
@@ -1299,14 +1622,16 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
 
         AppDivider()
 
-        CompactBinaryChoiceRow(
-            text = SessionTexts.LABEL_FOLLOW_ROTATION.get(),
-            firstChoice = SessionTexts.OPTION_ROTATION_LOCAL.get(),
-            secondChoice = SessionTexts.OPTION_ROTATION_TARGET.get(),
-            secondChoiceSelected = state.config.followRemoteOrientation,
-            onChoiceChange = { followTarget ->
-                state.updateConfig { copy(followRemoteOrientation = followTarget) }
-            },
+        CompactSegmentedChoiceRow(
+            text = SessionTexts.LABEL_SCREEN_ROTATION.get(),
+            choices =
+                listOf(
+                    ScreenRotationPolicy.NONE to SessionTexts.OPTION_ROTATION_NONE.get(),
+                    ScreenRotationPolicy.LOCAL to SessionTexts.OPTION_ROTATION_LOCAL.get(),
+                    ScreenRotationPolicy.TARGET to SessionTexts.OPTION_ROTATION_TARGET.get(),
+                ),
+            selectedChoice = state.config.screenRotationPolicy,
+            onChoiceChange = { policy -> state.updateConfig { copy(screenRotationPolicy = policy) } },
             helpText = SessionTexts.HELP_FOLLOW_ORIENTATION.get(),
         )
 

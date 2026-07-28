@@ -33,15 +33,15 @@ class GitHubReleaseUpdateChecker(
 
     private fun fetchReleases(): List<GitHubReleaseInfo> {
         // 临时验证更新 UI 时，可注释真实请求并直接返回以下 mock：
-        //return listOf(
-        //    GitHubReleaseInfo(
-        //        tagName = "99.0.0",
-        //        name = "Screen Remote 99.0.0 (Mock)",
-        //        htmlUrl = "https://github.com/XRSec/Screen-Remote/releases",
-        //        prerelease = false,
-        //        draft = false,
-        //    ),
-        //)
+//        return listOf(
+//            GitHubReleaseInfo(
+//                tagName = "99.0.0",
+//                name = "Screen Remote 99.0.0 (Mock)",
+//                htmlUrl = "https://github.com/XRSec/Screen-Remote/releases",
+//                prerelease = false,
+//                draft = false,
+//            ),
+//        )
 
         val connection =
             (URL(RELEASES_API_URL).openConnection() as HttpURLConnection).apply {

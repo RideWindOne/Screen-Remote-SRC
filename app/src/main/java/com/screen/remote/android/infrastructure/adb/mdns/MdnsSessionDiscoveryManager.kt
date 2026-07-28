@@ -190,6 +190,7 @@ class MdnsSessionDiscoveryManager private constructor(
                 AdbMdnsConfig(
                     serviceTypes =
                         setOf(
+                            AdbMdnsServiceType.ADB,
                             AdbMdnsServiceType.TLS_CONNECT,
                             AdbMdnsServiceType.TLS_PAIRING,
                         ),
@@ -437,13 +438,15 @@ class MdnsSessionDiscoveryManager private constructor(
     }
 
     private fun recomputePresenceLocked() {
+        val tlsConnectServices =
+            latestMdnsState.connectServices.filter { it.serviceType == AdbMdnsServiceType.TLS_CONNECT }
         val discoveredSerials =
-            latestMdnsState.connectServices
+            tlsConnectServices
                 .mapTo(linkedSetOf()) { it.canonicalSerial() }
         val retainedConnectSerials =
             retainedServices
                 .asSequence()
-                .filter { it.serviceType == AdbMdnsServiceType.TLS_CONNECT || it.serviceType == AdbMdnsServiceType.ADB }
+                .filter { it.serviceType == AdbMdnsServiceType.TLS_CONNECT }
                 .map(AdbMdnsService::canonicalSerial)
                 .filter { it !in discoveredSerials }
                 .toCollection(linkedSetOf())
@@ -451,9 +454,15 @@ class MdnsSessionDiscoveryManager private constructor(
         val nextOnlineSessionIds = onlineSessions.mapTo(linkedSetOf()) { it.sessionId }
         val discoveredServices =
             discoveredMdnsServices(
-                connectServices = latestMdnsState.connectServices,
+                connectServices = tlsConnectServices,
                 pairingServices = latestMdnsState.pairingServices,
                 pairedDeviceKeys = pairedMdnsDeviceKeys,
+                retainedServices = retainedServices,
+                refreshing = refreshing,
+            )
+        val discoveredTcpServices =
+            discoveredMdnsTcpServices(
+                connectServices = latestMdnsState.connectServices,
                 retainedServices = retainedServices,
                 refreshing = refreshing,
             )
@@ -461,12 +470,13 @@ class MdnsSessionDiscoveryManager private constructor(
         _state.value =
             MdnsSessionPresenceState(
                 monitoring = monitorStarted && latestMdnsState.status != AdbMdnsStatus.FAILED,
-                loading = refreshing && discoveredServices.isEmpty(),
+                loading = refreshing && discoveredServices.isEmpty() && discoveredTcpServices.isEmpty(),
                 refreshing = refreshing,
                 onlineSessionIds = nextOnlineSessionIds,
                 onlineMdnsSerials = discoveredSerials,
                 confirmingMdnsSerials = if (refreshing) retainedConnectSerials else emptySet(),
                 connectServices = discoveredServices,
+                tcpServices = discoveredTcpServices,
             )
     }
 

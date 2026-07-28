@@ -21,6 +21,7 @@ data class FloatingMenuActions(
     val showKeyboardInput: () -> Unit,
     val requestUploadFilePicker: () -> Unit,
     val requestLayoutInspectorRender: () -> Unit,
+    val rotateTargetDevice: suspend () -> Result<Boolean>,
     val hapticEnabled: Boolean,
 )
 

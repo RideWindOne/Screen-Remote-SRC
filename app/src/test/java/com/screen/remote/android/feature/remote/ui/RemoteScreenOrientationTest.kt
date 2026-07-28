@@ -1,6 +1,8 @@
 package com.screen.remote.android.feature.remote.ui
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -37,12 +39,25 @@ class RemoteScreenOrientationTest {
     }
 
     @Test
-    fun `local rotation policy removes orientation restrictions`() {
+    fun `none rotation policy preserves the original orientation request`() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_USER,
+            requestedOrientationForRotationPolicy(
+                policy = ScreenRotationPolicy.NONE,
+                remoteOrientation = RemoteScreenOrientation.LANDSCAPE,
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER,
+            ),
+        )
+    }
+
+    @Test
+    fun `local rotation policy removes controller orientation restrictions`() {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
             requestedOrientationForRotationPolicy(
-                followRemoteOrientation = false,
+                policy = ScreenRotationPolicy.LOCAL,
                 remoteOrientation = RemoteScreenOrientation.LANDSCAPE,
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER,
             ),
         )
     }
@@ -52,15 +67,39 @@ class RemoteScreenOrientationTest {
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             requestedOrientationForRotationPolicy(
-                followRemoteOrientation = true,
+                policy = ScreenRotationPolicy.TARGET,
                 remoteOrientation = RemoteScreenOrientation.LANDSCAPE,
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER,
             ),
         )
         assertEquals(
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
             requestedOrientationForRotationPolicy(
-                followRemoteOrientation = true,
+                policy = ScreenRotationPolicy.TARGET,
                 remoteOrientation = RemoteScreenOrientation.PORTRAIT,
+                originalRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER,
+            ),
+        )
+    }
+
+    @Test
+    fun `local policy rotates the target only when orientations differ`() {
+        assertEquals(RemoteScreenOrientation.LANDSCAPE, localScreenOrientation(Configuration.ORIENTATION_LANDSCAPE))
+        assertEquals(RemoteScreenOrientation.PORTRAIT, localScreenOrientation(Configuration.ORIENTATION_PORTRAIT))
+        assertEquals(
+            true,
+            shouldRotateTargetForLocalPolicy(
+                ScreenRotationPolicy.LOCAL,
+                RemoteScreenOrientation.LANDSCAPE,
+                RemoteScreenOrientation.PORTRAIT,
+            ),
+        )
+        assertEquals(
+            false,
+            shouldRotateTargetForLocalPolicy(
+                ScreenRotationPolicy.LOCAL,
+                RemoteScreenOrientation.PORTRAIT,
+                RemoteScreenOrientation.PORTRAIT,
             ),
         )
     }

@@ -3,6 +3,7 @@ package com.screen.remote.android.feature.remote.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.KeyEvent
@@ -54,6 +55,7 @@ import com.screen.remote.android.core.designsystem.component.MessageListState
 import com.screen.remote.android.core.designsystem.component.rememberMessageListState
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.ConnectionProgress
+import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import com.screen.remote.android.core.domain.model.getDisplayText
 import com.screen.remote.android.core.domain.model.getIcon
 import com.screen.remote.android.core.common.util.ApiCompatHelper
@@ -134,14 +136,32 @@ internal fun requestedOrientationForRemoteScreen(orientation: RemoteScreenOrient
     }
 
 internal fun requestedOrientationForRotationPolicy(
-    followRemoteOrientation: Boolean,
+    policy: ScreenRotationPolicy,
     remoteOrientation: RemoteScreenOrientation?,
+    originalRequestedOrientation: Int,
 ): Int? =
-    if (followRemoteOrientation) {
-        requestedOrientationForRemoteScreen(remoteOrientation)
-    } else {
-        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    when (policy) {
+        ScreenRotationPolicy.NONE -> originalRequestedOrientation
+        ScreenRotationPolicy.LOCAL -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        ScreenRotationPolicy.TARGET -> requestedOrientationForRemoteScreen(remoteOrientation)
     }
+
+internal fun localScreenOrientation(configurationOrientation: Int): RemoteScreenOrientation? =
+    when (configurationOrientation) {
+        Configuration.ORIENTATION_LANDSCAPE -> RemoteScreenOrientation.LANDSCAPE
+        Configuration.ORIENTATION_PORTRAIT -> RemoteScreenOrientation.PORTRAIT
+        else -> null
+    }
+
+internal fun shouldRotateTargetForLocalPolicy(
+    policy: ScreenRotationPolicy,
+    localOrientation: RemoteScreenOrientation?,
+    remoteOrientation: RemoteScreenOrientation?,
+): Boolean =
+    policy == ScreenRotationPolicy.LOCAL &&
+        localOrientation != null &&
+        remoteOrientation != null &&
+        localOrientation != remoteOrientation
 
 internal fun requestedOrientationAfterRemoteSession(originalRequestedOrientation: Int): Int =
     if (originalRequestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
@@ -465,6 +485,7 @@ private fun rememberRemoteDisplayScreenRouteState(
                     isLayoutInspectorAutoRefreshEnabled = true
                     requestLayoutInspectorRender(showOverlayOnSuccess = true)
                 },
+                rotateTargetDevice = controlViewModel::rotateTargetDevice,
                 hapticEnabled = settings.enableFloatingHapticFeedback,
             )
         }
@@ -556,6 +577,7 @@ private fun RemoteDisplayScreenEffects(
     scope: CoroutineScope,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val containerSize = LocalWindowInfo.current.containerSize
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = context as? ComponentActivity
@@ -576,27 +598,46 @@ private fun RemoteDisplayScreenEffects(
     LaunchedEffect(
         activity,
         originalRequestedOrientation,
-        routeState.sessionData?.config?.followRemoteOrientation,
+        routeState.sessionData?.config?.screenRotationPolicy,
+        configuration.orientation,
+        routeState.connectionState,
         routeState.videoWidth,
         routeState.videoHeight,
     ) {
-        val followRemoteOrientation = routeState.sessionData?.config?.followRemoteOrientation == true
+        val rotationPolicy =
+            routeState.sessionData?.config?.screenRotationPolicy ?: ScreenRotationPolicy.NONE
+        val remoteOrientation = remoteScreenOrientation(routeState.videoWidth, routeState.videoHeight)
         val targetOrientation =
             requestedOrientationForRotationPolicy(
-                followRemoteOrientation = followRemoteOrientation,
-                remoteOrientation = remoteScreenOrientation(routeState.videoWidth, routeState.videoHeight),
+                policy = rotationPolicy,
+                remoteOrientation = remoteOrientation,
+                originalRequestedOrientation = originalRequestedOrientation,
             )
 
         if (targetOrientation != null && activity?.requestedOrientation != targetOrientation) {
             activity?.requestedOrientation = targetOrientation
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
-                if (followRemoteOrientation) {
-                    "Rotation policy changed to target: ${routeState.videoWidth}x${routeState.videoHeight}, requestedOrientation=$targetOrientation"
-                } else {
-                    "Rotation policy changed to local: orientation restriction removed"
-                },
+                "Screen rotation policy applied: policy=${rotationPolicy.name.lowercase()}, " +
+                    "remote=${routeState.videoWidth}x${routeState.videoHeight}, requestedOrientation=$targetOrientation",
             )
+        }
+
+        if (
+            routeState.connectionState is ConnectionState.Connected &&
+            shouldRotateTargetForLocalPolicy(
+                policy = rotationPolicy,
+                localOrientation = localScreenOrientation(configuration.orientation),
+                remoteOrientation = remoteOrientation,
+            )
+        ) {
+            controlViewModel.rotateTargetDevice().onFailure { error ->
+                LogManager.e(
+                    LogTags.REMOTE_DISPLAY,
+                    "Failed to synchronize target rotation with the local device: ${error.message}",
+                    error,
+                )
+            }
         }
     }
 

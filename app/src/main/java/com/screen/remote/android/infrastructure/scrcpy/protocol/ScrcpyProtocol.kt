@@ -20,6 +20,7 @@ object ScrcpyProtocol {
     const val MSG_TYPE_INJECT_TOUCH_EVENT = 2
     const val MSG_TYPE_SET_CLIPBOARD = 9
     const val MSG_TYPE_SET_DISPLAY_POWER = 10
+    const val MSG_TYPE_ROTATE_DEVICE = 11
     const val MSG_TYPE_START_APP = 16
 
     // scrcpy 4.1 ControlMessageReader.MESSAGE_MAX_SIZE

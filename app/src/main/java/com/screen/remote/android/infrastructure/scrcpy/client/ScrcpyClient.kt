@@ -15,7 +15,6 @@ import com.screen.remote.android.core.common.manager.SessionIssueTracker
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.compatibilityCaptureSettings
-import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
@@ -59,13 +58,6 @@ class ScrcpyClient(
 
     init {
         ScrcpyDiagnosticsRegistry.register(this)
-
-        // 加载 Native 库
-        try {
-            System.loadLibrary("scrcpy_adb_bridge")
-        } catch (e: UnsatisfiedLinkError) {
-            LogManager.e(LogTags.SCRCPY_CLIENT, "${RemoteTexts.SCRCPY_NATIVE_LIB_LOAD_FAILED.english}: ${e.message}", e)
-        }
     }
 
     // 连接组件
@@ -262,6 +254,13 @@ class ScrcpyClient(
             compatibilityModeController.sendKeyEvent(keyCode, action)
         } else {
             controller.sendKeyEvent(keyCode, action, repeat, metaState)
+        }
+
+    suspend fun rotateDevice(): Result<Boolean> =
+        if (isCompatibilityMode()) {
+            Result.failure(UnsupportedOperationException("Target rotation is unavailable in compatibility mode"))
+        } else {
+            controller.rotateDevice()
         }
 
     suspend fun sendText(text: String): Result<Boolean> =

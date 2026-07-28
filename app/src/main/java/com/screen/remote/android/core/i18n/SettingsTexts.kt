@@ -88,6 +88,7 @@ object SettingsTexts {
     val ABOUT_UPDATE_INSTALL_PERMISSION =
         TextPair("请允许 Screen Remote 安装应用后重试", "Allow Screen Remote to install apps, then try again")
     val ABOUT_UPDATE_LATER = TextPair("稍后", "Later")
+    val ABOUT_UPDATE_SKIP = TextPair("跳过", "Skip")
     val ABOUT_UPDATE_LATEST = TextPair("当前已是最新版本", "You're up to date")
     val ABOUT_UPDATE_FAILED = TextPair("检查更新失败，请稍后重试", "Update check failed. Please try again later")
     val ABOUT_TELEMETRY = TextPair("遥测诊断", "Telemetry diagnostics")

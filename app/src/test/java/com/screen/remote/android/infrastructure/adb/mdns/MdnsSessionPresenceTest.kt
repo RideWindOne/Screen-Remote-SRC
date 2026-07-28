@@ -92,6 +92,23 @@ class MdnsSessionPresenceTest {
     }
 
     @Test
+    fun exposesLegacyAdbMdnsAdvertisementAsTcpEndpoint() {
+        val service =
+            AdbMdnsService(
+                name = "adb-10AEAG2YZS0020P",
+                host = "192.168.5.13",
+                port = 39517,
+                serviceType = AdbMdnsServiceType.ADB,
+            )
+
+        val endpoint = discoveredMdnsTcpServices(connectServices = listOf(service)).single()
+
+        assertEquals("192.168.5.13", endpoint.host)
+        assertEquals(39517, endpoint.port)
+        assertFalse(endpoint.confirming)
+    }
+
+    @Test
     fun refreshRetainsOldServiceAsConfirmingUntilItIsRediscovered() {
         val old =
             AdbMdnsService(

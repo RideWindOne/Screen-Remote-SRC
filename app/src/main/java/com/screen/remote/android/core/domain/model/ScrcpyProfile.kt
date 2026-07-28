@@ -23,7 +23,6 @@ data class ScrcpyProfile(
 private fun defaultProfileConfig(): ScrcpyConfig =
     ScrcpyConfig(
         maxSize = 1920,
-        followRemoteOrientation = true,
     )
 
 fun ScrcpyOptions.withProfile(profile: ScrcpyProfile): ScrcpyOptions =

@@ -160,10 +160,10 @@ private fun release4438UpdatePages(isDark: Boolean): List<WelcomePage> {
                 listOf(
                     WelcomeFeature(
                         Icons.Default.Tune,
-                        updateText("本机 / 目标旋转策略", "Local or target rotation"),
+                        updateText("无 / 本机 / 目标旋转策略", "None, local, or target rotation"),
                         updateText(
-                            "可让画面方向跟随本机自由旋转，或限制本机方向并跟随目标设备。",
-                            "Let rotation follow the local device freely, or constrain it to follow the target device.",
+                            "可不做特殊处理，让目标设备跟随本机，或让本机跟随目标设备。",
+                            "Keep the original behavior, make the target follow this device, or make this device follow the target.",
                         ),
                     ),
                     WelcomeFeature(

@@ -391,9 +391,23 @@ internal class FloatingMenuMenuInteractionBinder(
         menu: View,
         onHideMenu: () -> Unit,
     ) {
-        bindActionButton(menu, R.id.btn_back, 4, "发送返回键失败", onHideMenu)
-        bindActionButton(menu, R.id.btn_home, 3, "发送主页键失败", onHideMenu)
-        bindActionButton(menu, R.id.btn_recent, 187, "发送最近任务键失败", onHideMenu)
+        bindActionButton(menu, R.id.btn_back, 4, "Failed to send the Back key", onHideMenu)
+        bindActionButton(menu, R.id.btn_home, 3, "Failed to send the Home key", onHideMenu)
+        bindActionButton(menu, R.id.btn_recent, 187, "Failed to send the Recents key", onHideMenu)
+
+        menu.findViewById<ImageButton>(R.id.btn_rotate_target)?.let { button ->
+            bindSimpleButton(button, onHideMenu) {
+                scope.launch {
+                    actions.rotateTargetDevice().onFailure { error ->
+                        LogManager.e(
+                            LogTags.FLOATING_CONTROLLER_MSG,
+                            "Failed to rotate target device: ${error.message}",
+                            error,
+                        )
+                    }
+                }
+            }
+        }
 
         menu.findViewById<ImageButton>(R.id.btn_keyboard)?.let { button ->
             bindSimpleButton(button, onHideMenu) {

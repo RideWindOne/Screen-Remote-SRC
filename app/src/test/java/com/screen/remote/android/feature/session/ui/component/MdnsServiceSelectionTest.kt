@@ -1,6 +1,7 @@
 package com.screen.remote.android.feature.session.ui.component
 
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
+import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredTcpService
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -24,21 +25,35 @@ class MdnsServiceSelectionTest {
     }
 
     @Test
-    fun pairedConnectServiceDoesNotRequirePairingPrompt() {
-        val service = service(requiresPairing = false, previouslyPaired = true)
+    fun connectServiceDoesNotRequirePairingPromptWithoutLocalPairingRecord() {
+        val service = service(requiresPairing = false, previouslyPaired = false)
 
         assertEquals(false, service.requiresPairingPrompt())
     }
 
     @Test
-    fun unpairedOrPairingServiceRequiresPairingPrompt() {
+    fun pairingServiceRequiresPairingPrompt() {
         assertEquals(
             true,
-            service(requiresPairing = false, previouslyPaired = false).requiresPairingPrompt(),
+            service(requiresPairing = true, previouslyPaired = false).requiresPairingPrompt(),
         )
+    }
+
+    @Test
+    fun tcpServiceSelectionMatchesBothHostAndPort() {
+        val services =
+            listOf(
+                MdnsDiscoveredTcpService(host = "192.168.5.13", port = 39517),
+                MdnsDiscoveredTcpService(host = "192.168.5.13", port = 5555),
+            )
+
         assertEquals(
-            true,
-            service(requiresPairing = true, previouslyPaired = true).requiresPairingPrompt(),
+            0,
+            selectedTcpMdnsServiceIndex(
+                services = services,
+                selectedHost = "192.168.5.13",
+                selectedPort = 39517,
+            ),
         )
     }
 

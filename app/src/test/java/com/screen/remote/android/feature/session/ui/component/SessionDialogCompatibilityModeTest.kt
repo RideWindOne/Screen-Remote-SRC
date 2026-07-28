@@ -1,6 +1,7 @@
 package com.screen.remote.android.feature.session.ui.component
 
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
@@ -26,7 +27,7 @@ class SessionDialogCompatibilityModeTest {
                         newDisplayEnabled = true,
                         showTouches = true,
                         showFloatingBall = true,
-                        followRemoteOrientation = true,
+                        screenRotationPolicy = ScreenRotationPolicy.TARGET,
                         keepDeviceAwake = true,
                     )
                 }
@@ -47,7 +48,7 @@ class SessionDialogCompatibilityModeTest {
         assertFalse(state.config.newDisplayEnabled)
         assertFalse(state.config.showTouches)
         assertTrue(state.config.showFloatingBall)
-        assertTrue(state.config.followRemoteOrientation)
+        assertEquals(ScreenRotationPolicy.TARGET, state.config.screenRotationPolicy)
         assertTrue(state.config.keepDeviceAwake)
     }
 }

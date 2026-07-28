@@ -180,6 +180,12 @@ internal class ScrcpyControllerTransport(
         }
     }
 
+    private object RotateDeviceMessage : ControlMessage {
+        override fun encodeTo(buffer: ByteBuffer) {
+            buffer.put(ScrcpyProtocol.MSG_TYPE_ROTATE_DEVICE.toByte())
+        }
+    }
+
     private data class DisplayPowerMessage(
         val on: Boolean,
     ) : ControlMessage {
@@ -356,6 +362,8 @@ internal class ScrcpyControllerTransport(
         }
 
     fun enqueueDisplayPowerOff(): Result<Boolean> = enqueue(DisplayPowerMessage(on = false))
+
+    fun enqueueRotateDevice(): Result<Boolean> = enqueue(RotateDeviceMessage)
 
     fun enqueueStartApp(name: String): Result<Boolean> {
         val nameBytes = name.toByteArray(Charsets.UTF_8)

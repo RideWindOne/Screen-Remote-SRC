@@ -3,6 +3,7 @@ package com.screen.remote.android.app.deeplink
 import com.screen.remote.android.core.data.repository.parseBitRate
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 
 internal val SCRCPY_URL_PARAMETER_NAMES =
     setOf(
@@ -24,8 +25,7 @@ internal val SCRCPY_URL_PARAMETER_NAMES =
         "showFloatingBall",
         "hardwareDecoding",
         "enableHardwareDecoding",
-        "followOrientation",
-        "followRemoteOrientation",
+        "screenRotationPolicy",
         "clipboard",
         "clipboardSync",
         "turnScreenOff",
@@ -52,7 +52,7 @@ internal fun ScrcpyConfig.toUrlParameters(): Map<String, String> =
         "useFullScreen" to useFullScreen.toUrlBoolean(),
         "showFloatingBall" to showFloatingBall.toUrlBoolean(),
         "enableHardwareDecoding" to enableHardwareDecoding.toUrlBoolean(),
-        "followRemoteOrientation" to followRemoteOrientation.toUrlBoolean(),
+        "screenRotationPolicy" to screenRotationPolicy.name.lowercase(),
         "tunnelMode" to
             when (tunnelMode) {
                 ScrcpyTunnelMode.DIRECT_ADB -> "direct_adb"
@@ -106,8 +106,16 @@ internal fun ScrcpyConfig.withUrlParameters(parameters: Map<String, String>): Re
                     "floatingBall", "showFloatingBall" -> config.copy(showFloatingBall = value.requireBoolean(key))
                     "hardwareDecoding", "enableHardwareDecoding" ->
                         config.copy(enableHardwareDecoding = value.requireBoolean(key))
-                    "followOrientation", "followRemoteOrientation" ->
-                        config.copy(followRemoteOrientation = value.requireBoolean(key))
+                    "screenRotationPolicy" ->
+                        config.copy(
+                            screenRotationPolicy =
+                                when (value) {
+                                    "none" -> ScreenRotationPolicy.NONE
+                                    "local" -> ScreenRotationPolicy.LOCAL
+                                    "target" -> ScreenRotationPolicy.TARGET
+                                    else -> error("Invalid screenRotationPolicy: $value")
+                                },
+                        )
                     "clipboard", "clipboardSync" -> config.copy(clipboardSync = value.requireBoolean(key))
                     "turnScreenOff" -> config.copy(turnScreenOff = value.requireBoolean(key))
                     "powerOffOnClose" -> config.copy(powerOffOnClose = value.requireBoolean(key))

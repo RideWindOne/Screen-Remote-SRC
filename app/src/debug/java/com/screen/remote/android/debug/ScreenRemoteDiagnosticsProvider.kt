@@ -264,7 +264,7 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
                         "fullScreen",
                         "floatingBall",
                         "hardwareDecoding",
-                        "followOrientation",
+                        "screenRotationPolicy",
                         "clipboard",
                         "turnScreenOff",
                         "powerOffOnClose",
@@ -290,7 +290,6 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
                     .put("useFullScreen", "fullScreen")
                     .put("showFloatingBall", "floatingBall")
                     .put("enableHardwareDecoding", "hardwareDecoding")
-                    .put("followRemoteOrientation", "followOrientation")
                     .put("clipboardSync", "clipboard"),
             ).put(
                 "settings",

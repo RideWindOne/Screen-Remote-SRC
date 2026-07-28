@@ -48,7 +48,13 @@ data class UpdateCheckCache(
     val checkedAtEpochMillis: Long = 0,
     val latestVersion: String? = null,
     val releaseUrl: String? = null,
+    val skippedVersion: String? = null,
 )
+
+fun shouldShowAutomaticUpdate(
+    release: GitHubReleaseInfo?,
+    cache: UpdateCheckCache,
+): Boolean = release != null && release.tagName != cache.skippedVersion
 
 fun isAutomaticUpdateCheckDue(
     cache: UpdateCheckCache,

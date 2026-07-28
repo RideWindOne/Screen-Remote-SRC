@@ -1,14 +1,32 @@
 package com.screen.remote.android.core.update
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
 import java.util.TimeZone
 
 class AppUpdateModelsTest {
+    @Test
+    fun skippedVersionIsHiddenOnlyFromAutomaticUpdatePrompt() {
+        val release = GitHubReleaseInfo("4.4.3.9", "4.4.3.9", "url", false, false)
+
+        assertFalse(
+            shouldShowAutomaticUpdate(
+                release,
+                UpdateCheckCache(skippedVersion = "4.4.3.9"),
+            ),
+        )
+        assertTrue(
+            shouldShowAutomaticUpdate(
+                release.copy(tagName = "4.4.3.10"),
+                UpdateCheckCache(skippedVersion = "4.4.3.9"),
+            ),
+        )
+    }
+
     @Test
     fun fourPartCurrentVersionEqualsReleaseTag() {
         assertNull(

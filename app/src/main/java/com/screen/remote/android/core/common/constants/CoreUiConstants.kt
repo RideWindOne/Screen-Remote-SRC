@@ -39,6 +39,7 @@ object AppConstants {
  */
 object AppDimens {
     const val WINDOW_WIDTH_RATIO = 0.95f
+    const val WINDOW_WIDTH_SMALL_RATIO = 0.85f
     const val WINDOW_MAX_HEIGHT_RATIO = 0.8f
 
     val windowCornerRadius = IosDesignTokens.dialogCornerRadius

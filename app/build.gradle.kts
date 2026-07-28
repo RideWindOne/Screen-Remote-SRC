@@ -1,5 +1,3 @@
-
-import com.android.build.api.variant.FilterConfiguration
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Properties
@@ -11,6 +9,7 @@ import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import com.android.build.api.variant.FilterConfiguration
 
 plugins {
     alias(libs.plugins.android.application)
@@ -54,8 +53,8 @@ abstract class VerifyScrcpyServerTask : DefaultTask() {
                 digest.digest().joinToString("") { "%02x".format(it) }
             }
         check(actualSha256 == expectedSha256.get()) {
-            "Bundled scrcpy-server is not v${serverVersion.get()}: expected=${expectedSha256.get()} actual=$actualSha256. " +
-                "Run ./gradlew :app:updateScrcpyServer."
+            "Bundled scrcpy-server is not v${serverVersion.get()}: expected=${expectedSha256.get()}" +
+                " actual=$actualSha256. Run ./gradlew :app:updateScrcpyServer."
         }
     }
 }
@@ -106,7 +105,6 @@ android {
     namespace = appId
     compileSdk = 37
     buildToolsVersion = "37.0.0"
-    ndkVersion = "30.0.15729638"
 
     defaultConfig {
         applicationId = appId
@@ -121,20 +119,6 @@ android {
         buildConfigField("String", "TELEMETRY_BASE_URL", "\"$telemetryBaseUrl\"")
 
         vectorDrawables.useSupportLibrary = true
-
-        // ExternalNativeBuild 参数
-        // 启用 CMake 编译 Native 代码
-        @Suppress("UnstableApiUsage")
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments +=
-                    listOf(
-                        "-DANDROID_STL=c++_shared",
-                        "-DANDROID_PLATFORM=android-23",
-                    )
-            }
-        }
 
         ndk {
             // 支持所有主流架构
@@ -209,25 +193,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-        prefab = true
-    }
-
-    composeCompiler {
-        // Release 不需要携带 Compose 源位置信息，避免增加编译/压缩负担。
-        includeSourceInformation = false
-    }
-
-    // --------------------
-    // External Native Build
-    // --------------------
-    externalNativeBuild {
-        cmake {
-            path =
-                project.layout.projectDirectory
-                    .file("src/main/cpp/CMakeLists.txt")
-                    .asFile
-            version = "4.1.2"
-        }
     }
 
     // --------------------
@@ -244,7 +209,13 @@ android {
     }
 }
 
+composeCompiler {
+    // Release 不需要携带 Compose 源位置信息，避免增加编译/压缩负担。
+    includeSourceInformation = false
+}
+
 val syncDadbHelperAsset = tasks.register<SyncDadbHelperAssetTask>("syncDadbHelperAsset") {
+    description = "Build and stage the dadb helper JAR as a generated app asset"
     val generatedDir = layout.buildDirectory.dir("generated/assets/dadbHelper")
     dependsOn(gradle.includedBuild("dadb").task(":dadb-helper:dexJar"))
     from(rootProject.file("../external/dadb/dadb-helper/build/libs/dadb-helper.jar"))
