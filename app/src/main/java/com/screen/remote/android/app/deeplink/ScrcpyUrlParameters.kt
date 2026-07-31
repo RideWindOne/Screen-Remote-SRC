@@ -150,7 +150,6 @@ internal fun ScrcpyConfig.withUrlParameters(parameters: Map<String, String>): Re
                 if (config.compatibilityMode) {
                     config.copy(
                         enableAudio = false,
-                        clipboardSync = false,
                     )
                 } else {
                     config

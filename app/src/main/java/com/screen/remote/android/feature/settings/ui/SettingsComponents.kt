@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
@@ -183,6 +184,7 @@ fun SettingsItemWithMenu(
             IOSStyledDropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { onExpandedChange(false) },
+                offset = DpOffset(0.dp, AppDimens.listItemHeight),
             ) {
                 menuContent()
             }

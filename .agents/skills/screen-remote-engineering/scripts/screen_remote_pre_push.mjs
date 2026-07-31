@@ -8,7 +8,10 @@ import process from "node:process";
 const ZERO_SHA = "0".repeat(40);
 const REVIEW_MARKER = "Screen-Remote-Review: confirmed";
 const CODEX_MODEL = "gpt-5.3-codex-spark";
-const CODEX_REASONING_EFFORT = "medium";
+const CODEX_REASONING_EFFORT = "high";
+const APP_REPOSITORY = "XRSec/Screen-Remote-src";
+const ROOT_REPOSITORY = "XRSec/Screen-Remote";
+const ANDROID_WIKI_DIRECTORY = "wiki-android";
 
 function run(cwd, args) {
   const result = spawnSync(args[0], args.slice(1), {
@@ -46,6 +49,20 @@ function git(repo, ...args) {
   const [code, output] = run(repo, ["git", ...args]);
   if (code !== 0) throw new Error(output || `git ${args.join(" ")} failed`);
   return output;
+}
+
+function githubRepositorySlug(url) {
+  const normalized = url.trim().replace(/\/+$/, "");
+  const match = normalized.match(/github\.com(?::\d+)?[/:]([^/]+\/[^/]+?)(?:\.git)?$/i);
+  return match?.[1] ?? "";
+}
+
+function assertRepositoryTarget(appRepo) {
+  const origin = git(appRepo, "remote", "get-url", "origin");
+  const actual = githubRepositorySlug(origin);
+  if (actual.toLowerCase() !== APP_REPOSITORY.toLowerCase()) {
+    throw new Error(`repository target mismatch: expected ${APP_REPOSITORY}, got ${actual || origin}`);
+  }
 }
 
 function parseRefUpdates(text) {
@@ -143,8 +160,9 @@ function finishReview(result, { contextPath, messagePath }) {
 
 async function resumeInterruptedReview() {
   const appRepo = path.resolve(git(process.cwd(), "rev-parse", "--show-toplevel"));
+  assertRepositoryTarget(appRepo);
   const outer = path.dirname(appRepo);
-  const wikiRepo = path.join(outer, "external", "wiki");
+  const wikiRepo = path.join(outer, "external", ANDROID_WIKI_DIRECTORY);
   const dadbRepo = path.join(outer, "external", "dadb");
   const skillDir = path.join(appRepo, ".agents", "skills", "screen-remote-engineering");
   const stateDir = path.resolve(appRepo, git(appRepo, "rev-parse", "--git-path", "codex-pre-push"));
@@ -160,7 +178,7 @@ async function resumeInterruptedReview() {
     throw new Error("当前 HEAD 已变化；请直接再次 git push，让 hook 审读新的提交范围");
   }
   if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git")) || !existsSync(path.join(dadbRepo, ".git"))) {
-    throw new Error("outer project, skill, external/wiki, or external/dadb repository not found");
+    throw new Error("outer project, Android skill, external/wiki-android, or external/dadb repository not found");
   }
   git(dadbRepo, "cat-file", "-e", `${context.dadb_sha}^{commit}`);
 
@@ -171,6 +189,8 @@ async function resumeInterruptedReview() {
   console.log(`  范围：${context.base_sha.slice(0, 12)}..${context.local_sha.slice(0, 12)}`);
   console.log(`  dadb：${context.dadb_sha.slice(0, 12)}^..${context.dadb_sha.slice(0, 12)}`);
   console.log(`  模型：${CODEX_MODEL} / ${CODEX_REASONING_EFFORT}`);
+  console.log(`  Repository target：${APP_REPOSITORY}`);
+  console.log(`  Root pointer：${ROOT_REPOSITORY}`);
   console.log(`  Session：${context.session_id}`);
   console.log(`  Wiki：${wikiRepo}\n`);
   const [code] = await runStreaming(wikiRepo, ["codex", "exec", "resume", "--model", CODEX_MODEL, "--config", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`, "--output-schema", schemaPath, "--output-last-message", resultPath, context.session_id, resumePrompt]);
@@ -192,16 +212,17 @@ async function main() {
   if (!updates) return 0;
   const [, localSha, remoteRef, remoteSha] = updates;
   const appRepo = path.resolve(git(process.cwd(), "rev-parse", "--show-toplevel"));
+  assertRepositoryTarget(appRepo);
   const commitMessage = git(appRepo, "show", "-s", "--format=%B", localSha);
   if (commitMessage.split("\n").some((line) => line.trim() === REVIEW_MARKER)) {
     console.log(`已检测到 ${REVIEW_MARKER}，允许本次 push。`);
     return 0;
   }
   const outer = path.dirname(appRepo);
-  const wikiRepo = path.join(outer, "external", "wiki");
+  const wikiRepo = path.join(outer, "external", ANDROID_WIKI_DIRECTORY);
   const dadbRepo = path.join(outer, "external", "dadb");
   const skillDir = path.join(appRepo, ".agents", "skills", "screen-remote-engineering");
-  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git")) || !existsSync(path.join(dadbRepo, ".git"))) throw new Error("outer project, skill, external/wiki, or external/dadb repository not found");
+  if (!existsSync(path.join(skillDir, "SKILL.md")) || !existsSync(path.join(wikiRepo, ".git")) || !existsSync(path.join(dadbRepo, ".git"))) throw new Error("outer project, Android skill, external/wiki-android, or external/dadb repository not found");
 
   const baseSha = resolveBase(appRepo, remoteName, remoteRef, remoteSha, localSha);
   const dadbSha = git(dadbRepo, "rev-parse", "HEAD");
@@ -257,6 +278,8 @@ async function main() {
   console.log(`  范围：${baseSha.slice(0, 12)}..${localSha.slice(0, 12)}（${outgoingCount} commits）`);
   console.log(`  dadb：${dadbSha.slice(0, 12)}^..${dadbSha.slice(0, 12)}`);
   console.log(`  模型：${CODEX_MODEL} / ${CODEX_REASONING_EFFORT}`);
+  console.log(`  Repository target：${APP_REPOSITORY}`);
+  console.log(`  Root pointer：${ROOT_REPOSITORY}`);
   console.log(`  Wiki：${wikiRepo}`);
   console.log(`  若任务中断：make -C ${outer} wiki-resume`);
   console.log("  以下为 Codex 实时输出：\n");

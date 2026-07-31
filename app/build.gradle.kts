@@ -105,6 +105,7 @@ android {
     namespace = appId
     compileSdk = 37
     buildToolsVersion = "37.0.0"
+    ndkVersion = "30.0.15729638"
 
     defaultConfig {
         applicationId = appId
@@ -321,6 +322,9 @@ dependencies {
     implementation(libs.dadb)
     implementation(libs.dadb.android)
     implementation(libs.bouncycastle.bcpkix)
+
+    // QR generation for Wireless Debugging pairing
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
 }

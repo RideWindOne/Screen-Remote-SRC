@@ -251,7 +251,7 @@ internal fun rememberNearbyAdbScanController(sessions: List<SessionData>): Nearb
 @Composable
 internal fun NearbyAdbDevicesButton(
     controller: NearbyAdbScanController,
-    onPairingRequired: () -> Unit,
+    onPairingRequired: (host: String, port: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -305,7 +305,7 @@ internal fun NearbyAdbDevicesButton(
             onRefresh = controller::refresh,
             onPairingRequired = {
                 showDevices = false
-                onPairingRequired()
+                onPairingRequired(it.host, it.port)
             },
         )
     }
@@ -321,7 +321,7 @@ private fun NearbyAdbDevicesDialog(
     scanNotice: String?,
     onDismiss: () -> Unit,
     onRefresh: () -> Unit,
-    onPairingRequired: () -> Unit,
+    onPairingRequired: (MdnsDiscoveredConnectService) -> Unit,
 ) {
     val context = LocalContext.current
     val mdnsTlsEndpoints =
@@ -369,7 +369,7 @@ private fun NearbyAdbDevicesDialog(
                 service = service,
                 onClick = {
                     if (service.requiresPairing) {
-                        onPairingRequired()
+                        onPairingRequired(service)
                     } else {
                         copyAddress(
                             context = context,

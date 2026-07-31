@@ -9,17 +9,18 @@ Work from the repository's actual boundaries and load only the context needed fo
 
 ## Start every task
 
-1. This skill runs from the `Screen-Remote/` subrepository root. Read the inherited outer-project rules at `../AGENTS.md`; there is intentionally no `AGENTS.md` inside this subrepository. Do not try `AGENTS.md` or use `rg --files` to search for a parent file.
+1. This skill runs from the `Screen-Remote/` subrepository root. Read the Android rules at `AGENTS.md`, then use `../AGENTS.md` only for aggregate-repository routing and Git boundaries.
 2. Run:
 
    ```bash
-   sed -n '1,260p' ../AGENTS.md
+   sed -n '1,320p' AGENTS.md
+   sed -n '1,240p' ../AGENTS.md
    node .agents/skills/screen-remote-engineering/scripts/project_probe.mjs
    ```
 
-3. Treat the outer repository, `Screen-Remote/` app submodule, `external/dadb/`, and `external/wiki/` as separate Git worktrees. Preserve existing changes in all of them.
+3. Treat the outer repository, `Screen-Remote/` app submodule, `external/dadb/`, and `external/wiki-android/` as separate Git worktrees. Preserve existing changes in all of them.
 4. State the detected scope before reading implementation files.
-5. Do not recursively read `../external/`, all of `../external/wiki/`, or entire large UI files. Follow the routing below.
+5. Do not recursively read `../external/`, all of `../external/wiki-android/`, or entire large UI files. Follow the routing below.
 
 ## Select the workflow
 
@@ -28,7 +29,7 @@ Work from the repository's actual boundaries and load only the context needed fo
 - **Implement or fix:** Read `references/change-workflow.md` and `references/verification.md`. Make one coherent slice, run the narrowest meaningful check, then continue.
 - **Simplify or remove code:** Read `references/change-workflow.md`. Lock observable behavior with existing or focused regression tests, remove obsolete paths completely, and avoid compatibility shims or parallel implementations.
 - **Review:** Read `references/change-workflow.md`. Review only the detected diff plus the directly affected contracts and tests. Findings must include evidence, consequence, and a concrete remedy.
-- **Handle a human push from this subrepository:** Read `references/wiki-sync.md`. Review the exact remote-SHA-to-local-SHA committed app range supplied by the hook and the single locked `../external/dadb/` `HEAD^..HEAD` commit, update affected Chinese/English canonical page pairs in the outer-root `../external/wiki/` GitHub Wiki repository, and generate an app commit message from the app range. Never create wiki pages inside this repository, or rebase, amend, commit, or push from this workflow.
+- **Handle a human push from this subrepository:** Read `references/wiki-sync.md`. Review the exact remote-SHA-to-local-SHA committed app range supplied by the hook and the single locked `../external/dadb/` `HEAD^..HEAD` commit, update affected Chinese/English canonical page pairs in the outer-root `../external/wiki-android/` GitHub Wiki repository, and generate an app commit message from the app range. Never create wiki pages inside this repository, or rebase, amend, commit, or push from this workflow.
 - **Touch ADB, scrcpy, socket, session runtime, codec, decoder, controller, or transport code:** Also read `references/connection-safety.md` before editing or reviewing. These rules are mandatory.
 
 ## Context routing
@@ -47,7 +48,7 @@ Work from the repository's actual boundaries and load only the context needed fo
 - Keep configuration state separate from runtime state, and device capability separate from user preference.
 - Keep UI out of transport/protocol orchestration. Keep low-level infrastructure independent of feature UI.
 - Reuse the project's design-system components and module-specific i18n text objects.
-- Keep the outer root `README.md` and `README_CN.md` limited to the project introduction, previews, and Wiki navigation. Maintain detailed project documentation in `external/wiki/`. Keep the outer `docs/` directory media-only; never create or update Markdown there.
+- Keep detailed Android documentation in `../external/wiki-android/`. The aggregate root owns its public README, release material, media, and cross-platform contracts; do not change those from an Android-only task unless explicitly requested.
 - Avoid speculative layers such as empty `UseCase`, `Repository`, `Manager`, or `Facade` wrappers.
 - Do not modify external submodules unless the requested behavior genuinely belongs upstream or at the dependency boundary.
 - Do not commit, stage, push, or update submodule pointers unless the user asks.

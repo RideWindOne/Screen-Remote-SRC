@@ -29,6 +29,7 @@ fun SettingsScreen(
     onNavigateToBackupRestore: () -> Unit = {},
     onNavigateToCustomCommands: () -> Unit = {},
     openDevicePairingOnEntry: Boolean = false,
+    devicePairingHostPort: String = "",
 ) {
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
@@ -62,6 +63,7 @@ fun SettingsScreen(
     SettingsScreenDialogs(
         routeState = routeState,
         texts = texts,
+        devicePairingHostPort = devicePairingHostPort,
     )
 }
 

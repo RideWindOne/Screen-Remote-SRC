@@ -140,8 +140,8 @@ private fun release4438UpdatePages(isDark: Boolean): List<WelcomePage> {
                         Icons.Default.Terminal,
                         updateText("文本输入与粘贴", "Text input and paste"),
                         updateText(
-                            "兼容模式仍可输入和粘贴文本；自动粘贴板同步继续由普通 scrcpy 模式提供。",
-                            "Compatibility mode still supports text input and paste; automatic clipboard sync remains available in standard scrcpy mode.",
+                            "兼容模式仍可输入和粘贴文本，并可通过会话开关启用或关闭内置剪贴板同步。",
+                            "Compatibility mode still supports text input and paste, and its built-in clipboard sync follows the session toggle.",
                         ),
                     ),
                 ),

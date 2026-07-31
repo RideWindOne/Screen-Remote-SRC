@@ -228,7 +228,7 @@ fun EncoderSelectionDialog(
 
         Surface(
             shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = MaterialTheme.colorScheme.surface,
         ) {
             Column {
                 EncoderOptionsSection(

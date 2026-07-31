@@ -138,8 +138,8 @@ private fun extractVideoCodecTypeOptions(codecs: List<com.screen.remote.android.
     val types = mutableSetOf<String>()
     codecs.forEach { codec ->
         when {
-            codec.type.contains("avc", ignoreCase = true) -> types.add("H.264")
-            codec.type.contains("hevc", ignoreCase = true) -> types.add("H.265")
+            codec.type.contains("avc", ignoreCase = true) -> types.add("H264")
+            codec.type.contains("hevc", ignoreCase = true) -> types.add("H265")
             codec.type.contains("av01", ignoreCase = true) || codec.type.contains("av1", ignoreCase = true) -> types.add("AV1")
             codec.type.contains("vp8", ignoreCase = true) -> types.add("VP8")
             codec.type.contains("vp9", ignoreCase = true) -> types.add("VP9")
@@ -163,8 +163,8 @@ private fun filterVideoCodecs(
 
         val matchesCodecType =
             when (codecTypeFilter) {
-                "H.264" -> codec.type.contains("avc", ignoreCase = true)
-                "H.265" -> codec.type.contains("hevc", ignoreCase = true)
+                "H264" -> codec.type.contains("avc", ignoreCase = true)
+                "H265" -> codec.type.contains("hevc", ignoreCase = true)
                 "AV1" -> codec.type.contains("av01", ignoreCase = true) || codec.type.contains("av1", ignoreCase = true)
                 "VP8" -> codec.type.contains("vp8", ignoreCase = true)
                 "VP9" -> codec.type.contains("vp9", ignoreCase = true)
@@ -197,8 +197,8 @@ private fun filterVideoCodecs(
 
 private fun videoFilterMimeType(filter: String): String? =
     when (filter) {
-        "H.264" -> "video/avc"
-        "H.265" -> "video/hevc"
+        "H264" -> "video/avc"
+        "H265" -> "video/hevc"
         "AV1" -> "video/av01"
         "VP8" -> "video/x-vnd.on2.vp8"
         "VP9" -> "video/x-vnd.on2.vp9"

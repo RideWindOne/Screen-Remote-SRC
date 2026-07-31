@@ -231,7 +231,8 @@ fun EncoderListSection(
                 }
                 IOSStyledDropdownMenu(
                     expanded = showFilterMenu,
-                    offset = DpOffset(0.dp, 100.dp),
+                    offset = DpOffset(0.dp, AppDimens.listItemHeight),
+                    alignment = Alignment.TopEnd,
                     onDismissRequest = { showFilterMenu = false },
                 ) {
                     filterOptions.forEach { option ->
@@ -270,7 +271,7 @@ fun EncoderListSection(
         if (filteredEncoders.isNotEmpty()) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = MaterialTheme.colorScheme.surface,
             ) {
                 Column {
                     filteredEncoders.forEachIndexed { index, encoder ->

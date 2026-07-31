@@ -52,6 +52,7 @@ import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.app.deeplink.resolveSessionTarget
 import com.screen.remote.android.app.deeplink.SettingsDestination as DeepLinkSettingsDestination
 import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
@@ -104,6 +105,9 @@ private class MainScreenRouteState {
     var openDevicePairingOnSettingsEntry by mutableStateOf(false)
         private set
 
+    var devicePairingHostPort by mutableStateOf("")
+        private set
+
     var pendingManagementSessionId by mutableStateOf<String?>(null)
         private set
 
@@ -124,11 +128,16 @@ private class MainScreenRouteState {
 
     fun openSettings() {
         openDevicePairingOnSettingsEntry = false
+        devicePairingHostPort = ""
         settingsDestination = MainScreenSettingsDestination.ROOT
     }
 
-    fun openDevicePairingSettings() {
+    fun openDevicePairingSettings(
+        host: String,
+        port: Int,
+    ) {
         openDevicePairingOnSettingsEntry = true
+        devicePairingHostPort = formatHostPort(host, port)
         settingsDestination = MainScreenSettingsDestination.ROOT
     }
 
@@ -143,6 +152,7 @@ private class MainScreenRouteState {
     fun closeSettings() {
         settingsDestination = null
         openDevicePairingOnSettingsEntry = false
+        devicePairingHostPort = ""
     }
 
     fun requestSessionManagement(
@@ -682,6 +692,7 @@ private fun MainScreenDialogs(
                 viewModel = viewModel,
                 onBack = routeState::closeSettings,
                 openDevicePairingOnEntry = routeState.openDevicePairingOnSettingsEntry,
+                devicePairingHostPort = routeState.devicePairingHostPort,
                 onNavigateToAbout = {
                     routeState.navigateToSettings(MainScreenSettingsDestination.ABOUT)
                 },

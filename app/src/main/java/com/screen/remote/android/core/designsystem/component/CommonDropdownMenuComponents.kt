@@ -28,8 +28,8 @@ import com.screen.remote.android.core.common.IosDesignTokens
 fun IOSStyledDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
+    offset: DpOffset,
     modifier: Modifier = Modifier,
-    offset: DpOffset = DpOffset(0.dp, 80.dp),
     alignment: Alignment = Alignment.TopCenter,
     shadowElevation: Dp = 8.dp,
     content: @Composable ColumnScope.() -> Unit,

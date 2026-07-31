@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 /**
  * 设备配对 ViewModel
  *
- * 负责处理设备配对的业务逻辑（配对码方式）
+ * 负责处理设备配对的业务逻辑。
  */
 class DevicePairingViewModel : ViewModel() {
     private val _pairingStatus = MutableStateFlow(PairingStatus.IDLE)
@@ -94,13 +94,47 @@ class DevicePairingViewModel : ViewModel() {
         port: String,
         pairingCode: String,
         mdnsDeviceSerial: String? = null,
+    ) =
+        startPairing(
+            context = context,
+            ipAddress = ipAddress,
+            port = port,
+            pairingSecret = pairingCode,
+            pairingMethod = "pairing code",
+            mdnsDeviceSerial = mdnsDeviceSerial,
+        )
+
+    /**
+     * 使用二维码中生成的临时密码配对。
+     */
+    fun pairWithQrCode(
+        context: Context,
+        ipAddress: String,
+        port: String,
+        pairingPassword: String,
+    ) =
+        startPairing(
+            context = context,
+            ipAddress = ipAddress,
+            port = port,
+            pairingSecret = pairingPassword,
+            pairingMethod = "QR code",
+        )
+
+    private fun startPairing(
+        context: Context,
+        ipAddress: String,
+        port: String,
+        pairingSecret: String,
+        pairingMethod: String,
+        mdnsDeviceSerial: String? = null,
     ) {
         viewModelScope.launch {
             try {
                 _pairingStatus.value = PairingStatus.CONNECTING
                 LogManager.d(
                     LogTags.ADB_PAIRING,
-                    "Starting pairing with code: $ipAddress:$port $pairingCode",
+                    "Starting Wireless Debugging pairing: method=$pairingMethod endpoint=$ipAddress:$port",
                 )
 
                 // 创建配对管理器
@@ -109,7 +143,7 @@ class DevicePairingViewModel : ViewModel() {
                 _pairingStatus.value = PairingStatus.PAIRING
 
                 // 执行配对
-                val result = pairingManager.pairWithCode(ipAddress, port.toInt(), pairingCode)
+                val result = pairingManager.pairWithCode(ipAddress, port.toInt(), pairingSecret)
 
                 if (result.isSuccess) {
                     // 配对成功

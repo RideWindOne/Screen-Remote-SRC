@@ -296,6 +296,7 @@ object SessionTexts {
     val LABEL_HOST = TextPair("主机", "Host")
     val LABEL_PORT = TextPair("端口", "Port")
     val LABEL_SESSION_ADDRESS = TextPair("会话地址", "Address")
+    val SESSION_ADDRESS_MULTI = TextPair("多地址", "Multiple addresses")
     val LABEL_PRIMARY_ENDPOINT = TextPair("主会话地址", "Primary Session Address")
     val LABEL_BACKUP_ENDPOINT = TextPair("备用会话地址", "Backup Session Address")
     val LABEL_MDNS_SERVICE = TextPair("mDNS 服务", "mDNS Service")
@@ -483,8 +484,8 @@ object SessionTexts {
         )
     val HELP_COMPATIBILITY_MODE =
         TextPair(
-            "通过 ADB 截图显示低帧率画面，并使用 ADB 命令控制设备；可绕过 scrcpy 编码兼容问题，但不支持音频和粘贴板同步，且延迟更高。",
-            "Uses low-frame-rate ADB screenshots and ADB input commands. This bypasses scrcpy encoding issues, but audio and clipboard sync are unavailable, and latency is higher.",
+            "通过 ADB 截图显示低帧率画面，并使用 ADB 命令控制设备；可绕过 scrcpy 编码兼容问题，但不支持音频，且延迟更高。",
+            "Uses low-frame-rate ADB screenshots and ADB input commands. This bypasses scrcpy encoding issues, but audio is unavailable and latency is higher.",
         )
     val HELP_COMPATIBILITY_REQUIRES_SCRCPY =
         TextPair(
@@ -614,13 +615,8 @@ object SessionTexts {
     // 其他选项
     val HELP_CLIPBOARD_SYNC =
         TextPair(
-            "允许 scrcpy 与远程设备同步剪贴板内容。关闭后仍可使用文本输入，但不会自动交换剪贴板。",
-            "Allow scrcpy to synchronize clipboard contents with the remote device. When disabled, text input still works, but clipboards are not exchanged automatically.",
-        )
-    val HELP_COMPATIBILITY_CLIPBOARD_DISABLED =
-        TextPair(
-            "兼容模式没有 scrcpy 控制通道，无法自动同步粘贴板；文本输入和粘贴仍可使用。",
-            "Compatibility mode has no scrcpy control channel, so automatic clipboard sync is unavailable; text input and paste still work.",
+            "与远程设备自动同步剪贴板内容；兼容模式使用内置同步方式。关闭后仍可使用文本输入和主动粘贴，但不会自动交换剪贴板。",
+            "Automatically synchronize clipboard contents with the remote device; compatibility mode uses the built-in sync path. When disabled, text input and explicit paste still work, but clipboards are not exchanged automatically.",
         )
     val HELP_TURN_SCREEN_OFF =
         TextPair(

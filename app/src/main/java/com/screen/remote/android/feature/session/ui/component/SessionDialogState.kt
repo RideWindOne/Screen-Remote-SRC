@@ -19,6 +19,7 @@ import com.screen.remote.android.core.domain.model.formatSessionAddress
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.domain.model.parseTcpHostPort
 import com.screen.remote.android.core.domain.model.toAddressEndpoint
+import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import java.util.UUID
 
@@ -128,11 +129,10 @@ class SessionDialogState(
     @Suppress("unused", "UNUSED_PARAMETER")
     fun updateConfig(transform: ScrcpyConfig.() -> ScrcpyConfig) {
         config = config.transform()
-        if (config.compatibilityMode && (config.enableAudio || config.clipboardSync)) {
+        if (config.compatibilityMode && config.enableAudio) {
             config =
                 config.copy(
                     enableAudio = false,
-                    clipboardSync = false,
                 )
         }
     }
@@ -170,7 +170,6 @@ class SessionDialogState(
                 enableHardwareDecoding = false,
                 tunnelMode = ScrcpyTunnelMode.DIRECT_ADB,
                 enableAudio = false,
-                clipboardSync = false,
                 turnScreenOff = false,
                 powerOffOnClose = false,
                 cleanupOnDisconnect = false,
@@ -239,7 +238,6 @@ class SessionDialogState(
                         },
                     useFullScreen = config.useFullScreen && !config.gameMode && !config.compatibilityMode,
                     enableAudio = config.enableAudio && !config.compatibilityMode,
-                    clipboardSync = config.clipboardSync && !config.compatibilityMode,
                     turnScreenOff = config.turnScreenOff && !config.compatibilityMode,
                     powerOffOnClose =
                         config.powerOffOnClose &&
@@ -293,7 +291,32 @@ class SessionDialogState(
         backupEndpoints = backupEndpoints.filterIndexed { itemIndex, _ -> itemIndex != index }
     }
 
-    fun sessionAddressPreview(): String = primarySessionAddressPreview()
+    fun sessionAddressPreview(): String =
+        if (sessionAddressCount() > 1) {
+            SessionTexts.SESSION_ADDRESS_MULTI.get()
+        } else {
+            primarySessionAddressPreview()
+        }
+
+    private fun sessionAddressCount(): Int {
+        val primary =
+            when (deviceType) {
+                SessionDeviceType.TCP -> parseTcpHostPort(host)?.let { ConnectionCandidate(ConnectionTransport.TCP, it.host, it.port) }
+                SessionDeviceType.USB -> normalizeUsbSerial(usbSerialNumber).takeIf { it.isNotBlank() }?.let { ConnectionCandidate(ConnectionTransport.USB, it) }
+                SessionDeviceType.MDNS -> normalizeMdnsServiceName(host).takeIf { it.isNotBlank() }?.let { ConnectionCandidate(ConnectionTransport.MDNS, it) }
+            }
+
+        val backups =
+            backupEndpoints.mapNotNull { parseSessionAddressCandidate(it) }
+                .filterNot {
+                    primary != null &&
+                        it.transport == primary.transport &&
+                        it.host == primary.host &&
+                        it.port == primary.port
+                }
+
+        return (listOfNotNull(primary) + backups).distinctBy { "${it.transport}:${it.host}:${it.port}" }.size
+    }
 
     fun primarySessionAddressPreview(): String =
         when (deviceType) {
@@ -311,7 +334,7 @@ class SessionDialogState(
             }
             SessionDeviceType.USB -> formatSessionAddress(ConnectionTransport.USB, normalizeUsbSerial(usbSerialNumber.ifBlank { "..." }))
             SessionDeviceType.MDNS -> formatSessionAddress(ConnectionTransport.MDNS, normalizeMdnsServiceName(host.ifBlank { "..." }))
-        }.let(DeviceTransportSerial::stripAnyTransportPrefix)
+        }
 
     fun selectDeviceType(type: SessionDeviceType) {
         deviceType = type

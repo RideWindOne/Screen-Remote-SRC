@@ -9,6 +9,19 @@ import org.junit.Test
 
 class SessionDialogCompatibilityModeTest {
     @Test
+    fun enablingCompatibilityModePreservesDisabledClipboardSync() {
+        val state =
+            SessionDialogState().apply {
+                updateConfig { copy(clipboardSync = false) }
+            }
+
+        state.updateCompatibilityMode(true)
+
+        assertFalse(state.config.clipboardSync)
+        assertFalse(state.toSessionData().config.clipboardSync)
+    }
+
+    @Test
     fun enablingCompatibilityModeClearsScrcpyOnlyOptions() {
         val state =
             SessionDialogState().apply {
@@ -39,7 +52,7 @@ class SessionDialogCompatibilityModeTest {
         assertFalse(state.config.enableHardwareDecoding)
         assertEquals(ScrcpyTunnelMode.DIRECT_ADB, state.config.tunnelMode)
         assertFalse(state.config.enableAudio)
-        assertFalse(state.config.clipboardSync)
+        assertTrue(state.config.clipboardSync)
         assertFalse(state.config.turnScreenOff)
         assertFalse(state.config.powerOffOnClose)
         assertFalse(state.config.cleanupOnDisconnect)

@@ -8,7 +8,7 @@ Use this reference to orient or place code in the Screen-Remote subrepository. R
 - The current repository is the nested Android application repository.
 - `../external/dadb` is an included Gradle build and supplies ADB protocol plus Android transport support.
 - Other directories under `../external/` are upstream/reference submodules. Do not scan or edit them by default.
-- Long-lived engineering documentation lives in the outer `../external/wiki/` repository.
+- Long-lived Android engineering documentation lives in the outer `../external/wiki-android/` repository.
 
 Always inspect both statuses:
 
@@ -107,11 +107,11 @@ There is no broad instrumentation suite in the current tree. Compose/device beha
 
 Read only what matches the task:
 
-- orientation and placement: `../external/wiki/Module-Map-and-Boundaries.md`
-- boundaries: `../external/wiki/Module-Map-and-Boundaries.md`
-- runtime flow: `../external/wiki/Runtime-Main-Path.md`
-- engineering and verification: `../external/wiki/Engineering-and-Verification-Rules.md`
-- sockets/control: `../external/wiki/Session-Configuration-and-Connection-Lifecycle.md`
-- diagnosis: `../external/wiki/Layered-Troubleshooting-Method.md`
+- orientation and placement: `../external/wiki-android/Module-Map-and-Boundaries.md`
+- boundaries: `../external/wiki-android/Module-Map-and-Boundaries.md`
+- runtime flow: `../external/wiki-android/Runtime-Main-Path.md`
+- engineering and verification: `../external/wiki-android/Engineering-and-Verification-Rules.md`
+- sockets/control: `../external/wiki-android/Session-Configuration-and-Connection-Lifecycle.md`
+- diagnosis: `../external/wiki-android/Layered-Troubleshooting-Method.md`
 
 Do not load all wiki files for a normal code task.

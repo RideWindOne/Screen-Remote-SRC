@@ -125,14 +125,14 @@ class ScrcpyUrlParametersTest {
     }
 
     @Test
-    fun `compatibility mode disables unsupported streams regardless of URL parameter order`() {
+    fun `compatibility mode disables audio but preserves clipboard toggle regardless of URL parameter order`() {
         val compatibilityThenUnsupportedStreams =
             ScrcpyConfig()
                 .withUrlParameters(
                     linkedMapOf(
                         "compatibilityMode" to "on",
                         "audio" to "on",
-                        "clipboard" to "on",
+                        "clipboard" to "off",
                     ),
                 ).getOrThrow()
         val unsupportedStreamsThenCompatibility =
@@ -148,7 +148,7 @@ class ScrcpyUrlParametersTest {
         assertEquals(false, compatibilityThenUnsupportedStreams.enableAudio)
         assertEquals(false, compatibilityThenUnsupportedStreams.clipboardSync)
         assertEquals(false, unsupportedStreamsThenCompatibility.enableAudio)
-        assertEquals(false, unsupportedStreamsThenCompatibility.clipboardSync)
+        assertEquals(true, unsupportedStreamsThenCompatibility.clipboardSync)
     }
 
     @Test

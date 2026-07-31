@@ -13,6 +13,7 @@ datastore = "1.2.1"
 serializationJson = "1.11.0"
 dadb = "2.0.0"
 bouncycastle = "1.85"
+zxing = "3.5.4"
 junit = "4.13.2"
 annotationJvm = "1.10.0"
 
@@ -46,5 +47,6 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 dadb-android = { module = "dev.mobile:dadb-android", version.ref = "dadb" }
 bouncycastle-bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 junit = { module = "junit:junit", version.ref = "junit" }
 androidx-annotation-jvm = { group = "androidx.annotation", name = "annotation-jvm", version.ref = "annotationJvm" }

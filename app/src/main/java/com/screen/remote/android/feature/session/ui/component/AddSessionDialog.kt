@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -527,6 +528,7 @@ private fun DeviceTypeDropdownRow(state: SessionDialogState) {
         IOSStyledDropdownMenu(
             expanded = state.showDeviceTypeMenu,
             onDismissRequest = { state.showDeviceTypeMenu = false },
+            offset = DpOffset(0.dp, AppDimens.listItemHeight),
             alignment = Alignment.TopEnd,
         ) {
             SessionDeviceType.entries.forEach { type ->
@@ -715,6 +717,7 @@ private fun SessionAddressDeviceTypeDropdownRow(state: SessionAddressDialogState
         IOSStyledDropdownMenu(
             expanded = state.showDeviceTypeMenu,
             onDismissRequest = { state.showDeviceTypeMenu = false },
+            offset = DpOffset(0.dp, AppDimens.listItemHeight),
             alignment = Alignment.TopEnd,
         ) {
             SessionDeviceType.entries.forEach { type ->
@@ -1317,6 +1320,7 @@ private fun EditableAddressTypeDropdownRow(address: EditableSessionAddress) {
         IOSStyledDropdownMenu(
             expanded = address.showTypeMenu,
             onDismissRequest = { address.showTypeMenu = false },
+            offset = DpOffset(0.dp, AppDimens.listItemHeight),
             alignment = Alignment.TopEnd,
         ) {
             SessionDeviceType.entries.forEach { type ->
@@ -2202,13 +2206,7 @@ private fun OtherOptionsSection(state: SessionDialogState) {
             text = SessionTexts.SWITCH_CLIPBOARD_SYNC.get(),
             checked = state.config.clipboardSync,
             onCheckedChange = { enabled -> state.updateConfig { copy(clipboardSync = enabled) } },
-            helpText =
-                if (state.config.compatibilityMode) {
-                    SessionTexts.HELP_COMPATIBILITY_CLIPBOARD_DISABLED.get()
-                } else {
-                    SessionTexts.HELP_CLIPBOARD_SYNC.get()
-                },
-            enabled = !state.config.compatibilityMode,
+            helpText = SessionTexts.HELP_CLIPBOARD_SYNC.get(),
         )
         AppDivider()
 

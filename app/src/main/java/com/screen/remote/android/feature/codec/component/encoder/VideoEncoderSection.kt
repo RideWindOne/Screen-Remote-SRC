@@ -20,9 +20,9 @@ fun getVideoEncoderDialogConfig(detectedEncoders: List<EncoderCapability>): Enco
     val types = mutableSetOf<String>()
     detectedEncoders.forEach { encoder ->
         when {
-            encoder.mimeType.contains("avc", ignoreCase = true) -> types.add("H.264")
+            encoder.mimeType.contains("avc", ignoreCase = true) -> types.add("H264")
 
-            encoder.mimeType.contains("hevc", ignoreCase = true) -> types.add("H.265")
+            encoder.mimeType.contains("hevc", ignoreCase = true) -> types.add("H265")
 
             encoder.mimeType.contains("av01", ignoreCase = true) ||
                 encoder.mimeType.contains("av1", ignoreCase = true) -> types.add("AV1")
@@ -55,8 +55,8 @@ fun matchesVideoCodecFilter(
     if (filter == allFilterOption) return true
 
     return when (filter) {
-        "H.264" -> mimeType.contains("avc", ignoreCase = true)
-        "H.265" -> mimeType.contains("hevc", ignoreCase = true)
+        "H264" -> mimeType.contains("avc", ignoreCase = true)
+        "H265" -> mimeType.contains("hevc", ignoreCase = true)
         "AV1" -> mimeType.contains("av01", ignoreCase = true) || mimeType.contains("av1", ignoreCase = true)
         "VP8" -> mimeType.contains("vp8", ignoreCase = true)
         "VP9" -> mimeType.contains("vp9", ignoreCase = true)

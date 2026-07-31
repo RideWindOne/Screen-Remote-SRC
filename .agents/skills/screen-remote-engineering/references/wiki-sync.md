@@ -9,7 +9,7 @@ Use this workflow only when the locally installed Git `pre-push` hook is trigger
 - Analyze committed content only; ignore app and dadb working-tree changes and do not substitute a dadb remote comparison.
 - A push without the marker may contain multiple outgoing commits. Analyze their combined committed result so the developer can squash them afterward.
 - Never run `rebase`, `commit`, `commit --amend`, `reset`, `push`, or any other history-changing Git command.
-- Update files only inside the outer-root `external/wiki/` GitHub Wiki repository when documentation is materially affected. Never create wiki pages inside `Screen-Remote/`.
+- Update files only inside the outer-root `external/wiki-android/` GitHub Wiki repository when documentation is materially affected. Never create wiki pages inside `Screen-Remote/`.
 - Return one commit message derived from the final code, not from the existing commit message.
 
 Ignore uncommitted app and dadb changes. The hook reads the app outgoing range plus one locked dadb commit.
@@ -42,7 +42,7 @@ Use the dadb commit to verify dependency behavior, helper protocols, Android sup
 
 ## Update bilingual canonical wiki knowledge
 
-Read `../external/wiki/Documentation-Maintenance-Conventions.md` and use `../external/wiki/Technical-Documentation-Index.md` to locate existing canonical pages.
+Read `../external/wiki-android/Documentation-Maintenance-Conventions.md` and use `../external/wiki-android/Technical-Documentation-Index.md` to locate existing canonical pages.
 
 For every affected Chinese page, update or create its complete English counterpart in the same pass. Preserve established readable filenames and use the technical index and existing reciprocal links to resolve the pair; for a new page without an established mapping, `<name>.md` and `<name>-EN.md` are acceptable. Put reciprocal language links near the top of both pages. The English page must carry the same current knowledge, not merely an abbreviated summary. Include both paths in `wiki_pages`.
 

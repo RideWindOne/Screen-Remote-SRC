@@ -169,8 +169,10 @@ object AdbTexts {
 
     // ========== 设备配对 ==========
     val PAIRING_TITLE = TextPair("配对 ADB 设备", "Pair ADB Device")
-    val PAIRING_TAB_QR_CODE = TextPair("生成二维码", "Generate QR Code")
-    val PAIRING_TAB_PAIRING_CODE = TextPair("使用配对码", "Use Pairing Code")
+    val PAIRING_METHOD_TITLE = TextPair("配对方式", "Pairing Method")
+    val PAIRING_METHOD_LABEL = TextPair("方式", "Method")
+    val PAIRING_TAB_QR_CODE = TextPair("扫码配对", "QR Code")
+    val PAIRING_TAB_PAIRING_CODE = TextPair("配对码", "Pairing Code")
 
     // 配对说明
     val PAIRING_INSTRUCTION_TITLE = TextPair("说明", "Instructions")
@@ -207,42 +209,21 @@ object AdbTexts {
     val PAIRING_HOST_PORT_LABEL = TextPair("IP地址和端口", "IP address & Port")
     val PAIRING_CODE_LABEL = TextPair("WLAN配对码", "Wi-Fi Pairing Code")
 
-    // 二维码配对（我们生成二维码）
-    val QR_CODE_TITLE = TextPair("生成二维码配对", "Generate QR Code to Pair")
+    // 二维码配对
+    val QR_CODE_TITLE = TextPair("配对二维码", "Pairing QR Code")
     val QR_CODE_DESCRIPTION =
         TextPair(
-            "⚠️ 重要提示：\n当前版本的二维码配对功能受限于 Android 系统限制，无法完全实现自动配对。\n\n建议使用「配对码」方式进行配对，更加稳定可靠。\n\n如需使用二维码：\n1. 点击「生成二维码」按钮\n2. 在被控设备上打开「开发者选项」\n3. 启用「无线调试」\n4. 点击「使用二维码配对设备」\n5. 扫描二维码（可能无法识别）",
-            "⚠️ Important Notice:\nThe QR code pairing feature is limited due to Android system restrictions and cannot fully implement automatic pairing.\n\nWe recommend using the 'Pairing Code' method for more stable and reliable pairing.\n\nIf you want to use QR code:\n1. Tap 'Generate QR Code' button\n2. Open 'Developer options' on target device\n3. Enable 'Wireless debugging'\n4. Tap 'Pair device with QR code'\n5. Scan the QR code (may not be recognized)",
+            "在被控设备上打开「开发者选项 → 无线调试 → 使用二维码配对设备」，然后扫描下方二维码。Screen Remote 发现该设备后会自动完成配对。",
+            "On the target device, open Developer options → Wireless debugging → Pair device with QR code, then scan the code below. Screen Remote pairs automatically after discovering the device.",
         )
-    val QR_CODE_GENERATE_BUTTON = TextPair("生成二维码（实验性）", "Generate QR Code (Experimental)")
-    val QR_CODE_GENERATING = TextPair("正在生成...", "Generating...")
-    val QR_CODE_GENERATED = TextPair("二维码已生成（实验性功能）", "QR Code Generated (Experimental)")
-    val QR_CODE_SCAN_INSTRUCTION =
-        TextPair(
-            "⚠️ 注意：由于 Android 系统限制，此二维码可能无法被识别\n建议切换到「使用配对码」标签进行配对",
-            "⚠️ Note: Due to Android system limitations, this QR code may not be recognized\nWe recommend switching to 'Use Pairing Code' tab for pairing",
-        )
+    val QR_CODE_CONTENT_DESCRIPTION = TextPair("ADB 无线调试配对二维码", "ADB Wireless Debugging pairing QR code")
     val QR_CODE_WAITING_SCAN =
-        TextPair(
-            "技术说明：\nAndroid 的无线调试配对需要 mDNS 服务支持，当前版本仅生成二维码，无法提供完整的 mDNS 服务。\n\n推荐使用配对码方式进行配对。",
-            "Technical Note:\nAndroid wireless debugging pairing requires mDNS service support. The current version only generates QR codes and cannot provide complete mDNS service.\n\nWe recommend using the pairing code method.",
-        )
+        TextPair("等待被控设备扫描二维码…", "Waiting for the target device to scan…")
+    val QR_CODE_PAIRING = TextPair("已发现设备，正在配对…", "Device found. Pairing…")
+    val QR_CODE_PAIRING_SUCCESS = TextPair("扫码配对成功", "QR pairing successful")
+    val QR_CODE_PAIRING_RETRY =
+        TextPair("配对未完成，请生成新二维码后重试", "Pairing did not complete. Generate a new QR code and try again.")
     val QR_CODE_REGENERATE = TextPair("重新生成", "Regenerate")
-    val QR_CODE_MANUAL_PAIRING_NOTE =
-        TextPair(
-            "💡 提示：建议使用「配对码」方式进行配对",
-            "💡 Tip: We recommend using the 'Pairing Code' method",
-        )
-    val QR_CODE_LIMITATION_WARNING =
-        TextPair(
-            "⚠️ 功能限制说明",
-            "⚠️ Feature Limitations",
-        )
-    val QR_CODE_LIMITATION_DETAIL =
-        TextPair(
-            "由于 Android 系统的安全限制，应用层无法完全实现 ADB 配对所需的 mDNS 服务。生成的二维码可能无法被系统识别。\n\n建议使用「配对码」方式，该方式更加稳定可靠。",
-            "Due to Android system security restrictions, the application layer cannot fully implement the mDNS service required for ADB pairing. The generated QR code may not be recognized by the system.\n\nWe recommend using the 'Pairing Code' method, which is more stable and reliable.",
-        )
 
     // 配对码配对
     val PAIRING_CODE_TITLE = TextPair("使用配对码配对", "Pair with Pairing Code")

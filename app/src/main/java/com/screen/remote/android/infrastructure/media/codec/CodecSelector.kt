@@ -114,7 +114,7 @@ object CodecSelector {
         requestedDecoder: String,
         logTag: String,
     ): CodecSelectionResult? {
-        val orderedSpecs = CodecCatalog.orderedSpecs(mediaType)
+        val orderedSpecs = orderedSpecs(mediaType, remote, requestedEncoder)
         val fixedDecoder =
             requestedDecoder.takeIf { it.isNotEmpty() }?.let { name ->
                 eligibleDecoders.firstOrNull { it.name == name }
@@ -184,6 +184,28 @@ object CodecSelector {
         )
         return null
     }
+
+    private fun orderedSpecs(
+        mediaType: CodecMediaType,
+        remote: List<EncoderCapability>,
+        requestedEncoder: String,
+    ): List<CodecSpec> {
+        val catalogSpecs = CodecCatalog.orderedSpecs(mediaType)
+        if (requestedEncoder.isNotEmpty() || !hasOnlyGoogleH264AndVp8Encoders(mediaType, remote)) {
+            return catalogSpecs
+        }
+        val vp8 = catalogSpecs.first { it.name == "vp8" }
+        return listOf(vp8) + catalogSpecs.filterNot { it == vp8 }
+    }
+
+    private fun hasOnlyGoogleH264AndVp8Encoders(
+        mediaType: CodecMediaType,
+        remote: List<EncoderCapability>,
+    ): Boolean =
+        mediaType == CodecMediaType.VIDEO &&
+            remote.size == 2 &&
+            remote.any { it.name.equals(GOOGLE_H264_ENCODER, ignoreCase = true) && it.codec == "h264" } &&
+            remote.any { it.name.equals(GOOGLE_VP8_ENCODER, ignoreCase = true) && it.codec == "vp8" }
 
     private fun rawAudioSelection(): CodecSelectionResult {
         val raw = requireNotNull(CodecCatalog.find(CodecMediaType.AUDIO, "raw"))
@@ -257,4 +279,7 @@ object CodecSelector {
     }
 
     private fun aliasPenalty(isAlias: Boolean): Int = if (isAlias) 100 else 0
+
+    private const val GOOGLE_H264_ENCODER = "OMX.google.h264.encoder"
+    private const val GOOGLE_VP8_ENCODER = "OMX.google.vp8.encoder"
 }

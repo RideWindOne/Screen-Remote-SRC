@@ -43,6 +43,68 @@ class CodecSelectorTest {
     }
 
     @Test
+    fun `automatic selection prefers Google VP8 when only Google H264 and VP8 encoders exist`() {
+        val result =
+            select(
+                mediaType = CodecMediaType.VIDEO,
+                remoteEncoders =
+                    listOf(
+                        encoder("OMX.google.h264.encoder", "h264", "video/avc"),
+                        encoder("OMX.google.vp8.encoder", "vp8", "video/x-vnd.on2.vp8"),
+                    ),
+                localDecoders = listOf(decoder("local.decoder", "video/avc", "video/x-vnd.on2.vp8")),
+            )
+
+        assertEquals("vp8", result?.codec)
+        assertEquals("OMX.google.vp8.encoder", result?.encoder)
+    }
+
+    @Test
+    fun `Google VP8 preference does not replace normal catalog priority when another encoder exists`() {
+        val result =
+            select(
+                mediaType = CodecMediaType.VIDEO,
+                remoteEncoders =
+                    listOf(
+                        encoder(
+                            "OMX.google.h264.encoder",
+                            "h264",
+                            "video/avc",
+                            CodecAcceleration.SOFTWARE,
+                        ),
+                        encoder(
+                            "OMX.google.vp8.encoder",
+                            "vp8",
+                            "video/x-vnd.on2.vp8",
+                            CodecAcceleration.SOFTWARE,
+                        ),
+                        encoder("vendor.h264.encoder", "h264", "video/avc"),
+                    ),
+                localDecoders = listOf(decoder("local.decoder", "video/avc", "video/x-vnd.on2.vp8")),
+            )
+
+        assertEquals("h264", result?.codec)
+        assertEquals("vendor.h264.encoder", result?.encoder)
+    }
+
+    @Test
+    fun `Google VP8 preference falls back to H264 when no VP8 decoder exists`() {
+        val result =
+            select(
+                mediaType = CodecMediaType.VIDEO,
+                remoteEncoders =
+                    listOf(
+                        encoder("OMX.google.h264.encoder", "h264", "video/avc"),
+                        encoder("OMX.google.vp8.encoder", "vp8", "video/x-vnd.on2.vp8"),
+                    ),
+                localDecoders = listOf(decoder("local.h264.decoder", "video/avc")),
+            )
+
+        assertEquals("h264", result?.codec)
+        assertEquals("OMX.google.h264.encoder", result?.encoder)
+    }
+
+    @Test
     fun `raw audio is passthrough and does not require MediaCodec implementations`() {
         val result =
             select(
@@ -206,12 +268,13 @@ class CodecSelectorTest {
         name: String,
         codec: String,
         mimeType: String,
+        acceleration: CodecAcceleration = CodecAcceleration.HARDWARE,
     ) = EncoderCapability(
         name = name,
         codec = codec,
         mimeType = mimeType,
         mediaType = if (mimeType.startsWith("video/")) CodecMediaType.VIDEO else CodecMediaType.AUDIO,
-        acceleration = CodecAcceleration.HARDWARE,
+        acceleration = acceleration,
     )
 
     private fun decoder(

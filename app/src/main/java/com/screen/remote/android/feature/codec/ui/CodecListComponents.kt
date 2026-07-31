@@ -108,7 +108,7 @@ fun CodecList(
 ) {
     Surface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surface,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             codecs.forEachIndexed { index, codec ->

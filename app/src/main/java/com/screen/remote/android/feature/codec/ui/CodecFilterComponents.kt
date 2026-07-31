@@ -58,7 +58,8 @@ fun FilterDropdown(
         }
         IOSStyledDropdownMenu(
             expanded = showMenu,
-            offset = DpOffset(0.dp, 108.dp),
+            offset = DpOffset(0.dp, AppDimens.listItemHeight),
+            alignment = Alignment.TopEnd,
             onDismissRequest = { showMenu = false },
         ) {
             options.forEach { option ->

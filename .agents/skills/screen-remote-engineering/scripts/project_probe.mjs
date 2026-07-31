@@ -77,9 +77,9 @@ for (const file of files.slice(0, 30)) console.log(`  ${file}`);
 if (files.length > 30) console.log(`  ... ${files.length - 30} more`);
 console.log(`categories: ${kinds.join(", ") || "none"}`);
 
-const docs = ["../external/wiki/Module-Map-and-Boundaries.md"];
-if (kinds.includes("connection-runtime")) docs.push("../external/wiki/Runtime-Main-Path.md", "../external/wiki/Session-Configuration-and-Connection-Lifecycle.md");
-if (kinds.includes("ui-feature")) docs.push("../external/wiki/Engineering-and-Verification-Rules.md");
+const docs = ["../external/wiki-android/Module-Map-and-Boundaries.md"];
+if (kinds.includes("connection-runtime")) docs.push("../external/wiki-android/Runtime-Main-Path.md", "../external/wiki-android/Session-Configuration-and-Connection-Lifecycle.md");
+if (kinds.includes("ui-feature")) docs.push("../external/wiki-android/Engineering-and-Verification-Rules.md");
 console.log("suggested context:");
 for (const doc of [...new Set(docs)]) console.log(`  ${doc}`);
 

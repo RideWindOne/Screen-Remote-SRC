@@ -6,16 +6,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
-import com.screen.remote.android.feature.device.ui.component.AdbPairingCodeDialog
+import com.screen.remote.android.feature.device.ui.component.AdbPairingDialog
 
 @Composable
 internal fun SettingsScreenDialogs(
     routeState: SettingsScreenRouteState,
     texts: SettingsScreenTexts,
+    devicePairingHostPort: String,
 ) {
     if (routeState.showDevicePairingDialog) {
-        AdbPairingCodeDialog(
+        AdbPairingDialog(
             onDismiss = routeState::closeDevicePairingDialog,
+            initialHostPort = devicePairingHostPort,
         )
     }
 

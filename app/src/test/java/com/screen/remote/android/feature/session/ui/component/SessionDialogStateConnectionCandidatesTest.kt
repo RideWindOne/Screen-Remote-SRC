@@ -241,9 +241,9 @@ class SessionDialogStateConnectionCandidatesTest {
         assertEquals(true, saved.compatibilityMode)
         assertEquals(false, saved.gameMode)
         assertEquals(false, state.config.enableAudio)
-        assertEquals(false, state.config.clipboardSync)
+        assertEquals(true, state.config.clipboardSync)
         assertEquals(false, saved.enableAudio)
-        assertEquals(false, saved.clipboardSync)
+        assertEquals(true, saved.clipboardSync)
         assertEquals(false, saved.turnScreenOff)
     }
 

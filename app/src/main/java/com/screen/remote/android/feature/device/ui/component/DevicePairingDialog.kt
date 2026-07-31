@@ -1,10 +1,16 @@
 package com.screen.remote.android.feature.device.ui.component
 
+import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,6 +41,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.screen.remote.android.core.common.AdbPairingConstants
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.util.formatHostPort
@@ -55,19 +68,24 @@ import com.screen.remote.android.feature.device.data.PairingHistoryItem
 import com.screen.remote.android.feature.device.data.PairingResult
 import com.screen.remote.android.feature.device.data.PairingStatus
 import com.screen.remote.android.feature.device.viewmodel.DevicePairingViewModel
+import com.screen.remote.android.feature.session.ui.component.CompactSegmentedChoiceRow
 import com.screen.remote.android.feature.session.ui.component.LabeledTextField
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
+import com.screen.remote.android.infrastructure.adb.pairing.AdbQrPairingCredentials
+import com.screen.remote.android.infrastructure.adb.pairing.AdbQrPairingCredentialsGenerator
+import com.screen.remote.android.infrastructure.adb.pairing.findQrPairingService
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * ADB 配对码配对对话框入口。
+ * ADB 无线调试配对对话框入口。
  *
  * 入口层只负责状态装配、提交流程和委托子视图。
  */
 @Composable
-fun AdbPairingCodeDialog(
+fun AdbPairingDialog(
     onDismiss: () -> Unit,
+    initialHostPort: String = "",
     viewModel: DevicePairingViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -78,10 +96,17 @@ fun AdbPairingCodeDialog(
     val mdnsState by mdnsManager.state.collectAsState()
 
     var showClearHistoryDialog by remember { mutableStateOf(false) }
-    var hostPort by remember { mutableStateOf("") }
+    var pairingMethod by remember(initialHostPort) {
+        mutableStateOf(if (initialHostPort.isBlank()) PairingMethod.QR_CODE else PairingMethod.PAIRING_CODE)
+    }
+    var hostPort by remember(initialHostPort) { mutableStateOf(initialHostPort) }
     var pairingCode by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
     var selectedMdnsDeviceSerial by remember { mutableStateOf<String?>(null) }
+    var qrCredentials by remember { mutableStateOf<AdbQrPairingCredentials?>(null) }
+    var consumedQrServiceName by remember { mutableStateOf<String?>(null) }
+    var qrPairingCompleted by remember { mutableStateOf(false) }
+    var qrPairingFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.loadPairingHistory(context)
@@ -94,13 +119,51 @@ fun AdbPairingCodeDialog(
         }
     }
 
-    LaunchedEffect(pairingResult) {
+    LaunchedEffect(pairingMethod) {
+        if (pairingMethod == PairingMethod.QR_CODE && qrCredentials == null) {
+            qrCredentials = AdbQrPairingCredentialsGenerator.create()
+        }
+    }
+
+    LaunchedEffect(pairingResult, pairingMethod) {
         pairingResult?.let { result ->
+            if (pairingMethod == PairingMethod.QR_CODE) {
+                qrPairingCompleted = result.success
+                qrPairingFailed = !result.success
+            }
             if (result.success) {
                 kotlinx.coroutines.delay(2000.milliseconds)
                 viewModel.resetPairingStatus()
             }
         }
+    }
+
+    LaunchedEffect(
+        pairingMethod,
+        pairingStatus,
+        qrCredentials,
+        mdnsState.connectServices,
+        qrPairingCompleted,
+    ) {
+        if (
+            pairingMethod != PairingMethod.QR_CODE ||
+            pairingStatus != PairingStatus.IDLE ||
+            qrPairingCompleted
+        ) {
+            return@LaunchedEffect
+        }
+        val credentials = qrCredentials ?: return@LaunchedEffect
+        if (consumedQrServiceName == credentials.serviceName) return@LaunchedEffect
+        val pairingService = mdnsState.connectServices.findQrPairingService(credentials) ?: return@LaunchedEffect
+
+        consumedQrServiceName = credentials.serviceName
+        qrPairingFailed = false
+        viewModel.pairWithQrCode(
+            context = context,
+            ipAddress = pairingService.host,
+            port = pairingService.port.toString(),
+            pairingPassword = credentials.password,
+        )
     }
 
     DialogPage(
@@ -111,70 +174,115 @@ fun AdbPairingCodeDialog(
         },
         showBackButton = true,
         enableScroll = true,
-        rightButtonText = AdbTexts.BUTTON_PAIR.get(),
+        rightButtonText = AdbTexts.BUTTON_PAIR.get().takeIf { pairingMethod == PairingMethod.PAIRING_CODE },
         rightButtonEnabled = hostPort.isNotEmpty() && pairingCode.isNotEmpty(),
-        onRightButtonClick = {
-            performPairing(
-                hostPort = hostPort,
-                pairingCode = pairingCode,
-                onError = { errorMessage = it },
-                onPair = { host, port, code ->
-                    viewModel.pairWithCode(
-                        context = context,
-                        ipAddress = host,
-                        port = port,
-                        pairingCode = code,
-                        mdnsDeviceSerial = selectedMdnsDeviceSerial,
+        onRightButtonClick =
+            if (pairingMethod == PairingMethod.PAIRING_CODE) {
+                {
+                    performPairing(
+                        hostPort = hostPort,
+                        pairingCode = pairingCode,
+                        onError = { errorMessage = it },
+                        onPair = { host, port, code ->
+                            viewModel.pairWithCode(
+                                context = context,
+                                ipAddress = host,
+                                port = port,
+                                pairingCode = code,
+                                mdnsDeviceSerial = selectedMdnsDeviceSerial,
+                            )
+                        },
                     )
+                }
+            } else {
+                null
+            },
+    ) {
+        SectionTitle(AdbTexts.PAIRING_METHOD_TITLE.get())
+        PairingMethodCard(
+            selectedMethod = pairingMethod,
+            onMethodSelected = { selectedMethod ->
+                pairingMethod = selectedMethod
+                errorMessage = ""
+                viewModel.resetPairingStatus()
+            },
+        )
+
+        SectionTitle(AdbTexts.PAIRING_INSTRUCTION_TITLE.get())
+        PairingInstructionCard(
+            content =
+                if (pairingMethod == PairingMethod.QR_CODE) {
+                    AdbTexts.QR_CODE_DESCRIPTION.get()
+                } else {
+                    AdbTexts.PAIRING_INSTRUCTION_CONTENT.get()
+                },
+        )
+
+        if (pairingMethod == PairingMethod.QR_CODE) {
+            SectionTitle(AdbTexts.QR_CODE_TITLE.get())
+            QrPairingCard(
+                credentials = qrCredentials,
+                state =
+                    when {
+                        qrPairingCompleted -> QrPairingCardState.SUCCESS
+                        pairingStatus == PairingStatus.CONNECTING || pairingStatus == PairingStatus.PAIRING -> {
+                            QrPairingCardState.PAIRING
+                        }
+                        qrPairingFailed -> QrPairingCardState.FAILED
+                        else -> QrPairingCardState.WAITING
+                    },
+                onRegenerate = {
+                    qrCredentials = AdbQrPairingCredentialsGenerator.create()
+                    consumedQrServiceName = null
+                    qrPairingCompleted = false
+                    qrPairingFailed = false
+                    viewModel.resetPairingStatus()
                 },
             )
-        },
-    ) {
-        SectionTitle(AdbTexts.PAIRING_INSTRUCTION_TITLE.get())
-        PairingInstructionCard()
+        } else {
+            if (pairingHistory.isNotEmpty()) {
+                SectionTitle(AdbTexts.PAIRING_HISTORY_TITLE.get())
+                PairingHistoryCard(
+                    history = pairingHistory,
+                    onClearHistory = { showClearHistoryDialog = true },
+                    onDeleteHistory = { selectedHostPort ->
+                        viewModel.deletePairingHistoryItem(context, selectedHostPort)
+                    },
+                    onSelectHistory = { selectedHostPort ->
+                        hostPort = mergeSelectedHostWithCurrentPort(selectedHostPort, hostPort)
+                        selectedMdnsDeviceSerial = null
+                        errorMessage = ""
+                    },
+                )
+            }
 
-        if (pairingHistory.isNotEmpty()) {
-            SectionTitle(AdbTexts.PAIRING_HISTORY_TITLE.get())
-            PairingHistoryCard(
-                history = pairingHistory,
-                onClearHistory = { showClearHistoryDialog = true },
-                onDeleteHistory = { selectedHostPort ->
-                    viewModel.deletePairingHistoryItem(context, selectedHostPort)
-                },
-                onSelectHistory = { selectedHostPort ->
-                    hostPort = mergeSelectedHostWithCurrentPort(selectedHostPort, hostPort)
-                    selectedMdnsDeviceSerial = null
+            SectionTitle(AdbTexts.PAIRING_DISCOVERY_TITLE.get())
+            PairingDiscoveryCard(
+                loading = mdnsState.loading,
+                services = mdnsState.connectServices,
+                onSelectService = { service ->
+                    hostPort = formatHostPort(service.host, service.port.toString())
+                    selectedMdnsDeviceSerial = service.deviceSerial
                     errorMessage = ""
                 },
             )
+
+            SectionTitle(AdbTexts.PAIRING_INFO_TITLE.get())
+            PairingInputCard(
+                hostPort = hostPort,
+                onHostPortChange = {
+                    hostPort = it
+                    selectedMdnsDeviceSerial = null
+                    errorMessage = ""
+                },
+                pairingCode = pairingCode,
+                onPairingCodeChange = {
+                    pairingCode = it
+                    errorMessage = ""
+                },
+                errorMessage = errorMessage,
+            )
         }
-
-        SectionTitle(AdbTexts.PAIRING_DISCOVERY_TITLE.get())
-        PairingDiscoveryCard(
-            loading = mdnsState.loading,
-            services = mdnsState.connectServices,
-            onSelectService = { service ->
-                hostPort = formatHostPort(service.host, service.port.toString())
-                selectedMdnsDeviceSerial = service.deviceSerial
-                errorMessage = ""
-            },
-        )
-
-        SectionTitle(AdbTexts.PAIRING_INFO_TITLE.get())
-        PairingInputCard(
-            hostPort = hostPort,
-            onHostPortChange = {
-                hostPort = it
-                selectedMdnsDeviceSerial = null
-                errorMessage = ""
-            },
-            pairingCode = pairingCode,
-            onPairingCodeChange = {
-                pairingCode = it
-                errorMessage = ""
-            },
-            errorMessage = errorMessage,
-        )
     }
 
     PairingDialogOverlays(
@@ -188,6 +296,153 @@ fun AdbPairingCodeDialog(
         },
         onDismissClearHistory = { showClearHistoryDialog = false },
     )
+}
+
+private enum class PairingMethod {
+    QR_CODE,
+    PAIRING_CODE,
+}
+
+private enum class QrPairingCardState {
+    WAITING,
+    PAIRING,
+    SUCCESS,
+    FAILED,
+}
+
+@Composable
+private fun PairingMethodCard(
+    selectedMethod: PairingMethod,
+    onMethodSelected: (PairingMethod) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        CompactSegmentedChoiceRow(
+            text = AdbTexts.PAIRING_METHOD_LABEL.get(),
+            choices =
+                listOf(
+                    PairingMethod.QR_CODE to AdbTexts.PAIRING_TAB_QR_CODE.get(),
+                    PairingMethod.PAIRING_CODE to AdbTexts.PAIRING_TAB_PAIRING_CODE.get(),
+                ),
+            selectedChoice = selectedMethod,
+            onChoiceChange = onMethodSelected,
+        )
+    }
+}
+
+@Composable
+private fun QrPairingCard(
+    credentials: AdbQrPairingCredentials?,
+    state: QrPairingCardState,
+    onRegenerate: () -> Unit,
+) {
+    val qrBitmap =
+        remember(credentials?.qrPayload) {
+            credentials?.let { value ->
+                runCatching { generateQrBitmap(value.qrPayload) }.getOrNull()
+            }
+        }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (qrBitmap != null) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = AdbTexts.QR_CODE_CONTENT_DESCRIPTION.get(),
+                        contentScale = ContentScale.FillBounds,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth(0.68f)
+                                .aspectRatio(1f)
+                                .background(Color.White)
+                                .padding(4.dp),
+                    )
+                }
+            } else {
+                Text(
+                    text = AdbTexts.ERROR_QR_CODE_GENERATE_FAILED.get(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (state == QrPairingCardState.WAITING || state == QrPairingCardState.PAIRING) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                }
+                Text(
+                    text =
+                        when (state) {
+                            QrPairingCardState.WAITING -> AdbTexts.QR_CODE_WAITING_SCAN.get()
+                            QrPairingCardState.PAIRING -> AdbTexts.QR_CODE_PAIRING.get()
+                            QrPairingCardState.SUCCESS -> AdbTexts.QR_CODE_PAIRING_SUCCESS.get()
+                            QrPairingCardState.FAILED -> AdbTexts.QR_CODE_PAIRING_RETRY.get()
+                        },
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        when (state) {
+                            QrPairingCardState.SUCCESS -> MaterialTheme.colorScheme.primary
+                            QrPairingCardState.FAILED -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            AppDivider()
+
+            TextButton(
+                onClick = onRegenerate,
+                enabled = state != QrPairingCardState.PAIRING,
+            ) {
+                Text(AdbTexts.QR_CODE_REGENERATE.get())
+            }
+        }
+    }
+}
+
+private fun generateQrBitmap(
+    payload: String,
+    size: Int = 512,
+): Bitmap {
+    val matrix =
+        QRCodeWriter().encode(
+            payload,
+            BarcodeFormat.QR_CODE,
+            size,
+            size,
+            mapOf(
+                EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+                EncodeHintType.MARGIN to 2,
+            ),
+        )
+    val pixels =
+        IntArray(size * size) { index ->
+            val x = index % size
+            val y = index / size
+            if (matrix[x, y]) AndroidColor.BLACK else AndroidColor.WHITE
+        }
+    return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
 }
 
 @Composable
@@ -341,13 +596,13 @@ private fun performPairing(
 }
 
 @Composable
-internal fun PairingInstructionCard() {
+internal fun PairingInstructionCard(content: String = AdbTexts.PAIRING_INSTRUCTION_CONTENT.get()) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Text(
-            text = AdbTexts.PAIRING_INSTRUCTION_CONTENT.get(),
+            text = content,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(16.dp),
