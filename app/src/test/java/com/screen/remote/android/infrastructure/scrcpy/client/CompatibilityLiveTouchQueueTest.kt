@@ -42,6 +42,21 @@ class CompatibilityLiveTouchQueueTest {
         assertNull(queue.poll())
     }
 
+    @Test
+    fun `overflow drops oldest move event and keeps pointer lifecycle events`() {
+        val queue = CompatibilityLiveTouchQueue()
+
+        queue.offer(event(action = 0, x = 10))
+        queue.offer(event(action = 2, x = 20))
+        queue.offer(event(action = 1, x = 30))
+        queue.offer(event(action = 0, x = 40))
+
+        assertEquals(event(action = 0, x = 10), queue.poll())
+        assertEquals(event(action = 1, x = 30), queue.poll())
+        assertEquals(event(action = 0, x = 40), queue.poll())
+        assertNull(queue.poll())
+    }
+
     private fun event(
         action: Int,
         x: Int,

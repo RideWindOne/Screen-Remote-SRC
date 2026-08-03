@@ -81,6 +81,16 @@ val scrcpyServerAsset = layout.projectDirectory.file("src/main/assets/scrcpy-ser
 val scrcpyServerDownloadUrl =
     "https://github.com/Genymobile/scrcpy/releases/download/v$scrcpyServerVersion/scrcpy-server-v$scrcpyServerVersion"
 
+val defaultAbis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+val targetAbis =
+    providers
+        .gradleProperty("TARGET_ABI")
+        .orElse(defaultAbis.joinToString(","))
+        .get()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotBlank)
+
 fun sha256(file: File): String =
     file.inputStream().use { input ->
         val digest = MessageDigest.getInstance("SHA-256")
@@ -123,7 +133,7 @@ android {
 
         ndk {
             // 支持所有主流架构
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            abiFilters += targetAbis
         }
     }
 
@@ -134,7 +144,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include(*targetAbis.toTypedArray())
             isUniversalApk = true // 发布时关闭 universal APK
         }
     }

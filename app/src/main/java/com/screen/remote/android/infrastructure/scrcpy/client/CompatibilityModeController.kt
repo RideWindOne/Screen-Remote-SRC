@@ -25,6 +25,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.EOFException
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.net.SocketException
+import java.net.SocketTimeoutException
 
 internal class CompatibilityModeController(
     private val context: Context,
@@ -33,6 +38,7 @@ internal class CompatibilityModeController(
     private val getCaptureSettings: () -> CompatibilityCaptureSettings?,
     private val onFrame: (Bitmap?) -> Unit,
     private val onResolution: (Int, Int) -> Unit,
+    private val onConnectionLost: (String) -> Unit,
     private val onCaptureFailure: (String) -> Unit,
 ) {
     private val helperJar by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -56,14 +62,15 @@ internal class CompatibilityModeController(
     private var remoteWidth = 0
     @Volatile
     private var remoteHeight = 0
+    private val connectionLostHandled = AtomicBoolean(false)
 
     suspend fun start(): Result<Boolean> {
         isStarted = false
-        activeCaptureStream?.close()
+        safeCloseScreenshotStream(activeCaptureStream)
         activeCaptureStream = null
         captureJob?.cancelAndJoin()
         captureJob = null
-        activeTouchStream?.close()
+        safeCloseTouchStream(activeTouchStream)
         activeTouchStream = null
         touchDispatchJob?.cancelAndJoin()
         touchDispatchJob = null
@@ -72,6 +79,7 @@ internal class CompatibilityModeController(
         remoteHeight = 0
         onFrame(null)
         isStarted = true
+        connectionLostHandled.set(false)
         wakeUpScreen()
             .onSuccess {
                 LogManager.i(
@@ -90,6 +98,9 @@ internal class CompatibilityModeController(
             val error =
                 touchStreamResult.exceptionOrNull()
                     ?: IllegalStateException("Compatibility live touch stream failed without an error")
+            if (handleConnectionLostForClosedError("compatibility live touch", error)) {
+                return Result.success(true)
+            }
             LogManager.w(
                 LogTags.SCRCPY_CLIENT,
                 "Compatibility live touch stream failed to start and will retry: ${error.message}",
@@ -108,9 +119,9 @@ internal class CompatibilityModeController(
         captureJob =
             scope.launch {
                 var loggedCaptureBackend: RemoteScreenshotCaptureBackend? = null
-                val settings = getCaptureSettings() ?: DEFAULT_CAPTURE_SETTINGS
                 var consecutiveFailures = 0
                 while (isActive) {
+                    val settings = getCaptureSettings() ?: DEFAULT_CAPTURE_SETTINGS
                     val openResult = openHelperStream(settings)
                     val helperStream = openResult.getOrNull()
                     if (helperStream == null) {
@@ -123,10 +134,7 @@ internal class CompatibilityModeController(
                     }
 
                     activeCaptureStream = helperStream
-                    LogManager.i(
-                        LogTags.SCRCPY_CLIENT,
-                        "Compatibility capture started: maxSize=${settings.maxSize} jpegQuality=${settings.jpegQuality}",
-                    )
+                    logCaptureSettings("capture start", settings)
                     var firstFrameReceived = false
                     val firstFrameDeadline = SystemClock.elapsedRealtime() + FIRST_FRAME_TIMEOUT_MS
                     try {
@@ -158,6 +166,9 @@ internal class CompatibilityModeController(
                             }
                         }
                     } catch (error: Exception) {
+                        if (handleConnectionLostForClosedError("compatibility live capture", error)) {
+                            return@launch
+                        }
                         if (isActive) {
                             consecutiveFailures++
                             LogManager.w(
@@ -169,7 +180,7 @@ internal class CompatibilityModeController(
                             }
                         }
                     } finally {
-                        helperStream.close()
+                        safeCloseScreenshotStream(helperStream)
                         if (activeCaptureStream === helperStream) {
                             activeCaptureStream = null
                         }
@@ -181,14 +192,15 @@ internal class CompatibilityModeController(
 
     suspend fun stop() {
         isStarted = false
-        activeTouchStream?.close()
+        safeCloseTouchStream(activeTouchStream)
         activeTouchStream = null
         touchDispatchJob?.cancelAndJoin()
         touchDispatchJob = null
-        activeCaptureStream?.close()
+        safeCloseScreenshotStream(activeCaptureStream)
         activeCaptureStream = null
         captureJob?.cancelAndJoin()
         captureJob = null
+        connectionLostHandled.set(false)
         resetTouchState()
         remoteWidth = 0
         remoteHeight = 0
@@ -396,11 +408,14 @@ internal class CompatibilityModeController(
                         }
                     if (result.isFailure) {
                         val error = result.exceptionOrNull()
-                        stream.close()
+                        safeCloseTouchStream(stream)
                         if (activeTouchStream === stream) {
                             activeTouchStream = null
                         }
                         resetTouchState()
+                        if (handleConnectionLostForClosedError("compatibility live touch", error)) {
+                            return@launch
+                        }
                         if (isStarted) {
                             LogManager.w(
                                 LogTags.SCRCPY_CLIENT,
@@ -424,6 +439,9 @@ internal class CompatibilityModeController(
     private suspend fun recoverTouchStream(initialError: Throwable?): Boolean {
         var latestError =
             initialError ?: IllegalStateException("Compatibility live touch stream failed without an error")
+        if (handleConnectionLostForClosedError("compatibility live touch", latestError)) {
+            return false
+        }
         repeat(MAX_TOUCH_RECOVERY_ATTEMPTS) { attempt ->
             if (!isStarted) return false
             val retryDelayMs =
@@ -439,7 +457,7 @@ internal class CompatibilityModeController(
                     if (activeTouchStream === stream) {
                         activeTouchStream = null
                     }
-                    stream.close()
+                    safeCloseTouchStream(stream)
                     return false
                 }
                 LogManager.i(
@@ -451,6 +469,9 @@ internal class CompatibilityModeController(
             latestError =
                 result.exceptionOrNull()
                     ?: IllegalStateException("Compatibility live touch stream retry failed without an error")
+            if (handleConnectionLostForClosedError("compatibility live touch", latestError)) {
+                return false
+            }
         }
 
         LogManager.w(
@@ -480,6 +501,19 @@ internal class CompatibilityModeController(
             captureBackend = frame.captureBackend,
             captureDurationMillis = frame.captureDurationMillis,
             payloadBytes = frame.jpegBytes.size,
+        )
+    }
+
+    private fun logCaptureSettings(
+        context: String,
+        settings: CompatibilityCaptureSettings,
+    ) {
+        LogManager.i(
+            LogTags.SCRCPY_CLIENT,
+            "Compatibility Capture Settings\n" +
+                "Context: $context\n" +
+                "maxSize=${settings.maxSize}\n" +
+                "jpegQuality=${settings.jpegQuality}",
         )
     }
 
@@ -517,6 +551,9 @@ internal class CompatibilityModeController(
         consecutiveFailures: Int,
         error: Throwable?,
     ): Boolean {
+        if (handleConnectionLostForClosedError("compatibility live capture", error)) {
+            return false
+        }
         if (consecutiveFailures >= MAX_CONSECUTIVE_CAPTURE_FAILURES) {
             val message =
                 "Compatibility display capture stopped after $consecutiveFailures consecutive failures: " +
@@ -535,6 +572,89 @@ internal class CompatibilityModeController(
         )
         delay(retryDelayMs)
         return true
+    }
+
+    private fun handleConnectionLostForClosedError(
+        source: String,
+        error: Throwable?,
+    ): Boolean {
+        if (!isStarted) {
+            return false
+        }
+        if (!isRecoverableClosedError(error)) {
+            return false
+        }
+        requestReconnection(source, error)
+        return true
+    }
+
+    private fun requestReconnection(
+        source: String,
+        error: Throwable?,
+    ) {
+        if (!connectionLostHandled.compareAndSet(false, true)) {
+            return
+        }
+        isStarted = false
+        captureJob?.cancel()
+        touchDispatchJob?.cancel()
+        safeCloseScreenshotStream(activeCaptureStream)
+        safeCloseTouchStream(activeTouchStream)
+        activeCaptureStream = null
+        activeTouchStream = null
+        resetTouchState()
+        onConnectionLost(
+            "$source stream encountered recoverable closed state: ${error?.message ?: "closed"}",
+        )
+    }
+
+    private fun isRecoverableClosedError(error: Throwable?): Boolean {
+        var cursor = error
+        while (cursor != null) {
+            when (cursor) {
+                is EOFException,
+                is SocketException,
+                is SocketTimeoutException,
+                is IOException,
+                -> {
+                    if (cursor is IOException && cursor.message?.contains("closed", ignoreCase = true) == true) {
+                        return true
+                    }
+                    if (cursor is EOFException ||
+                        cursor is SocketException ||
+                        cursor is SocketTimeoutException
+                    ) {
+                        return true
+                    }
+                }
+            }
+            cursor = cursor.cause
+        }
+        return false
+    }
+
+    private fun safeCloseScreenshotStream(stream: RemoteScreenshotStream?) {
+        runCatching {
+            stream?.close()
+        }.onFailure { error ->
+            LogManager.w(
+                LogTags.SCRCPY_CLIENT,
+                "Failed to close compatibility screenshot stream: ${error.message}",
+                error,
+            )
+        }
+    }
+
+    private fun safeCloseTouchStream(stream: RemoteTouchStream?) {
+        runCatching {
+            stream?.close()
+        }.onFailure { error ->
+            LogManager.w(
+                LogTags.SCRCPY_CLIENT,
+                "Failed to close compatibility touch stream: ${error.message}",
+                error,
+            )
+        }
     }
 
     private fun resetTouchState() {

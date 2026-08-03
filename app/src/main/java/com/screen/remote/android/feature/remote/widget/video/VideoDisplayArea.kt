@@ -19,11 +19,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.IntSize
 import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.common.constants.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import com.screen.remote.android.feature.remote.presentation.VideoDecoderManager
 import com.screen.remote.android.feature.remote.widget.touch.RemoteTouchEventDispatcher
+import kotlin.math.min
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
@@ -72,6 +77,8 @@ fun VideoDisplayArea(
                 .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
+        var containerSize by remember { mutableStateOf(IntSize.Zero) }
+        var lastLoggedScale by remember { mutableStateOf("") }
         val containerAspectRatio =
             configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.toFloat()
         val matchHeightFirst = videoAspectRatio < containerAspectRatio
@@ -80,10 +87,13 @@ fun VideoDisplayArea(
 
         Box(
             modifier =
-                Modifier.fillMaxSize().aspectRatio(
-                    videoAspectRatio,
-                    matchHeightConstraintsFirst = matchHeightFirst,
-                ),
+                Modifier
+                    .fillMaxSize()
+                    .aspectRatio(
+                        videoAspectRatio,
+                        matchHeightConstraintsFirst = matchHeightFirst,
+                    )
+                    .onGloballyPositioned { containerSize = it.size },
         ) {
             if (sessionData?.config?.compatibilityMode == true) {
                 AndroidView(
@@ -99,6 +109,28 @@ fun VideoDisplayArea(
                             imageView.setImageDrawable(null)
                         } else {
                             imageView.setImageBitmap(compatibilityFrame)
+                            if (containerSize.width > 0 &&
+                                containerSize.height > 0 &&
+                                compatibilityFrame.width > 0 &&
+                                compatibilityFrame.height > 0
+                            ) {
+                                val scaleX = containerSize.width.toFloat() / compatibilityFrame.width.toFloat()
+                                val scaleY = containerSize.height.toFloat() / compatibilityFrame.height.toFloat()
+                                val scale = min(scaleX, scaleY)
+                                val summary =
+                                    "${compatibilityFrame.width}x${compatibilityFrame.height}|" +
+                                        "${containerSize.width}x${containerSize.height}|${scale}"
+                                if (summary != lastLoggedScale) {
+                                    lastLoggedScale = summary
+                                    LogManager.d(
+                                        LogTags.REMOTE_DISPLAY,
+                                        "Compatibility Display\n" +
+                                            "Bitmap: ${compatibilityFrame.width}x${compatibilityFrame.height}\n" +
+                                            "Container: ${containerSize.width}x${containerSize.height}\n" +
+                                            "Scale: $scale",
+                                    )
+                                }
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize(),

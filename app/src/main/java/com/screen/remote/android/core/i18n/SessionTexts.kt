@@ -526,8 +526,8 @@ object SessionTexts {
         )
     val HELP_COMPATIBILITY_QUALITY =
         TextPair(
-            "与 scrcpy 的最大尺寸规则一致：宽、高都不超过所选数值并保持原始比例。兼容模式自动使用 JPEG 画质：720 为 55、1080 为 60、1920 为 65、原始为 70。对于 4K 电视，选择 1920 会输出约 1920×1080。",
-            "Uses the same max-size rule as scrcpy: neither dimension exceeds the selected value and the native aspect ratio is preserved. Compatibility mode automatically uses JPEG quality 55 at 720, 60 at 1080, 65 at 1920, and 70 at native size. For a 4K TV, selecting 1920 produces roughly 1920×1080.",
+            "兼容模式按 maxSize 采样：0/原始表示不缩放。1~99 表示采样比例百分比（1 即 1%，99 即 99%），100 或空值也视作原始不缩放。可输入任意整数，超过 100 按像素上限采样。图像始终按长宽比例等比缩放，不会放大到超过原始尺寸。当前实现中 jpegQuality 同步按 maxSize 映射。",
+            "Compatibility mode samples by maxSize: 0/Original means no scaling. Values 1-99 map directly to sample ratio percentage (1 means 1%, 99 means 99%). A value of 100 or empty means original size. Any integer is accepted; values above 100 are treated as max-pixel limits. Scaling keeps aspect ratio and does not upscale beyond source size. jpegQuality is currently mapped directly from maxSize.",
         )
     val HELP_NORMAL_VIDEO_BITRATE =
         TextPair(

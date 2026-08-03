@@ -14,10 +14,31 @@ internal class CompatibilityLiveTouchQueue {
         if (event.action == ACTION_MOVE && events.lastOrNull()?.action == ACTION_MOVE) {
             events.removeLast()
         }
-        events.addLast(event)
-        check(events.size <= MAX_PENDING_EVENTS) {
-            "Compatibility live touch queue exceeded its bounded capacity"
+        if (events.size >= MAX_PENDING_EVENTS) {
+            if (!removeOldestMove()) {
+                events.removeFirst()
+            }
         }
+        events.addLast(event)
+    }
+
+    private fun removeOldestMove(): Boolean {
+        if (events.none { it.action == ACTION_MOVE }) {
+            return false
+        }
+
+        val withoutFirstMove = ArrayDeque<CompatibilityLiveTouchEvent>(events.size)
+        var removed = false
+        while (events.isNotEmpty()) {
+            val next = events.removeFirst()
+            if (!removed && next.action == ACTION_MOVE) {
+                removed = true
+                continue
+            }
+            withoutFirstMove.addLast(next)
+        }
+        events.addAll(withoutFirstMove)
+        return true
     }
 
     fun poll(): CompatibilityLiveTouchEvent? = events.removeFirstOrNull()

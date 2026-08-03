@@ -25,6 +25,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionCo
 import com.screen.remote.android.infrastructure.scrcpy.connection.AdbStreamSocket
 import dadb.AdbShellStream
 import dadb.Dadb
+import dadb.AdbConnectException
 import dadb.DadbRoute
 import dadb.DadbSession
 import dadb.PortForwarder
@@ -68,6 +69,7 @@ import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -86,6 +88,7 @@ class AdbConnection(
     private var sessionContext: SessionContext? = null,
 ) {
     private val transportDisconnectNotified = AtomicBoolean(false)
+    private val forcePrimaryStreaming = AtomicBoolean(false)
     private val streamingForwardRegistryMutex = Mutex()
 
     @Volatile
@@ -117,7 +120,41 @@ class AdbConnection(
         AdbConnectionVerifier.verifyDadb(dadb, deviceId, sessionContext = null)
 
     fun supportsDelayedAck(): Boolean =
-        dadb.routeIfReady(DadbRoute.STREAMING)?.supportsFeature(Dadb.FEATURE_DELAYED_ACK) == true
+        if (forcePrimaryStreaming.get()) {
+            false
+        } else {
+            dadb.routeIfReady(DadbRoute.STREAMING)?.supportsFeature(Dadb.FEATURE_DELAYED_ACK) == true
+        }
+
+    private fun shouldFallbackToPrimaryStreaming(error: Throwable): Boolean {
+        if (forcePrimaryStreaming.get()) {
+            return true
+        }
+        var cursor: Throwable? = error
+        while (cursor != null) {
+            if (cursor is SocketTimeoutException) {
+                return true
+            }
+            val message = cursor.message.orEmpty().lowercase()
+            if (
+                message.contains("connection handshake failed") ||
+                message.contains("could not create the streaming adb connection")
+            ) {
+                return true
+            }
+            cursor = cursor.cause
+        }
+        return false
+    }
+
+    private fun markStreamingFallback(error: Throwable) {
+        if (forcePrimaryStreaming.compareAndSet(false, true)) {
+            LogManager.w(
+                LogTags.ADB_CONNECTION,
+                "Streaming ADB not available, fallback to primary connection: ${error.message}",
+            )
+        }
+    }
 
     fun bindSessionContext(sessionContext: SessionContext?) {
         this.sessionContext = sessionContext
@@ -250,6 +287,7 @@ class AdbConnection(
         localHelperJar: File,
         maxSize: Int,
         jpegQuality: Int,
+        forceDisplaySurface: Boolean = false,
     ): Result<RemoteScreenshotStream> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -257,6 +295,7 @@ class AdbConnection(
                     localHelperJar = localHelperJar,
                     maxSize = maxSize,
                     jpegQuality = jpegQuality,
+                    forceDisplaySurface = forceDisplaySurface,
                 )
             }
         }
@@ -365,10 +404,10 @@ class AdbConnection(
                     localHelperJar = localHelperJar,
                 )
             }.onFailure { error ->
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "Helper directory request failed path=$path: ${error.message}",
-                    error,
+                logHelperRequestFailure(
+                    operation = "directory",
+                    detail = "path=$path",
+                    error = error,
                 )
             }
         }
@@ -381,10 +420,10 @@ class AdbConnection(
             runCatching {
                 dadb.loadProcessesWithHelper(localHelperJar = localHelperJar)
             }.onFailure { error ->
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "Helper process request failed: ${error.message}",
-                    error,
+                logHelperRequestFailure(
+                    operation = "process",
+                    detail = "jar=${localHelperJar.absolutePath}",
+                    error = error,
                 )
             }
         }
@@ -403,13 +442,26 @@ class AdbConnection(
                     localHelperJar = localHelperJar,
                 )
             }.onFailure { error ->
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "Helper icon request failed package=$packageName: ${error.message}",
-                    error,
+                logHelperRequestFailure(
+                    operation = "app icon",
+                    detail = "package=$packageName",
+                    error = error,
                 )
             }
         }
+
+private fun logHelperRequestFailure(
+    operation: String,
+    detail: String,
+    error: Throwable,
+) {
+    val levelMessage = "Helper $operation request failed ($detail): ${error.message}"
+    if (error is SocketTimeoutException) {
+        LogManager.w(LogTags.ADB_CONNECTION, "$levelMessage (timeout, retry later)")
+    } else {
+        LogManager.w(LogTags.ADB_CONNECTION, levelMessage)
+    }
+}
 
     suspend fun loadAppListPageWithHelper(
         offset: Int,
@@ -581,7 +633,26 @@ class AdbConnection(
 
     private suspend fun streamingDadb(): Dadb =
         withContext(Dispatchers.IO) {
-            dadb.route(DadbRoute.STREAMING)
+            if (forcePrimaryStreaming.get()) {
+                return@withContext dadb.route(DadbRoute.PRIMARY)
+            }
+            try {
+                dadb.route(DadbRoute.STREAMING)
+            } catch (error: AdbConnectException) {
+                if (shouldFallbackToPrimaryStreaming(error)) {
+                    markStreamingFallback(error)
+                    dadb.route(DadbRoute.PRIMARY)
+                } else {
+                    throw error
+                }
+            } catch (error: Exception) {
+                if (shouldFallbackToPrimaryStreaming(error)) {
+                    markStreamingFallback(error)
+                    dadb.route(DadbRoute.PRIMARY)
+                } else {
+                    throw error
+                }
+            }
         }
 }
 

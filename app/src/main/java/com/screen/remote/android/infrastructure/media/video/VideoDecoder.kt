@@ -1,6 +1,7 @@
 package com.screen.remote.android.infrastructure.media.video
 
 import android.media.MediaCodec
+import android.os.Looper
 import android.os.Process
 import android.view.Surface
 import com.screen.remote.android.core.common.LogTags
@@ -99,6 +100,11 @@ class VideoDecoder(
         width: Int,
         height: Int,
     ) = withContext(decoderDispatcher) {
+        if (Looper.myLooper() == null) {
+            Looper.prepare()
+            LogManager.d(LogTags.VIDEO_DECODER, "Preparing Looper for video decoding thread")
+        }
+
         try {
             configureDecoderThreadPriority()
             VideoDebugLog.d(LogTags.VIDEO_DECODER) { "Start decoding $videoCodec: ${width}x$height" }

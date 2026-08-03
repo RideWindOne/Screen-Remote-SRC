@@ -222,7 +222,10 @@ internal fun Session.handleSessionError(issue: SessionIssue) {
 internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
     val reason = issue.message
     if (hasPendingDecoderResolutionRecovery()) {
-        LogManager.d(LogTags.SCRCPY_CLIENT, "Automatic reconnect is paused while waiting for video size recovery confirmation: $reason")
+        LogManager.d(
+            LogTags.SCRCPY_CLIENT,
+            "Automatic reconnect is paused while waiting for video size recovery confirmation: $reason"
+        )
         return
     }
     when (runtime.sessionState.value) {
@@ -233,6 +236,7 @@ internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
             )
             return
         }
+
         is SessionState.Failed -> {
             LogManager.d(
                 LogTags.SCRCPY_CLIENT,
@@ -240,12 +244,16 @@ internal fun Session.handleRequestReconnect(issue: ReconnectIssue) {
             )
             return
         }
+
         else -> {}
     }
 
     val currentAttempts = runtime.reconnectAttempts()
     if (currentAttempts >= ScrcpyConstants.MAX_RECONNECT_ATTEMPTS) {
-        LogManager.e(LogTags.SCRCPY_CLIENT, "The number of reconnections has reached the upper limit, stop reconnecting.")
+        LogManager.e(
+            LogTags.SCRCPY_CLIENT,
+            "The number of reconnections has reached the upper limit, stop reconnecting."
+        )
         runtime.updateSessionState(
             SessionState.Failed(
                 SessionIssue(
@@ -524,7 +532,11 @@ internal fun Session.handleSocketConnecting(context: SocketConnectingContext) {
         expectedSocketCount = context.expectedSocketCount,
         audioEnabled = context.audioEnabled,
     )
-    runtime.updateProgress(ConnectionStep.CONNECT_SOCKET, StepStatus.RUNNING, RemoteTexts.REMOTE_CONNECTING_SOCKET.get())
+    runtime.updateProgress(
+        ConnectionStep.CONNECT_SOCKET,
+        StepStatus.RUNNING,
+        RemoteTexts.REMOTE_CONNECTING_SOCKET.get()
+    )
     LogManager.d(LogTags.SCRCPY_CLIENT, "Start connecting socket: ${context.summary()}")
 }
 
@@ -538,7 +550,11 @@ internal fun Session.handleSocketConnected(
     val socketConnections = componentSnapshot.socketConnections
 
     if (socketConnections.allRequiredSocketsConnected) {
-        runtime.updateProgress(ConnectionStep.CONNECT_SOCKET, StepStatus.SUCCESS, RemoteTexts.REMOTE_SOCKET_CONNECTED.get())
+        runtime.updateProgress(
+            ConnectionStep.CONNECT_SOCKET,
+            StepStatus.SUCCESS,
+            RemoteTexts.REMOTE_SOCKET_CONNECTED.get()
+        )
         runtime.updateSessionState(
             SessionState.Connected(
                 socketConnections.toConnectedContext(

@@ -1665,9 +1665,15 @@ private fun VideoConfigSection(state: SessionDialogState) {
                 value = state.maxSize,
                 presets =
                     listOf(
-                        "720" to "720",
-                        "1080" to "1080",
-                        "1920" to "1920",
+                        "10%" to "10",
+                        "20%" to "20",
+                        "30%" to "30",
+                        "40%" to "40",
+                        "50%" to "50",
+                        "60%" to "60",
+                        "70%" to "70",
+                        "80%" to "80",
+                        "90%" to "90",
                         SessionTexts.LABEL_ORIGINAL.get() to "",
                     ),
                 customEnabled = true,

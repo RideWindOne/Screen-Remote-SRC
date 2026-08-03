@@ -462,6 +462,7 @@ object ManagementTexts {
         val NEXT_COMMAND = TextPair("下一条命令", "Next command")
         val COMPLETE = TextPair("补全", "Complete")
         val CLEAR = TextPair("清空", "Clear")
+        val COPY_ALL = TextPair("复制", "Copy")
         val INTERACTIVE_SHELL_CONNECTED = TextPair("# 已连接交互式 shell。", "# Interactive shell connected.")
         val OPENING_INTERACTIVE_SHELL = TextPair("# 正在打开交互式 shell...", "# Opening interactive shell...")
         val ENTER_SHELL_COMMAND = TextPair("输入 Shell 命令", "Enter a shell command")

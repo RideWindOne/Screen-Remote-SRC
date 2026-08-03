@@ -1,6 +1,7 @@
 package com.screen.remote.android.feature.session.ui
 
 import android.annotation.SuppressLint
+import android.content.ClipData
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,8 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -95,6 +98,7 @@ private const val SESSION_MANAGEMENT_SHELL_KEEPALIVE_INTERVAL_MS = 20_000L
 private const val SESSION_MANAGEMENT_SHELL_RECONNECT_DELAY_MS = 1_200L
 private const val SESSION_MANAGEMENT_SHELL_MAX_RECONNECT_ATTEMPTS = 3
 private const val SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT = 16_000
+
 @SuppressLint("SdCardPath")
 private const val SESSION_MANAGEMENT_DEFAULT_SHELL_DIRECTORY = "/sdcard"
 private const val SESSION_MANAGEMENT_COMMAND_DONE_MARKER = "__SCREEN_REMOTE_COMMAND_DONE__"
@@ -102,11 +106,14 @@ private const val SESSION_MANAGEMENT_TERMINAL_MIN_TEXT_SCALE = 0.7f
 private const val SESSION_MANAGEMENT_TERMINAL_MAX_TEXT_SCALE = 2.2f
 private const val SESSION_MANAGEMENT_SHELL_INTERRUPT = "\u0003"
 private val SESSION_MANAGEMENT_UNSUPPORTED_INTERACTIVE_COMMANDS =
-    setOf("vi", "vim", "view", "ex", "vimdiff", "nvim", "nano", "emacs", "less", "more", "man", "watch", "screen", "tmux")
+    setOf(
+        "vi", "vim", "view", "ex", "vimdiff", "nvim", "nano",
+        "emacs", "less", "more", "man", "watch", "screen", "tmux"
+    )
 private val SESSION_MANAGEMENT_SHELL_SEGMENT_PATTERN = Regex("""&&|\|\||[|;]""")
 private val SESSION_MANAGEMENT_SHELL_ASSIGNMENT_PATTERN = Regex("""[A-Za-z_][A-Za-z0-9_]*=.*""")
 private val SESSION_MANAGEMENT_ANSI_PATTERN =
-    Regex("""\u001B(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\)|[PX^_].*?\u001B\\|[@-Z\\-_])""")
+    Regex("""\u001B(?:\[[0-?]*[ -/]*[@-~]|][^\u0007]*(?:\u0007|\u001B\\)|[PX^_].*?\u001B\\|[@-Z\\-_])""")
 private val SESSION_MANAGEMENT_TERMINAL_ERROR_PATTERN =
     Regex(
         """\b(error|failed|failure|fatal|exception|denied|not found|cannot|can't|invalid|unable|timed? out|no such file|permission denied)\b""",
@@ -117,7 +124,7 @@ private val SESSION_MANAGEMENT_TERMINAL_WARNING_PATTERN =
 private val SESSION_MANAGEMENT_TERMINAL_SUCCESS_PATTERN =
     Regex("""\b(connected|success|succeeded|complete|completed|ready|enabled|ok|done)\b""", RegexOption.IGNORE_CASE)
 private val SESSION_MANAGEMENT_GREP_COMMAND_PATTERN = Regex("""(?:^|[|;&])\s*(?:grep|egrep|fgrep|rg)\b""")
-private val SESSION_MANAGEMENT_SHELL_TOKEN_PATTERN = Regex("""'(?:[^']*)'|\"(?:[^\"\\]|\\.)*\"|\S+""")
+private val SESSION_MANAGEMENT_SHELL_TOKEN_PATTERN = Regex("""'(?:[^']*)'|"(?:[^"\\]|\\.)*"|\S+""")
 private val SESSION_MANAGEMENT_TERMINAL_TIMESTAMP_PATTERN =
     Regex("""\b(?:\d{4}-\d{2}-\d{2}[ T])?\d{2}:\d{2}:\d{2}(?:\.\d+)?\b""")
 private val SESSION_MANAGEMENT_TERMINAL_ENDPOINT_PATTERN =
@@ -130,22 +137,13 @@ private val SESSION_MANAGEMENT_TERMINAL_NUMBER_PATTERN =
     Regex("""(?<![\w.])[-+]?(?:0x[0-9A-Fa-f]+|\d+(?:\.\d+)?)(?:\s?(?:%|ms|s|KB|MB|GB|KiB|MiB|GiB|GHz|MHz|DPI))?\b""")
 private val SESSION_MANAGEMENT_TERMINAL_BOOLEAN_PATTERN =
     Regex("""\b(true|false|on|off|yes|no|enabled|disabled|running|stopped)\b""", RegexOption.IGNORE_CASE)
-private val SESSION_MANAGEMENT_TERMINAL_QUOTED_STRING_PATTERN =
-    Regex("""'(?:[^']*)'|\"(?:[^\"\\]|\\.)*\"""")
+private val SESSION_MANAGEMENT_TERMINAL_QUOTED_STRING_PATTERN = Regex("""'(?:[^']*)'|"(?:[^"\\]|\\.)*""")
 private val SESSION_MANAGEMENT_TERMINAL_FLAG_PATTERN = Regex("""(?<!\S)--?[A-Za-z0-9][A-Za-z0-9_-]*""")
 
-private val SessionManagementCommandTextColor
-    @Composable
-    get() = sessionManagementTerminalPalette().text
-private val SessionManagementCommandHintColor
-    @Composable
-    get() = sessionManagementTerminalPalette().hint
-private val SessionManagementCommandPromptColor
-    @Composable
-    get() = sessionManagementTerminalPalette().accent
-private val SessionManagementCommandErrorColor
-    @Composable
-    get() = sessionManagementTerminalPalette().error
+private val SessionManagementCommandTextColor @Composable get() = sessionManagementTerminalPalette().text
+private val SessionManagementCommandHintColor @Composable get() = sessionManagementTerminalPalette().hint
+private val SessionManagementCommandPromptColor @Composable get() = sessionManagementTerminalPalette().accent
+private val SessionManagementCommandErrorColor @Composable get() = sessionManagementTerminalPalette().error
 
 data class ManagementCommandRecord(
     val command: String,
@@ -402,7 +400,9 @@ private fun SessionManagementTerminalHistoryActions(
     onNext: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, end = 8.dp),
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -463,7 +463,9 @@ private fun SessionManagementTerminalHistoryActions(
             Icon(
                 imageVector = Icons.Default.KeyboardArrowUp,
                 contentDescription = ManagementTexts.Commands.PREVIOUS_COMMAND.get(),
-                tint = if (previousEnabled) SessionManagementCommandPromptColor else SessionManagementCommandHintColor.copy(alpha = 0.32f),
+                tint = if (previousEnabled) SessionManagementCommandPromptColor else SessionManagementCommandHintColor.copy(
+                    alpha = 0.32f
+                ),
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -475,7 +477,9 @@ private fun SessionManagementTerminalHistoryActions(
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = ManagementTexts.Commands.NEXT_COMMAND.get(),
-                tint = if (nextEnabled) SessionManagementCommandPromptColor else SessionManagementCommandHintColor.copy(alpha = 0.32f),
+                tint = if (nextEnabled) SessionManagementCommandPromptColor else SessionManagementCommandHintColor.copy(
+                    alpha = 0.32f
+                ),
                 modifier = Modifier.size(18.dp),
             )
         }
@@ -491,8 +495,10 @@ private fun SessionManagementTerminalContent(
     lineHeight: TextUnit,
     onClear: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
+    val outputScrollState = androidx.compose.foundation.lazy.rememberLazyListState()
     val terminalPalette = sessionManagementTerminalPalette()
+    val clipboardManager = LocalClipboard.current
+    val clipboardScope = rememberCoroutineScope()
     val displayLines =
         rememberTerminalOutputLines(
             output = output,
@@ -501,7 +507,9 @@ private fun SessionManagementTerminalContent(
 
     LaunchedEffect(displayLines.size, output.length, isConnected) {
         if (displayLines.isNotEmpty()) {
-            listState.animateScrollToItem(displayLines.lastIndex)
+            outputScrollState.animateScrollToItem(
+                index = displayLines.lastIndex,
+            )
         }
     }
 
@@ -510,18 +518,15 @@ private fun SessionManagementTerminalContent(
     ) {
         SelectionContainer {
             LazyColumn(
-                state = listState,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight()
                         .heightIn(min = 150.dp)
                         .padding(14.dp),
+                state = outputScrollState,
             ) {
-                itemsIndexed(
-                    items = displayLines,
-                    key = { index, _ -> index },
-                ) { _, line ->
+                items(displayLines.size) { index ->
+                    val line = displayLines[index]
                     if (line.tone == TerminalOutputTone.COMMAND_SEPARATOR) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 5.dp),
@@ -545,20 +550,44 @@ private fun SessionManagementTerminalContent(
         }
 
         if (output.isNotEmpty()) {
-            IconButton(
-                onClick = onClear,
+            Row(
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .size(28.dp),
+                        .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = ManagementTexts.Commands.CLEAR.get(),
-                    tint = SessionManagementCommandErrorColor,
-                    modifier = Modifier.size(16.dp),
-                )
+                TextButton(
+                    onClick = {
+                        clipboardScope.launch {
+                            clipboardManager.setClipEntry(ClipEntry(ClipData.newPlainText("Screen Remote", output)))
+                        }
+                    },
+                    modifier = Modifier.heightIn(min = 30.dp),
+                ) {
+                    Text(
+                        text = ManagementTexts.Commands.COPY_ALL.get(),
+                        color = SessionManagementCommandPromptColor,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = SessionManagementTerminalTextTokens.monospace,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                IconButton(
+                    onClick = onClear,
+                    modifier =
+                        Modifier
+                            .size(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = ManagementTexts.Commands.CLEAR.get(),
+                        tint = SessionManagementCommandErrorColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
@@ -701,7 +730,8 @@ private fun unsupportedInteractiveCommand(
         if (tokens.getOrNull(index) == "command") index += 1
         if (tokens.getOrNull(index) in setOf("busybox", "toybox")) index += 1
 
-        val executable = tokens.getOrNull(index)?.substringAfterLast('/')?.lowercase() ?: return@firstNotNullOfOrNull null
+        val executable =
+            tokens.getOrNull(index)?.substringAfterLast('/')?.lowercase() ?: return@firstNotNullOfOrNull null
         when (executable) {
             in SESSION_MANAGEMENT_UNSUPPORTED_INTERACTIVE_COMMANDS -> executable
             in setOf("sh", "bash", "zsh") if tokens.getOrNull(index + 1) == "-c" ->
@@ -1016,10 +1046,10 @@ private fun SessionManagementTerminalInputLine(
                 contentDescription = ManagementTexts.Commands.RUN_COMMAND.get(),
                 tint =
                     if (normalizedCommand.isNotBlank() && inputEnabled) {
-                    SessionManagementCommandPromptColor
-                } else {
-                    SessionManagementCommandHintColor.copy(alpha = 0.32f)
-                },
+                        SessionManagementCommandPromptColor
+                    } else {
+                        SessionManagementCommandHintColor.copy(alpha = 0.32f)
+                    },
             )
         }
     }

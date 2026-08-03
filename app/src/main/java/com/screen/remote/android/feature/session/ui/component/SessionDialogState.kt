@@ -130,10 +130,7 @@ class SessionDialogState(
     fun updateConfig(transform: ScrcpyConfig.() -> ScrcpyConfig) {
         config = config.transform()
         if (config.compatibilityMode && config.enableAudio) {
-            config =
-                config.copy(
-                    enableAudio = false,
-                )
+            config = config.copy(enableAudio = false)
         }
     }
 
@@ -163,21 +160,20 @@ class SessionDialogState(
     }
 
     private fun normalizeCompatibilityMode() {
-        config =
-            config.copy(
-                gameMode = false,
-                useFullScreen = false,
-                enableHardwareDecoding = false,
-                tunnelMode = ScrcpyTunnelMode.DIRECT_ADB,
-                enableAudio = false,
-                turnScreenOff = false,
-                powerOffOnClose = false,
-                cleanupOnDisconnect = false,
-                stayAwake = false,
-                ignoreVideoEncoderConstraints = false,
-                newDisplayEnabled = false,
-                showTouches = false,
-            )
+        config = config.copy(
+            gameMode = false,
+            useFullScreen = false,
+            enableHardwareDecoding = false,
+            tunnelMode = ScrcpyTunnelMode.DIRECT_ADB,
+            enableAudio = false,
+            turnScreenOff = false,
+            powerOffOnClose = false,
+            cleanupOnDisconnect = false,
+            stayAwake = false,
+            ignoreVideoEncoderConstraints = false,
+            newDisplayEnabled = false,
+            showTouches = false,
+        )
     }
 
     private fun normalizeGameVideoSettings() {
@@ -217,53 +213,55 @@ class SessionDialogState(
             color = color,
             profileId = profileId,
             useProfileDefaults = useProfileDefaults,
-            config =
-                config.copy(
-                    maxSize = maxSize.toIntOrNull()?.takeIf { it > 0 } ?: 0,
-                    videoBitRate = parseBitrateBitsPerSecond(videoBitrate) ?: ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
-                    maxFps = maxFps.toIntOrNull() ?: 60,
-                    newDisplay =
-                        if (config.newDisplayEnabled && !config.compatibilityMode) {
-                            buildNewDisplay(newDisplayWidth, newDisplayHeight, newDisplayDpi)
-                        } else {
-                            ""
-                        },
-                    audioBitRate = parseBitrateBitsPerSecond(audioBitrate) ?: 128000,
-                    enableHardwareDecoding = config.enableHardwareDecoding && !config.compatibilityMode,
-                    tunnelMode =
-                        if (config.compatibilityMode) {
-                            ScrcpyTunnelMode.DIRECT_ADB
-                        } else {
-                            config.tunnelMode
-                        },
-                    useFullScreen = config.useFullScreen && !config.gameMode && !config.compatibilityMode,
-                    enableAudio = config.enableAudio && !config.compatibilityMode,
-                    turnScreenOff = config.turnScreenOff && !config.compatibilityMode,
-                    powerOffOnClose =
-                        config.powerOffOnClose &&
-                            config.cleanupOnDisconnect &&
-                            !config.compatibilityMode,
-                    cleanupOnDisconnect = config.cleanupOnDisconnect && !config.compatibilityMode,
-                    stayAwake =
-                        config.stayAwake &&
-                            config.cleanupOnDisconnect &&
-                            !config.compatibilityMode,
-                    ignoreVideoEncoderConstraints = config.ignoreVideoEncoderConstraints && !config.compatibilityMode,
-                    newDisplayEnabled = config.newDisplayEnabled && !config.compatibilityMode,
-                    showTouches = config.showTouches && !config.compatibilityMode,
-                    startApp =
-                        if (config.newDisplayEnabled && !config.compatibilityMode) {
-                            config.startApp.trim()
-                        } else {
-                            ""
-                        },
-                ),
-            tcpPortForwardRules = tcpPortForwardRules ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),
+            config = config.copy(
+                maxSize = resolveMaxSizeForConfigSave(),
+                videoBitRate = parseBitrateBitsPerSecond(videoBitrate) ?: ScrcpyConstants.DEFAULT_VIDEO_BITRATE_INT,
+                maxFps = maxFps.toIntOrNull() ?: 60,
+                newDisplay =
+                    if (config.newDisplayEnabled && !config.compatibilityMode) {
+                        buildNewDisplay(newDisplayWidth, newDisplayHeight, newDisplayDpi)
+                    } else {
+                        ""
+                    },
+                audioBitRate = parseBitrateBitsPerSecond(audioBitrate) ?: 128000,
+                enableHardwareDecoding = config.enableHardwareDecoding && !config.compatibilityMode,
+                tunnelMode =
+                    if (config.compatibilityMode) {
+                        ScrcpyTunnelMode.DIRECT_ADB
+                    } else {
+                        config.tunnelMode
+                    },
+                useFullScreen = config.useFullScreen && !config.gameMode && !config.compatibilityMode,
+                enableAudio = config.enableAudio && !config.compatibilityMode,
+                turnScreenOff = config.turnScreenOff && !config.compatibilityMode,
+                powerOffOnClose =
+                    config.powerOffOnClose &&
+                        config.cleanupOnDisconnect &&
+                        !config.compatibilityMode,
+                cleanupOnDisconnect = config.cleanupOnDisconnect && !config.compatibilityMode,
+                stayAwake =
+                    config.stayAwake &&
+                        config.cleanupOnDisconnect &&
+                        !config.compatibilityMode,
+                ignoreVideoEncoderConstraints = config.ignoreVideoEncoderConstraints && !config.compatibilityMode,
+                newDisplayEnabled = config.newDisplayEnabled && !config.compatibilityMode,
+                showTouches = config.showTouches && !config.compatibilityMode,
+                startApp =
+                    if (config.newDisplayEnabled && !config.compatibilityMode) {
+                        config.startApp.trim()
+                    } else {
+                        ""
+                    },
+            ),
+            tcpPortForwardRules = tcpPortForwardRules
+                ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),
             capabilityCache =
                 capabilityCache,
             groupIds = selectedGroupIds,
         )
     }
+
+    private fun resolveMaxSizeForConfigSave(): Int = maxSize.toIntOrNull()?.takeIf { it > 0 } ?: 0
 
     /**
      * 检查是否有有效的设备连接信息
@@ -301,9 +299,19 @@ class SessionDialogState(
     private fun sessionAddressCount(): Int {
         val primary =
             when (deviceType) {
-                SessionDeviceType.TCP -> parseTcpHostPort(host)?.let { ConnectionCandidate(ConnectionTransport.TCP, it.host, it.port) }
-                SessionDeviceType.USB -> normalizeUsbSerial(usbSerialNumber).takeIf { it.isNotBlank() }?.let { ConnectionCandidate(ConnectionTransport.USB, it) }
-                SessionDeviceType.MDNS -> normalizeMdnsServiceName(host).takeIf { it.isNotBlank() }?.let { ConnectionCandidate(ConnectionTransport.MDNS, it) }
+                SessionDeviceType.TCP -> parseTcpHostPort(host)?.let {
+                    ConnectionCandidate(
+                        ConnectionTransport.TCP,
+                        it.host,
+                        it.port
+                    )
+                }
+
+                SessionDeviceType.USB -> normalizeUsbSerial(usbSerialNumber).takeIf { it.isNotBlank() }
+                    ?.let { ConnectionCandidate(ConnectionTransport.USB, it) }
+
+                SessionDeviceType.MDNS -> normalizeMdnsServiceName(host).takeIf { it.isNotBlank() }
+                    ?.let { ConnectionCandidate(ConnectionTransport.MDNS, it) }
             }
 
         val backups =
@@ -332,8 +340,16 @@ class SessionDialogState(
                     formatSessionAddress(ConnectionTransport.TCP, normalizeEndpointHost(displayHost), displayPort)
                 }
             }
-            SessionDeviceType.USB -> formatSessionAddress(ConnectionTransport.USB, normalizeUsbSerial(usbSerialNumber.ifBlank { "..." }))
-            SessionDeviceType.MDNS -> formatSessionAddress(ConnectionTransport.MDNS, normalizeMdnsServiceName(host.ifBlank { "..." }))
+
+            SessionDeviceType.USB -> formatSessionAddress(
+                ConnectionTransport.USB,
+                normalizeUsbSerial(usbSerialNumber.ifBlank { "..." })
+            )
+
+            SessionDeviceType.MDNS -> formatSessionAddress(
+                ConnectionTransport.MDNS,
+                normalizeMdnsServiceName(host.ifBlank { "..." })
+            )
         }
 
     fun selectDeviceType(type: SessionDeviceType) {
@@ -392,11 +408,13 @@ class SessionDialogState(
                         host = finalHost,
                         port = finalPort.toIntOrNull() ?: 5555,
                     )
+
                 SessionDeviceType.USB ->
                     ConnectionCandidate(
                         transport = ConnectionTransport.USB,
                         host = finalHost,
                     )
+
                 SessionDeviceType.MDNS ->
                     ConnectionCandidate(
                         transport = ConnectionTransport.MDNS,

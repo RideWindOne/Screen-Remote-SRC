@@ -104,18 +104,20 @@ internal fun ScrcpyConfig.withUrlParameters(parameters: Map<String, String>): Re
                     "compatibilityMode" -> config.copy(compatibilityMode = value.requireBoolean(key))
                     "fullScreen", "useFullScreen" -> config.copy(useFullScreen = value.requireBoolean(key))
                     "floatingBall", "showFloatingBall" -> config.copy(showFloatingBall = value.requireBoolean(key))
-                    "hardwareDecoding", "enableHardwareDecoding" ->
-                        config.copy(enableHardwareDecoding = value.requireBoolean(key))
-                    "screenRotationPolicy" ->
-                        config.copy(
-                            screenRotationPolicy =
-                                when (value) {
-                                    "none" -> ScreenRotationPolicy.NONE
-                                    "local" -> ScreenRotationPolicy.LOCAL
-                                    "target" -> ScreenRotationPolicy.TARGET
-                                    else -> error("Invalid screenRotationPolicy: $value")
-                                },
-                        )
+                    "hardwareDecoding", "enableHardwareDecoding" -> config.copy(
+                        enableHardwareDecoding = value.requireBoolean(key)
+                    )
+
+                    "screenRotationPolicy" -> config.copy(
+                        screenRotationPolicy =
+                            when (value) {
+                                "none" -> ScreenRotationPolicy.NONE
+                                "local" -> ScreenRotationPolicy.LOCAL
+                                "target" -> ScreenRotationPolicy.TARGET
+                                else -> error("Invalid screenRotationPolicy: $value")
+                            },
+                    )
+
                     "clipboard", "clipboardSync" -> config.copy(clipboardSync = value.requireBoolean(key))
                     "turnScreenOff" -> config.copy(turnScreenOff = value.requireBoolean(key))
                     "powerOffOnClose" -> config.copy(powerOffOnClose = value.requireBoolean(key))
@@ -123,26 +125,34 @@ internal fun ScrcpyConfig.withUrlParameters(parameters: Map<String, String>): Re
                     "stayAwake" -> config.copy(stayAwake = value.requireBoolean(key))
                     "keepDeviceAwake" -> config.copy(keepDeviceAwake = value.requireBoolean(key))
                     "showTouches" -> config.copy(showTouches = value.requireBoolean(key))
-                    "ignoreVideoEncoderConstraints" ->
-                        config.copy(ignoreVideoEncoderConstraints = value.requireBoolean(key))
+                    "ignoreVideoEncoderConstraints" -> config.copy(
+                        ignoreVideoEncoderConstraints = value.requireBoolean(key)
+                    )
+
                     "displayId" -> config.copy(displayId = value.requireNonNegativeInt(key))
                     "newDisplayEnabled" -> config.copy(newDisplayEnabled = value.requireBoolean(key))
                     "newDisplay" -> config.copy(newDisplayEnabled = true, newDisplay = value)
-                    "virtualDisplaySystemDecorations" ->
-                        config.copy(virtualDisplaySystemDecorations = value.requireBoolean(key))
-                    "preserveVirtualDisplayContent" ->
-                        config.copy(preserveVirtualDisplayContent = value.requireBoolean(key))
+                    "virtualDisplaySystemDecorations" -> config.copy(
+                        virtualDisplaySystemDecorations = value.requireBoolean(key)
+                    )
+
+                    "preserveVirtualDisplayContent" -> config.copy(
+                        preserveVirtualDisplayContent = value.requireBoolean(
+                            key
+                        )
+                    )
+
                     "startApp" -> config.copy(startApp = value)
                     "codecOptions" -> config.copy(codecOptions = value)
-                    "tunnelMode" ->
-                        config.copy(
-                            tunnelMode =
-                                when (value) {
-                                    "direct", "direct_adb" -> ScrcpyTunnelMode.DIRECT_ADB
-                                    "forward", "adb_forward" -> ScrcpyTunnelMode.ADB_FORWARD
-                                    else -> error("Invalid tunnelMode: $value")
-                                },
-                        )
+                    "tunnelMode" -> config.copy(
+                        tunnelMode =
+                            when (value) {
+                                "direct", "direct_adb" -> ScrcpyTunnelMode.DIRECT_ADB
+                                "forward", "adb_forward" -> ScrcpyTunnelMode.ADB_FORWARD
+                                else -> error("Invalid tunnelMode: $value")
+                            },
+                    )
+
                     else -> error("Unsupported scrcpy URL parameter: $key")
                 }
             }

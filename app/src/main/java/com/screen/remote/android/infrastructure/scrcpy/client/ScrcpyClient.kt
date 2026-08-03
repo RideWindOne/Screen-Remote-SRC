@@ -119,6 +119,9 @@ class ScrcpyClient(
             },
             onFrame = { frame -> _compatibilityFrame.value = frame },
             onResolution = { width, height -> _videoResolution.value = width to height },
+            onConnectionLost = { message ->
+                stateCoordinator.updateConnectionStateOnError(message)
+            },
             onCaptureFailure = { message ->
                 _connectionState.value = ConnectionState.Error(message)
             },

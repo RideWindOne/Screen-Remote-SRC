@@ -94,7 +94,10 @@ internal fun Session.saveCodecDetectionResult(
 
     updateOptionsInMemory(applyDetectionResult)
     persistOptionsInBackground(applyDetectionResult)
-    LogManager.d(LogTags.SCRCPY_CLIENT, "The codec detection results have been updated to the memory and saved in the background: sessionId=$sessionId")
+    LogManager.d(
+        LogTags.SCRCPY_CLIENT,
+        "The codec detection results have been updated to the memory and saved in the background: sessionId=$sessionId"
+    )
 }
 
 internal fun ScrcpyOptions.clearIgnoredUserCodecSelections(
@@ -102,13 +105,12 @@ internal fun ScrcpyOptions.clearIgnoredUserCodecSelections(
     clearAudio: Boolean,
 ): ScrcpyOptions =
     copy(
-        config =
-            config.copy(
-                userVideoEncoder = if (clearVideo) "" else config.userVideoEncoder,
-                userVideoDecoder = if (clearVideo) "" else config.userVideoDecoder,
-                userAudioEncoder = if (clearAudio) "" else config.userAudioEncoder,
-                userAudioDecoder = if (clearAudio) "" else config.userAudioDecoder,
-            ),
+        config = config.copy(
+            userVideoEncoder = if (clearVideo) "" else config.userVideoEncoder,
+            userVideoDecoder = if (clearVideo) "" else config.userVideoDecoder,
+            userAudioEncoder = if (clearAudio) "" else config.userAudioEncoder,
+            userAudioDecoder = if (clearAudio) "" else config.userAudioDecoder,
+        ),
     )
 
 internal fun Session.rememberResolvedVideoDecoder(
