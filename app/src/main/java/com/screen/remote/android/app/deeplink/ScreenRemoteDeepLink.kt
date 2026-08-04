@@ -1,12 +1,12 @@
 package com.screen.remote.android.app.deeplink
 
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
+import com.screen.remote.android.core.domain.model.SessionColor
+import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import com.screen.remote.android.core.domain.model.SessionColor
-import com.screen.remote.android.core.domain.model.ScrcpyConfig
-import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 
 sealed interface ScreenRemoteDeepLink {
     data object Sessions : ScreenRemoteDeepLink
@@ -155,7 +155,12 @@ fun parseScreenRemoteDeepLink(value: String): ScreenRemoteDeepLink? =
             "open" -> if (parameters.isEmpty()) parseOpenLink(segments) else null
             "session" -> parseSessionLink(segments, parameters)
             "setting" -> parseSettingLink(segments, parameters)
-            "adb" -> if (segments == listOf("keys", "generate") && parameters.isEmpty()) ScreenRemoteDeepLink.GenerateAdbKeys else null
+            "adb" -> if (segments == listOf(
+                    "keys",
+                    "generate"
+                ) && parameters.isEmpty()
+            ) ScreenRemoteDeepLink.GenerateAdbKeys else null
+
             "diagnostics" -> if (segments == listOf("logs") && parameters.isEmpty()) ScreenRemoteDeepLink.DiagnosticLogs else null
             "remote" -> if (segments == listOf("disconnect") && parameters.isEmpty()) ScreenRemoteDeepLink.Disconnect else null
             else -> null
@@ -169,6 +174,7 @@ fun ScreenRemoteDeepLink.toUrl(): String =
         is ScreenRemoteDeepLink.EditSession -> "$SCHEME://session/edit/${encodePathSegment(sessionSelector)}"
         is ScreenRemoteDeepLink.ScrcpySession ->
             "$SCHEME://session/${encodePathSegment(sessionSelector)}/scrcpy${parameters.toQuery()}"
+
         is ScreenRemoteDeepLink.ManageSession -> {
             val destinationPath =
                 buildList {
@@ -181,9 +187,11 @@ fun ScreenRemoteDeepLink.toUrl(): String =
                 }.joinToString("/")
             "$SCHEME://session/${encodePathSegment(sessionSelector)}/manage/$destinationPath${parameters.toQuery()}"
         }
+
         is ScreenRemoteDeepLink.Settings -> "$SCHEME://open/${destination.path}"
         is ScreenRemoteDeepLink.SettingValue ->
             "$SCHEME://setting/${encodePathSegment(setting)}/${encodePathSegment(value)}"
+
         ScreenRemoteDeepLink.GenerateAdbKeys -> "$SCHEME://adb/keys/generate"
         ScreenRemoteDeepLink.DiagnosticLogs -> "$SCHEME://diagnostics/logs"
         ScreenRemoteDeepLink.Disconnect -> "$SCHEME://remote/disconnect"
@@ -223,6 +231,7 @@ private fun parseSessionLink(
             } else {
                 null
             }
+
         "manage" -> parseManageLink(selector, segments.drop(2), parameters)
         else -> null
     }

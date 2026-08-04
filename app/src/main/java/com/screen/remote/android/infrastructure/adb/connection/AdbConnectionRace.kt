@@ -30,6 +30,7 @@ internal suspend fun raceAdbConnections(
     logTag: String,
     logLabel: String,
     deviceName: String? = null,
+    shellPassword: String = "",
     isCurrentRace: () -> Boolean = { true },
 ): AdbConnectionRaceOutcome {
     val distinctCandidates = candidates.distinctBy(ConnectionCandidate::deviceIdentifier)
@@ -66,6 +67,7 @@ internal suspend fun raceAdbConnections(
                             connectionManager.connectCandidate(
                                 candidate = candidate,
                                 deviceName = deviceName,
+                                shellPassword = shellPassword,
                             ).getOrThrow()
                         if (purpose != AdbConnectionPurpose.LATENCY_TEST) {
                             connection.refreshCandidatePreflight(purpose)

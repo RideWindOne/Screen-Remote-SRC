@@ -3,8 +3,8 @@ package com.screen.remote.android.infrastructure.scrcpy.connection
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.ScrcpyConstants
 import com.screen.remote.android.core.common.manager.LogManager
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

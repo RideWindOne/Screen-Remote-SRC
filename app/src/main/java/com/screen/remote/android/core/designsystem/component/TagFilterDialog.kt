@@ -85,7 +85,8 @@ fun TagFilterDialog(
                                         } else {
                                             availableTags.toSet()
                                         }
-                                }.padding(horizontal = 16.dp, vertical = 12.dp),
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(
@@ -113,7 +114,8 @@ fun TagFilterDialog(
                                             } else {
                                                 tempSelectedTags + tag
                                             }
-                                    }.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(

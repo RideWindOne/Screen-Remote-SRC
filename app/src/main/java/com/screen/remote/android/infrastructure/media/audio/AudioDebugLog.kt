@@ -1,7 +1,7 @@
 package com.screen.remote.android.infrastructure.media.audio
 
-import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.LogDetailCategory
+import com.screen.remote.android.core.common.manager.LogManager
 
 internal object AudioDebugLog {
     inline fun d(

@@ -46,6 +46,7 @@ data class ScrcpyConfig(
     val virtualDisplaySystemDecorations: Boolean = true,
     val preserveVirtualDisplayContent: Boolean = false,
     val startApp: String = "",
+    val shellPassword: String = "",
     val newDisplay: String = "",
     val displayId: Int = 0,
     val showTouches: Boolean = false,

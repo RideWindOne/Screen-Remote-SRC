@@ -103,6 +103,7 @@ class ConnectionLatencyTestViewModel(
                                             candidate = candidate,
                                             round = index + 1,
                                             usbDevice = usbPreparation[candidate]?.getOrNull(),
+                                            shellPassword = session.config.shellPassword,
                                         )
                                     recordRound(candidate, result)
                                     delay(150.milliseconds)
@@ -158,7 +159,9 @@ class ConnectionLatencyTestViewModel(
                 if (result.successful) {
                     val rttMedian = median(result.shellRoundTripMillis)
                     "#${result.round} 连接 ${result.connectMillis!!.oneDecimal()} ms｜RTT ${rttMedian.oneDecimal()} ms " +
-                        "[${result.shellRoundTripMillis.minOrNull()!!.oneDecimal()}–${result.shellRoundTripMillis.maxOrNull()!!.oneDecimal()}]｜" +
+                        "[${
+                            result.shellRoundTripMillis.minOrNull()!!.oneDecimal()
+                        }–${result.shellRoundTripMillis.maxOrNull()!!.oneDecimal()}]｜" +
                         result.resolvedEndpoint.orEmpty()
                 } else {
                     "#${result.round} 失败 ${result.failureMillis?.oneDecimal() ?: "-"} ms｜${result.error}" +
@@ -248,14 +251,18 @@ fun ConnectionLatencyTestState.copyText(session: SessionData): String =
                 appendLine(
                     "连接：中位 ${median(endpoint.connectSamples).oneDecimal()} ms；" +
                         "平均 ${endpoint.connectSamples.average().oneDecimal()} ms；" +
-                        "范围 ${endpoint.connectSamples.minOrNull()!!.oneDecimal()}–${endpoint.connectSamples.maxOrNull()!!.oneDecimal()} ms",
+                        "范围 ${
+                            endpoint.connectSamples.minOrNull()!!.oneDecimal()
+                        }–${endpoint.connectSamples.maxOrNull()!!.oneDecimal()} ms",
                 )
             }
             if (endpoint.shellSamples.isNotEmpty()) {
                 appendLine(
                     "连接后 RTT：中位 ${median(endpoint.shellSamples).oneDecimal()} ms；" +
                         "平均 ${endpoint.shellSamples.average().oneDecimal()} ms；" +
-                        "范围 ${endpoint.shellSamples.minOrNull()!!.oneDecimal()}–${endpoint.shellSamples.maxOrNull()!!.oneDecimal()} ms；" +
+                        "范围 ${endpoint.shellSamples.minOrNull()!!.oneDecimal()}–${
+                            endpoint.shellSamples.maxOrNull()!!.oneDecimal()
+                        } ms；" +
                         "样本 ${endpoint.shellSamples.size}",
                 )
             }

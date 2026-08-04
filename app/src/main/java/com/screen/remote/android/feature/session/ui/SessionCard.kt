@@ -50,8 +50,8 @@ import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
-import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.i18n.SessionTexts
 
 @SuppressLint("UseOfNonLambdaOffsetOverload")

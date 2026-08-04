@@ -86,6 +86,7 @@ class AdbLatencyBenchmark {
         round: Int,
         shellRounds: Int = DEFAULT_SHELL_ROUNDS,
         usbDevice: UsbDevice? = null,
+        shellPassword: String = "",
     ): AdbLatencyRoundResult =
         withContext(Dispatchers.IO) {
             var dadb: Dadb? = null
@@ -109,11 +110,12 @@ class AdbLatencyBenchmark {
                 resolvedEndpoint =
                     endpoint?.let { "${it.first}:${it.second}" }
                         ?: usbDevice?.deviceName
-                        ?: candidate.host
+                            ?: candidate.host
 
                 dadb =
                     if (candidate.transport == ConnectionTransport.USB) {
-                        val preparedDevice = requireNotNull(usbDevice) { "USB device permission preparation is incomplete" }
+                        val preparedDevice =
+                            requireNotNull(usbDevice) { "USB device permission preparation is incomplete" }
                         val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
                         AdbRuntimeProvider.get().createUsbDadb(
                             usbManager = usbManager,
@@ -134,6 +136,12 @@ class AdbLatencyBenchmark {
 
                 // 连接耗时只统计实际 ADB 建链；mDNS 另包含服务解析。
                 val connectMillis = elapsedMillis(connectStartedAt)
+                val shellExecutor = AdbConnectionShellExecutor(
+                    dadb = dadb,
+                    deviceId = candidate.deviceIdentifier(),
+                    shellPasswordProvider = { shellPassword },
+                )
+
                 val shellSamples =
                     buildList(shellRounds) {
                         repeat(shellRounds) { sampleIndex ->
@@ -141,10 +149,14 @@ class AdbLatencyBenchmark {
                             val startedAt = System.nanoTime()
                             val response =
                                 withTimeout(SHELL_TIMEOUT_MS.milliseconds) {
-                                    dadb.shell("echo -n $token")
+                                    shellExecutor.execute(
+                                        command = "echo -n $token",
+                                        retryOnFailure = false,
+                                        allowShellPasswordFallback = shellPassword.isNotBlank(),
+                                    ).getOrThrow()
                                 }
-                            check(response.exitCode == 0 && response.output.trim() == token) {
-                                "Invalid RTT response: exit=${response.exitCode} output=${response.output.trim()}"
+                            check(response.trim() == token) {
+                                "Invalid RTT response: output=${response.trim()}"
                             }
                             add(elapsedMillis(startedAt))
                         }

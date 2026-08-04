@@ -110,7 +110,8 @@ internal class FloatingMenuWindowBoundsProvider(context: Context) {
 private fun WindowInsets?.safeFloatingInsets(): FloatingMenuInsets {
     this ?: return FloatingMenuInsets()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        val insets = getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout())
+        val insets =
+            getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout())
         return FloatingMenuInsets(
             left = insets.left,
             right = insets.right,

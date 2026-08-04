@@ -18,8 +18,8 @@ import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionCo
 import dadb.Dadb
 import dadb.android.runtime.AdbRuntime
 import dadb.android.runtime.ExperimentalDadbAndroidApi
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +40,7 @@ internal class AdbConnectionConnector(
         deviceName: String?,
         forceReconnect: Boolean,
         sessionContext: SessionContext?,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedHost = normalizeEndpointHost(host)
@@ -47,6 +48,7 @@ internal class AdbConnectionConnector(
             try {
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
                     existingConnection.bindSessionContext(sessionContext)
+                    existingConnection.setShellPassword(shellPassword)
                     if (forceReconnect) {
                         LogManager.d(LogTags.ADB_CONNECTION, AdbTexts.ADB_FORCE_RECONNECT_CLEANUP.english)
                         runCatching { existingConnection.close() }
@@ -66,11 +68,13 @@ internal class AdbConnectionConnector(
                     try {
                         LogManager.d(
                             LogTags.ADB_CONNECTION,
-                            "Endpoint state before connect: ${AdbRuntimeDiagnostics.endpointSummary(
-                                context,
-                                normalizedHost,
-                                port,
-                            )}",
+                            "Endpoint state before connect: ${
+                                AdbRuntimeDiagnostics.endpointSummary(
+                                    context,
+                                    normalizedHost,
+                                    port,
+                                )
+                            }",
                         )
                         adbRuntime.connectNetworkDadbSession(
                             host = normalizedHost,
@@ -92,6 +96,7 @@ internal class AdbConnectionConnector(
                     AdbConnectionVerifier.verifyDadb(
                         dadb,
                         deviceId,
+                        shellPassword = shellPassword,
                         sessionContext = sessionContext,
                     )
                 if (verifyResult.isFailure) {
@@ -104,11 +109,13 @@ internal class AdbConnectionConnector(
                 val isTlsConnection = dadb.isTlsConnection()
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "Endpoint state after connect: ${AdbRuntimeDiagnostics.endpointSummary(
-                        context,
-                        normalizedHost,
-                        port,
-                    )} tls=$isTlsConnection",
+                    "Endpoint state after connect: ${
+                        AdbRuntimeDiagnostics.endpointSummary(
+                            context,
+                            normalizedHost,
+                            port,
+                        )
+                    } tls=$isTlsConnection",
                 )
 
                 val connectionType =
@@ -125,6 +132,7 @@ internal class AdbConnectionConnector(
                         host = normalizedHost,
                         port = port,
                         dadb = dadb,
+                        initialShellPassword = shellPassword,
                         deviceInfo =
                             DeviceInfo(
                                 deviceId = deviceId,
@@ -142,6 +150,7 @@ internal class AdbConnectionConnector(
                     deviceId = deviceId,
                     deviceName = deviceName,
                     connectionType = connectionType,
+                    shellPassword = shellPassword,
                 )
                 Result.success(connection)
             } catch (cancelled: CancellationException) {
@@ -156,6 +165,7 @@ internal class AdbConnectionConnector(
         usbDevice: UsbDevice,
         deviceName: String?,
         sessionContext: SessionContext?,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             try {
@@ -166,13 +176,16 @@ internal class AdbConnectionConnector(
                 LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.USB_SERIAL_NUMBER.english}: $serialNumber")
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "USB connect request: deviceId=$deviceId requestedName=${deviceName ?: "<none>"} ${formatUsbDeviceDebug(
-                        usbDevice,
-                    )}",
+                    "USB connect request: deviceId=$deviceId requestedName=${deviceName ?: "<none>"} ${
+                        formatUsbDeviceDebug(
+                            usbDevice,
+                        )
+                    }",
                 )
 
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
                     existingConnection.bindSessionContext(sessionContext)
+                    existingConnection.setShellPassword(shellPassword)
                     LogManager.d(
                         LogTags.ADB_CONNECTION,
                         "Existing USB connection found: deviceId=$deviceId delayedAck=${existingConnection.supportsDelayedAck()} " +
@@ -196,7 +209,8 @@ internal class AdbConnectionConnector(
                         "USB permission request failed for $deviceId: ${permissionResult.exceptionOrNull()?.message}",
                     )
                     return@withContext Result.failure(
-                        permissionResult.exceptionOrNull() ?: IllegalStateException("USB permission request failed: $deviceId"),
+                        permissionResult.exceptionOrNull()
+                            ?: IllegalStateException("USB permission request failed: $deviceId"),
                     )
                 }
                 if (permissionResult.getOrNull() != true) {
@@ -207,9 +221,11 @@ internal class AdbConnectionConnector(
                 var activeUsbDevice = refreshGrantedUsbDevice(usbDevice)
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "USB device refreshed after permission: old=${formatUsbDeviceDebug(
-                        usbDevice,
-                    )}, new=${formatUsbDeviceDebug(activeUsbDevice)}",
+                    "USB device refreshed after permission: old=${
+                        formatUsbDeviceDebug(
+                            usbDevice,
+                        )
+                    }, new=${formatUsbDeviceDebug(activeUsbDevice)}",
                 )
 
                 val usbManager =
@@ -225,9 +241,11 @@ internal class AdbConnectionConnector(
                         try {
                             LogManager.d(
                                 LogTags.ADB_CONNECTION,
-                                "Creating USB transport Dadb for $deviceId attempt=${attempt + 1} ${formatUsbDeviceDebug(
-                                    activeUsbDevice,
-                                )}",
+                                "Creating USB transport Dadb for $deviceId attempt=${attempt + 1} ${
+                                    formatUsbDeviceDebug(
+                                        activeUsbDevice,
+                                    )
+                                }",
                             )
                             adbRuntime.createUsbDadbSession(
                                 usbManager = usbManager,
@@ -242,7 +260,13 @@ internal class AdbConnectionConnector(
                             return@repeat
                         }
 
-                    val verifyResult = AdbConnectionVerifier.verifyDadb(dadb, deviceId, sessionContext = sessionContext)
+                    val verifyResult =
+                        AdbConnectionVerifier.verifyDadb(
+                            dadb,
+                            deviceId,
+                            shellPassword = shellPassword,
+                            sessionContext = sessionContext,
+                        )
                     if (verifyResult.isSuccess) {
                         val detectedSerial = verifyResult.getOrDefault(serialNumber)
                         LogManager.d(
@@ -255,6 +279,7 @@ internal class AdbConnectionConnector(
                                 host = "usb",
                                 port = 0,
                                 dadb = dadb,
+                                initialShellPassword = shellPassword,
                                 deviceInfo =
                                     DeviceInfo(
                                         deviceId = deviceId,
@@ -275,6 +300,7 @@ internal class AdbConnectionConnector(
                             deviceId = deviceId,
                             deviceName = deviceName,
                             connectionType = ConnectionType.USB,
+                            shellPassword = shellPassword,
                         )
                         return@withContext Result.success(connection)
                     }
@@ -317,6 +343,7 @@ internal class AdbConnectionConnector(
         deviceId: String,
         deviceName: String?,
         sessionContext: SessionContext?,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedId = normalizeUsbDeviceId(deviceId)
@@ -349,6 +376,7 @@ internal class AdbConnectionConnector(
                     usbDevice = matchedDevice.device,
                     deviceName = deviceName,
                     sessionContext = sessionContext,
+                    shellPassword = shellPassword,
                 )
             }
 
@@ -397,14 +425,17 @@ internal class AdbConnectionConnector(
                 if (refreshedMatch != null) {
                     LogManager.d(
                         LogTags.ADB_CONNECTION,
-                        "USB connect by id matched after permission for $normalizedId: ${formatUsbDeviceInfoDebug(
-                            refreshedMatch,
-                        )}",
+                        "USB connect by id matched after permission for $normalizedId: ${
+                            formatUsbDeviceInfoDebug(
+                                refreshedMatch,
+                            )
+                        }",
                     )
                     return@withContext connectUsb(
                         usbDevice = refreshedMatch.device,
                         deviceName = deviceName,
                         sessionContext = sessionContext,
+                        shellPassword = shellPassword,
                     )
                 }
             }
@@ -426,9 +457,11 @@ internal class AdbConnectionConnector(
         if (matched) {
             LogManager.d(
                 LogTags.ADB_CONNECTION,
-                "USB match hit for sessionDeviceId=$deviceId serial=$serial candidate=${formatUsbDeviceInfoDebug(
-                    device,
-                )}",
+                "USB match hit for sessionDeviceId=$deviceId serial=$serial candidate=${
+                    formatUsbDeviceInfoDebug(
+                        device,
+                    )
+                }",
             )
         }
         matched
@@ -473,6 +506,7 @@ internal class AdbConnectionConnector(
         deviceId: String,
         deviceName: String?,
         connectionType: ConnectionType,
+        shellPassword: String,
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -482,6 +516,7 @@ internal class AdbConnectionConnector(
                         deviceId = deviceId,
                         customName = deviceName,
                         connectionType = connectionType,
+                        shellPassword = shellPassword,
                     )
                 connection.deviceInfo = detailedDeviceInfo
                 connectionRegistry.refreshConnectedDevices()
@@ -509,7 +544,9 @@ private fun formatUsbDeviceDebug(device: UsbDevice): String =
         "manufacturer=${device.manufacturerName ?: "Unknown"} productName=${device.productName ?: "Unknown"} interfaces=${device.interfaceCount}"
 
 private fun formatUsbDeviceInfoDebug(device: com.screen.remote.android.infrastructure.adb.usb.UsbDeviceInfo): String =
-    "path=${device.device.deviceName} serial=${device.serialNumber.ifBlank {
-        "<none>"
-    }} permission=${device.hasPermission} " +
+    "path=${device.device.deviceName} serial=${
+        device.serialNumber.ifBlank {
+            "<none>"
+        }
+    } permission=${device.hasPermission} " +
         "manufacturer=${device.manufacturerName} product=${device.productName}"

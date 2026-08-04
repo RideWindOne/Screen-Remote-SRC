@@ -135,58 +135,58 @@ fun DialogHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-            if (leftButtonText != null) {
-                TextButton(onClick = onDismiss) {
-                    Text(
-                        leftButtonText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                if (leftButtonText != null) {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            leftButtonText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                } else if (showBackButton) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(IosDesignTokens.dialogActionSlotWidth))
                 }
-            } else if (showBackButton) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            } else {
-                Spacer(modifier = Modifier.width(IosDesignTokens.dialogActionSlotWidth))
-            }
 
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
 
-            if (trailingContent != null) {
-                trailingContent()
-            } else if (rightButtonText != null && onRightButtonClick != null) {
-                TextButton(
-                    onClick = onRightButtonClick,
-                    enabled = rightButtonEnabled,
-                ) {
-                    Text(
-                        rightButtonText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color =
-                            if (rightButtonEnabled) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = IosDesignTokens.disabledActionAlpha)
-                            },
-                    )
+                if (trailingContent != null) {
+                    trailingContent()
+                } else if (rightButtonText != null && onRightButtonClick != null) {
+                    TextButton(
+                        onClick = onRightButtonClick,
+                        enabled = rightButtonEnabled,
+                    ) {
+                        Text(
+                            rightButtonText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color =
+                                if (rightButtonEnabled) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = IosDesignTokens.disabledActionAlpha)
+                                },
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(IosDesignTokens.dialogActionSlotWidth))
                 }
-            } else {
-                Spacer(modifier = Modifier.width(IosDesignTokens.dialogActionSlotWidth))
-            }
             }
         }
 
@@ -335,7 +335,7 @@ fun IOSAlertDialog(
             MaterialTheme.colorScheme.background,
             Color.Unspecified,
             Color.Transparent,
-            -> iosAlertDialogContainerColor()
+                -> iosAlertDialogContainerColor()
 
             else -> containerColor
         }

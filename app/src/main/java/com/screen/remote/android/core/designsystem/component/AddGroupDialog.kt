@@ -8,8 +8,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,10 +73,9 @@ fun AddGroupDialog(
     val fullPath = if (parentPath == "/") "/$name" else "$parentPath/$name"
 
     // 计算初始完整路径（用于编辑模式排除自身）
-    val initialFullPath =
-        remember {
-            if (initialParentPath == "/") "/$initialName" else "$initialParentPath/$initialName"
-        }
+    val initialFullPath = remember {
+        if (initialParentPath == "/") "/$initialName" else "$initialParentPath/$initialName"
+    }
 
     // 检查路径是否重复（忽略大小写）
     val isDuplicate =
@@ -223,7 +222,10 @@ private fun AddGroupInputRow(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(start = IosDesignTokens.fieldContentStartPadding, end = IosDesignTokens.fieldContentEndPadding),
+                            .padding(
+                                start = IosDesignTokens.fieldContentStartPadding,
+                                end = IosDesignTokens.fieldContentEndPadding
+                            ),
                     contentAlignment = Alignment.CenterEnd,
                 ) {
                     if (value.isEmpty()) {

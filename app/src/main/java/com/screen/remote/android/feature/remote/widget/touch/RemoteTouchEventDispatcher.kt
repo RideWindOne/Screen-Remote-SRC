@@ -57,7 +57,8 @@ internal class RemoteTouchEventDispatcher(
             when (event.actionMasked) {
                 MotionEvent.ACTION_UP,
                 MotionEvent.ACTION_POINTER_UP,
-                -> event.getPointerId(event.actionIndex)
+                    -> event.getPointerId(event.actionIndex)
+
                 else -> null
             }
 

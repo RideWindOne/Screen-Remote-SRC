@@ -16,27 +16,27 @@ import com.screen.remote.android.core.common.constants.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.GroupRepository
-import com.screen.remote.android.core.domain.model.AppSettings
-import com.screen.remote.android.core.domain.model.AppLanguage
-import com.screen.remote.android.core.domain.model.ThemeMode
-import com.screen.remote.android.core.data.storage.SessionStorage
-import com.screen.remote.android.core.domain.model.DeviceGroup
-import com.screen.remote.android.core.domain.model.ConnectionCandidate
-import com.screen.remote.android.core.update.UpdateChannel
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.data.repository.toData
+import com.screen.remote.android.core.data.storage.SessionStorage
+import com.screen.remote.android.core.domain.model.AppLanguage
+import com.screen.remote.android.core.domain.model.AppSettings
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.DeviceGroup
+import com.screen.remote.android.core.domain.model.ThemeMode
 import com.screen.remote.android.core.domain.model.markConnectionCandidateSuccess
+import com.screen.remote.android.core.update.UpdateChannel
+import com.screen.remote.android.feature.device.viewmodel.AdbKeysViewModel
 import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import com.screen.remote.android.feature.session.update.hasUnseenRecentUpdateContent
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
-import com.screen.remote.android.feature.device.viewmodel.AdbKeysViewModel
 import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
-import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionPurpose
+import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import com.screen.remote.android.service.ScrcpyForegroundService
@@ -149,8 +149,6 @@ class MainViewModel(
     val usbDevices get() = dependencies.adbConnectionManager.getUsbDevices()
     val connectedAdbDevices get() = dependencies.adbConnectionManager.connectedDevices
 
-    fun currentRemoteDeviceId(): String? = scrcpyClient.getCurrentDeviceId()
-
     fun selectGroup(groupPath: String) = groupViewModel.selectGroup(groupPath)
 
     fun addGroup(
@@ -162,15 +160,14 @@ class MainViewModel(
 
     fun removeGroup(groupId: String) = groupViewModel.removeGroup(groupId)
 
-    fun getSessionCountByGroup(): Map<String, Int> = groupViewModel.getSessionCountByGroup()
-
     // ============ 会话对话框管理（直接委托） ============
 
     val showAddSessionDialog: StateFlow<Boolean> get() = sessionViewModel.showAddSessionDialog
     val editingSessionId: StateFlow<String?> get() = sessionViewModel.editingSessionId
     val newSessionPrefill: StateFlow<NewSessionPrefill> get() = sessionViewModel.newSessionPrefill
 
-    fun showAddSessionDialog(prefill: NewSessionPrefill = NewSessionPrefill()) = sessionViewModel.showAddSessionDialog(prefill)
+    fun showAddSessionDialog(prefill: NewSessionPrefill = NewSessionPrefill()) =
+        sessionViewModel.showAddSessionDialog(prefill)
 
     fun completeSessionOnboarding() {
         viewModelScope.launch {
@@ -221,7 +218,6 @@ class MainViewModel(
 
     val connectedSessionId: StateFlow<String?> get() = connectionViewModel.connectedSessionId
     val connectStatus get() = connectionViewModel.connectStatus
-    val connectionProgress get() = connectionViewModel.connectionProgress
 
     fun connectSession(sessionId: String) = connectionViewModel.connectSession(sessionId)
 
@@ -256,14 +252,9 @@ class MainViewModel(
 
     fun disconnectFromDevice() = connectionViewModel.disconnectFromDevice()
 
-    fun cancelConnect() = connectionViewModel.cancelConnect()
-
-    fun handleConnectionLost() = connectionViewModel.handleConnectionLost()
-
     // ============ 管理页 ADB 连接（仅 ADB，不启动 scrcpy） ============
 
     val managementConnectStatus: StateFlow<ManagementConnectStatus> = managementConnection.status
-    val managementDeviceId: StateFlow<String?> = managementConnection.deviceId
 
     fun connectManagementSession(sessionId: String) {
         managementConnectJob?.cancel()
@@ -326,12 +317,6 @@ class MainViewModel(
         managementConnection.clearStatus()
     }
 
-    fun disconnectManagementDevice() {
-        viewModelScope.launch(Dispatchers.IO) {
-            managementConnection.disconnect()
-        }
-    }
-
     // ============ 设置管理（委托给 SettingsViewModel） ============
 
     val settings get() = settingsViewModel.settings
@@ -347,30 +332,6 @@ class MainViewModel(
         action: Int,
         metaState: Int,
     ) = controlViewModel.sendKeyEvent(keyCode, action, metaState)
-
-    suspend fun sendText(text: String) = controlViewModel.sendText(text)
-
-    fun sendTouchEvent(
-        action: Int,
-        pointerId: Long,
-        x: Int,
-        y: Int,
-        screenWidth: Int,
-        screenHeight: Int,
-        pressure: Float = 1.0f,
-    ) = controlViewModel.sendTouchEvent(action, pointerId, x, y, screenWidth, screenHeight, pressure)
-
-    suspend fun sendSwipeGesture(
-        startX: Int,
-        startY: Int,
-        endX: Int,
-        endY: Int,
-        duration: Long = 300,
-    ) = controlViewModel.sendSwipeGesture(startX, startY, endX, endY, duration)
-
-    suspend fun wakeUpScreen() = controlViewModel.wakeUpScreen()
-
-    suspend fun executeShellCommand(command: String) = controlViewModel.executeShellCommand(command)
 
     // ============ Factory ============
 
@@ -427,14 +388,15 @@ private class ManagementAdbSessionController(
 
     private val _status = MutableStateFlow<ManagementConnectStatus>(ManagementConnectStatus.Idle)
     val status: StateFlow<ManagementConnectStatus> = _status.asStateFlow()
-
     private val _deviceId = MutableStateFlow<String?>(null)
-    val deviceId: StateFlow<String?> = _deviceId.asStateFlow()
 
     suspend fun connect(sessionId: String) {
         val sessionData = sessionRepository.getSessionData(sessionId)
         if (sessionData == null) {
-            LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId session does not exist")
+            LogManager.e(
+                LogTags.MANAGEMENT,
+                "Management connection failed: sessionId=$sessionId session does not exist"
+            )
             _status.value = ManagementConnectStatus.Failed(sessionId)
             return
         }
@@ -444,7 +406,10 @@ private class ManagementAdbSessionController(
     suspend fun connect(sessionData: SessionData) {
         val sessionId = sessionData.id
         val generation = connectGeneration.incrementAndGet()
-        LogManager.i(LogTags.MANAGEMENT, "Start establishing a management connection: sessionId=$sessionId generation=$generation")
+        LogManager.i(
+            LogTags.MANAGEMENT,
+            "Start establishing a management connection: sessionId=$sessionId generation=$generation"
+        )
         val existingStatus = _status.value
         val existingDeviceId = _deviceId.value
         val existingBridgeConnection = bridge.currentConnection()
@@ -462,7 +427,10 @@ private class ManagementAdbSessionController(
                 existingConnection.verifyWithoutSessionEvents().isSuccess
             ) {
                 if (connectGeneration.get() == generation) {
-                    LogManager.i(LogTags.MANAGEMENT, "Reuse authenticated management connection: deviceId=$existingDeviceId")
+                    LogManager.i(
+                        LogTags.MANAGEMENT,
+                        "Reuse authenticated management connection: deviceId=$existingDeviceId"
+                    )
                     _status.value = existingStatus
                 }
                 return
@@ -487,7 +455,10 @@ private class ManagementAdbSessionController(
                 existingConnection.verifyWithoutSessionEvents().isSuccess
             ) {
                 if (connectGeneration.get() == generation) {
-                    LogManager.i(LogTags.MANAGEMENT, "Reuse existing ADB connections in candidates: deviceId=$existingDeviceId")
+                    LogManager.i(
+                        LogTags.MANAGEMENT,
+                        "Reuse existing ADB connections in candidates: deviceId=$existingDeviceId"
+                    )
                     activateConnection(sessionData, existingDeviceId, generation)
                 }
                 return
@@ -500,7 +471,11 @@ private class ManagementAdbSessionController(
             connectAdb(sessionData, generation)
                 .getOrElse { error ->
                     if (connectGeneration.get() != generation) return
-                    LogManager.e(LogTags.MANAGEMENT, "Management connection failed: sessionId=$sessionId ${error.message}", error)
+                    LogManager.e(
+                        LogTags.MANAGEMENT,
+                        "Management connection failed: sessionId=$sessionId ${error.message}",
+                        error
+                    )
                     _status.value =
                         ManagementConnectStatus.Failed(
                             sessionId,
@@ -534,7 +509,10 @@ private class ManagementAdbSessionController(
         )
         _deviceId.value = connectedDeviceId
         _status.value = ManagementConnectStatus.Connected(sessionData.id)
-        LogManager.i(LogTags.MANAGEMENT, "Management connection is ready: sessionId=${sessionData.id} deviceId=$connectedDeviceId")
+        LogManager.i(
+            LogTags.MANAGEMENT,
+            "Management connection is ready: sessionId=${sessionData.id} deviceId=$connectedDeviceId"
+        )
     }
 
     private suspend fun recordSuccessfulCandidate(

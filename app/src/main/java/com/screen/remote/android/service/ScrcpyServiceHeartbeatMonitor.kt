@@ -10,10 +10,10 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionMana
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -38,7 +38,10 @@ internal class ScrcpyServiceHeartbeatMonitor(
 
         heartbeatJob =
             serviceScope.launch {
-                LogManager.d(LogTags.SCRCPY_SERVICE, "ADB heartbeat detection has started (interval: ${HEARTBEAT_INTERVAL}ms)")
+                LogManager.d(
+                    LogTags.SCRCPY_SERVICE,
+                    "ADB heartbeat detection has started (interval: ${HEARTBEAT_INTERVAL}ms)"
+                )
 
                 while (isActive) {
                     delay(HEARTBEAT_INTERVAL.milliseconds)
@@ -91,14 +94,20 @@ internal class ScrcpyServiceHeartbeatMonitor(
                             return@forEach
                         }
                         removedAny = true
-                        LogManager.d(LogTags.SCRCPY_SERVICE, "Failed device removed: ${expectedDevice.deviceName} ($deviceId)")
+                        LogManager.d(
+                            LogTags.SCRCPY_SERVICE,
+                            "Failed device removed: ${expectedDevice.deviceName} ($deviceId)"
+                        )
                         failure.expectedConnection?.let { expectedConnection ->
                             try {
                                 adbManager.disconnectDeviceIfCurrent(deviceId, expectedConnection)
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (e: Exception) {
-                                LogManager.e(LogTags.SCRCPY_SERVICE, "Conditional disconnection of ADB connection failed: ${e.message}")
+                                LogManager.e(
+                                    LogTags.SCRCPY_SERVICE,
+                                    "Conditional disconnection of ADB connection failed: ${e.message}"
+                                )
                             }
                         }
                     }
@@ -166,7 +175,10 @@ internal class ScrcpyServiceHeartbeatMonitor(
             if (!isStillProtected(deviceId, protectedDevice)) {
                 return true
             }
-            LogManager.d(LogTags.SCRCPY_SERVICE, "Start reconnecting to ADB according to the original connection: $deviceId")
+            LogManager.d(
+                LogTags.SCRCPY_SERVICE,
+                "Start reconnecting to ADB according to the original connection: $deviceId"
+            )
 
             reconnectExactDevice(
                 deviceId = deviceId,
@@ -199,6 +211,7 @@ internal class ScrcpyServiceHeartbeatMonitor(
                     adbManager.connectMdnsService(
                         serviceName = candidate.host,
                     )
+
                 ConnectionTransport.TCP ->
                     adbManager.connectDevice(
                         host = candidate.host,

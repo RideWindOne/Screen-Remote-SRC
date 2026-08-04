@@ -7,8 +7,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
-import com.screen.remote.android.core.domain.model.CodecAcceleration
 import com.screen.remote.android.core.designsystem.component.SectionTitle
+import com.screen.remote.android.core.domain.model.CodecAcceleration
 import com.screen.remote.android.core.i18n.CodecTexts
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
@@ -140,7 +140,11 @@ private fun extractVideoCodecTypeOptions(codecs: List<com.screen.remote.android.
         when {
             codec.type.contains("avc", ignoreCase = true) -> types.add("H264")
             codec.type.contains("hevc", ignoreCase = true) -> types.add("H265")
-            codec.type.contains("av01", ignoreCase = true) || codec.type.contains("av1", ignoreCase = true) -> types.add("AV1")
+            codec.type.contains("av01", ignoreCase = true) || codec.type.contains(
+                "av1",
+                ignoreCase = true
+            ) -> types.add("AV1")
+
             codec.type.contains("vp8", ignoreCase = true) -> types.add("VP8")
             codec.type.contains("vp9", ignoreCase = true) -> types.add("VP9")
         }
@@ -188,6 +192,7 @@ private fun filterVideoCodecs(
                         codec.lowLatencyMimeTypes.any { it.equals(selectedMime, ignoreCase = true) }
                     }
                 }
+
                 "c2" -> codec.name.startsWith("c2.", ignoreCase = true)
                 else -> true
             }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.common.constants.NetworkConstants
 import com.screen.remote.android.core.common.constants.ScrcpyConstants
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
@@ -20,7 +21,6 @@ import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.core.domain.model.parseTcpHostPort
 import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import com.screen.remote.android.core.i18n.SessionTexts
-import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import java.util.UUID
 
 /**
@@ -126,7 +126,6 @@ class SessionDialogState(
         }
     }
 
-    @Suppress("unused", "UNUSED_PARAMETER")
     fun updateConfig(transform: ScrcpyConfig.() -> ScrcpyConfig) {
         config = config.transform()
         if (config.compatibilityMode && config.enableAudio) {
@@ -134,7 +133,6 @@ class SessionDialogState(
         }
     }
 
-    @Suppress("unused", "UNUSED_PARAMETER")
     fun updateCapabilityCache(transform: DeviceCapabilityCache.() -> DeviceCapabilityCache) {
         capabilityCache = capabilityCache.transform()
     }
@@ -246,12 +244,8 @@ class SessionDialogState(
                 ignoreVideoEncoderConstraints = config.ignoreVideoEncoderConstraints && !config.compatibilityMode,
                 newDisplayEnabled = config.newDisplayEnabled && !config.compatibilityMode,
                 showTouches = config.showTouches && !config.compatibilityMode,
-                startApp =
-                    if (config.newDisplayEnabled && !config.compatibilityMode) {
-                        config.startApp.trim()
-                    } else {
-                        ""
-                    },
+                startApp = config.startApp.trim(),
+                shellPassword = config.shellPassword,
             ),
             tcpPortForwardRules = tcpPortForwardRules
                 ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),

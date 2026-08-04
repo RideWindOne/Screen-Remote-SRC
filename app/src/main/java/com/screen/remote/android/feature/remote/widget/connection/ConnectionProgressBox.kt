@@ -31,7 +31,11 @@ fun ConnectionProgressBox(progressText: @Composable () -> Unit) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isLandscape = maxWidth > maxHeight
 
-        Box(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+        ) {
             progressText()
         }
 

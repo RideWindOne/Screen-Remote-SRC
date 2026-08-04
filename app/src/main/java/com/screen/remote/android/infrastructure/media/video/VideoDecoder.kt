@@ -5,12 +5,12 @@ import android.os.Looper
 import android.os.Process
 import android.view.Surface
 import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.common.event.ScreenInitSize
 import com.screen.remote.android.core.common.event.ScrcpyEventBus
+import com.screen.remote.android.core.common.event.ScreenInitSize
+import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssueKind
-import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderType
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
@@ -73,9 +73,14 @@ class VideoDecoder(
             onConnectionLost = { onConnectionLost?.invoke() },
         )
 
-    @Volatile private var decoder: MediaCodec? = null
-    @Volatile private var isRunning = false
-    @Volatile private var isStopped = false
+    @Volatile
+    private var decoder: MediaCodec? = null
+
+    @Volatile
+    private var isRunning = false
+
+    @Volatile
+    private var isStopped = false
     private var lifecycleReportedStarted = false
 
     var onVideoSizeChanged: ((width: Int, height: Int, rotation: Int) -> Unit)? = null

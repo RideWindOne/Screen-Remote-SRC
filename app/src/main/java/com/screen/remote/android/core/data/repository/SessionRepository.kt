@@ -6,15 +6,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
-import com.screen.remote.android.core.domain.model.toAddressEndpoint
-import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
-import com.screen.remote.android.core.domain.model.ScrcpySession
-import com.screen.remote.android.core.domain.model.SessionColor
+import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -84,9 +82,6 @@ data class SessionData(
 
     fun primaryConnectionEndpointForDisplay(): String = primaryConnectionCandidate().toAddressEndpoint()
 
-    fun allConnectionEndpointsForDisplay(): List<String> =
-        toConnectionCandidates().sortedBy(ConnectionCandidate::priority).map { it.toAddressEndpoint() }
-
     fun toConnectionCandidates(): List<ConnectionCandidate> {
         return connectionCandidates.map { it.toDomain() }
     }
@@ -126,7 +121,8 @@ data class ConnectionCandidateData(
     val failureCount: Int = 0,
 ) {
     fun toDomain(): ConnectionCandidate {
-        val parsedTransport = runCatching { ConnectionTransport.valueOf(transport) }.getOrDefault(ConnectionTransport.TCP)
+        val parsedTransport =
+            runCatching { ConnectionTransport.valueOf(transport) }.getOrDefault(ConnectionTransport.TCP)
         val normalizedHost =
             if (parsedTransport == ConnectionTransport.MDNS) {
                 DeviceTransportSerial.mdnsDeviceSerial(host)
@@ -190,18 +186,6 @@ internal fun preserveBitRateText(
         bitsPerSecond.toString()
     }
 
-/** Keep an empty optional limit empty while it round-trips through the integer options model. */
-internal fun preserveOptionalLimitText(
-    currentText: String,
-    value: Int,
-): String =
-    when {
-        currentText.isBlank() && value <= 0 -> currentText
-        currentText.toIntOrNull() == value -> currentText
-        value > 0 -> value.toString()
-        else -> ""
-    }
-
 class SessionRepository(
     private val context: Context,
 ) {
@@ -214,17 +198,6 @@ class SessionRepository(
     private object Keys {
         val SESSIONS = stringPreferencesKey("sessions_list")
     }
-
-    val sessionsFlow: Flow<List<ScrcpySession>> =
-        context.sessionDataStore.data.map { preferences ->
-            val sessionsJson = preferences[Keys.SESSIONS] ?: "[]"
-            try {
-                val sessionDataList = json.decodeFromString<List<SessionData>>(sessionsJson)
-                sessionDataList.map { it.toScrcpySession() }
-            } catch (e: Exception) {
-                emptyList()
-            }
-        }
 
     suspend fun addSession(sessionData: SessionData) {
         context.sessionDataStore.edit { preferences ->
@@ -364,15 +337,6 @@ class SessionRepository(
             }
         }
 
-    private fun SessionData.toScrcpySession() =
-        ScrcpySession(
-            id = id,
-            name = name,
-            color = SessionColor.valueOf(color),
-            isConnected = false,
-            hasWifi = toConnectionCandidates().any { it.transport != ConnectionTransport.USB },
-            hasWarning = false,
-        )
 }
 
 /** Replace one logical session and collapse any duplicate rows carrying the same ID. */

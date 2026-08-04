@@ -26,10 +26,7 @@ object LogTags {
     // 媒体解码
     const val VIDEO_DECODER = "VDEC"
     const val AUDIO_DECODER = "ADEC"
-    const val ENCODE = "ENC"
     const val AAC_ENCODE = "AAC"
-    const val H264_ENCODE = "H264"
-    const val H265_ENCODE = "H265"
     const val OPUS_ENCODE = "OPUS"
     const val CODEC_TEST_SCREEN = "CTST"
     const val AUDIO_CODEC_SELECTOR = "ACSL"

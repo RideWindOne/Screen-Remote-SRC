@@ -45,10 +45,9 @@ fun GroupManagementDialog(
     onDeleteGroup: (String) -> Unit,
 ) {
     val state = rememberGroupManagementDialogState()
-    val treeNodes =
-        remember(groups) {
-            TreeActions.buildGroupTree(groups)
-        }
+    val treeNodes = remember(groups) {
+        TreeActions.buildGroupTree(groups)
+    }
 
     DialogPage(
         title = SessionTexts.GROUP_MANAGE.get(),

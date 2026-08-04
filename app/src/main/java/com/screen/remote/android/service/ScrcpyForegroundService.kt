@@ -106,7 +106,10 @@ class ScrcpyForegroundService : Service() {
                         deviceName = deviceName,
                     )
                 } else {
-                    LogManager.e(LogTags.SCRCPY_SERVICE, "Ignore invalid device protection requests: deviceId=$deviceId")
+                    LogManager.e(
+                        LogTags.SCRCPY_SERVICE,
+                        "Ignore invalid device protection requests: deviceId=$deviceId"
+                    )
                     reconcileProtectedDevices()
                 }
             }
@@ -194,7 +197,10 @@ class ScrcpyForegroundService : Service() {
             heartbeatMonitor.start()
         }
 
-        LogManager.d(LogTags.SCRCPY_SERVICE, "The foreground service has been started, protecting ${protectedDevices.size} devices")
+        LogManager.d(
+            LogTags.SCRCPY_SERVICE,
+            "The foreground service has been started, protecting ${protectedDevices.size} devices"
+        )
         return true
     }
 

@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -121,7 +121,8 @@ fun SessionOnboardingBackground(
                             scaleX = iconScale.value
                             scaleY = iconScale.value
                             alpha = iconAlpha.value
-                        }.clip(RoundedCornerShape(22.dp)),
+                        }
+                        .clip(RoundedCornerShape(22.dp)),
             )
         }
     }
@@ -285,7 +286,9 @@ private fun WelcomePageCard(
                             imageVector = page.icon,
                             contentDescription = null,
                             tint = page.accent,
-                            modifier = Modifier.padding(14.dp).size(30.dp),
+                            modifier = Modifier
+                                .padding(14.dp)
+                                .size(30.dp),
                         )
                     }
                     Text(
@@ -362,7 +365,9 @@ private fun WelcomeSparkles(
             imageVector = Icons.Default.AutoAwesome,
             contentDescription = null,
             tint = accent,
-            modifier = Modifier.align(Alignment.TopEnd).size(30.dp),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(30.dp),
         )
         Box(
             modifier =
@@ -409,7 +414,9 @@ private fun WelcomeFeatureRow(
             Icon(
                 imageVector = feature.icon,
                 contentDescription = null,
-                modifier = Modifier.padding(9.dp).size(19.dp),
+                modifier = Modifier
+                    .padding(9.dp)
+                    .size(19.dp),
                 tint = accent,
             )
         }
@@ -447,9 +454,21 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
             accent = blue,
             features =
                 listOf(
-                    WelcomeFeature(Icons.Default.HighQuality, onboardingText(SessionTexts.ONBOARDING_RESOLUTION_TITLE), onboardingText(SessionTexts.ONBOARDING_RESOLUTION_BODY)),
-                    WelcomeFeature(Icons.Default.Speed, onboardingText(SessionTexts.ONBOARDING_FPS_TITLE), onboardingText(SessionTexts.ONBOARDING_FPS_BODY)),
-                    WelcomeFeature(Icons.Default.Devices, onboardingText(SessionTexts.ONBOARDING_CODEC_TITLE), onboardingText(SessionTexts.ONBOARDING_CODEC_BODY)),
+                    WelcomeFeature(
+                        Icons.Default.HighQuality,
+                        onboardingText(SessionTexts.ONBOARDING_RESOLUTION_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_RESOLUTION_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Speed,
+                        onboardingText(SessionTexts.ONBOARDING_FPS_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_FPS_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Devices,
+                        onboardingText(SessionTexts.ONBOARDING_CODEC_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_CODEC_BODY)
+                    ),
                 ),
         ),
         floatingBallWelcomePage(isDark),
@@ -461,9 +480,21 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
             accent = teal,
             features =
                 listOf(
-                    WelcomeFeature(Icons.Default.Key, onboardingText(SessionTexts.ONBOARDING_PAIRING_TITLE), onboardingText(SessionTexts.ONBOARDING_PAIRING_BODY)),
-                    WelcomeFeature(Icons.Default.Sensors, onboardingText(SessionTexts.ONBOARDING_DISCOVERY_TITLE), onboardingText(SessionTexts.ONBOARDING_DISCOVERY_BODY)),
-                    WelcomeFeature(Icons.AutoMirrored.Filled.AltRoute, onboardingText(SessionTexts.ONBOARDING_ENDPOINTS_TITLE), onboardingText(SessionTexts.ONBOARDING_ENDPOINTS_BODY)),
+                    WelcomeFeature(
+                        Icons.Default.Key,
+                        onboardingText(SessionTexts.ONBOARDING_PAIRING_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_PAIRING_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Sensors,
+                        onboardingText(SessionTexts.ONBOARDING_DISCOVERY_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_DISCOVERY_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.AutoMirrored.Filled.AltRoute,
+                        onboardingText(SessionTexts.ONBOARDING_ENDPOINTS_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_ENDPOINTS_BODY)
+                    ),
                 ),
         ),
         WelcomePage(
@@ -474,10 +505,26 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
             accent = teal,
             features =
                 listOf(
-                    WelcomeFeature(Icons.Default.Tune, onboardingText(SessionTexts.ONBOARDING_ENABLE_DEVELOPER_OPTIONS_TITLE), onboardingText(SessionTexts.ONBOARDING_ENABLE_DEVELOPER_OPTIONS_BODY)),
-                    WelcomeFeature(Icons.Default.Wifi, onboardingText(SessionTexts.ONBOARDING_OPEN_WIRELESS_DEBUGGING_TITLE), onboardingText(SessionTexts.ONBOARDING_OPEN_WIRELESS_DEBUGGING_BODY)),
-                    WelcomeFeature(Icons.Default.Key, onboardingText(SessionTexts.ONBOARDING_USE_PAIRING_CODE_TITLE), onboardingText(SessionTexts.ONBOARDING_USE_PAIRING_CODE_BODY)),
-                    WelcomeFeature(Icons.Default.Devices, onboardingText(SessionTexts.ONBOARDING_ADD_WIRELESS_SESSION_TITLE), onboardingText(SessionTexts.ONBOARDING_ADD_WIRELESS_SESSION_BODY)),
+                    WelcomeFeature(
+                        Icons.Default.Tune,
+                        onboardingText(SessionTexts.ONBOARDING_ENABLE_DEVELOPER_OPTIONS_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_ENABLE_DEVELOPER_OPTIONS_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Wifi,
+                        onboardingText(SessionTexts.ONBOARDING_OPEN_WIRELESS_DEBUGGING_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_OPEN_WIRELESS_DEBUGGING_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Key,
+                        onboardingText(SessionTexts.ONBOARDING_USE_PAIRING_CODE_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_USE_PAIRING_CODE_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Devices,
+                        onboardingText(SessionTexts.ONBOARDING_ADD_WIRELESS_SESSION_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_ADD_WIRELESS_SESSION_BODY)
+                    ),
                 ),
         ),
         WelcomePage(
@@ -488,9 +535,21 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
             accent = green,
             features =
                 listOf(
-                    WelcomeFeature(Icons.AutoMirrored.Filled.AltRoute, onboardingText(SessionTexts.ONBOARDING_PORT_FORWARD_TITLE), onboardingText(SessionTexts.ONBOARDING_PORT_FORWARD_BODY)),
-                    WelcomeFeature(Icons.Default.DesktopWindows, onboardingText(SessionTexts.ONBOARDING_VIRTUAL_DISPLAY_TITLE), onboardingText(SessionTexts.ONBOARDING_VIRTUAL_DISPLAY_BODY)),
-                    WelcomeFeature(Icons.Default.SportsEsports, onboardingText(SessionTexts.ONBOARDING_GAME_MODE_TITLE), onboardingText(SessionTexts.ONBOARDING_GAME_MODE_BODY)),
+                    WelcomeFeature(
+                        Icons.AutoMirrored.Filled.AltRoute,
+                        onboardingText(SessionTexts.ONBOARDING_PORT_FORWARD_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_PORT_FORWARD_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.DesktopWindows,
+                        onboardingText(SessionTexts.ONBOARDING_VIRTUAL_DISPLAY_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_VIRTUAL_DISPLAY_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.SportsEsports,
+                        onboardingText(SessionTexts.ONBOARDING_GAME_MODE_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_GAME_MODE_BODY)
+                    ),
                 ),
         ),
         WelcomePage(
@@ -501,9 +560,21 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
             accent = purple,
             features =
                 listOf(
-                    WelcomeFeature(Icons.Default.Apps, onboardingText(SessionTexts.ONBOARDING_APPS_TITLE), onboardingText(SessionTexts.ONBOARDING_APPS_BODY)),
-                    WelcomeFeature(Icons.Default.Folder, onboardingText(SessionTexts.ONBOARDING_FILES_TITLE), onboardingText(SessionTexts.ONBOARDING_FILES_BODY)),
-                    WelcomeFeature(Icons.Default.Terminal, onboardingText(SessionTexts.ONBOARDING_SHELL_TITLE), onboardingText(SessionTexts.ONBOARDING_SHELL_BODY)),
+                    WelcomeFeature(
+                        Icons.Default.Apps,
+                        onboardingText(SessionTexts.ONBOARDING_APPS_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_APPS_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Folder,
+                        onboardingText(SessionTexts.ONBOARDING_FILES_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_FILES_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Terminal,
+                        onboardingText(SessionTexts.ONBOARDING_SHELL_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_SHELL_BODY)
+                    ),
                 ),
         ),
         WelcomePage(
@@ -514,9 +585,21 @@ private fun welcomePages(isDark: Boolean): List<WelcomePage> {
             accent = orange,
             features =
                 listOf(
-                    WelcomeFeature(Icons.Default.Tune, onboardingText(SessionTexts.ONBOARDING_CONFIG_TITLE), onboardingText(SessionTexts.ONBOARDING_CONFIG_BODY)),
-                    WelcomeFeature(Icons.Default.Key, onboardingText(SessionTexts.ONBOARDING_KEYS_TITLE), onboardingText(SessionTexts.ONBOARDING_KEYS_BODY)),
-                    WelcomeFeature(Icons.Default.Restore, onboardingText(SessionTexts.ONBOARDING_RESTORE_TITLE), onboardingText(SessionTexts.ONBOARDING_RESTORE_BODY)),
+                    WelcomeFeature(
+                        Icons.Default.Tune,
+                        onboardingText(SessionTexts.ONBOARDING_CONFIG_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_CONFIG_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Key,
+                        onboardingText(SessionTexts.ONBOARDING_KEYS_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_KEYS_BODY)
+                    ),
+                    WelcomeFeature(
+                        Icons.Default.Restore,
+                        onboardingText(SessionTexts.ONBOARDING_RESTORE_TITLE),
+                        onboardingText(SessionTexts.ONBOARDING_RESTORE_BODY)
+                    ),
                 ),
         ),
     )

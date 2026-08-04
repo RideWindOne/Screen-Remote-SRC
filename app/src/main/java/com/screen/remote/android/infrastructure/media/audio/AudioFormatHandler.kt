@@ -103,7 +103,10 @@ class AudioFormatHandler(
      */
     private fun validateOpusConfig(data: ByteArray): Boolean {
         if (data.size < OpusConfigParser.OPUS_HEADER_SIZE) {
-            LogManager.e(LogTags.AUDIO_DECODER, "Opus configuration package size error: ${data.size}, at least 19 required")
+            LogManager.e(
+                LogTags.AUDIO_DECODER,
+                "Opus configuration package size error: ${data.size}, at least 19 required"
+            )
             return false
         }
 
@@ -126,7 +129,10 @@ class AudioFormatHandler(
     private fun validateFlacConfig(data: ByteArray): Boolean {
         val streamInfo = FlacConfigParser.parseStreamInfo(data)
         if (streamInfo == null) {
-            LogManager.e(LogTags.AUDIO_DECODER, "FLAC configuration package error: size=${data.size}, cannot parse STREAMINFO")
+            LogManager.e(
+                LogTags.AUDIO_DECODER,
+                "FLAC configuration package error: size=${data.size}, cannot parse STREAMINFO"
+            )
             return false
         }
 
@@ -169,7 +175,10 @@ class AudioFormatHandler(
             val candidates = decoderCandidates(mime)
             for (info in candidates) {
                 val mediaCodec = runCatching { MediaCodec.createByCodecName(info.name) }.getOrElse { error ->
-                    LogManager.w(LogTags.AUDIO_DECODER, "Failed to create audio decoder: ${info.name}: ${error.message}")
+                    LogManager.w(
+                        LogTags.AUDIO_DECODER,
+                        "Failed to create audio decoder: ${info.name}: ${error.message}"
+                    )
                     continue
                 }
                 try {
@@ -179,7 +188,10 @@ class AudioFormatHandler(
                     AudioDebugLog.d(LogTags.AUDIO_DECODER) { "Audio decoder created successfully: ${mediaCodec.name}" }
                     return mediaCodec
                 } catch (e: Exception) {
-                    LogManager.w(LogTags.AUDIO_DECODER, "Audio decoder configuration failed, try next candidate: ${info.name}: ${e.message}")
+                    LogManager.w(
+                        LogTags.AUDIO_DECODER,
+                        "Audio decoder configuration failed, try next candidate: ${info.name}: ${e.message}"
+                    )
                     runCatching { mediaCodec.stop() }
                     runCatching { mediaCodec.release() }
                 }
@@ -267,7 +279,10 @@ class AudioFormatHandler(
             "opus" -> {
                 val opusConfig = OpusConfigParser.parse(configData)
                 if (opusConfig == null) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "The Opus configuration package is invalid and the initialization data cannot be set.")
+                    LogManager.e(
+                        LogTags.AUDIO_DECODER,
+                        "The Opus configuration package is invalid and the initialization data cannot be set."
+                    )
                     return
                 }
 
@@ -284,7 +299,10 @@ class AudioFormatHandler(
             "flac" -> {
                 val streamInfo = FlacConfigParser.parseStreamInfo(configData)
                 if (streamInfo == null) {
-                    LogManager.e(LogTags.AUDIO_DECODER, "The FLAC configuration package is invalid and the initialization data cannot be set.")
+                    LogManager.e(
+                        LogTags.AUDIO_DECODER,
+                        "The FLAC configuration package is invalid and the initialization data cannot be set."
+                    )
                     return
                 }
 

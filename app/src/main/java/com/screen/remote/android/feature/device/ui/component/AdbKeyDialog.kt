@@ -24,9 +24,9 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,11 +40,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,10 +52,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.common.util.FilePickerHelper
-import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.AppDivider
+import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.SectionCard
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.core.domain.model.AdbKeysInfo
 import com.screen.remote.android.core.i18n.AdbTexts
 import com.screen.remote.android.core.i18n.CommonTexts
@@ -64,6 +63,7 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionMana
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,6 +1,6 @@
 /*
  * 媒体 API 兼容性工具
- * 
+ *
  * 从 ApiCompatHelper.kt 拆分而来
  * 职责：MediaCodec、音视频编解码器相关 API 兼容
  */
@@ -17,37 +17,6 @@ import android.media.MediaFormat
 import android.os.Build
 import android.view.Surface
 import androidx.annotation.RequiresApi
-
-/**
- * 获取视频编解码器的 MIME 类型（兼容不同 API 级别）
- *
- * Android 10 (API 29) 引入了 MediaFormat.MIMETYPE_VIDEO_AV1
- */
-fun getVideoMimeType(codecName: String): String? =
-    when (codecName.lowercase()) {
-        "h264", "avc" -> MediaFormat.MIMETYPE_VIDEO_AVC
-        "h265", "hevc" -> MediaFormat.MIMETYPE_VIDEO_HEVC
-        "av1" -> if (Build.VERSION.SDK_INT >= 29) MediaFormat.MIMETYPE_VIDEO_AV1 else null
-        "vp8" -> MediaFormat.MIMETYPE_VIDEO_VP8
-        "vp9" -> MediaFormat.MIMETYPE_VIDEO_VP9
-        else -> null
-    }
-
-/**
- * 判断当前设备是否支持 AV1 编解码器
- */
-fun isAV1Supported(): Boolean = Build.VERSION.SDK_INT >= 29
-
-/**
- * 获取支持的视频编解码器列表（根据 API 级别过滤）
- */
-fun getSupportedVideoCodecs(): List<String> {
-    val codecs = mutableListOf("h264", "h265", "vp9", "vp8")
-    if (isAV1Supported()) {
-        codecs.add("av1")
-    }
-    return codecs
-}
 
 /**
  * 判断 MediaCodecInfo 是否为硬件加速编解码器

@@ -9,8 +9,8 @@ import com.screen.remote.android.core.domain.model.AdbKeysInfo
 import com.screen.remote.android.core.i18n.AdbTexts
 import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
-import dadb.android.runtime.ExperimentalDadbAndroidApi
 import dadb.android.runtime.AdbRuntime
+import dadb.android.runtime.ExperimentalDadbAndroidApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -49,11 +49,6 @@ class AdbKeysViewModel(
         }
 
     // ============ 密钥读取 ============
-
-    fun getAdbPublicKey(): Flow<String?> =
-        flow {
-            emit(adbConnectionManager.getPublicKey())
-        }
 
     fun getAdbKeysInfo(): Flow<AdbKeysInfo> =
         flow {
@@ -171,15 +166,6 @@ class AdbKeysViewModel(
         }
         return fileName
     }
-
-    // 保留旧的文本编辑方式导入（用于手动粘贴）
-    suspend fun importAdbKeys(
-        privateKey: String,
-        publicKey: String,
-    ): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            persistIdentity(privateKey, publicKey)
-        }
 
     private suspend fun persistIdentity(
         privateKey: String,

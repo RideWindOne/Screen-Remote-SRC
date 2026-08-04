@@ -10,27 +10,7 @@ data class DeviceGroup(
     val parentPath: String = "/",
     val description: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-) {
-    /**
-     * 获取路径深度（层级）
-     */
-    fun getDepth(): Int = if (path == "/") 0 else path.count { it == '/' }
-
-    /**
-     * 检查是否为根分组
-     */
-    fun isRoot(): Boolean = path == "/"
-
-    /**
-     * 检查是否为某个路径的子分组
-     */
-    fun isChildOf(parentPath: String): Boolean = this.parentPath == parentPath
-
-    /**
-     * 检查是否为某个路径的后代分组（包括子、孙等）
-     */
-    fun isDescendantOf(ancestorPath: String): Boolean = path.startsWith("$ancestorPath/")
-}
+)
 
 /**
  * 树形节点（用于 UI 展示）

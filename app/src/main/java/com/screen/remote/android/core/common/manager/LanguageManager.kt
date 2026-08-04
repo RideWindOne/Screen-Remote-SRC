@@ -16,21 +16,14 @@ import java.util.Locale
  */
 object LanguageManager {
     private var currentLanguage: AppLanguage = AppLanguage.AUTO
-    
+
     /**
      * 设置当前语言
      */
     fun setLanguage(language: AppLanguage) {
         currentLanguage = language
     }
-    
-    /**
-     * 获取当前语言
-     */
-    fun getCurrentLanguage(): AppLanguage {
-        return currentLanguage
-    }
-    
+
     /**
      * 获取当前实际使用的语言（考虑 AUTO 模式）
      */
@@ -41,24 +34,11 @@ object LanguageManager {
                 val systemLang = Locale.getDefault().language
                 if (systemLang == "zh") AppLanguage.CHINESE else AppLanguage.ENGLISH
             }
+
             else -> currentLanguage
         }
     }
-    
-    /**
-     * 判断当前是否使用中文
-     */
-    fun isChinese(): Boolean {
-        return getEffectiveLanguage() == AppLanguage.CHINESE
-    }
-    
-    /**
-     * 判断当前是否使用英文
-     */
-    fun isEnglish(): Boolean {
-        return getEffectiveLanguage() == AppLanguage.ENGLISH
-    }
-    
+
     /**
      * 获取文本（中文/英文）
      */
@@ -83,10 +63,10 @@ fun rememberText(chinese: String, english: String): String {
     val context = LocalContext.current
     val preferencesManager = PreferencesManager(context)
     val settings by preferencesManager.settingsFlow.collectAsState(initial = AppSettings())
-    
+
     // 更新语言管理器
     LanguageManager.setLanguage(settings.language)
-    
+
     return LanguageManager.getText(chinese, english)
 }
 

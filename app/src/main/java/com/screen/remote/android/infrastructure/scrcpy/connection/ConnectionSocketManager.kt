@@ -4,8 +4,8 @@ import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.NetworkConstants
 import com.screen.remote.android.core.common.constants.ScrcpyConstants.SOCKET_READ_TIMEOUT
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketConnectContext
@@ -245,7 +245,10 @@ class ConnectionSocketManager(
             delay(DIRECT_VIDEO_CONNECT_RETRY_DELAY_MS.milliseconds)
         }
 
-        throw IOException("Failed to open video adb stream: ${lastError?.message ?: "server socket not ready"}", lastError)
+        throw IOException(
+            "Failed to open video adb stream: ${lastError?.message ?: "server socket not ready"}",
+            lastError
+        )
     }
 
     /**
@@ -257,8 +260,10 @@ class ConnectionSocketManager(
             is DummyReadResult.Success -> return
             is DummyReadResult.Closed ->
                 throw IOException("video socket -> server did not send a dummy byte (connection closed)")
+
             is DummyReadResult.Timeout ->
                 throw IOException("video socket -> timed out while reading the dummy byte")
+
             is DummyReadResult.Invalid ->
                 throw IOException(
                     "video socket -> received unexpected dummy byte: " +

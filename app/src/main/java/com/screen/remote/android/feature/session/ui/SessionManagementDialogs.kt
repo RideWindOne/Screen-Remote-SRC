@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -271,7 +273,9 @@ internal fun SessionManagementLocalAppPickerDialog(
                 ) {
                     items(visibleApps, key = { app -> app.packageName }) { app ->
                         Surface(
-                            modifier = Modifier.fillMaxWidth().clickable { onSelect(app) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(app) },
                             shape = RoundedCornerShape(ManagementDialogOptionCornerRadius),
                             color = MaterialTheme.colorScheme.surfaceVariant,
                         ) {
@@ -318,6 +322,8 @@ internal fun SessionManagementLocalAppPickerDialog(
 internal fun SessionManagementProgressDialog(
     title: String,
     message: String,
+    progress: Float? = null,
+    detail: String? = null,
 ) {
     SessionManagementCenteredDialog(
         title = title,
@@ -328,6 +334,23 @@ internal fun SessionManagementProgressDialog(
         leftButtonText = null,
     ) {
         SessionManagementDialogMessage(message)
+        if (detail != null || progress != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(9.dp)
+                            .clip(RoundedCornerShape(999.dp)),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            if (detail != null) {
+                SessionManagementDialogMessage(detail)
+            }
+        }
     }
 }
 
@@ -744,7 +767,8 @@ private fun SessionManagementActivationTargetRow(
                         } else {
                             onUnavailable(target.label)
                         }
-                    }.padding(horizontal = 14.dp, vertical = 14.dp),
+                    }
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -15,8 +15,6 @@ internal class VideoDecoderOutputDrainer(
 ) {
     private var renderedFrameCount = 0
 
-    fun hasRenderedOutput(): Boolean = renderedFrameCount > 0
-
     fun renderedFrameCount(): Int = renderedFrameCount
 
     fun resetAfterDecoderFallback() {

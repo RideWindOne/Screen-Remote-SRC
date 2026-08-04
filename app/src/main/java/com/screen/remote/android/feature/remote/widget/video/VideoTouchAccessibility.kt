@@ -66,7 +66,7 @@ private class ClickGestureTracker(
             MotionEvent.ACTION_POINTER_DOWN,
             MotionEvent.ACTION_POINTER_UP,
             MotionEvent.ACTION_CANCEL,
-            -> {
+                -> {
                 reset()
                 false
             }

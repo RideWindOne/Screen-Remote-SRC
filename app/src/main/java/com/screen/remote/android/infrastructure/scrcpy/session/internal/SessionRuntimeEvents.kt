@@ -20,7 +20,6 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssu
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderType
-import com.screen.remote.android.infrastructure.scrcpy.session.model.VideoResolutionRecoverySource
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardRemovalContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardSetupContext
@@ -36,18 +35,19 @@ import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEven
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
-import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketConnectContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketConnectingContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketDisconnectContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketType
+import com.screen.remote.android.infrastructure.scrcpy.session.model.VideoResolutionRecoverySource
 import com.screen.remote.android.infrastructure.scrcpy.session.model.completedSummary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.logSummary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.reconnectDetail
 import com.screen.remote.android.infrastructure.scrcpy.session.model.startedSummary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.summary
 import com.screen.remote.android.infrastructure.scrcpy.session.model.targetSummary
+import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
 
 internal fun Session.processEvent(event: SessionEvent) {
     LogManager.d(LogTags.SCRCPY_CLIENT, "Handle event: $event")
@@ -197,7 +197,7 @@ internal fun Session.handleForwardSetup(
     runtime.updateProgress(
         ConnectionStep.ADB_FORWARD,
         StepStatus.SUCCESS,
-        context.progressMessage(localPort, remoteSocket),
+        progressMessage(localPort, remoteSocket),
     )
     LogManager.d(LogTags.SCRCPY_CLIENT, "Forward has been created: ${context.logSummary(localPort, remoteSocket)}")
 }
@@ -600,7 +600,7 @@ internal fun ServerIssue.pushFailedProgressMessage(): String = "${RemoteTexts.RE
 
 internal fun ServerIssue.startFailedProgressMessage(): String = "${RemoteTexts.REMOTE_START_FAILED.get()}: $message"
 
-internal fun ForwardSetupContext.progressMessage(
+internal fun progressMessage(
     localPort: Int,
     remoteSocket: String,
 ): String = "${RemoteTexts.REMOTE_FORWARD_SETUP.get()}: ${targetSummary(localPort, remoteSocket)}"

@@ -14,9 +14,9 @@ import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionStat
 import com.screen.remote.android.infrastructure.scrcpy.controller.ScrcpyController
 import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import com.screen.remote.android.infrastructure.scrcpy.session.model.CleanupTrigger
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,21 +97,28 @@ internal class ScrcpyClientConnectionCoordinator(
                     controller.start(activeDeviceId, gameMode = options.config.gameMode)
                 }
 
-                options.config.startApp
-                    .takeUnless { options.config.compatibilityMode }
-                    ?.trim()
-                    ?.takeIf(String::isNotEmpty)
-                    ?.let { startApp ->
-                    controller.startApp(startApp)
-                        .onFailure { error ->
-                            LogManager.w(LogTags.SCRCPY_CLIENT, "Request to launch app on virtual display failed: ${error.message}")
+                if (!options.config.compatibilityMode && !options.config.newDisplayEnabled) {
+                    options.config.startApp
+                        .trim()
+                        .takeIf(String::isNotEmpty)
+                        ?.let { startApp ->
+                            controller.startApp(startApp)
+                                .onFailure { error ->
+                                    LogManager.w(
+                                        LogTags.SCRCPY_CLIENT,
+                                        "Request to launch app on virtual display failed: ${error.message}",
+                                    )
+                                }
                         }
                 }
 
                 if (options.config.turnScreenOff && !options.config.compatibilityMode) {
                     controller.turnDisplayOff()
                         .onFailure { error ->
-                            LogManager.w(LogTags.SCRCPY_CLIENT, "Request to close device screen failed: ${error.message}")
+                            LogManager.w(
+                                LogTags.SCRCPY_CLIENT,
+                                "Request to close device screen failed: ${error.message}"
+                            )
                         }
                 }
 

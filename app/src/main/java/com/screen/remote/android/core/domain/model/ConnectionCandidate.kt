@@ -51,14 +51,17 @@ fun parseSessionAddressCandidate(rawValue: String): ConnectionCandidate? {
             val host = DeviceTransportSerial.stripUsbPrefix(value)
             if (host.isBlank()) null else ConnectionCandidate(ConnectionTransport.USB, host, 0)
         }
+
         value.startsWith("mdns:", ignoreCase = true) -> {
             val host = DeviceTransportSerial.mdnsDeviceSerial(value)
             if (host.isBlank()) null else ConnectionCandidate(ConnectionTransport.MDNS, host)
         }
+
         value.startsWith("tcp:", ignoreCase = true) ->
             parseTcpHostPort(value)?.let {
                 ConnectionCandidate(ConnectionTransport.TCP, it.host, it.port)
             }
+
         else ->
             parseHostPort(value)?.let {
                 ConnectionCandidate(ConnectionTransport.TCP, it.host, it.port)

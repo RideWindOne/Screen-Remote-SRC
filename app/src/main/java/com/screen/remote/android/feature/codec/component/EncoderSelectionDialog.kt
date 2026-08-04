@@ -14,12 +14,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.domain.model.ConnectionCandidate
-import com.screen.remote.android.core.domain.model.CodecMediaType
-import com.screen.remote.android.core.domain.model.EncoderCapability
-import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.designsystem.component.SectionTitle
+import com.screen.remote.android.core.domain.model.CodecMediaType
+import com.screen.remote.android.core.domain.model.ConnectionCandidate
+import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.toAddressEndpoint
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.encoder.DetectingCard
 import com.screen.remote.android.feature.codec.component.encoder.EmptyCard
@@ -31,8 +31,8 @@ import com.screen.remote.android.feature.codec.component.encoder.getVideoEncoder
 import com.screen.remote.android.feature.codec.component.encoder.matchesAudioCodecFilter
 import com.screen.remote.android.feature.codec.component.encoder.matchesVideoCodecFilter
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
-import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionPurpose
+import com.screen.remote.android.infrastructure.adb.connection.raceAdbConnections
 import com.screen.remote.android.service.ScrcpyForegroundService
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -138,7 +138,7 @@ fun EncoderSelectionDialog(
                                     LogTags.VIDEO_CODEC_SELECTOR
                                 } else {
                                     LogTags.AUDIO_CODEC_SELECTOR
-                            },
+                                },
                             logLabel = "Codec detection ADB",
                         ).result.getOrThrow()
                     }

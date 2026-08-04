@@ -78,13 +78,11 @@ internal class FloatingMenuGestureState {
         BOTTOM,
     }
 
-    enum class Direction(
-        val actionName: String,
-    ) {
-        UP("桌面"),
-        DOWN("通知栏"),
-        LEFT("返回"),
-        RIGHT("后台任务"),
+    enum class Direction {
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT,
     }
 
     fun reset() {

@@ -2,7 +2,6 @@ package com.screen.remote.android.feature.settings.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,12 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
 import com.screen.remote.android.core.designsystem.component.HelpIcon
-import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSSwitch
 import com.screen.remote.android.core.designsystem.component.SectionCard
 
@@ -127,66 +124,6 @@ fun SettingsItem(
                         },
                     modifier = Modifier.size(IosDesignTokens.externalIconSize),
                 )
-            }
-        }
-    }
-}
-
-/**
- * 设置项（带下拉菜单）
- *
- * @param title 标题
- * @param subtitle 当前选中的值
- * @param expanded 菜单是否展开
- * @param onExpandedChange 菜单展开状态变化回调
- * @param helpText 帮助说明文本（可选）
- * @param menuContent 菜单内容
- */
-@Composable
-fun SettingsItemWithMenu(
-    title: String,
-    subtitle: String,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    helpText: String? = null,
-    menuContent: @Composable ColumnScope.() -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(AppDimens.listItemHeight)
-                .clickable { onExpandedChange(true) }
-                .padding(horizontal = IosDesignTokens.standardHorizontalPadding),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(IosDesignTokens.compactInlineSpacing),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (helpText != null) {
-                HelpIcon(helpText = helpText)
-            }
-        }
-
-        Box {
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            IOSStyledDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { onExpandedChange(false) },
-                offset = DpOffset(0.dp, AppDimens.listItemHeight),
-            ) {
-                menuContent()
             }
         }
     }

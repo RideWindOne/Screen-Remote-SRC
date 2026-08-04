@@ -54,10 +54,7 @@ object TelemetryManager {
                     return@runCatching
                 }
 
-                val payload = TelemetryLogCollector.collect(logDate)
-                if (payload == null) {
-                    return@runCatching
-                }
+                val payload = TelemetryLogCollector.collect(logDate) ?: return@runCatching
 
                 client.uploadLog(
                     identity = identity,

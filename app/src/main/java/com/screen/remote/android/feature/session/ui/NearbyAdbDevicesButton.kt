@@ -63,8 +63,8 @@ import com.screen.remote.android.infrastructure.adb.discovery.NearbyTcpAdbDevice
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredTcpService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Stable

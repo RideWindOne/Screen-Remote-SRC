@@ -53,11 +53,13 @@ internal class VideoDecoderPacketProcessor(
                         getDecoder(), width, height,
                         surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                     )
+
                 VideoPacketCodecMode.VPX ->
                     formatHandler.reconfigureVpx(
                         getDecoder(), width, height,
                         surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                     )
+
                 VideoPacketCodecMode.H264, VideoPacketCodecMode.H265 -> return true
                 VideoPacketCodecMode.UNSUPPORTED ->
                     throw VideoDecoderConfigurationException(videoCodec, "Dynamic size changes are not supported")
@@ -102,8 +104,10 @@ internal class VideoDecoderPacketProcessor(
                 VideoPacketCodecMode.H265 -> processH265ConfigPacket(payload, effectiveConfigured)
                 VideoPacketCodecMode.AV1 ->
                     processAV1(payload, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
+
                 VideoPacketCodecMode.VPX ->
                     processVpx(payload, effectiveConfigured, pts, packetIsConfig, packetIsKeyFrame)
+
                 VideoPacketCodecMode.UNSUPPORTED ->
                     throw VideoDecoderConfigurationException(videoCodec, "Unsupported video format")
             }
@@ -135,6 +139,7 @@ internal class VideoDecoderPacketProcessor(
                         surface = surfaceController.currentSurface(),
                         dummySurface = surfaceController.currentDummySurface(),
                     )
+
                 VideoPacketCodecMode.H265 ->
                     formatHandler.reconfigureH265(
                         oldDecoder = oldDecoder,
@@ -146,6 +151,7 @@ internal class VideoDecoderPacketProcessor(
                         surface = surfaceController.currentSurface(),
                         dummySurface = surfaceController.currentDummySurface(),
                     )
+
                 VideoPacketCodecMode.AV1 ->
                     formatHandler.reconfigureAV1(
                         oldDecoder,
@@ -154,6 +160,7 @@ internal class VideoDecoderPacketProcessor(
                         surfaceController.currentSurface(),
                         surfaceController.currentDummySurface(),
                     )
+
                 VideoPacketCodecMode.VPX ->
                     formatHandler.reconfigureVpx(
                         oldDecoder,
@@ -162,6 +169,7 @@ internal class VideoDecoderPacketProcessor(
                         surfaceController.currentSurface(),
                         surfaceController.currentDummySurface(),
                     )
+
                 VideoPacketCodecMode.UNSUPPORTED -> null
             } ?: return false
 
@@ -255,10 +263,12 @@ internal class VideoDecoderPacketProcessor(
                 pendingH264Sps = nalUnit.copyOf()
                 configureH264IfReady(configured)
             }
+
             VideoNalParser.H264_NAL_PPS -> {
                 pendingH264Pps = nalUnit.copyOf()
                 configureH264IfReady(configured)
             }
+
             else -> configured
         }
     }
@@ -278,7 +288,8 @@ internal class VideoDecoderPacketProcessor(
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
             } else {
-                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.264", "Decoder does not exist")
+                val decoder =
+                    getDecoder() ?: throw VideoDecoderConfigurationException("H.264", "Decoder does not exist")
                 formatHandler.configureH264(
                     decoder, runtimeState.currentWidth, runtimeState.currentHeight, sps, pps,
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
@@ -302,14 +313,17 @@ internal class VideoDecoderPacketProcessor(
                 pendingH265Vps = nalUnit.copyOf()
                 configureH265IfReady(configured)
             }
+
             VideoNalParser.H265_NAL_SPS -> {
                 pendingH265Sps = nalUnit.copyOf()
                 configureH265IfReady(configured)
             }
+
             VideoNalParser.H265_NAL_PPS -> {
                 pendingH265Pps = nalUnit.copyOf()
                 configureH265IfReady(configured)
             }
+
             else -> configured
         }
     }
@@ -334,7 +348,8 @@ internal class VideoDecoderPacketProcessor(
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),
                 )
             } else {
-                val decoder = getDecoder() ?: throw VideoDecoderConfigurationException("H.265", "Decoder does not exist")
+                val decoder =
+                    getDecoder() ?: throw VideoDecoderConfigurationException("H.265", "Decoder does not exist")
                 formatHandler.configureH265(
                     decoder, runtimeState.currentWidth, runtimeState.currentHeight, vps, sps, pps,
                     surfaceController.currentSurface(), surfaceController.currentDummySurface(),

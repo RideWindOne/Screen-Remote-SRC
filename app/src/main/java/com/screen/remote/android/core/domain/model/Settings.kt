@@ -1,7 +1,7 @@
 package com.screen.remote.android.core.domain.model
 
-import kotlinx.serialization.Serializable
 import com.screen.remote.android.core.update.UpdateChannel
+import kotlinx.serialization.Serializable
 
 /**
  * 主题模式

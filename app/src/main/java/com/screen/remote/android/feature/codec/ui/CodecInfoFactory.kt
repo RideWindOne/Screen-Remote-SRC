@@ -3,9 +3,11 @@ package com.screen.remote.android.feature.codec.ui
 import com.screen.remote.android.core.domain.model.DecoderCapability
 import com.screen.remote.android.feature.codec.model.CodecInfo
 
-fun buildVideoDecoderInfos(decoders: List<DecoderCapability>): List<CodecInfo> = buildLocalCodecInfos(decoders, "video/")
+fun buildVideoDecoderInfos(decoders: List<DecoderCapability>): List<CodecInfo> =
+    buildLocalCodecInfos(decoders, "video/")
 
-fun buildAudioDecoderInfos(decoders: List<DecoderCapability>): List<CodecInfo> = buildLocalCodecInfos(decoders, "audio/")
+fun buildAudioDecoderInfos(decoders: List<DecoderCapability>): List<CodecInfo> =
+    buildLocalCodecInfos(decoders, "audio/")
 
 private fun buildLocalCodecInfos(
     decoders: List<DecoderCapability>,

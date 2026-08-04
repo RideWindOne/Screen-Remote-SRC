@@ -4,12 +4,12 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
-import com.screen.remote.android.core.common.util.compat.getSecurityPatchCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.screen.remote.android.core.common.util.compat.getSecurityPatchCompat
 import com.screen.remote.android.core.domain.model.DecoderCapability
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -125,17 +125,6 @@ class LocalDecoderManager(
             invalidateCapabilitiesForNewRuntime(preferences, runtimeSignature)
             preferences[Keys.RUNTIME_SIGNATURE] = runtimeSignature
             preferences[Keys.AUDIO_DECODERS] = json.encodeToString(decoders)
-        }
-    }
-
-    /**
-     * 保存完整数据
-     */
-    suspend fun saveData(data: LocalDecoderData) {
-        dataStore.edit { preferences ->
-            preferences[Keys.RUNTIME_SIGNATURE] = data.runtimeSignature
-            preferences[Keys.VIDEO_DECODERS] = json.encodeToString(data.videoDecoders)
-            preferences[Keys.AUDIO_DECODERS] = json.encodeToString(data.audioDecoders)
         }
     }
 

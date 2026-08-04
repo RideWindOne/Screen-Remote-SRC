@@ -2,8 +2,8 @@ package com.screen.remote.android.feature.session.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.screen.remote.android.core.domain.model.EncoderCapability
 import androidx.lifecycle.viewModelScope
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
-import com.screen.remote.android.app.deeplink.NewSessionPrefill
 
 /**
  * 会话管理 ViewModel
@@ -65,8 +64,6 @@ class SessionViewModel(
     }
 
     // ============ 会话 CRUD ============
-
-    fun getSessionData(sessionId: String) = sessionRepository.getSessionDataFlow(sessionId)
 
     fun saveSessionData(sessionData: SessionData) {
         viewModelScope.launch {
@@ -136,56 +133,6 @@ class SessionViewModel(
         val newNumber = maxNumber + 1
 
         return "${baseName}_$newNumber"
-    }
-
-    /**
-     * 更新会话的选中解码器
-     * @param sessionId 会话 ID
-     * @param videoDecoder 选中的视频解码器名称（null 表示不更新）
-     * @param audioDecoder 选中的音频解码器名称（null 表示不更新）
-     */
-    suspend fun updateSelectedDecoders(
-        sessionId: String,
-        videoDecoder: String? = null,
-        audioDecoder: String? = null,
-    ) {
-        val currentData = sessionRepository.getSessionData(sessionId) ?: return
-
-        val updatedData =
-            currentData.copy(
-                capabilityCache =
-                    currentData.capabilityCache.copy(
-                        selectedVideoDecoder = videoDecoder ?: currentData.capabilityCache.selectedVideoDecoder,
-                        selectedAudioDecoder = audioDecoder ?: currentData.capabilityCache.selectedAudioDecoder,
-                    ),
-            )
-
-        sessionRepository.updateSession(updatedData)
-    }
-
-    /**
-     * 更新会话的远程编码器列表
-     * @param sessionId 会话 ID
-     * @param videoEncoders 远程视频编码器列表
-     * @param audioEncoders 远程音频编码器列表
-     */
-    suspend fun updateRemoteEncoders(
-        sessionId: String,
-        videoEncoders: List<EncoderCapability>,
-        audioEncoders: List<EncoderCapability>,
-    ) {
-        val currentData = sessionRepository.getSessionData(sessionId) ?: return
-
-        val updatedData =
-            currentData.copy(
-                capabilityCache =
-                    currentData.capabilityCache.copy(
-                        remoteVideoEncoders = videoEncoders,
-                        remoteAudioEncoders = audioEncoders,
-                    ),
-            )
-
-        sessionRepository.updateSession(updatedData)
     }
 
     // ============ Factory ============

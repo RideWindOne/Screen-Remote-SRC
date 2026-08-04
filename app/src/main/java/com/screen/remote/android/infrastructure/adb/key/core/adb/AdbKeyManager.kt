@@ -6,8 +6,8 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.i18n.AdbTexts
 import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import dadb.AdbKeyPair
-import dadb.android.runtime.ExperimentalDadbAndroidApi
 import dadb.android.runtime.AdbRuntime
+import dadb.android.runtime.ExperimentalDadbAndroidApi
 
 /**
  * ADB 密钥对管理器
@@ -46,17 +46,6 @@ internal class AdbKeyManager {
     fun reloadKeyPair() {
         initKeyPair()
     }
-
-    /**
-     * 获取公钥（用于手动授权）
-     */
-    fun getPublicKey(): String? =
-        try {
-            adbRuntime.readIdentity().publicKey
-        } catch (e: Exception) {
-            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_GET_PUBLIC_KEY_FAILED.english}: ${e.message}", e)
-            null
-        }
 
     companion object {
         fun defaultStorageRoot(context: Context) = AdbRuntime.defaultStorageRoot(context)

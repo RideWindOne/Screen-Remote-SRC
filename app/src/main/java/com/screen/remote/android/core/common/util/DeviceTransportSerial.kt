@@ -4,7 +4,6 @@ object DeviceTransportSerial {
     private const val USB_PREFIX = "usb:"
     private const val TCP_PREFIX = "tcp:"
     private const val MDNS_PREFIX = "mdns:"
-    private const val ADB_TLS_PREFIX = "adb-tls:"
     private val MDNS_SERVICE_SUFFIXES =
         listOf(
             "._adb-tls-connect._tcp",
@@ -23,9 +22,6 @@ object DeviceTransportSerial {
 
     fun mdns(serviceName: String): String =
         MDNS_PREFIX + stripMdnPrefix(serviceName)
-
-    fun adbTls(host: String, port: Int): String =
-        ADB_TLS_PREFIX + formatHostPort(normalizeEndpointHost(host), port)
 
     fun stripUsbPrefix(value: String): String = stripPrefixIgnoreCase(value, USB_PREFIX)
 
@@ -67,16 +63,6 @@ object DeviceTransportSerial {
     fun mdnsDeviceKey(value: String): String = mdns(mdnsDeviceSerial(value)).lowercase()
 
     fun stripTcpPrefix(value: String): String = stripPrefixIgnoreCase(value, TCP_PREFIX)
-
-    fun normalizeEndpoint(value: String): String = stripAnyTransportPrefix(value)
-
-    fun stripAnyTransportPrefix(value: String): String =
-        when {
-            value.trim().startsWith(USB_PREFIX, ignoreCase = true) -> stripUsbPrefix(value)
-            value.trim().startsWith(MDNS_PREFIX, ignoreCase = true) -> stripMdnPrefix(value)
-            value.trim().startsWith(TCP_PREFIX, ignoreCase = true) -> stripTcpPrefix(value)
-            else -> value.trim()
-        }
 
     private fun stripPrefixIgnoreCase(
         value: String,

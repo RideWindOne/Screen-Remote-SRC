@@ -556,7 +556,12 @@ internal object RemoteUiLayoutParser {
             !isObfuscatedResourceName(resourceName) &&
             shouldUseResourceFallback(kind)
         ) {
-            if (isArrowLikeResourceName(resourceName) && kind in setOf(RemoteUiLayoutNodeKind.IMAGE, RemoteUiLayoutNodeKind.OTHER, RemoteUiLayoutNodeKind.BUTTON)) {
+            if (isArrowLikeResourceName(resourceName) && kind in setOf(
+                    RemoteUiLayoutNodeKind.IMAGE,
+                    RemoteUiLayoutNodeKind.OTHER,
+                    RemoteUiLayoutNodeKind.BUTTON
+                )
+            ) {
                 return ParsedLabel("", RemoteUiLayoutLabelSource.FALLBACK)
             }
             val humanized = humanizeResourceName(resourceName)
@@ -590,7 +595,12 @@ internal object RemoteUiLayoutParser {
         }
 
         val lowered = label.lowercase()
-        if (lowered in GENERIC_LABELS || (label in SYMBOL_ONLY_LABELS && kind !in setOf(RemoteUiLayoutNodeKind.TEXT, RemoteUiLayoutNodeKind.INPUT, RemoteUiLayoutNodeKind.BUTTON))) {
+        if (lowered in GENERIC_LABELS || (label in SYMBOL_ONLY_LABELS && kind !in setOf(
+                RemoteUiLayoutNodeKind.TEXT,
+                RemoteUiLayoutNodeKind.INPUT,
+                RemoteUiLayoutNodeKind.BUTTON
+            ))
+        ) {
             return ""
         }
 
@@ -749,7 +759,11 @@ internal object RemoteUiLayoutParser {
         }
 
         return existing.kind in setOf(RemoteUiLayoutNodeKind.TEXT, RemoteUiLayoutNodeKind.INPUT) &&
-            candidate.kind in setOf(RemoteUiLayoutNodeKind.BUTTON, RemoteUiLayoutNodeKind.IMAGE, RemoteUiLayoutNodeKind.OTHER)
+            candidate.kind in setOf(
+            RemoteUiLayoutNodeKind.BUTTON,
+            RemoteUiLayoutNodeKind.IMAGE,
+            RemoteUiLayoutNodeKind.OTHER
+        )
     }
 
     private fun overlapOverSmallerArea(
@@ -764,7 +778,8 @@ internal object RemoteUiLayoutParser {
             return 0f
         }
 
-        val intersectionArea = (intersectionRight - intersectionLeft).toLong() * (intersectionBottom - intersectionTop).toLong()
+        val intersectionArea =
+            (intersectionRight - intersectionLeft).toLong() * (intersectionBottom - intersectionTop).toLong()
         val smallerArea = minOf(a.area(), b.area()).coerceAtLeast(1L)
         return intersectionArea.toFloat() / smallerArea.toFloat()
     }

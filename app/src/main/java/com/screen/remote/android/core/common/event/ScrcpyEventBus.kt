@@ -2,10 +2,6 @@ package com.screen.remote.android.core.common.event
 
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.domain.model.ScrcpyErrorEvent
-import com.screen.remote.android.core.domain.model.ScrcpyEventType
-import com.screen.remote.android.core.domain.model.ScrcpyStatus
-import com.screen.remote.android.core.domain.model.ScrcpyStatusEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -59,11 +55,6 @@ object ScrcpyEventBus {
     fun pushEvent(event: ScrcpyEvent): Boolean = eventLoop.pushEvent(event)
 
     /**
-     * 在主线程执行任务
-     */
-    fun postToMainThread(task: () -> Unit): Boolean = eventLoop.postToMainThread(task)
-
-    /**
      * 启动事件循环
      */
     fun start() {
@@ -101,104 +92,14 @@ object ScrcpyEventBus {
     private val deviceStates = mutableMapOf<String, DeviceMonitorState>()
 
     /**
-     * 获取设备监控状态
-     */
-    fun getDeviceState(deviceId: String): DeviceMonitorState =
-        deviceStates.getOrPut(deviceId) { DeviceMonitorState(deviceId) }
-
-    /**
      * 清除设备监控状态
      */
     fun clearDeviceState(deviceId: String) {
         deviceStates.remove(deviceId)
     }
 
-    /**
-     * 获取状态摘要
-     */
-    fun getStateSummary(deviceId: String): String {
-        val state = getDeviceState(deviceId)
-        return buildString {
-            appendLine("=== Scrcpy Status Summary [$deviceId] ===")
-            appendLine("Connection: ${if (state.isConnected) "connected" else "disconnected"}")
-            appendLine("Screen: ${if (state.isScreenOn) "on" else "off"} / ${if (state.isScreenLocked) "locked" else "unlocked"}")
-            appendLine("Video: ${state.videoFrameCount} frames, ${if (state.isVideoActive) "active" else "stalled"}")
-            appendLine("Audio: ${state.audioFrameCount} frames, ${if (state.isAudioActive) "active" else "stalled"}")
-            appendLine("Server logs: ${state.serverLogCount}")
-            state.socketStats.forEach { (type, stats) ->
-                appendLine(
-                    "  [$type] received: ${stats.packetsReceived} packets/${stats.bytesReceived / 1024}KB, sent: ${stats.packetsSent} packets/${stats.bytesSent / 1024}KB",
-                )
-            }
-            if (state.recentExceptions.isNotEmpty()) {
-                appendLine("Recent exceptions: ${state.recentExceptions.size}")
-            }
-        }
-    }
-
     // ============ JNI 回调接口 ============
 
-    /**
-     * 从 Native 层接收状态变化事件
-     * 由 scrcpy_bridge_jni.cpp 调用
-     */
-    @JvmStatic
-    fun emitStatusFromNative(
-        status: Int,
-        deviceId: String?,
-        errorMessage: String?,
-    ) {
-        val scrcpyStatus =
-            ScrcpyStatus.entries.getOrNull(status) ?: run {
-                LogManager.e(LogTags.SCRCPY_EVENT_BUS, "Invalid status code: $status")
-                return
-            }
-
-        val event =
-            ScrcpyStatusEvent(
-                status = scrcpyStatus,
-                deviceId = deviceId,
-                errorMessage = errorMessage,
-            )
-
-        LogManager.d(
-            LogTags.SCRCPY_EVENT_BUS,
-            "Received Native status event: status=$scrcpyStatus, deviceId=$deviceId",
-        )
-
-        pushEvent(StatusChanged(event))
-    }
-
-    /**
-     * 从 Native 层接收错误事件
-     * 由 scrcpy_bridge_jni.cpp 调用
-     */
-    @JvmStatic
-    fun emitErrorFromNative(
-        eventType: Int,
-        deviceId: String?,
-        errorMessage: String?,
-    ) {
-        val scrcpyEventType =
-            ScrcpyEventType.fromCode(eventType) ?: run {
-                LogManager.e(LogTags.SCRCPY_EVENT_BUS, "Invalid event type code: $eventType")
-                return
-            }
-
-        val event =
-            ScrcpyErrorEvent(
-                eventType = scrcpyEventType,
-                deviceId = deviceId,
-                errorMessage = errorMessage,
-            )
-
-        LogManager.d(
-            LogTags.SCRCPY_EVENT_BUS,
-            "Received Native error event: eventType=$scrcpyEventType, deviceId=$deviceId, message=$errorMessage",
-        )
-
-        pushEvent(ScrcpyError(event))
-    }
 }
 
 class ScrcpyEventLoop(
@@ -286,8 +187,6 @@ class ScrcpyEventLoop(
             LogManager.v(TAG, "No handler for event: ${event::class.simpleName}")
         }
     }
-
-    fun postToMainThread(task: () -> Unit): Boolean = pushEvent(RunOnMainThread(task))
 
     fun isRunning(): Boolean = isRunning
 }

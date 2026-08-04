@@ -81,44 +81,6 @@ object AdbShellManager {
         }
 
     /**
-     * 获取设备属性
-     */
-    suspend fun getProperty(
-        connection: AdbConnection,
-        property: String,
-    ): Result<String> =
-        execute(
-            connection = connection,
-            command = "getprop $property",
-            retryOnFailure = false,
-            reportToEventBus = false,
-        )
-
-    /**
-     * 唤醒屏幕
-     */
-    suspend fun wakeUpScreen(connection: AdbConnection): Result<String> =
-        execute(connection, "input keyevent KEYCODE_WAKEUP")
-
-    /**
-     * 展开通知栏
-     */
-    suspend fun expandNotifications(connection: AdbConnection): Result<String> =
-        execute(connection, EXPAND_NOTIFICATIONS_COMMAND)
-
-    /**
-     * 设置剪贴板
-     */
-    suspend fun setClipboard(
-        connection: AdbConnection,
-        text: String,
-    ): Result<String> =
-        execute(
-            connection,
-            "service call clipboard 1 i32 0 s16 com.android.shell s16 \"$text\"",
-        )
-
-    /**
      * 杀死进程
      */
     suspend fun killProcess(
@@ -131,37 +93,4 @@ object AdbShellManager {
             retryOnFailure = false,
         )
 
-    /**
-     * 设置文件权限
-     */
-    suspend fun chmod(
-        connection: AdbConnection,
-        mode: String,
-        path: String,
-    ): Result<String> =
-        execute(
-            connection,
-            "chmod $mode $path",
-            retryOnFailure = false,
-            reportToEventBus = false,
-        )
-
-    /**
-     * 心跳检测
-     */
-    suspend fun heartbeat(connection: AdbConnection): Result<String> =
-        execute(
-            connection = connection,
-            command = "echo 1",
-            retryOnFailure = false,
-            reportToEventBus = false,
-        )
-
-    /**
-     * 验证连接
-     */
-    suspend fun verifyConnection(connection: AdbConnection): Boolean {
-        val result = heartbeat(connection)
-        return result.isSuccess
-    }
 }

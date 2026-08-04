@@ -25,11 +25,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.style.TextOverflow
 import com.screen.remote.android.core.common.constants.AppColors
 import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.domain.model.DefaultGroups

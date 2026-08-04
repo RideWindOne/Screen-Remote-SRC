@@ -5,8 +5,8 @@ import com.screen.remote.android.core.data.repository.SessionData
 import dadb.android.wireless.AdbMdnsService
 import dadb.android.wireless.AdbMdnsServiceType
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MdnsSessionPresenceTest {

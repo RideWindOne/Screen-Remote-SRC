@@ -9,9 +9,9 @@ import android.os.Bundle
 import android.os.Process
 import android.util.Base64
 import com.screen.remote.android.app.ScreenRemoteApp
-import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
 import com.screen.remote.android.app.deeplink.ManageDestination
 import com.screen.remote.android.app.deeplink.ManageSection
+import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
 import com.screen.remote.android.app.deeplink.SettingsDestination
 import com.screen.remote.android.app.deeplink.UrlSetting
 import com.screen.remote.android.app.deeplink.toUrl
@@ -22,8 +22,8 @@ import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyDiagnosticsRegistry
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -39,7 +39,7 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
         runCatching {
             when (method) {
                 METHOD_DEVICES -> devicesPayload()
-                METHOD_SESSION -> sessionPayload(includeComponents = true)
+                METHOD_SESSION -> sessionPayload()
                 METHOD_SOCKETS -> socketPayload()
                 METHOD_CODECS -> codecsPayload()
                 METHOD_LOGS -> logsPayload()
@@ -77,7 +77,7 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
         )
     }
 
-    private fun sessionPayload(includeComponents: Boolean): JSONObject {
+    private fun sessionPayload(): JSONObject {
         val client = ScrcpyDiagnosticsRegistry.currentClient
         val session = client?.sessionManager?.currentOrNull
         return envelope().apply {
@@ -104,7 +104,7 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
                         .put("selectedAudioCodec", options.capabilityCache.selectedAudioCodec),
                 )
             }
-            if (includeComponents && session != null) {
+            if (session != null) {
                 val snapshot = session.componentSnapshot.value
                 put(
                     "components",
@@ -233,7 +233,10 @@ class ScreenRemoteDiagnosticsProvider : ContentProvider() {
                     .put("editSession", "screen-remote://session/edit/{sessionId|name}")
                     .put("manage", "screen-remote://session/{sessionId|name|host:port}/manage/{section}")
                     .put("manageFile", "screen-remote://session/{sessionId|name|host:port}/manage/file/{path}")
-                    .put("manageCommand", "screen-remote://session/{sessionId|name|host:port}/manage/command?command={command}")
+                    .put(
+                        "manageCommand",
+                        "screen-remote://session/{sessionId|name|host:port}/manage/command?command={command}"
+                    )
                     .put("openSetting", "screen-remote://open/settings/{destination}")
                     .put("setSetting", "screen-remote://setting/{setting}/{value}"),
             ).put(

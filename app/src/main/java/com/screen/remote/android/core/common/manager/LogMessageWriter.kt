@@ -37,29 +37,6 @@ internal class LogMessageWriter(
         }
     }
 
-    fun writeRawLog(
-        level: String,
-        tag: String,
-        message: String,
-    ) {
-        if (!state.isEnabled || state.runtimeLoggingSuppressed) {
-            return
-        }
-
-        scope.launch {
-            try {
-                appendLogLine(
-                    level = level,
-                    tag = tag,
-                    message = message,
-                    appendTrailingNewline = !message.endsWith("\n"),
-                )
-            } catch (e: Exception) {
-                Log.e(LogTags.LOG_MANAGER, "${LogTexts.LOG_WRITE_RAW_FAILED.english}: ${e.message}")
-            }
-        }
-    }
-
     private fun appendLogLine(
         level: String,
         tag: String,

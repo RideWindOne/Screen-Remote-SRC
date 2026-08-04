@@ -5,20 +5,20 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.data.repository.SessionRepository
 import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
-import com.screen.remote.android.core.data.repository.SessionRepository
-import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
-import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedAudioDecoder
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberResolvedVideoDecoder
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
-import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
-import kotlinx.coroutines.Dispatchers
+import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,7 +39,6 @@ sealed class ConnectStatus {
 
     data object Failed : ConnectStatus()
 
-    data object Unauthorized : ConnectStatus()
 }
 
 /**
@@ -52,6 +51,7 @@ class ConnectionViewModel(
 ) : ViewModel() {
     // 当前连接任务的 Job，用于取消正在进行的连接
     private var connectJob: Job? = null
+
     @Volatile
     private var disconnectRequested = false
 
@@ -215,11 +215,17 @@ class ConnectionViewModel(
      */
     fun handleConnectionLost() {
         if (disconnectRequested) {
-            LogManager.d(LogTags.CONNECTION_VM, "Ignore connection loss: currently in user active disconnection process")
+            LogManager.d(
+                LogTags.CONNECTION_VM,
+                "Ignore connection loss: currently in user active disconnection process"
+            )
             return
         }
 
-        LogManager.w(LogTags.CONNECTION_VM, "Handle connection loss: leave it to session lifecycle for unified reconnection")
+        LogManager.w(
+            LogTags.CONNECTION_VM,
+            "Handle connection loss: leave it to session lifecycle for unified reconnection"
+        )
         createSessionContext().emit(
             SessionEvent.RequestReconnect(
                 ReconnectIssue(
@@ -228,20 +234,6 @@ class ConnectionViewModel(
                 ),
             ),
         )
-    }
-
-    /**
-     * 临时断开连接（后台时使用），不改变连接状态
-     */
-    fun pauseConnection() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                LogManager.d(LogTags.CONNECTION_VM, "Pause connection...")
-                scrcpyClient.disconnect()
-            } catch (e: Exception) {
-                LogManager.e(LogTags.CONNECTION_VM, "Pause connection exception: ${e.message}", e)
-            }
-        }
     }
 
     // ============ 状态访问 ============

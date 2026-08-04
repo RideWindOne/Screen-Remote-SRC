@@ -38,6 +38,16 @@ internal sealed interface ManagementShellPacket {
     data class Exit(val code: Int) : ManagementShellPacket
 }
 
+internal data class FileUploadProgress(
+    val fileIndex: Int,
+    val totalFiles: Int,
+    val fileName: String,
+    val fileUploadedBytes: Long,
+    val fileTotalBytes: Long,
+    val uploadedBytes: Long,
+    val totalBytes: Long,
+)
+
 internal class ManagementShellStream(
     private val stream: AdbShellStream,
 ) {
@@ -218,7 +228,13 @@ private fun buildRemoteTransferCommand(
         val destinationChecks =
             entries.joinToString(separator = "; ") { entry ->
                 val destination = joinRemotePath(normalizedTargetDirectory, entry.name)
-                "[ ! -e ${quoteShellArg(destination)} ] || { echo ${quoteShellArg(ManagementTexts.Files.DESTINATION_ALREADY_EXISTS.format(entry.name))} >&2; exit 1; }"
+                "[ ! -e ${quoteShellArg(destination)} ] || { echo ${
+                    quoteShellArg(
+                        ManagementTexts.Files.DESTINATION_ALREADY_EXISTS.format(
+                            entry.name
+                        )
+                    )
+                } >&2; exit 1; }"
             }
         val transferCommands =
             entries.joinToString(separator = "; ") { entry ->
@@ -308,6 +324,7 @@ internal suspend fun uploadLocalFilesToRemoteDirectory(
     context: Context,
     sourceUris: List<Uri>,
     targetDirectory: String,
+    onProgress: (FileUploadProgress) -> Unit = {},
 ): Result<String> {
     val connection =
         SessionManagementAdbConnection.current()
@@ -333,21 +350,66 @@ internal suspend fun uploadLocalFilesToRemoteDirectory(
             val destinationChecks =
                 sources.joinToString(separator = "; ") { (_, name) ->
                     val destination = joinRemotePath(normalizedTarget, name)
-                    "[ ! -e ${quoteShellArg(destination)} ] || { echo ${quoteShellArg(ManagementTexts.Files.DESTINATION_ALREADY_EXISTS.format(name))} >&2; exit 1; }"
+                    "[ ! -e ${quoteShellArg(destination)} ] || { echo ${
+                        quoteShellArg(
+                            ManagementTexts.Files.DESTINATION_ALREADY_EXISTS.format(
+                                name
+                            )
+                        )
+                    } >&2; exit 1; }"
                 }
             executeManagementShell(destinationChecks).getOrThrow()
 
             val uploadDir = File(context.cacheDir, "session-management/uploads").apply { mkdirs() }
-            val uploadedPaths = mutableListOf<String>()
-            runCatching {
-                sources.forEach { (uri, name) ->
+            val localCopies =
+                sources.map { (uri, name) ->
                     val localFile = File(uploadDir, "${sha256(uri.toString().toByteArray()).take(12)}_$name")
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         localFile.outputStream().use { output -> input.copyTo(output) }
                     } ?: error(ManagementTexts.Files.COULDN_T_READ_FILE.format(name))
+                    localFile to name
+                }
+            val uploadedPaths = mutableListOf<String>()
+            val totalBytes = localCopies.sumOf { it.first.length() }
+            var completedBytes = 0L
+
+            runCatching {
+                localCopies.forEachIndexed { index, (localFile, name) ->
                     val remotePath = joinRemotePath(normalizedTarget, name)
-                    connection.pushFile(localFile.absolutePath, remotePath).getOrThrow()
+                    val localFileSize = localFile.length()
+                    var currentFileUploaded = 0L
+                    connection.pushFile(
+                        localPath = localFile.absolutePath,
+                        remotePath = remotePath,
+                        onProgressBytes = { bytes ->
+                            currentFileUploaded = (currentFileUploaded + bytes).coerceAtMost(localFileSize)
+                            onProgress(
+                                FileUploadProgress(
+                                    fileIndex = index + 1,
+                                    totalFiles = sources.size,
+                                    fileName = name,
+                                    fileUploadedBytes = currentFileUploaded,
+                                    fileTotalBytes = localFileSize,
+                                    uploadedBytes = (completedBytes + currentFileUploaded).coerceAtMost(totalBytes),
+                                    totalBytes = totalBytes,
+                                ),
+                            )
+                        },
+                    ).getOrThrow()
+                    currentFileUploaded = localFileSize
+                    completedBytes = (completedBytes + localFileSize).coerceAtMost(totalBytes)
                     uploadedPaths += remotePath
+                    onProgress(
+                        FileUploadProgress(
+                            fileIndex = index + 1,
+                            totalFiles = localCopies.size,
+                            fileName = name,
+                            fileUploadedBytes = localFileSize,
+                            fileTotalBytes = localFileSize,
+                            uploadedBytes = completedBytes,
+                            totalBytes = totalBytes,
+                        ),
+                    )
                 }
             }.onFailure {
                 if (uploadedPaths.isNotEmpty()) {
@@ -742,11 +804,12 @@ private suspend fun writePackageApks(
     val localFiles =
         remotePaths.mapIndexed { index, remotePath ->
             val remoteName = remotePath.substringAfterLast('/').ifBlank { "split-$index.apk" }
-            val uniqueName = if (index == 0 || remotePaths.take(index).none { it.substringAfterLast('/') == remoteName }) {
-                remoteName
-            } else {
-                "$index-$remoteName"
-            }
+            val uniqueName =
+                if (index == 0 || remotePaths.take(index).none { it.substringAfterLast('/') == remoteName }) {
+                    remoteName
+                } else {
+                    "$index-$remoteName"
+                }
             File(exportDir, uniqueName).also { localFile ->
                 connection.pullFile(remotePath, localFile.absolutePath).getOrThrow()
             }
@@ -836,12 +899,6 @@ private fun parseLsDetailLine(
     )
 }
 
-internal fun formatFileModifiedTime(value: String): String =
-    when {
-        value.length >= 16 -> value.take(16)
-        else -> value
-    }
-
 private fun resolveMimeType(fileName: String): String {
     val extension = fileName.substringAfterLast('.', "").lowercase(Locale.getDefault())
     if (extension.isBlank()) return "*/*"
@@ -849,7 +906,7 @@ private fun resolveMimeType(fileName: String): String {
     return when (extension) {
         "txt", "log", "md", "json", "xml", "html", "htm", "css", "js", "kt", "java", "py", "sh", "yaml", "yml",
         "ini", "conf", "properties",
-        -> "text/plain"
+            -> "text/plain"
 
         else -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
     }

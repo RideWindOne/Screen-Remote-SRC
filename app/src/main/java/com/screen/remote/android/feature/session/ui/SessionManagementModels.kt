@@ -64,14 +64,6 @@ internal data class DeviceDashboardSnapshot(
     val androidVersionLabel: String
         get() = androidVersion.ifBlank { "Android" }
 
-    val heroSummary: String
-        get() =
-            when {
-                errorMessage != null -> ManagementTexts.General.DEVICE_INFO_LOAD_FAILED_SUMMARY.get()
-                isLoading -> ManagementTexts.General.SYNCING_DEVICE_SUMMARY.get()
-                else -> ManagementTexts.General.DEVICE_SUMMARY.format(model, androidVersion, resolution, storageSummary)
-            }
-
     val currentDpiValue: String?
         get() = dpi.substringAfterLast(": ", dpi).trim().takeIf { it.isNotBlank() }
 

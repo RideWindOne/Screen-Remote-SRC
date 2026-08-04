@@ -9,6 +9,18 @@ import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.ConnectionTransport
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.ConnectException
 import java.net.DatagramPacket
@@ -22,18 +34,7 @@ import java.nio.ByteOrder
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 enum class NearbyAdbProtocol {
     TCP,
@@ -134,7 +135,6 @@ class NearbyAdbScanner(
 
                 scanExplicitEndpoints(
                     endpoints = historicalEndpoints,
-                    stage = NearbyAdbScanStage.CHECKING_HISTORY,
                     onProgress = { send(NearbyAdbScanEvent.Progress(it)) },
                     onFound = ::publish,
                 )
@@ -205,10 +205,10 @@ class NearbyAdbScanner(
 
     private suspend fun scanExplicitEndpoints(
         endpoints: List<HistoricalTcpEndpoint>,
-        stage: NearbyAdbScanStage,
         onProgress: suspend (NearbyAdbScanProgress) -> Unit,
         onFound: suspend (NearbyTcpAdbDevice) -> Unit,
     ) {
+        val stage = NearbyAdbScanStage.CHECKING_HISTORY
         val completed = AtomicInteger(0)
         onProgress(NearbyAdbScanProgress(stage, total = endpoints.size))
         coroutineScope {
@@ -312,11 +312,18 @@ class NearbyAdbScanner(
                 DatagramSocket().use { socket ->
                     val payload = byteArrayOf(0)
                     hosts.forEach { host ->
-                        socket.send(DatagramPacket(payload, payload.size, InetAddress.getByName(host), NEIGHBOR_WARMUP_PORT))
+                        socket.send(
+                            DatagramPacket(
+                                payload,
+                                payload.size,
+                                InetAddress.getByName(host),
+                                NEIGHBOR_WARMUP_PORT
+                            )
+                        )
                     }
                 }
             }
-            delay(NEIGHBOR_SETTLE_MS)
+            delay(NEIGHBOR_SETTLE_MS.milliseconds)
         }
     }
 

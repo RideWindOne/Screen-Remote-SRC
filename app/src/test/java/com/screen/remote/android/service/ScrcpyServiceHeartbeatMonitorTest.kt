@@ -1,13 +1,13 @@
 package com.screen.remote.android.service
 
 import com.screen.remote.android.core.domain.model.ConnectionTransport
-import java.util.concurrent.ConcurrentHashMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.ConcurrentHashMap
 
 class ScrcpyServiceHeartbeatMonitorTest {
     @Test

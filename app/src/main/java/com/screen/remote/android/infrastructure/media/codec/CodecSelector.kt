@@ -75,7 +75,10 @@ object CodecSelector {
                     ignoredUserSelection = requestedEncoder.isNotEmpty() || requestedDecoder.isNotEmpty(),
                 )
             }
-            LogManager.w(logTag, "Incomplete encoding and decoding capabilities: remote=${remote.size}, local=${eligibleDecoders.size}")
+            LogManager.w(
+                logTag,
+                "Incomplete encoding and decoding capabilities: remote=${remote.size}, local=${eligibleDecoders.size}"
+            )
             return null
         }
 
@@ -158,6 +161,7 @@ object CodecSelector {
                             mimeType = spec.mimeType,
                             mediaType = mediaType,
                         )
+
                     else -> null
                 } ?: continue
 
@@ -179,7 +183,7 @@ object CodecSelector {
 
         LogManager.d(
             logTag,
-            "No matching combination found: encoder=${requestedEncoder.ifBlank {"auto" }} " +
+            "No matching combination found: encoder=${requestedEncoder.ifBlank { "auto" }} " +
                 "decoder=${requestedDecoder.ifBlank { "auto" }}",
         )
         return null
@@ -227,7 +231,7 @@ object CodecSelector {
     ): String =
         CodecCatalog.find(mediaType, value)?.name
             ?: CodecCatalog.inferFromImplementationName(mediaType, value)?.name
-            .orEmpty()
+                .orEmpty()
 
     private fun bestEncoder(
         encoders: List<EncoderCapability>,

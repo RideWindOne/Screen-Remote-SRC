@@ -124,27 +124,3 @@ enum class ExceptionType {
     UNKNOWN,
 }
 
-internal fun buildScrcpyMonitorSummary(
-    deviceId: String,
-    state: SessionMonitorState,
-): String =
-    buildString {
-        appendLine("=== Scrcpy Status Summary [$deviceId] ===")
-        appendLine("Connection: ${if (state.isConnected) "connected" else "disconnected"}")
-        appendLine("Screen: ${if (state.isScreenOn) "on" else "off"} / ${if (state.isScreenLocked) "locked" else "unlocked"}")
-        appendLine("Video: ${state.videoFrameCount} frames, ${if (state.isVideoActive) "active" else "stalled"}")
-        appendLine("Audio: ${state.audioFrameCount} frames, ${if (state.isAudioActive) "active" else "stalled"}")
-        appendLine("Server logs: ${state.serverLogCount}")
-        appendLine("Socket statistics:")
-        state.socketStats.forEach { (type, stats) ->
-            appendLine(
-                "  [$type] received: ${stats.packetsReceived} packets/${stats.bytesReceived / 1024}KB, sent: ${stats.packetsSent} packets/${stats.bytesSent / 1024}KB",
-            )
-        }
-        if (state.recentExceptions.isNotEmpty()) {
-            appendLine("Recent exceptions: ${state.recentExceptions.size}")
-            state.recentExceptions.takeLast(3).forEach {
-                appendLine("  [${it.type}] ${it.message}")
-            }
-        }
-    }

@@ -101,12 +101,16 @@ internal class VideoDecoderPlayback(
 
                     is dadb.AdbShellPacket.Exit -> {
                         if (isRunning() && shouldReportConnectionLost()) {
-                            LogManager.w(LogTags.VIDEO_DECODER, "The video stream is terminated by the remote end and triggers reconnection.")
+                            LogManager.w(
+                                LogTags.VIDEO_DECODER,
+                                "The video stream is terminated by the remote end and triggers reconnection."
+                            )
                             onConnectionLost()
                             ScrcpyEventBus.pushEvent(DeviceDisconnected)
                         }
                         break
                     }
+
                     else -> continue
                 }
 
@@ -126,7 +130,11 @@ internal class VideoDecoderPlayback(
                     val recovered =
                         runCatching { packetProcessor.recoverAfterRuntimeFailure(e) }
                             .onFailure { fallbackError ->
-                                LogManager.e(LogTags.VIDEO_DECODER, "Video decoder runtime fallback failed: ${fallbackError.message}", fallbackError)
+                                LogManager.e(
+                                    LogTags.VIDEO_DECODER,
+                                    "Video decoder runtime fallback failed: ${fallbackError.message}",
+                                    fallbackError
+                                )
                             }.getOrDefault(false)
                     if (recovered) {
                         outputDrainer.resetAfterDecoderFallback()
@@ -150,7 +158,10 @@ internal class VideoDecoderPlayback(
         when {
             error.isExpectedConnectionClosure() -> {
                 if (shouldReportConnectionLost()) {
-                    LogManager.w(LogTags.VIDEO_DECODER, "The video connection has been disconnected, triggering reconnection: ${error.message}")
+                    LogManager.w(
+                        LogTags.VIDEO_DECODER,
+                        "The video connection has been disconnected, triggering reconnection: ${error.message}"
+                    )
                     onConnectionLost()
                     ScrcpyEventBus.pushEvent(DeviceDisconnected)
                 } else {
@@ -159,7 +170,10 @@ internal class VideoDecoderPlayback(
             }
 
             error.message?.contains("Read timed out") == true -> {
-                LogManager.w(LogTags.VIDEO_DECODER, "Video stream timed out (device screen paused), continue waiting...")
+                LogManager.w(
+                    LogTags.VIDEO_DECODER,
+                    "Video stream timed out (device screen paused), continue waiting..."
+                )
             }
 
             else -> {

@@ -61,16 +61,6 @@ class PairingEndpointMetadataManager(
         val MDNS_PAIRINGS = stringPreferencesKey("mdns_pairing_records")
     }
 
-    suspend fun getAll(): Map<String, PairingEndpointMetadata> =
-        context.pairingEndpointMetadataDataStore.data
-            .map { preferences ->
-                val raw = preferences[Keys.METADATA] ?: "[]"
-                runCatching {
-                    json.decodeFromString<List<PairingEndpointMetadata>>(raw)
-                        .associateBy { it.endpoint.trim().lowercase() }
-                }.getOrDefault(emptyMap())
-            }.first()
-
     suspend fun exportBackup(): PairingEndpointMetadataBackup =
         context.pairingEndpointMetadataDataStore.data
             .map { preferences ->
@@ -177,8 +167,6 @@ class PairingEndpointMetadataManager(
                 decodeMdnsPairings(preferences[Keys.MDNS_PAIRINGS])
                     .mapTo(linkedSetOf()) { it.deviceKey }
             }
-
-    suspend fun getPairedMdnsDeviceKeys(): Set<String> = pairedMdnsDeviceKeysFlow.first()
 
     suspend fun listRecentSuccessfulPairings(): List<PairingHistoryItem> =
         context.pairingEndpointMetadataDataStore.data

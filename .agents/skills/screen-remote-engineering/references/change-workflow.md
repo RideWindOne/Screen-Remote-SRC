@@ -1,6 +1,7 @@
 # Change Workflow
 
-Use this reference for specs, multi-file implementation, behavior-preserving simplification, deletion/migration, debugging, and review inside the Screen-Remote subrepository.
+Use this reference for specs, multi-file implementation, behavior-preserving simplification,
+deletion/migration, debugging, and review inside the Screen-Remote subrepository.
 
 ## Define the scope
 
@@ -12,11 +13,13 @@ Before editing, state:
 - risk level: local, cross-layer, runtime-chain, build/native, or external dependency;
 - observable acceptance checks.
 
-If requirements or ownership are ambiguous, resolve that ambiguity before coding. Do not create a formal spec for a tiny local edit.
+If requirements or ownership are ambiguous, resolve that ambiguity before coding. Do not create a
+formal spec for a tiny local edit.
 
 ## Plan significant work
 
-Write a compact spec before a new feature, architectural boundary, or change that crosses multiple runtime stages. Include:
+Write a compact spec before a new feature, architectural boundary, or change that crosses multiple
+runtime stages. Include:
 
 1. user-visible behavior;
 2. non-goals;
@@ -25,7 +28,8 @@ Write a compact spec before a new feature, architectural boundary, or change tha
 5. verification evidence;
 6. ordered implementation slices.
 
-Keep the spec in the conversation by default. Create a repository artifact only when the user requests it or the task must survive across sessions.
+Keep the spec in the conversation by default. Create a repository artifact only when the user
+requests it or the task must survive across sessions.
 
 ## Implement incrementally
 
@@ -37,7 +41,8 @@ Prefer thin, risk-first slices:
 4. inspect the diff for scope growth;
 5. continue only after the slice is stable.
 
-Keep the tree compilable. Do not accumulate a large unverified rewrite. Do not commit between slices unless the user explicitly asks for commits.
+Keep the tree compilable. Do not accumulate a large unverified rewrite. Do not commit between slices
+unless the user explicitly asks for commits.
 
 ## Simplify without changing behavior
 
@@ -64,11 +69,13 @@ Avoid:
 - splitting one readable flow across many low-information files;
 - new `Manager`, `Facade`, `Repository`, or `UseCase` types that only forward calls.
 
-Existing tests should normally remain unchanged for a pure simplification. Change a test only when it asserts an internal shape rather than observable behavior, and explain why.
+Existing tests should normally remain unchanged for a pure simplification. Change a test only when
+it asserts an internal shape rather than observable behavior, and explain why.
 
 ## Remove deprecated or migrated code
 
-This project does not preserve old versions, old data shapes, old storage paths, or historical behavior by default.
+This project does not preserve old versions, old data shapes, old storage paths, or historical
+behavior by default.
 
 For a removal:
 
@@ -81,15 +88,20 @@ For a removal:
 
 ## Review a change
 
-Detect scope in this order: staged app diff, unstaged app diff, requested ref/branch diff, then user-specified files. Include the outer repository only when it has relevant changes.
+Detect scope in this order: staged app diff, unstaged app diff, requested ref/branch diff, then
+user-specified files. Include the outer repository only when it has relevant changes.
 
 Review these axes:
 
-1. **Correctness:** state transitions, null/error cases, races, resource ownership, Android lifecycle.
+1. **Correctness:** state transitions, null/error cases, races, resource ownership, Android
+   lifecycle.
 2. **Boundary:** correct placement among `core`, `infrastructure`, `feature`, `service`, and `app`.
-3. **Single source of truth:** no duplicated configuration, capability, negotiated state, text, or constants.
-4. **Complexity:** no unnecessary wrapper, indirection, long conditional appendage, or cross-file scattering.
-5. **Android/Compose:** stable state ownership, lifecycle-aware collection, no heavy work during composition, design-system consistency.
+3. **Single source of truth:** no duplicated configuration, capability, negotiated state, text, or
+   constants.
+4. **Complexity:** no unnecessary wrapper, indirection, long conditional appendage, or cross-file
+   scattering.
+5. **Android/Compose:** stable state ownership, lifecycle-aware collection, no heavy work during
+   composition, design-system consistency.
 6. **Runtime safety:** apply `connection-safety.md` when the remote-control chain is touched.
 7. **Tests:** verify behavior and regression risk rather than implementation trivia.
 8. **Scope:** reject unrelated formatting, drive-by cleanup, and accidental submodule changes.

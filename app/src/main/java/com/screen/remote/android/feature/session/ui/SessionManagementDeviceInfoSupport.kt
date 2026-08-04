@@ -8,12 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.screen.remote.android.core.common.LogTags
+import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.SectionCard
 import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.core.common.LogTags
-import com.screen.remote.android.core.common.manager.LogManager
 import dadb.helper.RemoteDeviceField
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -230,13 +230,6 @@ private fun parseKeyValueBlock(text: String): Map<String, String> =
                 null
             }
         }.toMap()
-
-private fun parseKeyValueEqualsBlock(text: String): Map<String, String> =
-    Regex("""([A-Za-z][A-Za-z0-9_]+)=([^=\n]+?)(?=\s+[A-Za-z][A-Za-z0-9_]+=|$)""")
-        .findAll(text)
-        .associate { match ->
-            match.groupValues[1].trim() to match.groupValues[2].trim()
-        }
 
 private fun formatWmValue(
     raw: String,
@@ -457,23 +450,6 @@ internal fun formatWifiSummary(
     listOf(frequency, linkSpeed)
         .filter { it.isNotBlank() }
         .joinToString(" / ")
-
-private fun formatWifiSsid(raw: String): String {
-    val value =
-        Regex("""SSID:\s*"?(.*?)(?:"?\s*,|\s+BSSID:|$)""", RegexOption.IGNORE_CASE)
-            .find(raw)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.trim()
-            .orEmpty()
-    return when {
-        value.isBlank() -> ""
-        value.equals("<unknown ssid>", ignoreCase = true) -> ""
-        value.equals("<none>", ignoreCase = true) -> ""
-        value.equals("null", ignoreCase = true) -> ""
-        else -> value
-    }
-}
 
 private fun formatRefreshRate(raw: String): String {
     val rate =

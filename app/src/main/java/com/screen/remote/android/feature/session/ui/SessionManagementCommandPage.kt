@@ -39,9 +39,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,47 +50,45 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import com.screen.remote.android.core.domain.model.CustomShellCommand
 import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
-import com.screen.remote.android.core.domain.model.CustomShellCommand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -144,14 +142,6 @@ private val SessionManagementCommandTextColor @Composable get() = sessionManagem
 private val SessionManagementCommandHintColor @Composable get() = sessionManagementTerminalPalette().hint
 private val SessionManagementCommandPromptColor @Composable get() = sessionManagementTerminalPalette().accent
 private val SessionManagementCommandErrorColor @Composable get() = sessionManagementTerminalPalette().error
-
-data class ManagementCommandRecord(
-    val command: String,
-    val output: String,
-    val isSuccess: Boolean,
-    val executedAtMillis: Long,
-    val durationMs: Long,
-)
 
 internal enum class TerminalOutputTone {
     PROMPT,
@@ -833,67 +823,6 @@ private fun terminalLineText(
             )
         }
     }
-
-@Composable
-private fun SessionManagementTerminalEntry(record: ManagementCommandRecord) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        // 命令行
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = "$",
-                style =
-                    MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = SessionManagementTerminalTextTokens.monospace,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                color = SessionManagementCommandPromptColor,
-            )
-            Text(
-                text = record.command,
-                style =
-                    MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = SessionManagementTerminalTextTokens.monospace,
-                    ),
-                color = SessionManagementCommandTextColor,
-            )
-        }
-
-        // 输出
-        if (record.output.isNotBlank()) {
-            Text(
-                text = record.output,
-                style =
-                    MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = SessionManagementTerminalTextTokens.monospace,
-                    ),
-                color =
-                    if (record.isSuccess) {
-                        SessionManagementCommandTextColor
-                    } else {
-                        SessionManagementCommandErrorColor
-                    },
-            )
-        }
-
-        // 状态行
-        Text(
-            text = "# ${if (record.isSuccess) "✓" else "✗"} ${record.executedAtLabel()} (${
-                formatCommandDuration(
-                    record.durationMs,
-                )
-            })",
-            style =
-                MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = SessionManagementTerminalTextTokens.monospace,
-                ),
-            color = SessionManagementCommandHintColor,
-        )
-    }
-}
 
 @Composable
 private fun SessionManagementTerminalInputLine(
@@ -1670,78 +1599,15 @@ internal fun nextTerminalCommandHistory(
 ): List<String> =
     (listOf(command) + history.filterNot { it == command })
 
-internal suspend fun executeManagementShellCommand(command: String): ManagementCommandRecord {
-    val normalizedCommand = command.trim()
-    val executedAtMillis = System.currentTimeMillis()
-    val result = executeManagementShell(normalizedCommand)
-    val durationMs = (System.currentTimeMillis() - executedAtMillis).coerceAtLeast(0L)
-
-    return result.fold(
-        onSuccess = { output ->
-            ManagementCommandRecord(
-                command = normalizedCommand,
-                output = normalizeManagementCommandOutput(output, success = true),
-                isSuccess = true,
-                executedAtMillis = executedAtMillis,
-                durationMs = durationMs,
-            )
-        },
-        onFailure = { error ->
-            ManagementCommandRecord(
-                command = normalizedCommand,
-                output = normalizeManagementCommandOutput(error.message.orEmpty(), success = false),
-                isSuccess = false,
-                executedAtMillis = executedAtMillis,
-                durationMs = durationMs,
-            )
-        },
-    )
-}
-
-private fun normalizeManagementCommandOutput(
-    raw: String,
-    success: Boolean,
-): String {
-    val normalized =
-        raw
-            .trim()
-            .ifBlank {
-                if (success) {
-                    ManagementTexts.Commands.COMMAND_COMPLETED_NO_OUTPUT.get()
-                } else {
-                    ManagementTexts.Commands.COMMAND_FAILED.get()
-                }
-            }
-
-    if (normalized.length <= SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT) {
-        return normalized
-    }
-
-    return buildString {
-        append(normalized.take(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT))
-        append("\n\n")
-        append(ManagementTexts.Commands.OUTPUT_TRUNCATED.format(SESSION_MANAGEMENT_COMMAND_OUTPUT_LIMIT))
-    }
-}
-
-private fun formatCommandDuration(durationMs: Long): String =
-    when {
-        durationMs < 1_000L -> "${durationMs}ms"
-        else -> String.format(Locale.US, "%.2fs", durationMs / 1_000f)
-    }
-
-private fun ManagementCommandRecord.executedAtLabel(): String =
-    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(executedAtMillis))
-
 private fun managementCommandPresets(): List<ManagementCommandPreset> =
     listOf(
         ManagementCommandPreset(
             title = ManagementTexts.Commands.DEVICE_OVERVIEW.get(),
             description = ManagementTexts.Commands.QUICK_CHECK_BRAND_MODEL_ANDROID_VERSION.get(),
             command =
-                $$"echo Manufacturer: $(getprop ro.product.manufacturer) && " +
-                    $$"echo Model: $(getprop ro.product.model) && " +
-                    $$"echo Android: $(getprop ro.build.version.release)",
+                "echo Manufacturer: $(getprop ro.product.manufacturer) && " +
+                    "echo Model: $(getprop ro.product.model) && " +
+                    "echo Android: $(getprop ro.build.version.release)",
             icon = Icons.Default.Android,
         ),
         ManagementCommandPreset(

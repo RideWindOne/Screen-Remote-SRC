@@ -13,8 +13,6 @@ enum class SessionComponent {
 sealed class ComponentState {
     data object Idle : ComponentState()
 
-    data object Starting : ComponentState()
-
     data object Running : ComponentState()
 
     data object Connected : ComponentState()

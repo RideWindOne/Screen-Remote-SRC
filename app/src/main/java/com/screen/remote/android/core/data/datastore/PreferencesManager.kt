@@ -12,8 +12,8 @@ import com.screen.remote.android.core.domain.model.AppLanguage
 import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.CustomShellCommand
 import com.screen.remote.android.core.domain.model.ThemeMode
-import com.screen.remote.android.core.update.UpdateChannel
 import com.screen.remote.android.core.update.GitHubReleaseInfo
+import com.screen.remote.android.core.update.UpdateChannel
 import com.screen.remote.android.core.update.UpdateCheckCache
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -49,8 +49,8 @@ class PreferencesManager(
     }
 
     val lastSeenOnboardingVersionFlow: Flow<String?> =
-        context.dataStore.data.map {
-            preferences -> preferences[Keys.LAST_SEEN_ONBOARDING_VERSION]
+        context.dataStore.data.map { preferences ->
+            preferences[Keys.LAST_SEEN_ONBOARDING_VERSION]
 //            "v4.4.2" // 修改这里临时预览更新页面
         }
 

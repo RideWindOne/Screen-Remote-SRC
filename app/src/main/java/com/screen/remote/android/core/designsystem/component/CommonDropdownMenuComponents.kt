@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -85,7 +85,10 @@ fun IOSStyledDropdownMenuItem(
             modifier
                 .wrapContentSize()
                 .clickable(onClick = onClick)
-                .padding(horizontal = IosDesignTokens.standardHorizontalPadding, vertical = IosDesignTokens.compactSpacing),
+                .padding(
+                    horizontal = IosDesignTokens.standardHorizontalPadding,
+                    vertical = IosDesignTokens.compactSpacing
+                ),
         contentAlignment = Alignment.Center,
     ) {
         val style =
@@ -103,20 +106,3 @@ fun IOSStyledDropdownMenuItem(
     }
 }
 
-@Composable
-fun IOSStyledDropdownMenuItem(
-    text: @Composable () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .wrapContentSize()
-                .clickable(onClick = onClick)
-                .padding(horizontal = IosDesignTokens.standardHorizontalPadding, vertical = IosDesignTokens.compactSpacing),
-        contentAlignment = Alignment.Center,
-    ) {
-        text()
-    }
-}

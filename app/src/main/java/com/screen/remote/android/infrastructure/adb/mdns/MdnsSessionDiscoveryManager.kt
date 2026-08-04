@@ -263,7 +263,10 @@ class MdnsSessionDiscoveryManager private constructor(
             .onSuccess {
                 scheduleSettleLocked(generation)
                 recomputePresenceLocked()
-                LogManager.i(LogTags.ADB_CONNECTION, "Started shared mDNS discovery: reason=$reason generation=$generation")
+                LogManager.i(
+                    LogTags.ADB_CONNECTION,
+                    "Started shared mDNS discovery: reason=$reason generation=$generation"
+                )
             }.onFailure { error ->
                 latestMdnsState = AdbMdnsState(status = AdbMdnsStatus.FAILED)
                 recomputePresenceLocked()
@@ -311,7 +314,7 @@ class MdnsSessionDiscoveryManager private constructor(
         settleJob?.cancel()
         settleJob =
             scope.launch {
-                delay(REFRESH_CONFIRMATION_WINDOW_MS)
+                delay(REFRESH_CONFIRMATION_WINDOW_MS.milliseconds)
                 synchronized(lifecycleLock) {
                     if (generation != refreshGeneration || !monitorStarted) return@synchronized
                     refreshing = false
@@ -320,7 +323,10 @@ class MdnsSessionDiscoveryManager private constructor(
                         consecutiveFailures = 0
                     }
                     recomputePresenceLocked()
-                    LogManager.d(LogTags.ADB_CONNECTION, "Completed mDNS discovery confirmation: generation=$generation")
+                    LogManager.d(
+                        LogTags.ADB_CONNECTION,
+                        "Completed mDNS discovery confirmation: generation=$generation"
+                    )
                 }
             }
     }
@@ -338,7 +344,7 @@ class MdnsSessionDiscoveryManager private constructor(
         )
         recoveryJob =
             scope.launch {
-                delay(delayMillis)
+                delay(delayMillis.milliseconds)
                 synchronized(lifecycleLock) {
                     recoveryJob = null
                     if (monitor !== failedMonitor || generation != refreshGeneration || !shouldMonitorLocked()) {
@@ -383,7 +389,7 @@ class MdnsSessionDiscoveryManager private constructor(
         periodicRefreshJob =
             scope.launch {
                 while (isActive) {
-                    delay(FOREGROUND_REFRESH_INTERVAL_MS)
+                    delay(FOREGROUND_REFRESH_INTERVAL_MS.milliseconds)
                     synchronized(lifecycleLock) {
                         if (monitorStarted && shouldMonitorLocked()) {
                             restartMonitoringLocked("periodic foreground confirmation")
@@ -426,7 +432,7 @@ class MdnsSessionDiscoveryManager private constructor(
             networkRefreshJob?.cancel()
             networkRefreshJob =
                 scope.launch {
-                    delay(NETWORK_REFRESH_DEBOUNCE_MS)
+                    delay(NETWORK_REFRESH_DEBOUNCE_MS.milliseconds)
                     synchronized(lifecycleLock) {
                         networkRefreshJob = null
                         if (monitorStarted && shouldMonitorLocked()) {

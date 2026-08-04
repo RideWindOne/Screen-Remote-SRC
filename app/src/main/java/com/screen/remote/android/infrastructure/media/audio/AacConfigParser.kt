@@ -18,7 +18,8 @@ internal object AacConfigParser {
             if (objectType == 31) objectType = 32 + bits.read(6)
             if (objectType <= 0) return null
             val frequencyIndex = bits.read(4)
-            val sampleRate = if (frequencyIndex == 15) bits.read(24) else sampleRates.getOrNull(frequencyIndex) ?: return null
+            val sampleRate =
+                if (frequencyIndex == 15) bits.read(24) else sampleRates.getOrNull(frequencyIndex) ?: return null
             val channelConfiguration = bits.read(4)
             if (sampleRate <= 0 || channelConfiguration !in 1..7) return null
             val channelCount = if (channelConfiguration == 7) 8 else channelConfiguration

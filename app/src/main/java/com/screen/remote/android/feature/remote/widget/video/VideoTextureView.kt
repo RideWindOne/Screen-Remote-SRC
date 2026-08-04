@@ -2,8 +2,8 @@ package com.screen.remote.android.feature.remote.widget.video
 
 import android.graphics.SurfaceTexture
 import android.view.MotionEvent
-import android.view.View
 import android.view.TextureView
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier

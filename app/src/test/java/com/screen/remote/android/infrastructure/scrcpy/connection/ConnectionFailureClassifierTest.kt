@@ -1,9 +1,9 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection
 
-import java.io.IOException
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 class ConnectionFailureClassifierTest {
     @Test

@@ -8,7 +8,10 @@ class ScrcpyProfilePolicyTest {
     fun `default options and profile use four megabits per second`() {
         val candidate = ConnectionCandidate(ConnectionTransport.TCP, "192.168.1.2", 5555)
 
-        assertEquals(4_000_000, ScrcpyOptions("session-1", connectionCandidates = listOf(candidate)).config.videoBitRate)
+        assertEquals(
+            4_000_000,
+            ScrcpyOptions("session-1", connectionCandidates = listOf(candidate)).config.videoBitRate
+        )
         assertEquals(4_000_000, ScrcpyProfile.default().config.videoBitRate)
     }
 

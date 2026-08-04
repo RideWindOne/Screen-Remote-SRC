@@ -1,8 +1,8 @@
 package com.screen.remote.android.infrastructure.scrcpy.controller
 
-import java.net.Socket
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.net.Socket
 
 class ControlSocketStreamingPolicyTest {
     @Test

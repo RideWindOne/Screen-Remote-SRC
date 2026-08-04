@@ -2,16 +2,16 @@ package com.screen.remote.android.infrastructure.scrcpy.stream
 
 import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
 import dadb.AdbShellPacket
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
-import java.net.Socket
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.net.Socket
 
 class ScrcpyStreamProtocolTest {
     @Test

@@ -24,11 +24,17 @@
     },
     "wiki_action": {
       "type": "string",
-      "enum": ["updated", "no_update", "blocked"]
+      "enum": [
+        "updated",
+        "no_update",
+        "blocked"
+      ]
     },
     "wiki_pages": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "wiki_reason": {
       "type": "string",

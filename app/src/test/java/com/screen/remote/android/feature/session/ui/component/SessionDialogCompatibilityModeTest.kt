@@ -2,9 +2,9 @@ package com.screen.remote.android.feature.session.ui.component
 
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SessionDialogCompatibilityModeTest {
@@ -63,5 +63,16 @@ class SessionDialogCompatibilityModeTest {
         assertTrue(state.config.showFloatingBall)
         assertEquals(ScreenRotationPolicy.TARGET, state.config.screenRotationPolicy)
         assertTrue(state.config.keepDeviceAwake)
+    }
+
+    @Test
+    fun enablingCompatibilityModeKeepsStartAppForLaterLaunch() {
+        val state =
+            SessionDialogState().apply {
+                updateConfig { copy(startApp = "  com.example.app/.MainActivity  ") }
+                updateCompatibilityMode(true)
+            }
+
+        assertEquals("com.example.app/.MainActivity", state.toSessionData().config.startApp)
     }
 }

@@ -134,10 +134,12 @@ internal fun SessionManagementFileRow(
                     } else {
                         Color.Transparent
                     },
-                ).combinedClickable(
+                )
+                .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongPress,
-                ).padding(horizontal = 16.dp, vertical = FilesRowVerticalPadding),
+                )
+                .padding(horizontal = 16.dp, vertical = FilesRowVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -222,17 +224,23 @@ private fun remoteFileIconPresentation(entry: RemoteFileEntry): RemoteFileIconPr
         "apk", "apks", "xapk" -> RemoteFileIconPresentation(Icons.Default.Android, AppColors.success)
         "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus" ->
             RemoteFileIconPresentation(Icons.Default.MusicNote, AppColors.commandMemoryAccent)
+
         "mov", "mp4", "m4v", "mkv", "avi", "webm", "3gp" ->
             RemoteFileIconPresentation(Icons.Default.Movie, AppColors.commandWindowAccent)
+
         "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif" ->
             RemoteFileIconPresentation(Icons.Default.Photo, AppColors.info)
+
         "pdf" -> RemoteFileIconPresentation(Icons.Default.PictureAsPdf, AppColors.destructive)
         "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz" ->
             RemoteFileIconPresentation(Icons.Default.Archive, AppColors.warning)
+
         "xml", "json", "kt", "java", "js", "ts", "html", "css", "sh", "py", "yaml", "yml" ->
             RemoteFileIconPresentation(Icons.Default.Code, AppColors.commandAppAccent)
+
         "txt", "log", "md", "csv", "ini", "conf" ->
             RemoteFileIconPresentation(Icons.Default.Description, AppColors.commandDeviceAccent)
+
         else ->
             RemoteFileIconPresentation(
                 Icons.AutoMirrored.Filled.InsertDriveFile,
@@ -259,7 +267,8 @@ internal fun SessionManagementFileListSkeleton() {
                             .padding(start = 64.dp, end = 16.dp)
                             .background(
                                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                            ).height(1.dp),
+                            )
+                            .height(1.dp),
                 )
             }
         }
@@ -275,10 +284,10 @@ private fun SessionManagementFilePlaceholderRow(isDirectory: Boolean) {
                 .padding(vertical = FilesRowVerticalPadding),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color =
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color =
                 if (isDirectory) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 } else {
@@ -347,7 +356,8 @@ internal fun SessionManagementBottomIconAction(
             Modifier
                 .clip(
                     RoundedCornerShape(12.dp),
-                ).clickable(onClick = onClick)
+                )
+                .clickable(onClick = onClick)
                 .padding(horizontal = 4.dp, vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -739,7 +749,7 @@ private fun decodeSampledPreviewBitmap(
     val safeTargetHeight = targetHeightPx.coerceAtLeast(1)
     while (
         bounds.outWidth / (sampleSize * 2) >= safeTargetWidth &&
-            bounds.outHeight / (sampleSize * 2) >= safeTargetHeight
+        bounds.outHeight / (sampleSize * 2) >= safeTargetHeight
     ) {
         sampleSize *= 2
     }

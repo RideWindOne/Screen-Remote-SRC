@@ -2,13 +2,13 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
     android:background="@drawable/floating_menu_bg"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
     android:paddingStart="7dp"
     android:paddingTop="0.5dp"
     android:paddingEnd="7dp"
-    android:paddingBottom="0.5dp"
-    android:gravity="center_horizontal">
+    android:paddingBottom="0.5dp">
 
     <LinearLayout
         android:id="@+id/layout_more_actions"
@@ -88,10 +88,10 @@
             android:layout_width="40.dp"
             android:layout_height="40.dp"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_toolbar_back"
-            android:scaleType="centerInside"
+            android:contentDescription="@string/floating_menu_back"
             android:padding="7dp"
-            android:contentDescription="@string/floating_menu_back" />
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_back" />
 
         <ImageButton
             android:id="@+id/btn_home"
@@ -99,10 +99,10 @@
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_toolbar_home"
-            android:scaleType="centerInside"
+            android:contentDescription="@string/floating_menu_home"
             android:padding="7dp"
-            android:contentDescription="@string/floating_menu_home" />
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_home" />
 
         <ImageButton
             android:id="@+id/btn_recent"
@@ -110,10 +110,10 @@
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_toolbar_switch"
-            android:scaleType="centerInside"
+            android:contentDescription="@string/floating_menu_recents"
             android:padding="7dp"
-            android:contentDescription="@string/floating_menu_recents" />
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_switch" />
 
         <ImageButton
             android:id="@+id/btn_keyboard"
@@ -121,10 +121,10 @@
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_toolbar_keyboard"
-            android:scaleType="centerInside"
+            android:contentDescription="@string/floating_menu_keyboard"
             android:padding="7dp"
-            android:contentDescription="@string/floating_menu_keyboard" />
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_keyboard" />
 
         <ImageButton
             android:id="@+id/btn_menu"
@@ -132,10 +132,10 @@
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:src="@drawable/ic_toolbar_more"
-            android:scaleType="centerInside"
+            android:contentDescription="@string/floating_menu_options"
             android:padding="7dp"
-            android:contentDescription="@string/floating_menu_options" />
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_more" />
 
         <ImageButton
             android:id="@+id/btn_close"

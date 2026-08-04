@@ -15,12 +15,7 @@ class VideoNalParser {
         const val H265_NAL_VPS = 32
         const val H265_NAL_SPS = 33
         const val H265_NAL_PPS = 34
-        const val H265_NAL_BLA_W_LP = 16
-        const val H265_NAL_BLA_W_RADL = 17
-        const val H265_NAL_BLA_N_LP = 18
         const val H265_NAL_IDR_W_RADL = 19
-        const val H265_NAL_IDR_N_LP = 20
-        const val H265_NAL_CRA_NUT = 21
 
     }
 
@@ -65,21 +60,11 @@ class VideoNalParser {
         return if (offset > 0 && nalUnit.size > offset) (nalUnit[offset].toInt() and 0x7E) shr 1 else -1
     }
 
-    /**
-     * 检查是否为 H.264 关键帧
-     */
-    fun isH264KeyFrame(nalType: Int): Boolean = nalType == H264_NAL_IDR
-
-    /**
-     * 检查是否为 H.265 关键帧
-     */
-    fun isH265KeyFrame(nalType: Int): Boolean =
-        nalType in H265_NAL_BLA_W_LP..H265_NAL_CRA_NUT
-
     private fun startCodeLength(data: ByteArray): Int =
         when {
             data.size >= 4 && data[0] == 0.toByte() && data[1] == 0.toByte() &&
                 data[2] == 0.toByte() && data[3] == 1.toByte() -> 4
+
             data.size >= 3 && data[0] == 0.toByte() && data[1] == 0.toByte() && data[2] == 1.toByte() -> 3
             else -> 0
         }

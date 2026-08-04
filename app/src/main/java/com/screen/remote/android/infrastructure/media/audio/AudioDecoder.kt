@@ -50,10 +50,17 @@ class AudioDecoder(
             onPlaybackReady = ::reportStarted,
         )
 
-    @Volatile private var decoder: MediaCodec? = null
-    @Volatile private var isRunning = false
-    @Volatile private var isStopped = false
-    @Volatile private var lifecycleReportedStarted = false
+    @Volatile
+    private var decoder: MediaCodec? = null
+
+    @Volatile
+    private var isRunning = false
+
+    @Volatile
+    private var isStopped = false
+
+    @Volatile
+    private var lifecycleReportedStarted = false
 
     var onConnectionLost: (() -> Unit)? = null
     var onDecoderSelected: ((String) -> Unit)?

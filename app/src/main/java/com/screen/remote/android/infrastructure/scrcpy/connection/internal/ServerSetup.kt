@@ -3,11 +3,11 @@ package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.core.domain.model.CodecCatalog
 import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.media.codec.CodecSelector
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
@@ -15,8 +15,8 @@ import com.screen.remote.android.infrastructure.scrcpy.protocol.ScrcpyProtocol
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.AdbIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
-import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerPushContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerPushContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerStartContext
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import kotlinx.coroutines.async
@@ -323,9 +323,9 @@ internal fun buildVideoCodecOptions(
 ): String? {
     val userOptions =
         userCodecOptions
-        .split(',')
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
 
     if (!isMtkAvcEncoder(videoEncoder, videoCodec)) {
         return userOptions.takeIf { it.isNotEmpty() }?.joinToString(",")

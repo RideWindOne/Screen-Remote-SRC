@@ -261,7 +261,11 @@ internal class VideoDecoderConfigurator(
         }
 
         releaseDecoder(candidate)
-        throw VideoDecoderConfigurationException(codecLabel, "Maximum number of candidate attempts exceeded", lastFailure)
+        throw VideoDecoderConfigurationException(
+            codecLabel,
+            "Maximum number of candidate attempts exceeded",
+            lastFailure
+        )
     }
 
     private fun createFailure(codecLabel: String): VideoDecoderConfigurationException =
@@ -272,8 +276,6 @@ internal class VideoDecoderConfigurator(
         runCatching { decoder.stop() }
         runCatching { decoder.release() }
     }
-
-
 
 
     private fun resolveSurface(

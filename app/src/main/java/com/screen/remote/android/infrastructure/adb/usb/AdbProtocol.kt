@@ -19,8 +19,6 @@ object AdbProtocol {
     // ADB 消息头长度
     const val ADB_HEADER_LENGTH = 24
 
-    // 认证类型
-    const val AUTH_TYPE_TOKEN = 1
     const val AUTH_TYPE_SIGNATURE = 2
     const val AUTH_TYPE_RSA_PUBLIC = 3
 

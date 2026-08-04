@@ -19,8 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.constants.AppTextSizes
 import com.screen.remote.android.core.common.manager.rememberText
@@ -129,7 +129,8 @@ fun ConnectionActionOverlay(
                         .background(
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                             shape = RoundedCornerShape(24.dp),
-                        ).padding(horizontal = 20.dp, vertical = 18.dp),
+                        )
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
             ) {
                 Text(
                     text = title,

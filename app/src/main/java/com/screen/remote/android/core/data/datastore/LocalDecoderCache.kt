@@ -33,7 +33,10 @@ object LocalDecoderCache {
 
         return if (data.isValid(runtimeSignature) && data.videoDecoders.isNotEmpty()) {
             // 使用持久化数据
-            LogManager.d(LogTags.VIDEO_DECODER, "Use persistent list of local video decoders (${data.videoDecoders.size})")
+            LogManager.d(
+                LogTags.VIDEO_DECODER,
+                "Use persistent list of local video decoders (${data.videoDecoders.size})"
+            )
             data.videoDecoders
         } else {
             // 重新检测并保存
@@ -56,7 +59,10 @@ object LocalDecoderCache {
 
         return if (data.isValid(runtimeSignature) && data.audioDecoders.isNotEmpty()) {
             // 使用持久化数据
-            LogManager.d(LogTags.AUDIO_DECODER, "Use a persistent list of local audio decoders (${data.audioDecoders.size})")
+            LogManager.d(
+                LogTags.AUDIO_DECODER,
+                "Use a persistent list of local audio decoders (${data.audioDecoders.size})"
+            )
             data.audioDecoders
         } else {
             // 重新检测并保存
@@ -130,6 +136,7 @@ object LocalDecoderCache {
                 when {
                     name.startsWith("OMX.google", ignoreCase = true) ||
                         name.startsWith("c2.android", ignoreCase = true) -> CodecAcceleration.SOFTWARE
+
                     else -> CodecAcceleration.UNKNOWN
                 }
             }

@@ -47,10 +47,6 @@ class ScrcpyController(
         transport.stop()
     }
 
-    fun destroy() {
-        transport.destroy()
-    }
-
     fun sendTouchEvent(
         action: Int,
         pointerId: Long,

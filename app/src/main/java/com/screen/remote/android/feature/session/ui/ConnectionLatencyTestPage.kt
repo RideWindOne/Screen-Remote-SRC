@@ -144,7 +144,9 @@ private fun ConnectionLatencyEndpointCard(endpoint: ConnectionLatencyEndpointSta
                     text =
                         "连接：中位 ${median(endpoint.connectSamples).oneDecimal()} ms，" +
                             "平均 ${endpoint.connectSamples.average().oneDecimal()} ms，" +
-                            "范围 ${endpoint.connectSamples.minOrNull()!!.oneDecimal()}–${endpoint.connectSamples.maxOrNull()!!.oneDecimal()} ms",
+                            "范围 ${
+                                endpoint.connectSamples.minOrNull()!!.oneDecimal()
+                            }–${endpoint.connectSamples.maxOrNull()!!.oneDecimal()} ms",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -153,7 +155,9 @@ private fun ConnectionLatencyEndpointCard(endpoint: ConnectionLatencyEndpointSta
                     text =
                         "连接后 RTT：中位 ${median(endpoint.shellSamples).oneDecimal()} ms，" +
                             "平均 ${endpoint.shellSamples.average().oneDecimal()} ms，" +
-                            "范围 ${endpoint.shellSamples.minOrNull()!!.oneDecimal()}–${endpoint.shellSamples.maxOrNull()!!.oneDecimal()} ms，" +
+                            "范围 ${
+                                endpoint.shellSamples.minOrNull()!!.oneDecimal()
+                            }–${endpoint.shellSamples.maxOrNull()!!.oneDecimal()} ms，" +
                             "样本 ${endpoint.shellSamples.size}",
                     style = MaterialTheme.typography.bodyMedium,
                 )

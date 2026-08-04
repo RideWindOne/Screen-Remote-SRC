@@ -1,7 +1,7 @@
 package com.screen.remote.android.feature.session.ui.component
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
@@ -40,7 +40,6 @@ import com.screen.remote.android.core.designsystem.component.IOSSwitch
 private val DialogRowLabelMaxWidth = IosDesignTokens.dialogLabelMaxWidth
 private val DialogRowSpacing = IosDesignTokens.compactSpacing
 private val DialogTrailingActionHorizontalPadding = IosDesignTokens.dialogHeaderHorizontalPadding
-private val DialogBinaryChoiceWidth = 116.dp
 private val DialogTernaryChoiceWidth = 156.dp
 private val DialogBinaryChoiceHeight = 32.dp
 private val DialogBinaryChoiceInset = 2.dp
@@ -75,59 +74,6 @@ fun CompactSwitchRow(
             onCheckedChange = onCheckedChange,
             enabled = enabled,
         )
-    }
-}
-
-@Composable
-fun CompactBinaryChoiceRow(
-    text: String,
-    firstChoice: String,
-    secondChoice: String,
-    secondChoiceSelected: Boolean,
-    onChoiceChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    helpText: String? = null,
-) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .height(AppDimens.listItemHeight)
-                .padding(horizontal = IosDesignTokens.compactHorizontalPadding),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DialogRowLabel(
-            label = text,
-            helpText = helpText,
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .padding(end = DialogRowSpacing),
-        )
-
-        Row(
-            modifier =
-                Modifier
-                    .width(DialogBinaryChoiceWidth)
-                    .height(DialogBinaryChoiceHeight)
-                    .clip(RoundedCornerShape(IosDesignTokens.segmentedControlContainerCornerRadius))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .selectableGroup()
-                    .padding(DialogBinaryChoiceInset),
-        ) {
-            BinaryChoiceButton(
-                text = firstChoice,
-                selected = !secondChoiceSelected,
-                onClick = { onChoiceChange(false) },
-                modifier = Modifier.weight(1f),
-            )
-            BinaryChoiceButton(
-                text = secondChoice,
-                selected = secondChoiceSelected,
-                onClick = { onChoiceChange(true) },
-                modifier = Modifier.weight(1f),
-            )
-        }
     }
 }
 
@@ -287,26 +233,6 @@ fun LabeledRow(
 }
 
 @Composable
-fun LabeledSwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    helpText: String? = null,
-) {
-    LabeledRow(
-        label = label,
-        modifier = modifier,
-        helpText = helpText,
-    ) {
-        IOSSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
-    }
-}
-
-@Composable
 fun LabeledClickableRow(
     label: String,
     trailingText: String,
@@ -395,14 +321,14 @@ private fun DialogTrailingAction(
     leadingIconTint: Color? = null,
 ) {
     Row(
-            modifier =
-                modifier
-                    .fillMaxHeight()
-                    .clickable(onClick = onClick)
-                    .padding(
-                        start = DialogTrailingActionHorizontalPadding,
-                        end = DialogTrailingActionHorizontalPadding,
-                    ),
+        modifier =
+            modifier
+                .fillMaxHeight()
+                .clickable(onClick = onClick)
+                .padding(
+                    start = DialogTrailingActionHorizontalPadding,
+                    end = DialogTrailingActionHorizontalPadding,
+                ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End,
     ) {

@@ -105,8 +105,10 @@ class AppUpdateDownloader(
             downloadManager.query(DownloadManager.Query().setFilterById(downloadId)).use { cursor ->
                 if (!cursor.moveToFirst()) throw IOException("Update download disappeared")
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                val reportedTotal = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                val downloaded =
+                    cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val reportedTotal =
+                    cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                 val total = reportedTotal.takeIf { it > 0 } ?: expectedSize.takeIf { it > 0 }
                 val progress = total?.let { ((downloaded.coerceAtLeast(0) * 100) / it).toInt().coerceIn(0, 100) }
                 withContext(Dispatchers.Main.immediate) { onProgress(progress) }

@@ -1,6 +1,6 @@
 /*
  * 音频编解码器测试工具
- * 
+ *
  * 从 CodecTestUtils.kt 拆分而来
  * 职责：音频编解码器查询和测试
  */
@@ -200,7 +200,13 @@ suspend fun testAudioDecoder(
                             if (inputBuffer != null) {
                                 inputBuffer.clear()
                                 inputBuffer.put(encodedData[frameIndex])
-                                decoder.queueInputBuffer(inputIndex, 0, encodedData[frameIndex].size, presentationTimeUs, 0)
+                                decoder.queueInputBuffer(
+                                    inputIndex,
+                                    0,
+                                    encodedData[frameIndex].size,
+                                    presentationTimeUs,
+                                    0
+                                )
                                 presentationTimeUs += 20000L
                                 frameIndex++
                             }

@@ -1,15 +1,7 @@
+import com.android.build.api.variant.FilterConfiguration
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Properties
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.provider.Property
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.TaskAction
-import com.android.build.api.variant.FilterConfiguration
 
 plugins {
     alias(libs.plugins.android.application)
@@ -90,6 +82,8 @@ val targetAbis =
         .split(',')
         .map(String::trim)
         .filter(String::isNotBlank)
+        .toMutableList()
+        .distinct()
 
 fun sha256(file: File): String =
     file.inputStream().use { input ->
@@ -133,6 +127,7 @@ android {
 
         ndk {
             // 支持所有主流架构
+            //noinspection ChromeOsAbiSupport
             abiFilters += targetAbis
         }
     }

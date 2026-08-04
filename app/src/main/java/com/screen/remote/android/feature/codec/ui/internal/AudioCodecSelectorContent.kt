@@ -7,8 +7,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
-import com.screen.remote.android.core.domain.model.CodecAcceleration
 import com.screen.remote.android.core.designsystem.component.SectionTitle
+import com.screen.remote.android.core.domain.model.CodecAcceleration
 import com.screen.remote.android.core.i18n.CodecTexts
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
@@ -135,7 +135,11 @@ private fun extractAudioCodecTypeOptions(codecs: List<CodecInfo>): List<String> 
     codecs.forEach { codec ->
         when {
             codec.type.contains("opus", ignoreCase = true) -> types.add("OPUS")
-            codec.type.contains("aac", ignoreCase = true) || codec.type.contains("mp4a", ignoreCase = true) -> types.add("AAC")
+            codec.type.contains("aac", ignoreCase = true) || codec.type.contains(
+                "mp4a",
+                ignoreCase = true
+            ) -> types.add("AAC")
+
             codec.type.contains("flac", ignoreCase = true) -> types.add("FLAC")
         }
     }

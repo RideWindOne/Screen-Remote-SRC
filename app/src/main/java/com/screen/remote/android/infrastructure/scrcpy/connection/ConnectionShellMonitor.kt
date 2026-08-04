@@ -1,14 +1,13 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection
 
-import com.screen.remote.android.core.common.manager.LogManager.dShell
-
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.LogManager.dShell
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
-import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
-import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssue
+import com.screen.remote.android.infrastructure.scrcpy.session.model.ServerIssueKind
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import dadb.AdbShellStream
@@ -410,10 +409,17 @@ class ConnectionShellMonitor(
         }
 
         if (expectedConnectionClosure) {
-            LogManager.w(LogTags.SCRCPY_SERVER, "ADB connection lost while waiting for scrcpy-server to start: $errorMsg")
+            LogManager.w(
+                LogTags.SCRCPY_SERVER,
+                "ADB connection lost while waiting for scrcpy-server to start: $errorMsg"
+            )
         } else if (error !is java.io.EOFException) {
             dumpRecentShellLines("startup-exception")
-            LogManager.e(LogTags.SCRCPY_SERVER, "Error while waiting for scrcpy-server to start: ${error.message}", error)
+            LogManager.e(
+                LogTags.SCRCPY_SERVER,
+                "Error while waiting for scrcpy-server to start: ${error.message}",
+                error
+            )
         }
         recordStartupFailure(
             ServerIssue(

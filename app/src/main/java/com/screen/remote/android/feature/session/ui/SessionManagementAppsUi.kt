@@ -9,8 +9,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -57,10 +57,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.designsystem.component.AppDivider
+import com.screen.remote.android.core.i18n.ManagementTexts
 
-private val AppsPanelCornerRadius = 16.dp
 private val AppsRowSpacing = 10.dp
 private val AppsRowVerticalPadding = 4.dp
 private val AppsRowMetaSpacing = 2.dp
@@ -72,7 +71,6 @@ private val AppsInfoCardVerticalPadding = 16.dp
 private val AppsOptionsMenuOffset = DpOffset(x = (-6).dp, y = (-56).dp)
 private val AppsOptionsMenuRowHeight = 40.dp
 private val AppsOptionsMenuIconSize = 20.dp
-private val AppsActionRowCornerRadius = 12.dp
 private val AppsActionRowHorizontalPadding = 8.dp
 private val AppsActionRowVerticalPadding = 12.dp
 private val AppsDetailLabelWidth = 92.dp
@@ -328,13 +326,42 @@ internal fun SessionManagementAppActionDialog(
                         .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                SessionManagementActionRow(icon = Icons.Default.Info, label = ManagementTexts.Apps.APP_DETAILS.get(), onClick = onDetails)
-                SessionManagementActionRow(icon = Icons.Default.PlayArrow, label = ManagementTexts.Apps.LAUNCH_DEVICE.get(), onClick = onLaunch)
-                SessionManagementActionRow(icon = Icons.Default.VerifiedUser, label = actionLabel, onClick = onToggleEnabled)
-                SessionManagementActionRow(icon = Icons.Default.DeleteOutline, label = ManagementTexts.Apps.UNINSTALL.get(), onClick = onUninstall)
-                SessionManagementActionRow(icon = Icons.Default.Build, label = ManagementTexts.Apps.CLEAR_DATA.get(), onClick = onClearData)
-                SessionManagementActionRow(icon = Icons.Default.PowerSettingsNew, label = ManagementTexts.Apps.FORCE_STOP.get(), enabled = isRunning, onClick = onForceStop)
-                SessionManagementActionRow(icon = Icons.Default.Download, label = ManagementTexts.Apps.EXPORT_APK.get(), onClick = onDownloadApk)
+                SessionManagementActionRow(
+                    icon = Icons.Default.Info,
+                    label = ManagementTexts.Apps.APP_DETAILS.get(),
+                    onClick = onDetails
+                )
+                SessionManagementActionRow(
+                    icon = Icons.Default.PlayArrow,
+                    label = ManagementTexts.Apps.LAUNCH_DEVICE.get(),
+                    onClick = onLaunch
+                )
+                SessionManagementActionRow(
+                    icon = Icons.Default.VerifiedUser,
+                    label = actionLabel,
+                    onClick = onToggleEnabled
+                )
+                SessionManagementActionRow(
+                    icon = Icons.Default.DeleteOutline,
+                    label = ManagementTexts.Apps.UNINSTALL.get(),
+                    onClick = onUninstall
+                )
+                SessionManagementActionRow(
+                    icon = Icons.Default.Build,
+                    label = ManagementTexts.Apps.CLEAR_DATA.get(),
+                    onClick = onClearData
+                )
+                SessionManagementActionRow(
+                    icon = Icons.Default.PowerSettingsNew,
+                    label = ManagementTexts.Apps.FORCE_STOP.get(),
+                    enabled = isRunning,
+                    onClick = onForceStop
+                )
+                SessionManagementActionRow(
+                    icon = Icons.Default.Download,
+                    label = ManagementTexts.Apps.EXPORT_APK.get(),
+                    onClick = onDownloadApk
+                )
             }
         }
     }
@@ -697,7 +724,11 @@ private fun SessionManagementAppDetailContent(
                     AppDetailItem(ManagementTexts.Apps.PACKAGE.get(), detail.packageName, useSmallText = true),
                     AppDetailItem(ManagementTexts.Apps.APK_SIZE.get(), detail.apkSize, fieldName = "apkSizeBytes"),
                     AppDetailItem(ManagementTexts.Apps.VERSION.get(), detail.versionName, fieldName = "versionName"),
-                    AppDetailItem(ManagementTexts.Apps.VERSION_CODE.get(), detail.versionCode, fieldName = "versionCode"),
+                    AppDetailItem(
+                        ManagementTexts.Apps.VERSION_CODE.get(),
+                        detail.versionCode,
+                        fieldName = "versionCode"
+                    ),
                     AppDetailItem(ManagementTexts.Apps.NATIVE_ABIS.get(), detail.nativeAbis, fieldName = "nativeAbis"),
                     AppDetailItem(ManagementTexts.Apps.UID.get(), detail.uid, fieldName = "uid"),
                     AppDetailItem(
@@ -709,12 +740,31 @@ private fun SessionManagementAppDetailContent(
                         if (detail.isEnabled) ManagementTexts.Apps.ENABLED.get() else ManagementTexts.Apps.DISABLED.get(),
                         fieldName = "enabled",
                     ),
-                    AppDetailItem(ManagementTexts.Apps.SYSTEM_APP.get(), if (detail.isSystemApp) ManagementTexts.Apps.YES.get() else ManagementTexts.Apps.NO.get(), fieldName = "systemApp"),
+                    AppDetailItem(
+                        ManagementTexts.Apps.SYSTEM_APP.get(),
+                        if (detail.isSystemApp) ManagementTexts.Apps.YES.get() else ManagementTexts.Apps.NO.get(),
+                        fieldName = "systemApp"
+                    ),
                     AppDetailItem(ManagementTexts.Apps.MIN_SDK.get(), detail.minSdk, fieldName = "minSdk"),
                     AppDetailItem(ManagementTexts.Apps.TARGET_SDK.get(), detail.targetSdk, fieldName = "targetSdk"),
-                    AppDetailItem(ManagementTexts.Apps.APK_PATH.get(), detail.apkPath, useSmallText = true, fieldName = "sourceDir"),
-                    AppDetailItem(ManagementTexts.Apps.FIRST_INSTALLED.get(), detail.firstInstallTime, useSmallText = true, fieldName = "firstInstallTime"),
-                    AppDetailItem(ManagementTexts.Apps.LAST_UPDATED.get(), detail.lastUpdateTime, useSmallText = true, fieldName = "lastUpdateTime"),
+                    AppDetailItem(
+                        ManagementTexts.Apps.APK_PATH.get(),
+                        detail.apkPath,
+                        useSmallText = true,
+                        fieldName = "sourceDir"
+                    ),
+                    AppDetailItem(
+                        ManagementTexts.Apps.FIRST_INSTALLED.get(),
+                        detail.firstInstallTime,
+                        useSmallText = true,
+                        fieldName = "firstInstallTime"
+                    ),
+                    AppDetailItem(
+                        ManagementTexts.Apps.LAST_UPDATED.get(),
+                        detail.lastUpdateTime,
+                        useSmallText = true,
+                        fieldName = "lastUpdateTime"
+                    ),
                 ).map { item ->
                     val issue = item.fieldName?.let(detail.fieldErrors::get)
                     val issueLabel =
@@ -824,12 +874,36 @@ internal fun SessionManagementAppBatchDialog(
         leftButtonText = ManagementTexts.Apps.CANCEL.get(),
     ) {
         SessionManagementDialogCard {
-            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                SessionManagementActionRow(Icons.Default.VerifiedUser, ManagementTexts.Apps.BATCH_ENABLE.get(), onClick = onEnable)
-                SessionManagementActionRow(Icons.Default.VerifiedUser, ManagementTexts.Apps.BATCH_DISABLE.get(), onClick = onDisable)
-                SessionManagementActionRow(Icons.Default.PowerSettingsNew, ManagementTexts.Apps.BATCH_FORCE_STOP.get(), onClick = onForceStop)
-                SessionManagementActionRow(Icons.Default.DeleteOutline, ManagementTexts.Apps.BATCH_UNINSTALL.get(), onClick = onUninstall)
-                SessionManagementActionRow(Icons.Default.Download, ManagementTexts.Apps.BATCH_EXPORT.get(), onClick = onExport)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                SessionManagementActionRow(
+                    Icons.Default.VerifiedUser,
+                    ManagementTexts.Apps.BATCH_ENABLE.get(),
+                    onClick = onEnable
+                )
+                SessionManagementActionRow(
+                    Icons.Default.VerifiedUser,
+                    ManagementTexts.Apps.BATCH_DISABLE.get(),
+                    onClick = onDisable
+                )
+                SessionManagementActionRow(
+                    Icons.Default.PowerSettingsNew,
+                    ManagementTexts.Apps.BATCH_FORCE_STOP.get(),
+                    onClick = onForceStop
+                )
+                SessionManagementActionRow(
+                    Icons.Default.DeleteOutline,
+                    ManagementTexts.Apps.BATCH_UNINSTALL.get(),
+                    onClick = onUninstall
+                )
+                SessionManagementActionRow(
+                    Icons.Default.Download,
+                    ManagementTexts.Apps.BATCH_EXPORT.get(),
+                    onClick = onExport
+                )
             }
         }
     }

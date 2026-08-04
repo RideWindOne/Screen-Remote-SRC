@@ -3,9 +3,9 @@ package com.screen.remote.android.infrastructure.scrcpy.client
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState
+import com.screen.remote.android.infrastructure.scrcpy.session.SessionManager
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ReconnectIssueKind
-import com.screen.remote.android.infrastructure.scrcpy.session.SessionManager
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import kotlinx.coroutines.CoroutineScope
@@ -66,7 +66,7 @@ internal class ScrcpyClientStateCoordinator(
             is SessionState.ServerStarted,
             is SessionState.ServerFailed,
             is SessionState.Idle,
-            -> {
+                -> {
                 // 这些状态已由运行时链路自身处理
             }
 

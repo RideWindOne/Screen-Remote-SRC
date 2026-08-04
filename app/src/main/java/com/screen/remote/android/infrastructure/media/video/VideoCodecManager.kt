@@ -80,7 +80,10 @@ class VideoCodecManager(
                                     suggestedMaxSize = findSuggestedMaxSize(listOf(cachedInfo), width, height),
                                 )
                         }
-                        LogManager.e(LogTags.VIDEO_DECODER, "User fixed video decoder is unavailable and does not perform automatic downgrade: $cachedName")
+                        LogManager.e(
+                            LogTags.VIDEO_DECODER,
+                            "User fixed video decoder is unavailable and does not perform automatic downgrade: $cachedName"
+                        )
                         return null
                     }
                     selectedDecoderName = null
@@ -109,7 +112,12 @@ class VideoCodecManager(
             // 系统推荐
             if (allowHardwareDecoders) codecList.findDecoderForFormat(format)?.let { name ->
                 val info = codecList.codecInfos.firstOrNull { it.name == name }
-                if (info != null && name !in rejectedDecoderNames && isLikelyHardware(info) && !isGoldfishCodec(name) && supportsCurrentAndRotation(info, width, height) != false) {
+                if (info != null && name !in rejectedDecoderNames && isLikelyHardware(info) && !isGoldfishCodec(name) && supportsCurrentAndRotation(
+                        info,
+                        width,
+                        height
+                    ) != false
+                ) {
                     hasSizeCompatibleCandidate = true
                     try {
                         selectedDecoderName = name
@@ -210,13 +218,16 @@ class VideoCodecManager(
                     )
                 LogManager.e(
                     LogTags.VIDEO_DECODER,
-                    "No codec supports ${width}x$height mime=$mimeType suggestedMaxSize=${suggestedMaxSize ?:"none"}",
+                    "No codec supports ${width}x$height mime=$mimeType suggestedMaxSize=${suggestedMaxSize ?: "none"}",
                 )
                 return null
             }
 
             if (!allowHardwareDecoders) {
-                LogManager.e(LogTags.VIDEO_DECODER, "There is no decoder available under the software-only decoding strategy")
+                LogManager.e(
+                    LogTags.VIDEO_DECODER,
+                    "There is no decoder available under the software-only decoding strategy"
+                )
                 return null
             }
 
@@ -241,7 +252,7 @@ class VideoCodecManager(
         }
         LogManager.w(
             LogTags.VIDEO_DECODER,
-            "Decoder eliminated in this session: $decoderName${cause?.message?.let {", reason=$it" }.orEmpty()}",
+            "Decoder eliminated in this session: $decoderName${cause?.message?.let { ", reason=$it" }.orEmpty()}",
         )
     }
 

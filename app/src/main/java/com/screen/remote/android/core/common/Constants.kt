@@ -2,7 +2,7 @@ package com.screen.remote.android.core.common
 
 /**
  * 常量统一导出文件
- * 
+ *
  * 所有常量已按功能拆分到 constants/ 目录下的独立文件：
  * - AppColors.kt - 颜色常量
  * - AppDimens.kt - 尺寸常量
@@ -16,7 +16,7 @@ package com.screen.remote.android.core.common
  * - SessionColors.kt - 会话颜色常量
  * - PlaceholderTexts.kt - 占位符文本
  * - LogTags.kt - 日志标签常量
- * 
+ *
  * 使用方式：
  * ```kotlin
  * import com.screen.remote.android.core.common.AppColors
@@ -36,8 +36,5 @@ typealias NetworkConstants = com.screen.remote.android.core.common.constants.Net
 typealias AdbPairingConstants = com.screen.remote.android.core.common.constants.AdbPairingConstants
 typealias ScrcpyConstants = com.screen.remote.android.core.common.constants.ScrcpyConstants
 typealias AppConstants = com.screen.remote.android.core.common.constants.AppConstants
-typealias FilePathConstants = com.screen.remote.android.core.common.constants.FilePathConstants
-typealias UIConstants = com.screen.remote.android.core.common.constants.UIConstants
-typealias SessionColors = com.screen.remote.android.core.common.constants.SessionColors
 typealias PlaceholderTexts = com.screen.remote.android.core.common.constants.PlaceholderTexts
 typealias LogTags = com.screen.remote.android.core.common.constants.LogTags

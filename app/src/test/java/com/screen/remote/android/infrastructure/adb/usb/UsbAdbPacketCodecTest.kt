@@ -28,7 +28,8 @@ class UsbAdbPacketCodecTest {
     @Test
     fun `completePacketLength can drain concatenated packets one by one`() {
         val firstPacket = AdbProtocol.generateOpen(localId = 7, dest = "shell,v2,raw:echo one").toByteArray()
-        val secondPacket = AdbProtocol.generateWrite(localId = 7, remoteId = 8, data = "two".toByteArray()).toByteArray()
+        val secondPacket =
+            AdbProtocol.generateWrite(localId = 7, remoteId = 8, data = "two".toByteArray()).toByteArray()
         val pending =
             Buffer()
                 .write(firstPacket)

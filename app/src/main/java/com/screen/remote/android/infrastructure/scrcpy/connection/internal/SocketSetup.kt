@@ -1,8 +1,8 @@
 package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 
-import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

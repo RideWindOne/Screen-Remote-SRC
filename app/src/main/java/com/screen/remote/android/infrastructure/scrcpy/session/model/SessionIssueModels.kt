@@ -14,7 +14,6 @@ enum class AdbIssueKind {
     HandshakeFailed,
     ConnectionUnavailable,
     ForwardSetupFailed,
-    CommandFailed,
     Unknown,
 }
 
@@ -180,10 +179,7 @@ data class ConnectedContext(
     val connectedSockets: Set<SocketType>,
     val dummyByteConfirmed: Boolean,
     val audioEnabled: Boolean,
-) {
-    val socketCount: Int
-        get() = connectedSockets.size
-}
+)
 
 enum class CleanupTrigger(
     val logLabel: String,
@@ -202,8 +198,6 @@ data class SocketDisconnectContext(
 
 enum class SocketDisconnectKind {
     LocalClose,
-    Cleanup,
-    RemoteClose,
     Unknown,
 }
 
@@ -215,7 +209,6 @@ data class ForwardRemovalContext(
 enum class ForwardRemovalTrigger {
     Disconnect,
     CleanupOldResources,
-    ReplaceExisting,
     Unknown,
 }
 

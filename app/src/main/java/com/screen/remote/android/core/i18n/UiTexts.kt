@@ -9,7 +9,6 @@ object CommonTexts {
     val BUTTON_SAVE = TextPair("保存", "Save")
     val BUTTON_ADD = TextPair("添加", "Add")
     val BUTTON_CONFIRM = TextPair("确定", "Confirm")
-    val BUTTON_OK = TextPair("确定", "OK")
     val BUTTON_BACK = TextPair("返回", "Back")
     val BUTTON_HIDE = TextPair("隐藏", "Hide")
     val BUTTON_SHOW = TextPair("显示", "Show")
@@ -20,20 +19,8 @@ object CommonTexts {
     val LABEL_STATUS = TextPair("状态", "Status")
     val ERROR_LABEL = TextPair("错误", "Error")
     val LABEL_DEVICE = TextPair("设备", "Device")
-    val LABEL_INTERVAL = TextPair("间隔", "Interval")
-    val LABEL_USING = TextPair("使用", "Using")
-    val LABEL_ITEMS = TextPair("个", "items")
-    val LABEL_CHARACTERS = TextPair("字符", "characters")
-
-    val TIME_1_MINUTE = TextPair("1 分钟", "1 minute")
-    val TIME_5_MINUTES = TextPair("5 分钟", "5 minutes")
-    val TIME_10_MINUTES = TextPair("10 分钟", "10 minutes")
-    val TIME_30_MINUTES = TextPair("30 分钟", "30 minutes")
-    val TIME_1_HOUR = TextPair("1 小时", "1 hour")
-    val TIME_ALWAYS = TextPair("始终", "Always")
 
     val STATUS_CONNECTING = TextPair("正在连接...", "Connecting...")
-    val ERROR_CONNECTION_FAILED = TextPair("连接失败", "Connection failed")
     val CONNECTION_FAILED_TITLE = TextPair("连接失败", "Connection Failed")
 
     val FILTER_ALL = TextPair("全部", "All")
@@ -88,7 +75,6 @@ object LogTexts {
     val LOG_DELETE_FILE_SUCCESS = TextPair("删除日志文件成功", "Log file deleted successfully")
     val LOG_READ_FILE_FAILED = TextPair("读取日志文件失败", "Failed to read log file")
     val LOG_READ_FILE_ERROR = TextPair("读取日志文件失败", "Failed to read log file")
-    val LOG_WRITE_RAW_FAILED = TextPair("写入原始日志失败", "Failed to write raw log")
 
     val DIALOG_CLEAR_LOGS_TITLE = TextPair("清除全部日志", "Clear All Logs")
     val DIALOG_CLEAR_LOGS_MESSAGE =

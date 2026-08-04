@@ -14,11 +14,11 @@ import androidx.compose.ui.platform.LocalContext
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.common.util.FilePickerHelper
 import com.screen.remote.android.core.designsystem.component.DialogPage
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 @Composable
 fun BackupRestoreScreen(

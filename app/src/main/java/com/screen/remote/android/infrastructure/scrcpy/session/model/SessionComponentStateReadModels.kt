@@ -40,10 +40,7 @@ data class InfrastructureConnectionReadModel(
 data class DecoderConnectionReadModel(
     val runningDecoders: Set<DecoderType>,
     val stoppedDecoders: Set<DecoderType>,
-) {
-    val hasRunningDecoders: Boolean
-        get() = runningDecoders.isNotEmpty()
-}
+)
 
 data class SessionComponentStateSnapshot(
     val componentStates: Map<SessionComponent, ComponentState>,

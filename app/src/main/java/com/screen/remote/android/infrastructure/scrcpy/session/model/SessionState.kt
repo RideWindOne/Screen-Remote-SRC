@@ -47,9 +47,6 @@ sealed class SessionState {
         val connectedSockets: Set<SocketType>
             get() = context.connectedSockets
 
-        val socketCount: Int
-            get() = context.socketCount
-
         val audioEnabled: Boolean
             get() = context.audioEnabled
 

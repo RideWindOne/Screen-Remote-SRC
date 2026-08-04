@@ -10,8 +10,6 @@ import com.screen.remote.android.BuildConfig
  */
 object AdbPairingConstants {
     const val PAIRING_CODE_LENGTH = 6
-    const val PAIRING_TIMEOUT_MS = 30000L
-    const val IP_ADDRESS_REGEX = "^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}$"
     const val MIN_PORT = 1024
     const val MAX_PORT = 65535
 }
@@ -29,9 +27,7 @@ object AppConstants {
     const val GITHUB_REPO = "https://github.com/XRSec/Screen-Remote"
     const val GITHUB_ISSUES = "https://github.com/XRSec/Screen-Remote/issues"
     const val GITHUB_USER_GUIDE = "https://github.com/XRSec/Screen-Remote/wiki/User-Documentation"
-    const val WAKELOCK_TIMEOUT_MS = 10L * 60 * 60 * 1000
     const val STATEFLOW_SUBSCRIBE_TIMEOUT_MS = 5000L
-    const val PROCESS_ID_START = 10000
 }
 
 /**
@@ -46,15 +42,8 @@ object AppDimens {
     val sectionTitleHeight = IosDesignTokens.sectionTitleHeight
     val listItemHeight = IosDesignTokens.formRowHeight
     val themeOptionHeight = IosDesignTokens.themeOptionHeight
-    val cardSpacing = IosDesignTokens.compactSpacing
     val paddingStandard = IosDesignTokens.compactHorizontalPadding
-    val spacingStandard = IosDesignTokens.compactHorizontalPadding
-    val paddingHorizontal = IosDesignTokens.compactHorizontalPadding
-    val paddingVertical = IosDesignTokens.compactHorizontalPadding
     val cardCornerRadius = IosDesignTokens.cardCornerRadius
-    val labelWidth = 100.dp
-    val volumeTextWidth = 50.dp
-    val volumeLabelWidth = 80.dp
 }
 
 /**
@@ -62,7 +51,6 @@ object AppDimens {
  */
 object AppTextSizes {
     val sectionTitle = 13.sp
-    val listItem = 15.sp
     val title = 17.sp
     val body = 15.sp
     val subtitle = 14.sp
@@ -74,7 +62,6 @@ object AppTextSizes {
  */
 @SuppressLint("SdCardPath")
 object FilePathConstants {
-    const val DEVICE_SCREENSHOT_DIR = "/sdcard/Pictures"
     const val APP_ICONS_DIR = "app_icons"
 }
 
@@ -111,7 +98,6 @@ object IosDesignTokens {
     val fieldContentStartPadding = 8.dp
     val fieldContentEndPadding = 12.dp
 
-    val helpIconSize = 16.dp
     val trailingIconSize = 16.dp
     val externalIconSize = 18.dp
 
@@ -120,7 +106,6 @@ object IosDesignTokens {
     val dialogLabelTextMaxWidth = 108.dp
 
     const val dividerAlpha = 0.3f
-    const val dialogHeaderBackgroundAlpha = 0.5f
     const val disabledActionAlpha = 0.3f
 }
 
@@ -128,13 +113,9 @@ object IosDesignTokens {
  * 网络常量
  */
 object NetworkConstants {
-    const val DEFAULT_ADB_PORT = "5555"
     const val DEFAULT_ADB_PORT_INT = 5555
     const val LOCALHOST = "127.0.0.1"
     const val CONNECT_TIMEOUT_MS = 5000L
-    const val READ_TIMEOUT_MS = 10000L
-    const val SOCKET_WAIT_TIMEOUT_MS = 5000L
-    const val SOCKET_WAIT_RETRIES = 10
     const val SOCKET_RECEIVE_BUFFER_SIZE = 64 * 1024
     const val SOCKET_SEND_BUFFER_SIZE = 64 * 1024
 }
@@ -147,18 +128,3 @@ object PlaceholderTexts {
     const val PORT = "5555"
 }
 
-/**
- * 会话颜色常量
- */
-object SessionColors {
-    const val DEFAULT_COLOR = "BLUE"
-}
-
-/**
- * UI 常量
- */
-object UIConstants {
-    const val HIDDEN_INPUT_OFFSET = -1000
-    const val LOG_FRAME_INTERVAL = 100
-    const val LOG_INITIAL_FRAMES = 5
-}

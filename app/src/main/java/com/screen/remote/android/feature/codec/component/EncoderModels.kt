@@ -1,14 +1,8 @@
 package com.screen.remote.android.feature.codec.component
 
-import com.screen.remote.android.feature.codec.component.encoder.getAudioEncoderDialogConfig
-import com.screen.remote.android.feature.codec.component.encoder.getVideoEncoderDialogConfig
-import com.screen.remote.android.feature.codec.component.encoder.matchesAudioCodecFilter
-import com.screen.remote.android.feature.codec.component.encoder.matchesVideoCodecFilter
-import com.screen.remote.android.core.domain.model.EncoderCapability
-
 /**
  * 编码器相关数据模型
- * 
+ *
  * 文件拆分说明：
  * - encoder/VideoEncoderSection.kt - 视频编码器配置逻辑
  * - encoder/AudioEncoderSection.kt - 音频编码器配置逻辑
@@ -34,25 +28,3 @@ data class EncoderDialogConfig(
     val showCodecTest: Boolean, // 是否显示编解码器测试按钮
 )
 
-/**
- * 根据编码器类型获取对话框配置
- */
-fun getEncoderDialogConfig(
-    encoderType: EncoderType,
-    detectedEncoders: List<EncoderCapability>,
-): EncoderDialogConfig =
-    when (encoderType) {
-        EncoderType.VIDEO -> getVideoEncoderDialogConfig(detectedEncoders)
-        EncoderType.AUDIO -> getAudioEncoderDialogConfig(detectedEncoders)
-    }
-
-/**
- * 检查编码器是否匹配筛选条件
- */
-fun matchesCodecFilter(
-    mimeType: String,
-    filter: String,
-    allFilterOption: String,
-): Boolean =
-    matchesVideoCodecFilter(mimeType, filter, allFilterOption) ||
-        matchesAudioCodecFilter(mimeType, filter, allFilterOption)

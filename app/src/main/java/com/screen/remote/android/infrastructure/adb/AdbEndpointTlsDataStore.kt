@@ -21,50 +21,6 @@ class AdbEndpointTlsDataStore(
     suspend fun findObservedConnectTlsPublicKey(endpoint: String): String? =
         findRecord(endpoint)?.observedConnectTlsPublicKeySha256Base64
 
-    suspend fun rememberObservedConnectTlsPublicKey(
-        endpoint: String,
-        observedConnectTlsPublicKeySha256Base64: String,
-    ) {
-        val normalizedEndpoint = normalizeEndpoint(endpoint) ?: return
-        val now = System.currentTimeMillis()
-        updateRecords { current ->
-            val existing = current.firstOrNull { it.endpoint == normalizedEndpoint }
-            current
-                .filterNot { it.endpoint == normalizedEndpoint } +
-                TlsEndpointRecord(
-                    endpoint = normalizedEndpoint,
-                    observedConnectTlsPublicKeySha256Base64 = observedConnectTlsPublicKeySha256Base64,
-                    updatedAtEpochMillis = now,
-                    lastKnownTransport = existing?.lastKnownTransport ?: TRANSPORT_TLS,
-                )
-        }
-    }
-
-    suspend fun markTlsPairingSucceeded(endpoint: String) {
-        val normalizedEndpoint = normalizeEndpoint(endpoint) ?: throw IllegalArgumentException("Blank endpoint")
-        val now = System.currentTimeMillis()
-        updateRecords { current ->
-            current
-                .filterNot { it.endpoint == normalizedEndpoint } +
-                TlsEndpointRecord(
-                    endpoint = normalizedEndpoint,
-                    observedConnectTlsPublicKeySha256Base64 = null,
-                    updatedAtEpochMillis = now,
-                    lastKnownTransport = TRANSPORT_TLS,
-                )
-        }
-    }
-
-    suspend fun forgetEndpoint(endpoint: String): Boolean {
-        val normalizedEndpoint = normalizeEndpoint(endpoint) ?: return false
-        val current = listRecords()
-        if (current.none { it.endpoint == normalizedEndpoint }) {
-            return false
-        }
-        updateRecords { records -> records.filterNot { it.endpoint == normalizedEndpoint } }
-        return true
-    }
-
     suspend fun clear(): Boolean {
         val hadState = listRecords().isNotEmpty()
         context.adbEndpointTlsDataStore.edit { preferences ->
@@ -99,13 +55,6 @@ class AdbEndpointTlsDataStore(
     private suspend fun findRecord(endpoint: String): TlsEndpointRecord? {
         val normalizedEndpoint = normalizeEndpoint(endpoint) ?: return null
         return listRecords().firstOrNull { it.endpoint == normalizedEndpoint }
-    }
-
-    private suspend fun updateRecords(transform: (List<TlsEndpointRecord>) -> List<TlsEndpointRecord>) {
-        context.adbEndpointTlsDataStore.edit { preferences ->
-            val current = decode(preferences[Keys.STATE_JSON])
-            preferences[Keys.STATE_JSON] = encode(transform(current))
-        }
     }
 
     private fun encode(records: List<TlsEndpointRecord>): String =

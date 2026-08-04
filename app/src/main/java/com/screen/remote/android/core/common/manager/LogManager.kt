@@ -35,10 +35,6 @@ object LogManager {
         fileController.init(context, enabled)
     }
 
-    fun setEnabled(enabled: Boolean) {
-        fileController.setEnabled(enabled)
-    }
-
     fun applySettings(settings: AppSettings) {
         state.liveLogRequested = settings.enableDebugMode
         LiveLogStore.setEnabled(settings.enableDebugMode && !state.runtimeLoggingSuppressed)
@@ -204,16 +200,6 @@ object LogManager {
     fun deleteLogFile(file: File): Boolean = fileController.deleteLogFile(file)
 
     fun readLogFile(file: File): String = fileController.readLogFile(file)
-
-    fun writeRawLog(
-        level: String,
-        tag: String,
-        message: String,
-    ) {
-        if (state.runtimeLoggingSuppressed) return
-        LiveLogStore.append(level, tag, message)
-        messageWriter.writeRawLog(level, tag, message)
-    }
 
     private fun isDebugLoggingEnabledForTag(tag: String): Boolean {
         if (state.runtimeLoggingSuppressed) return false

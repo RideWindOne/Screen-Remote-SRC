@@ -5,12 +5,12 @@ import com.screen.remote.android.core.data.storage.SessionStorage
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionStateMachine
 import com.screen.remote.android.infrastructure.scrcpy.session.SessionManager
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
-import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
-import com.screen.remote.android.infrastructure.scrcpy.session.internal.observeComponentSnapshot
-import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.createMonitorBus
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.initMonitor
+import com.screen.remote.android.infrastructure.scrcpy.session.internal.observeComponentSnapshot
+import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
+import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch

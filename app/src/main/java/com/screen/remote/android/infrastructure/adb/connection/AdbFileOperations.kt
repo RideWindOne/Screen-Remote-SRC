@@ -9,9 +9,12 @@ import dadb.AdbOperationFailedException
 import dadb.Dadb
 import dadb.InstallResult
 import dadb.SyncResult
-import dadb.UninstallResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okio.Buffer
+import okio.Source
+import okio.Timeout
+import okio.source
 import java.io.File
 
 /**
@@ -26,11 +29,28 @@ object AdbFileOperations {
         dadb: Dadb,
         localPath: String,
         remotePath: String,
+        onProgressBytes: (Long) -> Unit = {},
     ): Result<Boolean> =
         withContext(Dispatchers.IO) {
             try {
                 val file = File(localPath)
-                when (val operation = dadb.push(file, remotePath)) {
+                val source = file.source()
+                val sourceWithProgress = object : Source {
+                    override fun read(sink: Buffer, byteCount: Long): Long {
+                        val read = source.read(sink, byteCount)
+                        if (read > 0L) {
+                            onProgressBytes(read)
+                        }
+                        return read
+                    }
+
+                    override fun timeout(): Timeout = source.timeout()
+
+                    override fun close() {
+                        source.close()
+                    }
+                }
+                when (val operation = dadb.push(sourceWithProgress, remotePath, 0b110100100, file.lastModified())) {
                     SyncResult.Success -> Unit
                     is SyncResult.Failure -> throw AdbOperationFailedException(operation.reason)
                 }
@@ -114,33 +134,13 @@ object AdbFileOperations {
                     InstallResult.Success -> Unit
                     is InstallResult.Failure -> throw AdbOperationFailedException(operation.reason)
                 }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_SUCCESS.english}: ${apkFiles.joinToString()}")
+                LogManager.d(
+                    LogTags.ADB_CONNECTION,
+                    "${AdbTexts.ADB_APK_INSTALL_SUCCESS.english}: ${apkFiles.joinToString()}"
+                )
                 Result.success(true)
             } catch (e: Exception) {
                 LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APK_INSTALL_FAILED.english}: ${e.message}", e)
-                Result.failure(e)
-            }
-        }
-
-    /**
-     * 卸载应用
-     */
-    suspend fun uninstallPackage(
-        dadb: Dadb,
-        packageName: String,
-    ): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            try {
-                when (val operation = dadb.uninstall(packageName)) {
-                    UninstallResult.Success -> Unit
-                    is UninstallResult.Failure -> {
-                        throw AdbOperationFailedException(operation.reason, operation.exitCode)
-                    }
-                }
-                LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_SUCCESS.english}: $packageName")
-                Result.success(true)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_APP_UNINSTALL_FAILED.english}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -177,7 +177,11 @@ object AdbFileOperations {
 
                 Result.success(true)
             } catch (e: Exception) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_PUSH_SCRCPY_SERVER_FAILED.english}: ${e.message}", e)
+                LogManager.e(
+                    LogTags.ADB_CONNECTION,
+                    "${AdbTexts.ADB_PUSH_SCRCPY_SERVER_FAILED.english}: ${e.message}",
+                    e
+                )
                 Result.failure(e)
             }
         }

@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,11 +68,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.StatusBadge
+import com.screen.remote.android.core.i18n.ManagementTexts
 
 private val ManagementFabInset = 20.dp
 private val ManagementFabIconSize = 18.dp
@@ -517,9 +517,9 @@ internal fun SessionManagementDrawer(
                         .fillMaxSize()
                         .statusBarsPadding()
                         .padding(
-                    horizontal = ManagementDrawerPadding,
-                    vertical = ManagementDrawerPadding,
-                ),
+                            horizontal = ManagementDrawerPadding,
+                            vertical = ManagementDrawerPadding,
+                        ),
             ) {
                 Surface(
                     shape = SessionManagementCardShape,
@@ -839,14 +839,13 @@ private fun SessionManagementDrawerActionItem(
 internal enum class SessionManagementSection(
     private val text: com.screen.remote.android.core.i18n.TextPair,
     val icon: ImageVector,
-    val supportsRefresh: Boolean = false,
 ) {
-    DeviceInfo(ManagementTexts.General.DEVICE_INFO_SECTION, Icons.Default.Info, supportsRefresh = true),
-    Utility(ManagementTexts.General.UTILITIES_SECTION, Icons.Default.Build, supportsRefresh = true),
-    Files(ManagementTexts.General.FILES_SECTION, Icons.Default.Folder, supportsRefresh = true),
-    Apps(ManagementTexts.General.APPS_SECTION, Icons.Default.Apps, supportsRefresh = true),
-    Process(ManagementTexts.General.PROCESSES_SECTION, Icons.Default.Usb, supportsRefresh = true),
-    PortForward(ManagementTexts.General.PORT_FORWARD_SECTION, Icons.Default.SwapHoriz, supportsRefresh = true),
+    DeviceInfo(ManagementTexts.General.DEVICE_INFO_SECTION, Icons.Default.Info),
+    Utility(ManagementTexts.General.UTILITIES_SECTION, Icons.Default.Build),
+    Files(ManagementTexts.General.FILES_SECTION, Icons.Default.Folder),
+    Apps(ManagementTexts.General.APPS_SECTION, Icons.Default.Apps),
+    Process(ManagementTexts.General.PROCESSES_SECTION, Icons.Default.Usb),
+    PortForward(ManagementTexts.General.PORT_FORWARD_SECTION, Icons.Default.SwapHoriz),
     Command(ManagementTexts.General.COMMANDS_SECTION, Icons.Default.Code),
     ;
 

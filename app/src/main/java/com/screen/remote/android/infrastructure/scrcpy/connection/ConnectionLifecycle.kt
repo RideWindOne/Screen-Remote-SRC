@@ -25,13 +25,13 @@ import com.screen.remote.android.infrastructure.scrcpy.protocol.VideoStream
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberNegotiatedAudioCodec
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.rememberNegotiatedVideoCodec
 import com.screen.remote.android.infrastructure.scrcpy.session.model.ForwardRemovalTrigger
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketIssueKind
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SocketType
 import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -110,8 +110,6 @@ class ConnectionLifecycle(
     val activeDeviceId: String?
         get() = activeConnection?.deviceId
 
-    val currentScid: Int?
-        get() = activeConnection?.scid
     val healthMonitor = ConnectionHealthMonitor()
     internal val backgroundScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val lifecycleMutex = Mutex()
@@ -125,195 +123,187 @@ class ConnectionLifecycle(
     /**
      * 建立连接（从 CurrentSession 获取配置）
      */
-    suspend fun connect(): Result<Pair<VideoStream?, AudioStream?>> =
-        lifecycleMutex.withLock { connectInternal() }
+    suspend fun connect(): Result<Pair<VideoStream?, AudioStream?>> = lifecycleMutex.withLock { connectInternal() }
 
-    private suspend fun connectInternal(): Result<Pair<VideoStream?, AudioStream?>> =
-        withContext(Dispatchers.IO) {
-            var codecDetectionStarted = false
-            var ownsConnectionCleanup = false
-            try {
-                val session = sessionContext.currentSession() ?: throw IllegalStateException("Session does not exist")
-                val initialOptions = session.options
-                val previousConnection = activeConnection
-                // 步骤 1: 建立/验证 ADB 连接并分配端口
-                val prepared = setupAdbConnection(initialOptions, session)
-                val connection = prepared.connection
-                val options = session.options
-                val needsCodecDetection = shouldRunRemoteCodecDetectionInBackground(options)
-                codecDetectionStarted = needsCodecDetection
+    private suspend fun connectInternal(): Result<Pair<VideoStream?, AudioStream?>> = withContext(Dispatchers.IO) {
+        var codecDetectionStarted = false
+        var ownsConnectionCleanup = false
+        try {
+            val session = sessionContext.currentSession() ?: throw IllegalStateException("Session does not exist")
+            val initialOptions = session.options
+            val previousConnection = activeConnection
+            // 步骤 1: 建立/验证 ADB 连接并分配端口
+            val prepared = setupAdbConnection(initialOptions, session)
+            val connection = prepared.connection
+            val options = session.options
+            val needsCodecDetection = shouldRunRemoteCodecDetectionInBackground(options)
+            codecDetectionStarted = needsCodecDetection
 
-                // 步骤 2: 在创建新 forward 前完成旧资源清理，避免端口复用时误删新映射。
-                ownsConnectionCleanup = true
-                cleanupOldResources(previousConnection)
+            // 步骤 2: 在创建新 forward 前完成旧资源清理，避免端口复用时误删新映射。
+            ownsConnectionCleanup = true
+            cleanupOldResources(previousConnection)
 
-                if (options.config.compatibilityMode) {
-                    activeConnection = null
-                    val displayInfo =
-                        connection.getCachedDisplayInfo()
-                            ?: connection.refreshDisplayInfo().getOrNull()
-                    if (displayInfo != null) {
-                        session.onVideoResolution(displayInfo.currentWidth, displayInfo.currentHeight)
-                    }
-                    onVideoStreamReady(null)
-                    onAudioStreamReady(null)
-                    LogManager.i(
-                        LogTags.SCRCPY_CLIENT,
-                        "Compatibility mode connected over ADB; scrcpy-server startup is skipped",
-                    )
-                    return@withContext Result.success(Pair(null, null))
+            if (options.config.compatibilityMode) {
+                activeConnection = null
+                val displayInfo = connection.getCachedDisplayInfo() ?: connection.refreshDisplayInfo().getOrNull()
+                if (displayInfo != null) {
+                    session.onVideoResolution(displayInfo.currentWidth, displayInfo.currentHeight)
                 }
-
-                // 步骤 3: 生成 SCID 并设置 Forward
-                val scid = generateScid()
-                val socketName = "scrcpy_%08x".format(scid)
-                val attempt =
-                    ActiveScrcpyConnection(
-                        sessionId = session.sessionId,
-                        adbConnection = connection,
-                        localPort = prepared.localPort,
-                        scid = scid,
-                        socketName = socketName,
-                        tunnelMode = options.config.tunnelMode,
-                    )
-                activeConnection = attempt
-                setupForwardAndPushServer(
-                    connection = connection,
-                    socketName = socketName,
-                    localPort = attempt.localPort,
-                    tunnelMode = attempt.tunnelMode,
-                    onServerAvailable =
-                        if (needsCodecDetection) {
-                            {
-                                startRemoteCodecDetectionInBackground(
-                                    connection = connection,
-                                    expectedSessionId = session.sessionId,
-                                )
-                            }
-                        } else {
-                            null
-                        },
-                )
-
-                // 自动选择结果必须在正式启动命令读取会话配置前完成。
-                // 检测本身与端口等本地准备并行，但不能跨过 server 启动边界。
-                if (codecDetectionStarted) {
-                    codecDetectionJob?.join()
-                }
-
-                // 步骤 4: 启动 scrcpy-server
-                val launchOptions = session.options
-                val canProbeServerSocketDirectly = attempt.tunnelMode == ScrcpyTunnelMode.DIRECT_ADB
-                LogManager.d(
+                onVideoStreamReady(null)
+                onAudioStreamReady(null)
+                LogManager.i(
                     LogTags.SCRCPY_CLIENT,
-                    if (canProbeServerSocketDirectly) {
-                        "Server startup mode: direct localabstract, skip log settle, detect the first video socket"
-                    } else {
-                        "Server startup mode: ADB forward, wait for the server to be ready and then build the link according to the protocol sequence"
-                    },
+                    "Compatibility mode connected over ADB; scrcpy-server startup is skipped",
                 )
-                startScrcpyServer(
-                    connection = connection,
-                    scid = scid,
-                    options = launchOptions,
-                    waitForReady = !canProbeServerSocketDirectly,
-                )
+                return@withContext Result.success(Pair(null, null))
+            }
 
-                // 步骤 5: 连接 Socket
-                connectSockets(
-                    options = launchOptions,
-                    connection = connection,
-                    socketName = socketName,
-                    localPort = attempt.localPort,
-                    tunnelMode = attempt.tunnelMode,
-                )
-
-                if (canProbeServerSocketDirectly) {
-                    completeScrcpyServerStartup(scid)
-                }
-
-                // 步骤 6: 先读取媒体头；远端可能用 audio codec id=0 明确关闭音频。
-                val (videoStream, audioStream) =
-                    metadataReader.readMetadataAndCreateStreams(
-                        launchOptions.config.enableAudio,
-                        session.onVideoResolution,
-                    )
-                videoStream?.let { session.rememberNegotiatedVideoCodec(it.codec) }
-                audioStream?.let { session.rememberNegotiatedAudioCodec(it.codec) }
-
-                // 步骤 7: 根据媒体头的最终结果启动健康监控。
-                healthMonitor.startMonitoring(
-                    videoSocket = socketManager.videoSocket,
-                    audioSocket = socketManager.audioSocket.takeIf { audioStream != null },
-                    controlSocket = socketManager.controlSocket,
-                    onConnectionLostCallback = {
-                        LogManager.w(LogTags.SCRCPY_CLIENT, "Health monitoring detects connection loss")
-                        sessionContext.emit(
-                            SessionEvent.SocketError(
-                                SocketIssue(
-                                    kind = SocketIssueKind.HealthCheckFailed,
-                                    socketType = SocketType.Video,
-                                    detail = "Socket connection lost",
-                                ),
-                            ),
+            // 步骤 3: 生成 SCID 并设置 Forward
+            val scid = generateScid()
+            val socketName = "scrcpy_%08x".format(scid)
+            val attempt = ActiveScrcpyConnection(
+                sessionId = session.sessionId,
+                adbConnection = connection,
+                localPort = prepared.localPort,
+                scid = scid,
+                socketName = socketName,
+                tunnelMode = options.config.tunnelMode,
+            )
+            activeConnection = attempt
+            setupForwardAndPushServer(
+                connection = connection,
+                socketName = socketName,
+                localPort = attempt.localPort,
+                tunnelMode = attempt.tunnelMode,
+                onServerAvailable = if (needsCodecDetection) {
+                    {
+                        startRemoteCodecDetectionInBackground(
+                            connection = connection,
+                            expectedSessionId = session.sessionId,
                         )
-                    },
-                )
-
-                // 通知流已就绪
-                onVideoStreamReady(videoStream)
-                onAudioStreamReady(audioStream)
-
-                Result.success(Pair(videoStream, audioStream))
-            } catch (cancelled: CancellationException) {
-                // 用户取消必须保持协程取消语义，但已经创建的 scrcpy 资源仍需原子回收。
-                withContext(NonCancellable) {
-                    if (codecDetectionStarted) {
-                        codecDetectionJob?.cancelAndJoin()
-                        codecDetectionJob = null
                     }
-                    if (ownsConnectionCleanup) {
-                        disconnectInternal().onFailure { cleanupError ->
-                            LogManager.w(
-                                LogTags.SCRCPY_CLIENT,
-                                "Incomplete resource cleanup after canceling connection: ${cleanupError.message}",
-                            )
-                        }
-                    }
-                }
-                throw cancelled
-            } catch (e: Exception) {
+                } else {
+                    null
+                },
+            )
+
+            // 自动选择结果必须在正式启动命令读取会话配置前完成。
+            // 检测本身与端口等本地准备并行，但不能跨过 server 启动边界。
+            if (codecDetectionStarted) {
+                codecDetectionJob?.join()
+            }
+
+            // 步骤 4: 启动 scrcpy-server
+            val launchOptions = session.options
+            val canProbeServerSocketDirectly = attempt.tunnelMode == ScrcpyTunnelMode.DIRECT_ADB
+            LogManager.d(
+                LogTags.SCRCPY_CLIENT,
+                if (canProbeServerSocketDirectly) {
+                    "Server startup mode: direct localabstract, skip log settle, detect the first video socket"
+                } else {
+                    "Server startup mode: ADB forward, wait for the server to be ready and then build the link according to the protocol sequence"
+                },
+            )
+            startScrcpyServer(
+                connection = connection,
+                scid = scid,
+                options = launchOptions,
+                waitForReady = !canProbeServerSocketDirectly,
+            )
+
+            // 步骤 5: 连接 Socket
+            connectSockets(
+                options = launchOptions,
+                connection = connection,
+                socketName = socketName,
+                localPort = attempt.localPort,
+                tunnelMode = attempt.tunnelMode,
+            )
+
+            if (canProbeServerSocketDirectly) {
+                completeScrcpyServerStartup(scid)
+            }
+
+            // 步骤 6: 先读取媒体头；远端可能用 audio codec id=0 明确关闭音频。
+            val (videoStream, audioStream) = metadataReader.readMetadataAndCreateStreams(
+                launchOptions.config.enableAudio,
+                session.onVideoResolution,
+            )
+            videoStream?.let { session.rememberNegotiatedVideoCodec(it.codec) }
+            audioStream?.let { session.rememberNegotiatedAudioCodec(it.codec) }
+
+            // 步骤 7: 根据媒体头的最终结果启动健康监控。
+            healthMonitor.startMonitoring(
+                videoSocket = socketManager.videoSocket,
+                audioSocket = socketManager.audioSocket.takeIf { audioStream != null },
+                controlSocket = socketManager.controlSocket,
+                onConnectionLostCallback = {
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "Health monitoring detects connection loss")
+                    sessionContext.emit(
+                        SessionEvent.SocketError(
+                            SocketIssue(
+                                kind = SocketIssueKind.HealthCheckFailed,
+                                socketType = SocketType.Video,
+                                detail = "Socket connection lost",
+                            ),
+                        ),
+                    )
+                },
+            )
+
+            // 通知流已就绪
+            onVideoStreamReady(videoStream)
+            onAudioStreamReady(audioStream)
+
+            Result.success(Pair(videoStream, audioStream))
+        } catch (cancelled: CancellationException) {
+            // 用户取消必须保持协程取消语义，但已经创建的 scrcpy 资源仍需原子回收。
+            withContext(NonCancellable) {
                 if (codecDetectionStarted) {
                     codecDetectionJob?.cancelAndJoin()
                     codecDetectionJob = null
                 }
-                shellMonitor.dumpDiagnostics("connect-failed")
-                LogManager.e(LogTags.SCRCPY_CLIENT, "Connection failed: ${e.message}")
                 if (ownsConnectionCleanup) {
                     disconnectInternal().onFailure { cleanupError ->
                         LogManager.w(
                             LogTags.SCRCPY_CLIENT,
-                            "Incomplete resource cleanup after connection failure: ${cleanupError.message}",
+                            "Incomplete resource cleanup after canceling connection: ${cleanupError.message}",
                         )
                     }
                 }
-                Result.failure(e)
             }
+            throw cancelled
+        } catch (e: Exception) {
+            if (codecDetectionStarted) {
+                codecDetectionJob?.cancelAndJoin()
+                codecDetectionJob = null
+            }
+            shellMonitor.dumpDiagnostics("connect-failed")
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Connection failed: ${e.message}")
+            if (ownsConnectionCleanup) {
+                disconnectInternal().onFailure { cleanupError ->
+                    LogManager.w(
+                        LogTags.SCRCPY_CLIENT,
+                        "Incomplete resource cleanup after connection failure: ${cleanupError.message}",
+                    )
+                }
+            }
+            Result.failure(e)
         }
+    }
 
     private suspend fun startRemoteCodecDetectionInBackground(
         connection: AdbConnection,
         expectedSessionId: String,
     ) {
         codecDetectionJob?.cancelAndJoin()
-        codecDetectionJob =
-            backgroundScope.launch {
-                runCatching {
-                    detectRemoteEncodersAfterPush(connection, expectedSessionId)
-                }.onFailure { error ->
-                    LogManager.w(LogTags.SCRCPY_CLIENT, "Background detection of remote codec failed: ${error.message}")
-                }
+        codecDetectionJob = backgroundScope.launch {
+            runCatching {
+                detectRemoteEncodersAfterPush(connection, expectedSessionId)
+            }.onFailure { error ->
+                LogManager.w(LogTags.SCRCPY_CLIENT, "Background detection of remote codec failed: ${error.message}")
             }
+        }
     }
 
     private fun shouldRunRemoteCodecDetectionInBackground(options: ScrcpyOptions): Boolean =
@@ -325,67 +315,68 @@ class ConnectionLifecycle(
      */
     suspend fun disconnect(): Result<Boolean> = lifecycleMutex.withLock { disconnectInternal() }
 
-    private suspend fun disconnectInternal(): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            val connectionSnapshot = activeConnection
-            try {
-                codecDetectionJob?.cancelAndJoin()
-                codecDetectionJob = null
-                healthMonitor.stopMonitoring()
+    private suspend fun disconnectInternal(): Result<Boolean> = withContext(Dispatchers.IO) {
+        val connectionSnapshot = activeConnection
+        try {
+            codecDetectionJob?.cancelAndJoin()
+            codecDetectionJob = null
+            healthMonitor.stopMonitoring()
 
-                // 1. 关闭所有 Socket（停止数据传输）
-                socketManager.closeAllSockets()
-                delay(50.milliseconds) // 等待 Socket 完全关闭
+            // 1. 关闭所有 Socket（停止数据传输）
+            socketManager.closeAllSockets()
+            delay(50.milliseconds) // 等待 Socket 完全关闭
 
-                // 2. 停止 Shell 监控（避免继续读取错误）
-                shellMonitor.stopMonitor()
-                shellMonitor.closeShellStream()
+            // 2. 停止 Shell 监控（避免继续读取错误）
+            shellMonitor.stopMonitor()
+            shellMonitor.closeShellStream()
 
-                // 3. 移除 ADB Forward
-                if (connectionSnapshot?.tunnelMode == ScrcpyTunnelMode.ADB_FORWARD) {
-                    try {
-                        connectionSnapshot.adbConnection
-                            .removeAdbForward(connectionSnapshot.localPort, ForwardRemovalTrigger.Disconnect)
-                        LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.english)
-                    } catch (e: Exception) {
-                        LogManager.w(
-                            LogTags.SCRCPY_CLIENT,
-                            "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.english}: ${e.message}",
-                        )
-                    }
-                }
-
-                // 4. 终止服务器进程
-                if (connectionSnapshot != null) {
-                    try {
-                        val scidHex = String.format("%08x", connectionSnapshot.scid)
-                        killProcess(
-                            connectionSnapshot.adbConnection,
-                            "scrcpy.*scid=$scidHex",
-                        )
-
-                        LogManager.d(
-                            LogTags.SCRCPY_CLIENT,
-                            "${RemoteTexts.SCRCPY_TERMINATED_SERVER_PROCESS.english} (scid=$scidHex)",
-                        )
-                    } catch (e: Exception) {
-                        LogManager.w(
-                            LogTags.SCRCPY_CLIENT,
-                            "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.english}: ${e.message}",
-                        )
-                    }
-                }
-
-                stateMachine.clearProgress()
-
-                Result.success(true)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to disconnect: ${e.message}", e)
-                Result.failure(e)
-            } finally {
-                if (activeConnection === connectionSnapshot) {
-                    activeConnection = null
+            // 3. 移除 ADB Forward
+            if (connectionSnapshot?.tunnelMode == ScrcpyTunnelMode.ADB_FORWARD) {
+                try {
+                    connectionSnapshot.adbConnection.removeAdbForward(
+                        connectionSnapshot.localPort, ForwardRemovalTrigger.Disconnect
+                    )
+                    LogManager.d(LogTags.SCRCPY_CLIENT, RemoteTexts.SCRCPY_REMOVED_ADB_FORWARD.english)
+                } catch (e: Exception) {
+                    LogManager.w(
+                        LogTags.SCRCPY_CLIENT,
+                        "${RemoteTexts.SCRCPY_REMOVE_FORWARD_FAILED.english}: ${e.message}",
+                    )
                 }
             }
+
+            // 4. 终止服务器进程
+            if (connectionSnapshot != null) {
+                try {
+                    val scidHex = String.format("%08x", connectionSnapshot.scid)
+                    killProcess(
+                        connectionSnapshot.adbConnection,
+                        "scrcpy.*scid=$scidHex",
+                    )
+
+                    LogManager.d(
+                        LogTags.SCRCPY_CLIENT,
+                        "${RemoteTexts.SCRCPY_TERMINATED_SERVER_PROCESS.english} (scid=$scidHex)",
+                    )
+                } catch (e: Exception) {
+                    LogManager.w(
+                        LogTags.SCRCPY_CLIENT,
+                        "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.english}: ${e.message}",
+                    )
+                }
+            }
+
+            stateMachine.clearProgress()
+
+            Result.success(true)
+        } catch (e: Exception) {
+            LogManager.e(LogTags.SCRCPY_CLIENT, "Failed to disconnect: ${e.message}", e)
+            Result.failure(e)
+        } finally {
+            sessionContext.currentSession()?.adbConnection?.clearShellPassword()
+            if (activeConnection === connectionSnapshot) {
+                activeConnection = null
+            }
         }
+    }
 }

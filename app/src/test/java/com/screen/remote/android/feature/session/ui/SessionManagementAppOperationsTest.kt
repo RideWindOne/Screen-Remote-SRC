@@ -49,7 +49,10 @@ class SessionManagementAppOperationsTest {
 
     @Test
     fun `package manager failure output is not counted as success`() {
-        assertEquals("Failure [DELETE_FAILED_INTERNAL_ERROR]", packageActionFailure("Failure [DELETE_FAILED_INTERNAL_ERROR]"))
+        assertEquals(
+            "Failure [DELETE_FAILED_INTERNAL_ERROR]",
+            packageActionFailure("Failure [DELETE_FAILED_INTERNAL_ERROR]")
+        )
         assertEquals("Error: Unknown package: com.example", packageActionFailure("Error: Unknown package: com.example"))
         assertEquals(null, packageActionFailure("Success"))
         assertEquals(null, packageActionFailure("Package com.example new state: enabled"))

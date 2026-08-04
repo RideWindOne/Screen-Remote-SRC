@@ -22,9 +22,7 @@ enum class ScrcpyEventType(val code: Int) {
     RECORDER_ERROR(5),             // 录制器错误
     ;
 
-    companion object {
-        fun fromCode(code: Int): ScrcpyEventType? = entries.find { it.code == code }
-    }
+    companion object
 }
 
 /**

@@ -28,14 +28,14 @@ data class MessageItem(
  * 消息列表状态管理类
  */
 class MessageListState {
-    private val _messages = mutableStateListOf<MessageItem>()
-    val messages: List<MessageItem> get() = _messages
+    val messages: List<MessageItem>
+        field = mutableStateListOf<MessageItem>()
 
     /**
      * 添加消息
      */
     fun addMessage(message: MessageItem) {
-        _messages.add(message)
+        messages.add(message)
     }
 
     /**
@@ -45,9 +45,9 @@ class MessageListState {
         id: String,
         update: (MessageItem) -> MessageItem,
     ) {
-        val index = _messages.indexOfFirst { it.id == id }
+        val index = messages.indexOfFirst { it.id == id }
         if (index >= 0) {
-            _messages[index] = update(_messages[index])
+            messages[index] = update(messages[index])
         }
     }
 
@@ -55,7 +55,7 @@ class MessageListState {
      * 清空所有消息
      */
     fun clear() {
-        _messages.clear()
+        messages.clear()
     }
 }
 

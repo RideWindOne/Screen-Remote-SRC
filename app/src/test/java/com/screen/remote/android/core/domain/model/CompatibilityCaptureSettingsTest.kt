@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlin.test.assertTrue
 
-private const val MAX_SCREENSHOT_MAX_SIZE = 8192
+private const val MAX_SCREENSHOT_MAX_SIZE = 16384
 
 class CompatibilityCaptureSettingsTest {
     @Test

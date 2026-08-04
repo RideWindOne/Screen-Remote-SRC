@@ -4,12 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.screen.remote.android.core.common.AppConstants
-import com.screen.remote.android.core.domain.model.DefaultGroups
-import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.data.repository.GroupData
 import com.screen.remote.android.core.data.repository.GroupRepository
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
+import com.screen.remote.android.core.domain.model.DefaultGroups
+import com.screen.remote.android.core.domain.model.DeviceGroup
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -149,21 +149,6 @@ class GroupViewModel(
             sessionRepository.removeGroupReferences(groupId)
             groupRepository.removeGroup(groupId)
         }
-    }
-
-    // ============ 统计功能 ============
-
-    /**
-     * 统计每个分组下的会话数量
-     */
-    fun getSessionCountByGroup(): Map<String, Int> {
-        val countMap = mutableMapOf<String, Int>()
-        sessionDataList.value.forEach { session ->
-            session.groupIds.forEach { groupId ->
-                countMap[groupId] = (countMap[groupId] ?: 0) + 1
-            }
-        }
-        return countMap
     }
 
     // ============ Factory ============

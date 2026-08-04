@@ -170,9 +170,15 @@ class VideoDecoderManager(
                 if (usePersistentSurface) {
                     if (activeSurface != null && activeSurface.isValid) {
                         decoder.setSurface(activeSurface)
-                        LogManager.d(LogTags.REMOTE_DISPLAY, "Full screen mode keeps Texture Surface, skips dummy Surface switching")
+                        LogManager.d(
+                            LogTags.REMOTE_DISPLAY,
+                            "Full screen mode keeps Texture Surface, skips dummy Surface switching"
+                        )
                     } else {
-                        LogManager.w(LogTags.REMOTE_DISPLAY, "Full screen mode Surface is not available, do not switch to dummy Surface yet")
+                        LogManager.w(
+                            LogTags.REMOTE_DISPLAY,
+                            "Full screen mode Surface is not available, do not switch to dummy Surface yet"
+                        )
                     }
                 } else {
                     decoder.setSurface(null)

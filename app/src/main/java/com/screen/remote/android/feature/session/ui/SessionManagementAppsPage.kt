@@ -1,9 +1,9 @@
 package com.screen.remote.android.feature.session.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,8 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.FilePickerHelper
+import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.infrastructure.adb.connection.installApkFromUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -180,7 +180,8 @@ internal fun SessionManagementAppsPage(
         inventoryLoading = result == null
         inventoryRefreshing = false
         inventoryError = result?.errorMessage
-        selectedPackages = selectedPackages.intersect(inventoryApps.mapTo(mutableSetOf(), AppInventoryEntry::packageName))
+        selectedPackages =
+            selectedPackages.intersect(inventoryApps.mapTo(mutableSetOf(), AppInventoryEntry::packageName))
     }
 
     LaunchedEffect(cacheScopeKey, refreshToken, listRefreshTick) {
@@ -207,7 +208,14 @@ internal fun SessionManagementAppsPage(
     }
 
     val projectionRequest =
-        remember(inventoryAppList, selectedFilters, sortSelection, packageNameOnlyMode, normalizedSearchQuery, appCacheRevision) {
+        remember(
+            inventoryAppList,
+            selectedFilters,
+            sortSelection,
+            packageNameOnlyMode,
+            normalizedSearchQuery,
+            appCacheRevision
+        ) {
             AppListProjectionRequest(
                 apps = inventoryAppList,
                 selectedFilters = selectedFilters,
@@ -255,7 +263,8 @@ internal fun SessionManagementAppsPage(
                         ManagementTexts.Apps.INSTALL_SUCCEEDED.get()
                     }
                 appActionProgress = null
-                appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Apps.INSTALL_FAILED.get())
+                appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message
+                    ?: ManagementTexts.Apps.INSTALL_FAILED.get())
                 refreshInventory(manual = true)
             }
         }
@@ -268,7 +277,8 @@ internal fun SessionManagementAppsPage(
         scope.launch {
             val result = block()
             appActionProgress = null
-            appActionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Apps.ACTION_FAILED.get())
+            appActionResult =
+                result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Apps.ACTION_FAILED.get())
             refreshInventory(manual = true)
         }
     }
@@ -359,7 +369,10 @@ internal fun SessionManagementAppsPage(
                                 Text(
                                     text = ManagementTexts.Apps.SELECT_ALL.get(),
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.clickable { selectedPackages = visibleApps.mapTo(linkedSetOf(), AppInventoryEntry::packageName) },
+                                    modifier = Modifier.clickable {
+                                        selectedPackages =
+                                            visibleApps.mapTo(linkedSetOf(), AppInventoryEntry::packageName)
+                                    },
                                 )
                                 Text(
                                     text = ManagementTexts.Apps.BATCH_ACTIONS.get(),
@@ -385,7 +398,7 @@ internal fun SessionManagementAppsPage(
 
             if (
                 initialProjectionLoading ||
-                    (appInventory.errorMessage == null && visibleApps.isNotEmpty())
+                (appInventory.errorMessage == null && visibleApps.isNotEmpty())
             ) {
                 item {
                     Box(modifier = Modifier.height(12.dp))
@@ -771,26 +784,26 @@ internal fun appListComparator(
 ): Comparator<AppInventoryEntry> {
     val comparator =
         when (sort) {
-                AppListSort.Title -> {
-                    compareBy<AppInventoryEntry> { it.appTitle.lowercase(Locale.getDefault()) }
-                        .thenBy { it.packageName.lowercase(Locale.getDefault()) }
-                }
-
-                AppListSort.Package -> {
-                    compareBy<AppInventoryEntry> { it.packageName.lowercase(Locale.getDefault()) }
-                        .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
-                }
-
-                AppListSort.EnabledState -> {
-                    compareBy<AppInventoryEntry> { it.isEnabled }
-                        .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
-                }
-
-                AppListSort.Size -> {
-                    compareBy<AppInventoryEntry> { it.apkSizeBytes ?: -1L }
-                        .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
-                }
+            AppListSort.Title -> {
+                compareBy<AppInventoryEntry> { it.appTitle.lowercase(Locale.getDefault()) }
+                    .thenBy { it.packageName.lowercase(Locale.getDefault()) }
             }
+
+            AppListSort.Package -> {
+                compareBy<AppInventoryEntry> { it.packageName.lowercase(Locale.getDefault()) }
+                    .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
+            }
+
+            AppListSort.EnabledState -> {
+                compareBy<AppInventoryEntry> { it.isEnabled }
+                    .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
+            }
+
+            AppListSort.Size -> {
+                compareBy<AppInventoryEntry> { it.apkSizeBytes ?: -1L }
+                    .thenBy { it.appTitle.lowercase(Locale.getDefault()) }
+            }
+        }
     return if (ascending) comparator else Comparator { left, right -> comparator.compare(right, left) }
 }
 

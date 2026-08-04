@@ -113,7 +113,10 @@ fun showDualBallSystem(
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(4) // KEYCODE_BACK
                     if (result.isFailure) {
-                        LogManager.e(LogTags.FLOATING_CONTROLLER, "Failed to send return key: ${result.exceptionOrNull()?.message}")
+                        LogManager.e(
+                            LogTags.FLOATING_CONTROLLER,
+                            "Failed to send return key: ${result.exceptionOrNull()?.message}"
+                        )
                     }
                 }
             }

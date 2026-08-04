@@ -54,7 +54,11 @@ class ScrcpyMonitorBus(
                     try {
                         handleEvent(event)
                     } catch (e: Exception) {
-                        LogManager.e(LogTags.SCRCPY_EVENT_BUS, "[$deviceId] Exception in handling event: ${e.message}", e)
+                        LogManager.e(
+                            LogTags.SCRCPY_EVENT_BUS,
+                            "[$deviceId] Exception in handling event: ${e.message}",
+                            e
+                        )
                     }
                 }
             }
@@ -110,7 +114,4 @@ class ScrcpyMonitorBus(
         stats.lastTimestamp = System.currentTimeMillis()
     }
 
-    fun getStateSummary(): String {
-        return buildScrcpyMonitorSummary(deviceId, _state.value)
-    }
 }

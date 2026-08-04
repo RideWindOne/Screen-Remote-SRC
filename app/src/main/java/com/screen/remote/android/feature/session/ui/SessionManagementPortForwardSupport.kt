@@ -74,8 +74,10 @@ internal object SessionManagementPortForwardManager {
                     append($$"printf 'PID=%s\\n' \"$pid\"")
                 }
 
-            val launchOutput = connection.executeShell("sh -c ${quoteShellArg(script)}", retryOnFailure = false).getOrThrow()
-            val pid = launchOutput.lineSequence().firstOrNull { it.startsWith("PID=") }?.substringAfter('=')?.toIntOrNull()
+            val launchOutput =
+                connection.executeShell("sh -c ${quoteShellArg(script)}", retryOnFailure = false).getOrThrow()
+            val pid =
+                launchOutput.lineSequence().firstOrNull { it.startsWith("PID=") }?.substringAfter('=')?.toIntOrNull()
             val activeLocalPorts = mutableListOf<Int>()
             config.localPorts.forEach { port ->
                 connection.setupPortForward(port, port).getOrElse { error ->
@@ -120,7 +122,8 @@ internal object SessionManagementPortForwardManager {
                     .getOrThrow()
             val remoteRunning = output.lineSequence().any { it.trim() == "STATE=RUNNING" }
             val pid = output.lineSequence().firstOrNull { it.startsWith("PID=") }?.substringAfter('=')?.toIntOrNull()
-            val config = output.lineSequence().firstOrNull { it.startsWith("CONFIG=") }?.let { parseRemoteConfig(it.substringAfter("CONFIG=")) }
+            val config = output.lineSequence().firstOrNull { it.startsWith("CONFIG=") }
+                ?.let { parseRemoteConfig(it.substringAfter("CONFIG=")) }
             val localForwardRunning = config?.localPorts?.all { connection.isAdbForwardRunning(it) } == true
             PortForwardStatus(
                 remoteRunning = remoteRunning,

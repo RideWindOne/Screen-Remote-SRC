@@ -30,11 +30,11 @@ import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.domain.model.SessionColor
 import com.screen.remote.android.core.i18n.SessionTexts
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
-import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
+import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import kotlinx.coroutines.launch
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 @Composable
 fun SessionsScreen(

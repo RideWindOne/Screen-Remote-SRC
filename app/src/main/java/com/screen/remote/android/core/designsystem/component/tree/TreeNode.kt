@@ -192,7 +192,8 @@ fun TreeNodeItemForSelector(
                         } else {
                             Color.Transparent
                         },
-                    ).clickable(enabled = !isAlreadyAdded) { onSelect(node.group.id) }
+                    )
+                    .clickable(enabled = !isAlreadyAdded) { onSelect(node.group.id) }
                     .padding(start = (16 + node.level * 20).dp, end = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,

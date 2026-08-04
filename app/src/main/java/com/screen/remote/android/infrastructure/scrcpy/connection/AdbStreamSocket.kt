@@ -19,13 +19,26 @@ internal class AdbStreamSocket(
     private val adbStream: AdbStream,
     private val streamLabel: String,
 ) : Socket() {
-    @Volatile private var closed = false
-    @Volatile private var connected = true
-    @Volatile private var timeoutMs = 0
-    @Volatile private var keepAliveEnabled = false
-    @Volatile private var tcpNoDelayEnabled = true
-    @Volatile private var receiveBufferSizeValue = 64 * 1024
-    @Volatile private var sendBufferSizeValue = 64 * 1024
+    @Volatile
+    private var closed = false
+
+    @Volatile
+    private var connected = true
+
+    @Volatile
+    private var timeoutMs = 0
+
+    @Volatile
+    private var keepAliveEnabled = false
+
+    @Volatile
+    private var tcpNoDelayEnabled = true
+
+    @Volatile
+    private var receiveBufferSizeValue = 64 * 1024
+
+    @Volatile
+    private var sendBufferSizeValue = 64 * 1024
 
     private val pendingChunks = LinkedBlockingQueue<Chunk>()
     private val terminalError = AtomicReference<IOException?>()

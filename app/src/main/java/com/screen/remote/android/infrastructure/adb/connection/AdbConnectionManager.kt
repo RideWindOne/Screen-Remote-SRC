@@ -86,7 +86,8 @@ class AdbConnectionManager private constructor(
         deviceName: String? = null,
         forceReconnect: Boolean = false,
         sessionContext: SessionContext? = null,
-    ): Result<String> = connectMdnsConnection(serviceName, deviceName, forceReconnect, sessionContext).map { it.deviceId }
+    ): Result<String> =
+        connectMdnsConnection(serviceName, deviceName, forceReconnect, sessionContext).map { it.deviceId }
 
     suspend fun connectUsbDevice(
         usbDevice: UsbDevice,
@@ -108,14 +109,17 @@ class AdbConnectionManager private constructor(
         deviceName: String? = null,
         forceReconnect: Boolean = false,
         sessionContext: SessionContext? = null,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         when (candidate.transport) {
             ConnectionTransport.TCP ->
-                connectTcpConnection(candidate.host, candidate.port, deviceName, forceReconnect, sessionContext)
+                connectTcpConnection(candidate.host, candidate.port, deviceName, forceReconnect, sessionContext, shellPassword)
+
             ConnectionTransport.MDNS ->
-                connectMdnsConnection(candidate.host, deviceName, forceReconnect, sessionContext)
+                connectMdnsConnection(candidate.host, deviceName, forceReconnect, sessionContext, shellPassword)
+
             ConnectionTransport.USB ->
-                connectUsbConnection(candidate.deviceIdentifier(), deviceName, sessionContext)
+                connectUsbConnection(candidate.deviceIdentifier(), deviceName, sessionContext, shellPassword)
         }
 
     private suspend fun connectTcpConnection(
@@ -124,6 +128,7 @@ class AdbConnectionManager private constructor(
         deviceName: String? = null,
         forceReconnect: Boolean = false,
         sessionContext: SessionContext? = null,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedHost = normalizeEndpointHost(host)
@@ -135,6 +140,7 @@ class AdbConnectionManager private constructor(
                     deviceName = deviceName,
                     forceReconnect = forceReconnect,
                     sessionContext = sessionContext,
+                    shellPassword = shellPassword,
                 )
             }
         }
@@ -144,6 +150,7 @@ class AdbConnectionManager private constructor(
         deviceName: String? = null,
         forceReconnect: Boolean = false,
         sessionContext: SessionContext? = null,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withContext(Dispatchers.IO) {
             val normalizedServiceName = serviceName.trim()
@@ -165,6 +172,7 @@ class AdbConnectionManager private constructor(
                     deviceName = deviceName ?: service.name,
                     forceReconnect = forceReconnect,
                     sessionContext = sessionContext,
+                    shellPassword = shellPassword,
                 )
             }
         }
@@ -173,18 +181,20 @@ class AdbConnectionManager private constructor(
         usbDevice: UsbDevice,
         deviceName: String? = null,
         sessionContext: SessionContext? = null,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withDeviceOperationLock(resolveUsbOperationKey(usbDevice)) {
-            connector.connectUsb(usbDevice, deviceName, sessionContext)
+            connector.connectUsb(usbDevice, deviceName, sessionContext, shellPassword)
         }
 
     private suspend fun connectUsbConnection(
         deviceId: String,
         deviceName: String? = null,
         sessionContext: SessionContext? = null,
+        shellPassword: String = "",
     ): Result<AdbConnection> =
         withDeviceOperationLock(normalizeUsbDeviceId(deviceId)) {
-            connector.connectUsbByDeviceId(deviceId, deviceName, sessionContext)
+            connector.connectUsbByDeviceId(deviceId, deviceName, sessionContext, shellPassword)
         }
 
     fun scanUsbDevices() = usbAdbManager.scanUsbDevices()
@@ -192,11 +202,6 @@ class AdbConnectionManager private constructor(
     suspend fun requestUsbPermission(device: UsbDevice) = usbAdbManager.requestUsbPermission(device)
 
     fun getUsbDevices() = usbAdbManager.usbDevices
-
-    suspend fun verifyConnection(deviceId: String): Boolean {
-        val connection = getConnection(deviceId) ?: return false
-        return connection.verify().isSuccess
-    }
 
     suspend fun disconnectDevice(deviceId: String): Result<Boolean> =
         withContext(Dispatchers.IO) {
@@ -221,17 +226,7 @@ class AdbConnectionManager private constructor(
 
     fun isDeviceConnected(deviceId: String): Boolean = connectionRegistry.isDeviceConnected(deviceId)
 
-    suspend fun disconnectAll() =
-        withContext(Dispatchers.IO) {
-            LogManager.d(LogTags.ADB_CONNECTION, "Disconnect all ADB connections")
-            connectionRegistry.disconnectAll()
-        }
-
     fun getKeyPair() = keyManager.getKeyPair()
-
-    fun getPublicKey() = keyManager.getPublicKey()
-
-    fun reloadKeyPair() = keyManager.reloadKeyPair()
 
     suspend fun refreshRuntimeIdentity() =
         withContext(Dispatchers.IO) {
@@ -239,7 +234,10 @@ class AdbConnectionManager private constructor(
             connectionRegistry.disconnectAll()
             AdbBridge.clearConnection()
             keyManager.reloadKeyPair()
-            LogManager.d(LogTags.ADB_CONNECTION, "Runtime identity refreshed: ${AdbRuntimeDiagnostics.identitySummary(AdbRuntimeProvider.get())}")
+            LogManager.d(
+                LogTags.ADB_CONNECTION,
+                "Runtime identity refreshed: ${AdbRuntimeDiagnostics.identitySummary(AdbRuntimeProvider.get())}"
+            )
         }
 
     private fun emit(
@@ -397,7 +395,11 @@ internal class AdbConnectionRegistry {
             LogManager.d(LogTags.ADB_CONNECTION, "The specified ADB connection object has been cleaned: $deviceId")
             Result.success(true)
         } catch (e: Exception) {
-            LogManager.e(LogTags.ADB_CONNECTION, "Conditional disconnection ADB connection failed $deviceId: ${e.message}", e)
+            LogManager.e(
+                LogTags.ADB_CONNECTION,
+                "Conditional disconnection ADB connection failed $deviceId: ${e.message}",
+                e
+            )
             Result.failure(e)
         }
 

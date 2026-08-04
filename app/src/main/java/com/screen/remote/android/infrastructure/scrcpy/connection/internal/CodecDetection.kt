@@ -9,9 +9,9 @@ import com.screen.remote.android.infrastructure.media.codec.CodecSelector
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import com.screen.remote.android.infrastructure.scrcpy.session.Session
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.saveCodecDetectionResult
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionIssue
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionIssueKind
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 
 /**
  * 编解码器检测与选择入口。
@@ -203,7 +203,10 @@ internal fun validateCodecSelection(
     audioResult: CodecSelectionResult?,
 ): Boolean {
     if ((needDetectVideo && videoResult == null) || (needDetectAudio && audioResult == null)) {
-        LogManager.w(LogTags.SCRCPY_CLIENT, "Codec automatic selection failed, will continue to use current configuration or scrcpy defaults")
+        LogManager.w(
+            LogTags.SCRCPY_CLIENT,
+            "Codec automatic selection failed, will continue to use current configuration or scrcpy defaults"
+        )
         return false
     }
     return true

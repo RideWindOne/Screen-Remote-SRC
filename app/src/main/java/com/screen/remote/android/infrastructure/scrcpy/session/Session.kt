@@ -8,13 +8,13 @@ import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.SessionRuntimeState
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.processEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.internal.stopMonitor
-import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionComponentStateSnapshot
 import com.screen.remote.android.infrastructure.scrcpy.session.model.DecoderResolutionRecoveryRequest
+import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionComponentStateSnapshot
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionEvent
 import com.screen.remote.android.infrastructure.scrcpy.session.model.SessionState
 import com.screen.remote.android.infrastructure.scrcpy.session.monitor.ScrcpyMonitorBus
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel

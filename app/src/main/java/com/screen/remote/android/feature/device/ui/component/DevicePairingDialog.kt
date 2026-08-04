@@ -1,7 +1,6 @@
 package com.screen.remote.android.feature.device.ui.component
 
 import android.graphics.Bitmap
-import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -76,6 +75,7 @@ import com.screen.remote.android.infrastructure.adb.pairing.AdbQrPairingCredenti
 import com.screen.remote.android.infrastructure.adb.pairing.AdbQrPairingCredentialsGenerator
 import com.screen.remote.android.infrastructure.adb.pairing.findQrPairingService
 import kotlin.time.Duration.Companion.milliseconds
+import android.graphics.Color as AndroidColor
 
 /**
  * ADB 无线调试配对对话框入口。
@@ -228,6 +228,7 @@ fun AdbPairingDialog(
                         pairingStatus == PairingStatus.CONNECTING || pairingStatus == PairingStatus.PAIRING -> {
                             QrPairingCardState.PAIRING
                         }
+
                         qrPairingFailed -> QrPairingCardState.FAILED
                         else -> QrPairingCardState.WAITING
                     },

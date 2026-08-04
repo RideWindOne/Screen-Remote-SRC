@@ -127,12 +127,15 @@ private fun mergeMdnsServices(
     if (refreshing) {
         retainedServices.forEach { service ->
             if (service.stableKey() !in currentKeys) {
-                merged.putIfAbsent(service.stableKey(), service to true)
+                val serviceKey = service.stableKey()
+                if (!merged.containsKey(serviceKey)) {
+                    merged[serviceKey] = service to true
+                }
             }
         }
     }
     return merged.values.sortedWith(
-        compareBy<Pair<AdbMdnsService, Boolean>>(
+        compareBy(
             { it.first.name },
             { it.first.serviceType.name },
             { it.first.host },

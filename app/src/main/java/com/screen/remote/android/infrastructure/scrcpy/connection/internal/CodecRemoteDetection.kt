@@ -2,8 +2,8 @@ package com.screen.remote.android.infrastructure.scrcpy.connection.internal
 
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.EncoderCapability
+import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.EncoderDetectionResult
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle

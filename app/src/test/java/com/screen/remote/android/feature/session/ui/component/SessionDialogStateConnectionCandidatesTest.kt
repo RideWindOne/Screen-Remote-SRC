@@ -3,8 +3,8 @@ package com.screen.remote.android.feature.session.ui.component
 import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.data.repository.ConnectionCandidateData
 import com.screen.remote.android.core.data.repository.SessionData
-import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.ConnectionTransport
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

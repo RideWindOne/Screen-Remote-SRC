@@ -74,7 +74,10 @@ class ConnectionMetadataReader(
                         val codecId = DataInputStream(audioInput).readInt()
                         when (val header = parseAudioStreamHeader(codecId)) {
                             AudioStreamHeader.Disabled -> {
-                                LogManager.w(LogTags.SCRCPY_CLIENT, "The remote device has disabled audio, continue the video session")
+                                LogManager.w(
+                                    LogTags.SCRCPY_CLIENT,
+                                    "The remote device has disabled audio, continue the video session"
+                                )
                                 audioSocket.close()
                             }
 
@@ -171,12 +174,24 @@ class ConnectionMetadataReader(
                 }
                 offset += read
                 VideoDebugLog.d(LogTags.SCRCPY_PACKET) {
-                    "video:device_meta chunk=$read total=$offset/$DEVICE_NAME_FIELD_LENGTH data=${hex(buffer.copyOf(offset))}"
+                    "video:device_meta chunk=$read total=$offset/$DEVICE_NAME_FIELD_LENGTH data=${
+                        hex(
+                            buffer.copyOf(
+                                offset
+                            )
+                        )
+                    }"
                 }
             } catch (e: java.net.SocketTimeoutException) {
                 LogManager.e(
                     LogTags.SCRCPY_PACKET,
-                    "video:device_meta timeout total=$offset/$DEVICE_NAME_FIELD_LENGTH partial=${hex(buffer.copyOf(offset))}",
+                    "video:device_meta timeout total=$offset/$DEVICE_NAME_FIELD_LENGTH partial=${
+                        hex(
+                            buffer.copyOf(
+                                offset
+                            )
+                        )
+                    }",
                     e,
                 )
                 throw e

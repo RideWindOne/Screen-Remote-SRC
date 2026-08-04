@@ -207,7 +207,10 @@ class SessionManagementTerminalHighlightTest {
             "cd /sdcard/Pictures/",
             applyShellCompletion(completedDirectory, childTarget, listOf("Download/", "Pictures/"), candidateIndex = 1),
         )
-        assertEquals(false, shouldLoadNextShellCompletionLevel("cd /sdcard/Download/", listOf("Download/", "Pictures/")))
+        assertEquals(
+            false,
+            shouldLoadNextShellCompletionLevel("cd /sdcard/Download/", listOf("Download/", "Pictures/"))
+        )
     }
 
     private fun TerminalOutputLine.matchedText(): String {

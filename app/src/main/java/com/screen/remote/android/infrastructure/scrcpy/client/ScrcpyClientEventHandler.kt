@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 internal class ScrcpyClientEventHandler(
     private val connectionState: MutableStateFlow<ConnectionState>,
     private val getCurrentSessionId: () -> String?,
-    private val getCurrentDeviceId: () -> String?,
     private val updateConnectionStateOnError: (String) -> Unit,
 ) {
     /**

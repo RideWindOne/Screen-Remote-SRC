@@ -28,10 +28,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppDimens
-import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
+import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.i18n.CodecTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.EncoderType
@@ -39,7 +39,7 @@ import com.screen.remote.android.feature.session.ui.component.CompactTextField
 
 /**
  * 编码器列表组件
- * 
+ *
  * 提取自 EncoderSelectionDialog.kt
  * 包含编码器选项区域、列表区域和状态卡片
  */

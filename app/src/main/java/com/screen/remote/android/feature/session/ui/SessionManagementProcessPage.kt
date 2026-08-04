@@ -45,8 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.designsystem.component.AppDivider
+import com.screen.remote.android.core.i18n.ManagementTexts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -57,7 +57,7 @@ import java.util.Locale
 private val ProcessChildListPaddingTop = 2.dp
 private val ProcessChildRowHorizontalPadding = 12.dp
 private val ProcessChildRowVerticalPadding = 1.dp
-private val ProcessChildAvatarScale = 0.88f
+private const val ProcessChildAvatarScale = 0.88f
 private val ProcessChildDividerInsetStart = 66.dp
 private val ProcessChildDividerInsetEnd = 12.dp
 private val ProcessCardHorizontalPadding = 12.dp
@@ -262,14 +262,16 @@ internal fun SessionManagementProcessPage(
         scope.launch {
             val result =
                 runCatching {
-                    val connection = SessionManagementAdbConnection.current() ?: error(ManagementTexts.Processes.NO_ADB_CONNECTION_AVAILABLE.get())
+                    val connection = SessionManagementAdbConnection.current()
+                        ?: error(ManagementTexts.Processes.NO_ADB_CONNECTION_AVAILABLE.get())
                     connection
                         .executeShell("am force-stop ${entry.packageName}", retryOnFailure = false)
                         .getOrThrow()
                     ManagementTexts.Processes.TRIED_STOP_PROCESSES.format(entry.packageName)
                 }
             actionProgress = null
-            actionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Processes.COULDN_T_STOP_PROCESS.get())
+            actionResult = result.getOrNull() ?: (result.exceptionOrNull()?.message
+                ?: ManagementTexts.Processes.COULDN_T_STOP_PROCESS.get())
         }
     }
 
@@ -326,7 +328,8 @@ internal fun SessionManagementProcessPage(
                     item {
                         SessionManagementNoteCard(
                             title = ManagementTexts.Processes.COULDN_T_LOAD_PROCESSES.get(),
-                            text = processSnapshot.errorMessage ?: ManagementTexts.Processes.COULDN_T_LOAD_PROCESS_LIST.get(),
+                            text = processSnapshot.errorMessage
+                                ?: ManagementTexts.Processes.COULDN_T_LOAD_PROCESS_LIST.get(),
                         )
                     }
                 }

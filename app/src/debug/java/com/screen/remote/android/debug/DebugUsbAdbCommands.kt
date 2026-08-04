@@ -3,15 +3,13 @@ package com.screen.remote.android.debug
 import android.content.Context
 import android.content.Intent
 import android.hardware.usb.UsbManager
-import androidx.activity.ComponentActivity
-import androidx.lifecycle.lifecycleScope
 import com.screen.remote.android.app.ScreenRemoteApp
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
-import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
+import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.adb.usb.UsbDadb
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +29,8 @@ internal object DebugUsbAdbCommands {
     }
 
     suspend fun handleIntent(intent: Intent) {
-        val command = intent.getStringExtra(DebugUsbAdbReceiver.EXTRA_COMMAND)?.ifBlank { null } ?: DebugUsbAdbReceiver.COMMAND_DIAG
+        val command = intent.getStringExtra(DebugUsbAdbReceiver.EXTRA_COMMAND)?.ifBlank { null }
+            ?: DebugUsbAdbReceiver.COMMAND_DIAG
         val manager = ScreenRemoteApp.instance.adbConnectionManager
         log("command start: $command")
 
@@ -239,28 +238,6 @@ internal object DebugUsbAdbCommands {
         log("command finish: $command")
     }
 
-    @JvmStatic
-    fun handleActivityLaunch(activity: ComponentActivity) {
-        val command =
-            activity.intent.getStringExtra(EXTRA_STARTUP_COMMAND)
-                ?.ifBlank { null }
-                ?: return
-
-        if (activity.intent.getBooleanExtra(EXTRA_STARTUP_CONSUMED, false)) {
-            return
-        }
-        activity.intent.putExtra(EXTRA_STARTUP_CONSUMED, true)
-        activity.intent.putExtra(DebugUsbAdbReceiver.EXTRA_COMMAND, command)
-
-        activity.lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                handleIntent(activity.intent)
-            } catch (t: Throwable) {
-                log("startup command failed: ${t.message}", t)
-            }
-        }
-    }
-
     private suspend fun ensureConnected(
         manager: com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager,
         intent: Intent,
@@ -326,6 +303,4 @@ internal object DebugUsbAdbCommands {
         }
     }
 
-    private const val EXTRA_STARTUP_COMMAND = "debug_usb_command"
-    private const val EXTRA_STARTUP_CONSUMED = "debug_usb_command_consumed"
 }

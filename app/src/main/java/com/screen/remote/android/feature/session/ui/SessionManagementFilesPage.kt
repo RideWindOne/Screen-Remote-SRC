@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -47,11 +48,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.AppColors
 import com.screen.remote.android.core.common.util.FilePickerHelper
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.designsystem.component.ClickableBreadcrumb
 import com.screen.remote.android.core.designsystem.component.ClickableBreadcrumbItem
+import com.screen.remote.android.core.i18n.ManagementTexts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -150,6 +152,8 @@ internal fun SessionManagementFileBrowser(
     var deleteTargets by remember { mutableStateOf<List<RemoteFileEntry>>(emptyList()) }
     var fileActionMessage by remember { mutableStateOf<String?>(null) }
     var fileActionProgress by remember { mutableStateOf<String?>(null) }
+    val fileUploadProgressState = remember { MutableStateFlow<FileUploadProgress?>(null) }
+    val fileUploadProgress by fileUploadProgressState.collectAsState()
     var fileSnapshot by state.snapshotState
     var fileSnapshotPath by state.snapshotPathState
     var fileRefreshing by remember { mutableStateOf(true) }
@@ -189,7 +193,8 @@ internal fun SessionManagementFileBrowser(
         state.lastExternalRefreshToken = refreshToken
         state.lastLocalRefreshTick = localRefreshTick
         val pathChanged = fileSnapshotPath != currentPath
-        val canKeepCurrentContent = !pathChanged && fileSnapshot.entries.isNotEmpty() && fileSnapshot.errorMessage == null
+        val canKeepCurrentContent =
+            !pathChanged && fileSnapshot.entries.isNotEmpty() && fileSnapshot.errorMessage == null
         if (pathChanged) {
             fileSnapshotPath = currentPath
             selectedPaths = emptySet()
@@ -248,15 +253,45 @@ internal fun SessionManagementFileBrowser(
         block: suspend () -> Result<String>,
     ) {
         fileActionProgress = progress
+        fileUploadProgressState.value = null
         scope.launch {
             val result = block()
             fileActionProgress = null
-            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message ?: ManagementTexts.Files.FILE_ACTION_FAILED.get())
+            if (result.isSuccess) {
+                fileUploadProgressState.value = null
+            }
+            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message
+                ?: ManagementTexts.Files.FILE_ACTION_FAILED.get())
             if (result.isSuccess) {
                 onSuccess()
             }
             selectedPaths = emptySet()
             refreshCurrentDirectory()
+        }
+    }
+
+    fun launchFileUploadAction(
+        sourceUris: List<Uri>,
+        targetDirectory: String,
+    ) {
+        fileUploadProgressState.value = null
+        fileActionProgress = ManagementTexts.Files.UPLOADING_FILE_S.format(sourceUris.size)
+        scope.launch {
+            val result =
+                uploadLocalFilesToRemoteDirectory(
+                    context = context,
+                    sourceUris = sourceUris,
+                    targetDirectory = targetDirectory,
+                    onProgress = { progress ->
+                        fileUploadProgressState.value = progress
+                    },
+                )
+            fileUploadProgressState.value = null
+            fileActionProgress = null
+            fileActionMessage = result.getOrNull() ?: (result.exceptionOrNull()?.message
+                ?: ManagementTexts.Files.FILE_ACTION_FAILED.get())
+            refreshCurrentDirectory()
+            selectedPaths = emptySet()
         }
     }
 
@@ -293,17 +328,19 @@ internal fun SessionManagementFileBrowser(
             val targetDirectory = pendingUploadTargetDirectory
             pendingUploadTargetDirectory = null
             if (sourceUris.isNotEmpty() && targetDirectory != null) {
-                launchFileAction(
-                    progress = ManagementTexts.Files.UPLOADING_FILE_S.format(sourceUris.size),
-                ) {
-                    uploadLocalFilesToRemoteDirectory(
-                        context = context,
-                        sourceUris = sourceUris,
-                        targetDirectory = targetDirectory,
-                    )
-                }
+                launchFileUploadAction(sourceUris = sourceUris, targetDirectory = targetDirectory)
             }
         }
+    val uploadProgressValue =
+        fileUploadProgress
+            ?.let { progress ->
+                when {
+                    progress.totalBytes > 0L -> progress.uploadedBytes.toFloat() / progress.totalBytes.toFloat()
+                    progress.totalFiles > 0 -> progress.fileIndex.toFloat() / progress.totalFiles.toFloat()
+                    else -> null
+                }
+            }?.coerceIn(0f, 1f)
+    val uploadProgressDetail = formatUploadProgressDetail(fileUploadProgress)
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -350,7 +387,8 @@ internal fun SessionManagementFileBrowser(
                                     .clickable {
                                         currentPath = navigateFileBrowserUp(currentPath)
                                         selectedPaths = emptySet()
-                                    }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
                         )
                     }
                 }
@@ -372,7 +410,8 @@ internal fun SessionManagementFileBrowser(
                         fileSnapshot.errorMessage != null -> {
                             SessionManagementNoteCard(
                                 title = ManagementTexts.Files.FOLDER_LOAD_FAILED_TITLE.get(),
-                                text = fileSnapshot.errorMessage ?: ManagementTexts.Files.FOLDER_LOAD_FAILED_MESSAGE.get(),
+                                text = fileSnapshot.errorMessage
+                                    ?: ManagementTexts.Files.FOLDER_LOAD_FAILED_MESSAGE.get(),
                             )
                         }
 
@@ -428,7 +467,8 @@ internal fun SessionManagementFileBrowser(
                                                     .padding(start = 64.dp, end = 16.dp)
                                                     .background(
                                                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                                                    ).height(1.dp),
+                                                    )
+                                                    .height(1.dp),
                                         )
                                     }
                                 }
@@ -507,7 +547,8 @@ internal fun SessionManagementFileBrowser(
                         onClick = {
                             renameTarget = selectedEntries.singleOrNull()
                                 ?: run {
-                                    fileActionMessage = ManagementTexts.Files.RENAME_ONLY_SUPPORTS_SINGLE_FILE_FOLDER.get()
+                                    fileActionMessage =
+                                        ManagementTexts.Files.RENAME_ONLY_SUPPORTS_SINGLE_FILE_FOLDER.get()
                                     null
                                 }
                         },
@@ -519,7 +560,8 @@ internal fun SessionManagementFileBrowser(
                         onClick = {
                             fileDetailEntry = selectedEntries.singleOrNull()
                                 ?: run {
-                                    fileActionMessage = ManagementTexts.Files.DETAILS_ONLY_SUPPORTS_SINGLE_FILE_FOLDER.get()
+                                    fileActionMessage =
+                                        ManagementTexts.Files.DETAILS_ONLY_SUPPORTS_SINGLE_FILE_FOLDER.get()
                                     null
                                 }
                         },
@@ -735,7 +777,8 @@ internal fun SessionManagementFileBrowser(
                                             audioPreviewPlayer = null
                                         }
                                         player.release()
-                                        fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_PLAY_AUDIO.get()
+                                        fileActionMessage =
+                                            error.message ?: ManagementTexts.Files.COULDN_T_PLAY_AUDIO.get()
                                     }
                                 }
 
@@ -791,7 +834,9 @@ internal fun SessionManagementFileBrowser(
                     fileActionProgress = null
                     result.fold(
                         onSuccess = { editorState -> textEditorState = editorState },
-                        onFailure = { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_LOAD_TEXT_FILE.get() },
+                        onFailure = { error ->
+                            fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_LOAD_TEXT_FILE.get()
+                        },
                     )
                 }
             },
@@ -846,7 +891,9 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_IMAGE.get() }
+                        ?.let { error ->
+                            fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_IMAGE.get()
+                        }
                 }
             },
             onPushBack = {
@@ -865,7 +912,9 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_VIDEO.get() }
+                        ?.let { error ->
+                            fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_VIDEO.get()
+                        }
                 }
             },
             onPushBack = {
@@ -884,7 +933,9 @@ internal fun SessionManagementFileBrowser(
                 scope.launch {
                     openLocalFileExternal(context, state.localFile)
                         .exceptionOrNull()
-                        ?.let { error -> fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_FILE.get() }
+                        ?.let { error ->
+                            fileActionMessage = error.message ?: ManagementTexts.Files.COULDN_T_OPEN_FILE.get()
+                        }
                 }
             },
             onPushBack = {
@@ -915,6 +966,8 @@ internal fun SessionManagementFileBrowser(
         SessionManagementProgressDialog(
             title = ManagementTexts.Files.FILES.get(),
             message = message,
+            progress = uploadProgressValue,
+            detail = uploadProgressDetail,
         )
     }
 
@@ -926,3 +979,16 @@ internal fun SessionManagementFileBrowser(
         )
     }
 }
+
+private fun formatUploadProgressDetail(progress: FileUploadProgress?): String? =
+    progress?.let {
+        ManagementTexts.Files.UPLOADING_FILE_S.format(it.totalFiles) +
+            "\n" +
+            "${it.fileName} (${formatFileSize(it.fileUploadedBytes)} / ${formatFileSize(it.fileTotalBytes)})" +
+            "\n" +
+            if (it.totalBytes > 0L) {
+                "${formatFileSize(it.uploadedBytes)} / ${formatFileSize(it.totalBytes)}"
+            } else {
+                "${it.fileIndex} / ${it.totalFiles}"
+            }
+    }

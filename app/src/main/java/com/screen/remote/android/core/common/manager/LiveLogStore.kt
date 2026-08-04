@@ -14,6 +14,7 @@ data class LiveLogEntry(
 object LiveLogStore {
     private const val MAX_ENTRIES = 1_000
     private val lock = Any()
+
     @Volatile
     private var enabled = false
     private var nextId = 0L

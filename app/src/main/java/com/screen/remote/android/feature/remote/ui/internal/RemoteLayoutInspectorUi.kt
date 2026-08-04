@@ -2,6 +2,7 @@ package com.screen.remote.android.feature.remote.ui.internal
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
@@ -32,14 +32,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -114,7 +114,8 @@ internal fun RemoteLayoutInspectorOverlay(
                             width = if (node.focused) 2.dp else 1.dp,
                             color = nodeColor,
                             shape = RoundedCornerShape(6.dp),
-                        ).background(
+                        )
+                        .background(
                             color = nodeColor.copy(alpha = 0.05f),
                             shape = RoundedCornerShape(6.dp),
                         ),
@@ -129,7 +130,9 @@ internal fun RemoteLayoutInspectorOverlay(
                         imageVector = Icons.Default.ExpandMore,
                         contentDescription = "Dropdown indicator",
                         tint = nodeColor,
-                        modifier = Modifier.align(Alignment.Center).size(16.dp),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(16.dp),
                     )
                 }
             }
@@ -216,12 +219,21 @@ internal fun RemoteLayoutInspectorOverlay(
                     text = displayLabel,
                     modifier =
                         Modifier
-                            .offset { IntOffset(leftPx.roundToInt() + 2.dp.roundToPx(), topPx.roundToInt() + 2.dp.roundToPx()) }
+                            .offset {
+                                IntOffset(
+                                    leftPx.roundToInt() + 2.dp.roundToPx(),
+                                    topPx.roundToInt() + 2.dp.roundToPx()
+                                )
+                            }
                             .background(
                                 color = nodeColor.copy(alpha = 0.88f),
                                 shape = RoundedCornerShape(4.dp),
-                            ).width(labelWidthDp)
-                            .padding(horizontal = OverlayLabelHorizontalPadding, vertical = OverlayLabelVerticalPadding),
+                            )
+                            .width(labelWidthDp)
+                            .padding(
+                                horizontal = OverlayLabelHorizontalPadding,
+                                vertical = OverlayLabelVerticalPadding
+                            ),
                     style = overlayLabelStyle(finalFontSize),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -337,7 +349,7 @@ private fun shouldRenderArrowIndicator(node: RemoteUiLayoutNode): Boolean {
                 loweredResource.contains("spinner") ||
                 loweredResource.contains("region_image") ||
                 loweredResource.contains("regionimage")
-        )
+            )
 }
 
 private fun shouldRenderToggleIndicator(node: RemoteUiLayoutNode): Boolean =
@@ -403,7 +415,9 @@ private fun BoxScope.CheckboxIndicator(
             imageVector = Icons.Default.Check,
             contentDescription = if (node.isEffectivelyChecked) "Checked" else "Unchecked checkbox",
             tint = iconTint,
-            modifier = Modifier.align(Alignment.Center).size(11.dp),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(11.dp),
         )
     }
 }
@@ -562,7 +576,7 @@ private fun looksLikeCustomCheckContainer(node: RemoteUiLayoutNode): Boolean {
                 lowered.contains("accept") ||
                 lowered.contains("consent") ||
                 lowered.contains("policy")
-        )
+            )
 }
 
 internal fun shouldSuppressNodeLabel(
@@ -604,9 +618,9 @@ internal fun shouldSuppressNodeLabel(
                             horizontalOverlapRatio(node, other) >= 0.4f &&
                                 verticalGap(node, other) in 0..80 &&
                                 isLikelyNodeSpecificStackedTextLabel(node, other)
-                        ) ||
+                            ) ||
                             (verticalOverlapRatio(node, other) >= 0.4f && horizontalGap(node, other) in 0..80)
-                    )
+                        )
             }
 
     if (hasNearbyPrimaryTextLabel) {
@@ -626,13 +640,13 @@ internal fun shouldSuppressNodeLabel(
                             (
                                 other.bounds.area() == node.bounds.area() &&
                                     other.bounds.width > node.bounds.width
-                            ) ||
+                                ) ||
                             (
                                 other.bounds.area() == node.bounds.area() &&
                                     other.bounds.width == node.bounds.width &&
                                     other.resourceId < node.resourceId
-                            )
-                    )
+                                )
+                        )
             }
 
     if (hasLargerResourceNamedSiblingInSameComponent) {
@@ -646,7 +660,7 @@ internal fun shouldSuppressNodeLabel(
                 node.resourceId.lowercase().contains("layout_") ||
                     node.resourceId.lowercase().contains("_group") ||
                     node.resourceId.lowercase().contains("container")
-            ) &&
+                ) &&
             allNodes.any { other ->
                 other !== node &&
                     other.packageName == node.packageName &&
@@ -810,7 +824,8 @@ private fun overlapOverSmallerArea(
     if (intersectionRight <= intersectionLeft || intersectionBottom <= intersectionTop) {
         return 0f
     }
-    val intersectionArea = (intersectionRight - intersectionLeft).toLong() * (intersectionBottom - intersectionTop).toLong()
+    val intersectionArea =
+        (intersectionRight - intersectionLeft).toLong() * (intersectionBottom - intersectionTop).toLong()
     val smallerArea = minOf(a.bounds.area(), b.bounds.area()).coerceAtLeast(1L)
     return intersectionArea.toFloat() / smallerArea.toFloat()
 }

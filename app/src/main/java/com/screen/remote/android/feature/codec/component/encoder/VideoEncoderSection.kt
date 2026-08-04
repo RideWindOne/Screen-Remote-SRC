@@ -1,13 +1,13 @@
 package com.screen.remote.android.feature.codec.component.encoder
 
+import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.codec.component.EncoderDialogConfig
-import com.screen.remote.android.core.domain.model.EncoderCapability
 
 /**
  * 视频编码器配置
- * 
+ *
  * 提取自 EncoderSelectionDialog.kt
  * 负责视频编码器的配置和筛选逻辑
  */

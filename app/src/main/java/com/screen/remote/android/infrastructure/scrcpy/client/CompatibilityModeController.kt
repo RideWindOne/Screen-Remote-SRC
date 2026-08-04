@@ -12,8 +12,8 @@ import com.screen.remote.android.core.domain.model.CompatibilityCaptureSettings
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.helper.DadbHelperAsset
-import dadb.helper.RemoteScreenshotStream
 import dadb.helper.RemoteScreenshotCaptureBackend
+import dadb.helper.RemoteScreenshotStream
 import dadb.helper.RemoteTouchStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,9 +27,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.EOFException
 import java.io.IOException
-import java.util.concurrent.atomic.AtomicBoolean
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.milliseconds
 
 internal class CompatibilityModeController(
     private val context: Context,
@@ -47,8 +48,10 @@ internal class CompatibilityModeController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var captureJob: Job? = null
     private var touchDispatchJob: Job? = null
+
     @Volatile
     private var activeCaptureStream: RemoteScreenshotStream? = null
+
     @Volatile
     private var activeTouchStream: RemoteTouchStream? = null
     private val touchLock = Any()
@@ -56,10 +59,13 @@ internal class CompatibilityModeController(
     private var activePointerId: Long? = null
     private val liveTouchQueue = CompatibilityLiveTouchQueue()
     private var liveTouchDispatchRunning = false
+
     @Volatile
     private var isStarted = false
+
     @Volatile
     private var remoteWidth = 0
+
     @Volatile
     private var remoteHeight = 0
     private val connectionLostHandled = AtomicBoolean(false)
@@ -80,24 +86,22 @@ internal class CompatibilityModeController(
         onFrame(null)
         isStarted = true
         connectionLostHandled.set(false)
-        wakeUpScreen()
-            .onSuccess {
-                LogManager.i(
-                    LogTags.SCRCPY_CLIENT,
-                    "Compatibility mode wake-up command sent",
-                )
-            }.onFailure { error ->
-                LogManager.w(
-                    LogTags.SCRCPY_CLIENT,
-                    "Compatibility mode wake-up command failed: ${error.message}",
-                )
-            }
+        wakeUpScreen().onSuccess {
+            LogManager.i(
+                LogTags.SCRCPY_CLIENT,
+                "Compatibility mode wake-up command sent",
+            )
+        }.onFailure { error ->
+            LogManager.w(
+                LogTags.SCRCPY_CLIENT,
+                "Compatibility mode wake-up command failed: ${error.message}",
+            )
+        }
         val touchStreamResult = openTouchHelperStream()
         val touchStream = touchStreamResult.getOrNull()
         if (touchStream == null) {
-            val error =
-                touchStreamResult.exceptionOrNull()
-                    ?: IllegalStateException("Compatibility live touch stream failed without an error")
+            val error = touchStreamResult.exceptionOrNull()
+                ?: IllegalStateException("Compatibility live touch stream failed without an error")
             if (handleConnectionLostForClosedError("compatibility live touch", error)) {
                 return Result.success(true)
             }
@@ -105,10 +109,9 @@ internal class CompatibilityModeController(
                 LogTags.SCRCPY_CLIENT,
                 "Compatibility live touch stream failed to start and will retry: ${error.message}",
             )
-            touchDispatchJob =
-                scope.launch {
-                    recoverTouchStream(error)
-                }
+            touchDispatchJob = scope.launch {
+                recoverTouchStream(error)
+            }
         } else {
             activeTouchStream = touchStream
             LogManager.i(
@@ -116,77 +119,73 @@ internal class CompatibilityModeController(
                 "Compatibility live touch stream started",
             )
         }
-        captureJob =
-            scope.launch {
-                var loggedCaptureBackend: RemoteScreenshotCaptureBackend? = null
-                var consecutiveFailures = 0
-                while (isActive) {
-                    val settings = getCaptureSettings() ?: DEFAULT_CAPTURE_SETTINGS
-                    val openResult = openHelperStream(settings)
-                    val helperStream = openResult.getOrNull()
-                    if (helperStream == null) {
+        captureJob = scope.launch {
+            var loggedCaptureBackend: RemoteScreenshotCaptureBackend? = null
+            var consecutiveFailures = 0
+            while (isActive) {
+                val settings = getCaptureSettings() ?: DEFAULT_CAPTURE_SETTINGS
+                val openResult = openHelperStream(settings)
+                val helperStream = openResult.getOrNull()
+                if (helperStream == null) {
+                    consecutiveFailures++
+                    val error = openResult.exceptionOrNull()
+                    if (!retryCaptureOrReportFailure(consecutiveFailures, error)) {
+                        return@launch
+                    }
+                    continue
+                }
+
+                activeCaptureStream = helperStream
+                logCaptureSettings("capture start", settings)
+                var firstFrameReceived = false
+                val firstFrameDeadline = SystemClock.elapsedRealtime() + FIRST_FRAME_TIMEOUT_MS
+                try {
+                    while (isActive) {
+                        val capturedFrame = captureHelperFrame(helperStream)
+                        if (capturedFrame == null) {
+                            if (!firstFrameReceived && SystemClock.elapsedRealtime() >= firstFrameDeadline) {
+                                throw IllegalStateException(
+                                    "Compatibility screenshot helper did not produce an initial frame within ${FIRST_FRAME_TIMEOUT_MS}ms",
+                                )
+                            }
+                            continue
+                        }
+                        firstFrameReceived = true
+                        consecutiveFailures = 0
+                        remoteWidth = capturedFrame.sourceWidth
+                        remoteHeight = capturedFrame.sourceHeight
+                        onResolution(capturedFrame.sourceWidth, capturedFrame.sourceHeight)
+                        onFrame(capturedFrame.bitmap)
+                        if (capturedFrame.captureBackend != loggedCaptureBackend) {
+                            loggedCaptureBackend = capturedFrame.captureBackend
+                            LogManager.i(
+                                LogTags.SCRCPY_CLIENT,
+                                "Compatibility capture backend selected: " + "backend=${capturedFrame.captureBackend} " + "captureMs=${capturedFrame.captureDurationMillis} " + "payloadBytes=${capturedFrame.payloadBytes}",
+                            )
+                        }
+                    }
+                } catch (error: Exception) {
+                    if (handleConnectionLostForClosedError("compatibility live capture", error)) {
+                        return@launch
+                    }
+                    if (isActive) {
                         consecutiveFailures++
-                        val error = openResult.exceptionOrNull()
+                        LogManager.w(
+                            LogTags.SCRCPY_CLIENT,
+                            "Compatibility display capture interrupted: ${error.message}",
+                        )
                         if (!retryCaptureOrReportFailure(consecutiveFailures, error)) {
                             return@launch
                         }
-                        continue
                     }
-
-                    activeCaptureStream = helperStream
-                    logCaptureSettings("capture start", settings)
-                    var firstFrameReceived = false
-                    val firstFrameDeadline = SystemClock.elapsedRealtime() + FIRST_FRAME_TIMEOUT_MS
-                    try {
-                        while (isActive) {
-                            val capturedFrame = captureHelperFrame(helperStream)
-                            if (capturedFrame == null) {
-                                if (!firstFrameReceived && SystemClock.elapsedRealtime() >= firstFrameDeadline) {
-                                    throw IllegalStateException(
-                                        "Compatibility screenshot helper did not produce an initial frame within ${FIRST_FRAME_TIMEOUT_MS}ms",
-                                    )
-                                }
-                                continue
-                            }
-                            firstFrameReceived = true
-                            consecutiveFailures = 0
-                            remoteWidth = capturedFrame.sourceWidth
-                            remoteHeight = capturedFrame.sourceHeight
-                            onResolution(capturedFrame.sourceWidth, capturedFrame.sourceHeight)
-                            onFrame(capturedFrame.bitmap)
-                            if (capturedFrame.captureBackend != loggedCaptureBackend) {
-                                loggedCaptureBackend = capturedFrame.captureBackend
-                                LogManager.i(
-                                    LogTags.SCRCPY_CLIENT,
-                                    "Compatibility capture backend selected: " +
-                                        "backend=${capturedFrame.captureBackend} " +
-                                        "captureMs=${capturedFrame.captureDurationMillis} " +
-                                        "payloadBytes=${capturedFrame.payloadBytes}",
-                                )
-                            }
-                        }
-                    } catch (error: Exception) {
-                        if (handleConnectionLostForClosedError("compatibility live capture", error)) {
-                            return@launch
-                        }
-                        if (isActive) {
-                            consecutiveFailures++
-                            LogManager.w(
-                                LogTags.SCRCPY_CLIENT,
-                                "Compatibility display capture interrupted: ${error.message}",
-                            )
-                            if (!retryCaptureOrReportFailure(consecutiveFailures, error)) {
-                                return@launch
-                            }
-                        }
-                    } finally {
-                        safeCloseScreenshotStream(helperStream)
-                        if (activeCaptureStream === helperStream) {
-                            activeCaptureStream = null
-                        }
+                } finally {
+                    safeCloseScreenshotStream(helperStream)
+                    if (activeCaptureStream === helperStream) {
+                        activeCaptureStream = null
                     }
                 }
             }
+        }
         return Result.success(true)
     }
 
@@ -228,20 +227,19 @@ internal class CompatibilityModeController(
         when (action) {
             MotionEvent.ACTION_DOWN -> {
                 var shouldLaunchDispatcher = false
-                val accepted =
-                    synchronized(touchLock) {
-                        if (activePointerId == null) {
-                            activePointerId = pointerId
-                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
-                            if (!liveTouchDispatchRunning) {
-                                liveTouchDispatchRunning = true
-                                shouldLaunchDispatcher = true
-                            }
-                            true
-                        } else {
-                            activePointerId == pointerId
+                val accepted = synchronized(touchLock) {
+                    if (activePointerId == null) {
+                        activePointerId = pointerId
+                        liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                        if (!liveTouchDispatchRunning) {
+                            liveTouchDispatchRunning = true
+                            shouldLaunchDispatcher = true
                         }
+                        true
+                    } else {
+                        activePointerId == pointerId
                     }
+                }
                 if (shouldLaunchDispatcher) {
                     launchLiveTouchDispatcher()
                 }
@@ -250,19 +248,18 @@ internal class CompatibilityModeController(
 
             MotionEvent.ACTION_MOVE -> {
                 var shouldLaunchDispatcher = false
-                val accepted =
-                    synchronized(touchLock) {
-                        if (activePointerId != pointerId) {
-                            false
-                        } else {
-                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
-                            if (!liveTouchDispatchRunning) {
-                                liveTouchDispatchRunning = true
-                                shouldLaunchDispatcher = true
-                            }
-                            true
+                val accepted = synchronized(touchLock) {
+                    if (activePointerId != pointerId) {
+                        false
+                    } else {
+                        liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                        if (!liveTouchDispatchRunning) {
+                            liveTouchDispatchRunning = true
+                            shouldLaunchDispatcher = true
                         }
+                        true
                     }
+                }
                 if (shouldLaunchDispatcher) {
                     launchLiveTouchDispatcher()
                 }
@@ -271,19 +268,18 @@ internal class CompatibilityModeController(
 
             MotionEvent.ACTION_UP -> {
                 var shouldLaunchDispatcher = false
-                val accepted =
-                    synchronized(touchLock) {
-                        if (activePointerId != pointerId) {
-                            false
-                        } else {
-                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
-                            if (!liveTouchDispatchRunning) {
-                                liveTouchDispatchRunning = true
-                                shouldLaunchDispatcher = true
-                            }
-                            true
+                val accepted = synchronized(touchLock) {
+                    if (activePointerId != pointerId) {
+                        false
+                    } else {
+                        liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                        if (!liveTouchDispatchRunning) {
+                            liveTouchDispatchRunning = true
+                            shouldLaunchDispatcher = true
                         }
+                        true
                     }
+                }
                 if (shouldLaunchDispatcher) {
                     launchLiveTouchDispatcher()
                 }
@@ -292,19 +288,18 @@ internal class CompatibilityModeController(
 
             MotionEvent.ACTION_CANCEL -> {
                 var shouldLaunchDispatcher = false
-                val accepted =
-                    synchronized(touchLock) {
-                        if (activePointerId != pointerId) {
-                            false
-                        } else {
-                            liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
-                            if (!liveTouchDispatchRunning) {
-                                liveTouchDispatchRunning = true
-                                shouldLaunchDispatcher = true
-                            }
-                            true
+                val accepted = synchronized(touchLock) {
+                    if (activePointerId != pointerId) {
+                        false
+                    } else {
+                        liveTouchQueue.offer(event = liveTouchEvent(action, pointerId, sample))
+                        if (!liveTouchDispatchRunning) {
+                            liveTouchDispatchRunning = true
+                            shouldLaunchDispatcher = true
                         }
+                        true
                     }
+                }
                 if (shouldLaunchDispatcher) {
                     launchLiveTouchDispatcher()
                 }
@@ -334,8 +329,7 @@ internal class CompatibilityModeController(
                 return Result.failure(IllegalStateException("Compatibility mode is not active"))
             }
             val connection =
-                currentConnection()
-                    ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
+                currentConnection() ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
             return inputMutex.withLock {
                 connection.injectRemoteText(
                     localHelperJar = helperJar,
@@ -347,22 +341,28 @@ internal class CompatibilityModeController(
         return executeInput("input text ${encoded.shellQuoted()}")
     }
 
+    suspend fun startApp(name: String): Result<Boolean> {
+        val normalizedName = name.trim()
+        if (normalizedName.isEmpty()) {
+            return Result.success(true)
+        }
+        val launchCommand = "monkey -p ${normalizedName.shellQuoted()} -c android.intent.category.LAUNCHER 1"
+        return executeInput(launchCommand, allowShellPasswordFallback = true)
+    }
+
     suspend fun wakeUpScreen(): Result<Boolean> = executeInput("input keyevent ${KeyEvent.KEYCODE_WAKEUP}")
 
-    private fun currentConnection(): AdbConnection? =
-        getDeviceId()?.let(adbConnectionManager::getConnection)
+    private fun currentConnection(): AdbConnection? = getDeviceId()?.let(adbConnectionManager::getConnection)
 
     private suspend fun openHelperStream(settings: CompatibilityCaptureSettings): Result<RemoteScreenshotStream> {
         val connection =
-            currentConnection()
-                ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
+            currentConnection() ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
         return runCatching {
-            connection
-                .openRemoteScreenshotStream(
-                    localHelperJar = helperJar,
-                    maxSize = settings.maxSize,
-                    jpegQuality = settings.jpegQuality,
-                ).getOrThrow()
+            connection.openRemoteScreenshotStream(
+                localHelperJar = helperJar,
+                maxSize = settings.maxSize,
+                jpegQuality = settings.jpegQuality,
+            ).getOrThrow()
         }.onFailure { error ->
             LogManager.w(
                 LogTags.SCRCPY_CLIENT,
@@ -373,67 +373,60 @@ internal class CompatibilityModeController(
 
     private suspend fun openTouchHelperStream(): Result<RemoteTouchStream> {
         val connection =
-            currentConnection()
-                ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
+            currentConnection() ?: return Result.failure(IllegalStateException("ADB connection is unavailable"))
         return connection.openRemoteTouchStream(localHelperJar = helperJar)
     }
 
     private fun launchLiveTouchDispatcher() {
-        touchDispatchJob =
-            scope.launch {
-                while (isActive) {
-                    val event =
-                        synchronized(touchLock) {
-                            liveTouchQueue.poll()
-                                ?: run {
-                                    liveTouchDispatchRunning = false
-                                    null
-                                }
-                        } ?: return@launch
-                    val stream =
-                        activeTouchStream
-                            ?: run {
-                                synchronized(touchLock) {
-                                    liveTouchDispatchRunning = false
-                                }
-                                return@launch
-                            }
-                    val result =
-                        runCatching {
-                            stream.sendTouch(
-                                action = event.action,
-                                x = event.x,
-                                y = event.y,
-                            )
-                        }
-                    if (result.isFailure) {
-                        val error = result.exceptionOrNull()
-                        safeCloseTouchStream(stream)
-                        if (activeTouchStream === stream) {
-                            activeTouchStream = null
-                        }
-                        resetTouchState()
-                        if (handleConnectionLostForClosedError("compatibility live touch", error)) {
-                            return@launch
-                        }
-                        if (isStarted) {
-                            LogManager.w(
-                                LogTags.SCRCPY_CLIENT,
-                                "Compatibility live touch stream was interrupted and will retry: ${error?.message}",
-                            )
-                            recoverTouchStream(error)
-                        }
+        touchDispatchJob = scope.launch {
+            while (isActive) {
+                val event = synchronized(touchLock) {
+                    liveTouchQueue.poll() ?: run {
+                        liveTouchDispatchRunning = false
+                        null
+                    }
+                } ?: return@launch
+                val stream = activeTouchStream ?: run {
+                    synchronized(touchLock) {
+                        liveTouchDispatchRunning = false
+                    }
+                    return@launch
+                }
+                val result = runCatching {
+                    stream.sendTouch(
+                        action = event.action,
+                        x = event.x,
+                        y = event.y,
+                    )
+                }
+                if (result.isFailure) {
+                    val error = result.exceptionOrNull()
+                    safeCloseTouchStream(stream)
+                    if (activeTouchStream === stream) {
+                        activeTouchStream = null
+                    }
+                    resetTouchState()
+                    if (handleConnectionLostForClosedError("compatibility live touch", error)) {
                         return@launch
                     }
-                    if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
-                        synchronized(touchLock) {
-                            if (activePointerId == event.pointerId) {
-                                activePointerId = null
-                            }
+                    if (isStarted) {
+                        LogManager.w(
+                            LogTags.SCRCPY_CLIENT,
+                            "Compatibility live touch stream was interrupted and will retry: ${error?.message}",
+                        )
+                        recoverTouchStream(error)
+                    }
+                    return@launch
+                }
+                if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                    synchronized(touchLock) {
+                        if (activePointerId == event.pointerId) {
+                            activePointerId = null
                         }
                     }
                 }
             }
+        }
     }
 
     private suspend fun recoverTouchStream(initialError: Throwable?): Boolean {
@@ -444,9 +437,8 @@ internal class CompatibilityModeController(
         }
         repeat(MAX_TOUCH_RECOVERY_ATTEMPTS) { attempt ->
             if (!isStarted) return false
-            val retryDelayMs =
-                (TOUCH_RETRY_DELAY_MS * (attempt + 1)).coerceAtMost(MAX_TOUCH_RETRY_DELAY_MS)
-            delay(retryDelayMs)
+            val retryDelayMs = (TOUCH_RETRY_DELAY_MS * (attempt + 1)).coerceAtMost(MAX_TOUCH_RETRY_DELAY_MS)
+            delay(retryDelayMs.milliseconds)
             if (!isStarted) return false
 
             val result = openTouchHelperStream()
@@ -466,9 +458,8 @@ internal class CompatibilityModeController(
                 )
                 return true
             }
-            latestError =
-                result.exceptionOrNull()
-                    ?: IllegalStateException("Compatibility live touch stream retry failed without an error")
+            latestError = result.exceptionOrNull()
+                ?: IllegalStateException("Compatibility live touch stream retry failed without an error")
             if (handleConnectionLostForClosedError("compatibility live touch", latestError)) {
                 return false
             }
@@ -476,22 +467,19 @@ internal class CompatibilityModeController(
 
         LogManager.w(
             LogTags.SCRCPY_CLIENT,
-            "Compatibility live touch is unavailable after $MAX_TOUCH_RECOVERY_ATTEMPTS recovery attempts: " +
-                latestError.message,
+            "Compatibility live touch is unavailable after $MAX_TOUCH_RECOVERY_ATTEMPTS recovery attempts: " + latestError.message,
         )
         return false
     }
 
     private fun captureHelperFrame(stream: RemoteScreenshotStream): CapturedFrame? {
         val frame = stream.requestFrame() ?: return null
-        val bitmap =
-            BitmapFactory.decodeByteArray(frame.jpegBytes, 0, frame.jpegBytes.size)
-                ?: throw IllegalStateException("Unable to decode compatibility helper JPEG")
+        val bitmap = BitmapFactory.decodeByteArray(frame.jpegBytes, 0, frame.jpegBytes.size)
+            ?: throw IllegalStateException("Unable to decode compatibility helper JPEG")
         if (bitmap.width != frame.imageWidth || bitmap.height != frame.imageHeight) {
             bitmap.recycle()
             throw IllegalStateException(
-                "Compatibility helper JPEG dimensions do not match the frame header: " +
-                    "header=${frame.imageWidth}x${frame.imageHeight}",
+                "Compatibility helper JPEG dimensions do not match the frame header: " + "header=${frame.imageWidth}x${frame.imageHeight}",
             )
         }
         return CapturedFrame(
@@ -510,40 +498,35 @@ internal class CompatibilityModeController(
     ) {
         LogManager.i(
             LogTags.SCRCPY_CLIENT,
-            "Compatibility Capture Settings\n" +
-                "Context: $context\n" +
-                "maxSize=${settings.maxSize}\n" +
-                "jpegQuality=${settings.jpegQuality}",
+            "Compatibility Capture Settings\n" + "Context: $context\n" + "maxSize=${settings.maxSize}\n" + "jpegQuality=${settings.jpegQuality}",
         )
     }
 
-    private suspend fun executeInput(command: String): Result<Boolean> {
+    private suspend fun executeInput(
+        command: String,
+        allowShellPasswordFallback: Boolean = true,
+    ): Result<Boolean> {
         if (!isStarted) {
             return Result.failure(IllegalStateException("Compatibility mode is not active"))
         }
         return inputMutex.withLock {
-            val connection =
-                currentConnection()
-                    ?: return@withLock Result.failure(IllegalStateException("ADB connection is unavailable"))
-            val checkedCommand = "{ $command; }; status=\$?; echo \"$INPUT_EXIT_MARKER\$status\""
-            connection
-                .executeShell(checkedCommand, retryOnFailure = false)
-                .mapCatching { output ->
-                    val exitCode =
-                        output
-                            .lineSequence()
-                            .map(String::trim)
-                            .firstOrNull { it.startsWith(INPUT_EXIT_MARKER) }
-                            ?.removePrefix(INPUT_EXIT_MARKER)
-                            ?.toIntOrNull()
-                            ?: throw IllegalStateException(
-                                "Compatibility input command did not report an exit status",
-                            )
-                    check(exitCode == 0) {
-                        "Compatibility input command failed with exit code $exitCode"
-                    }
-                    true
+            val connection = currentConnection()
+                ?: return@withLock Result.failure(IllegalStateException("ADB connection is unavailable"))
+            val checkedCommand = $$"{ $$command; }; status=$?; echo \"$$INPUT_EXIT_MARKER$status\""
+            connection.executeShell(
+                checkedCommand,
+                retryOnFailure = false,
+                allowShellPasswordFallback = allowShellPasswordFallback,
+            ).mapCatching { output ->
+                val exitCode = output.lineSequence().map(String::trim).firstOrNull { it.startsWith(INPUT_EXIT_MARKER) }
+                    ?.removePrefix(INPUT_EXIT_MARKER)?.toIntOrNull() ?: throw IllegalStateException(
+                    "Compatibility input command did not report an exit status",
+                )
+                check(exitCode == 0) {
+                    "Compatibility input command failed with exit code $exitCode"
                 }
+                true
+            }
         }
     }
 
@@ -556,8 +539,8 @@ internal class CompatibilityModeController(
         }
         if (consecutiveFailures >= MAX_CONSECUTIVE_CAPTURE_FAILURES) {
             val message =
-                "Compatibility display capture stopped after $consecutiveFailures consecutive failures: " +
-                    (error?.message ?: "unknown error")
+                "Compatibility display capture stopped after $consecutiveFailures consecutive failures: " + (error?.message
+                    ?: "unknown error")
             LogManager.e(LogTags.SCRCPY_CLIENT, message, error)
             isStarted = false
             onFrame(null)
@@ -567,10 +550,9 @@ internal class CompatibilityModeController(
         val retryDelayMs = (CAPTURE_RETRY_DELAY_MS * consecutiveFailures).coerceAtMost(MAX_CAPTURE_RETRY_DELAY_MS)
         LogManager.i(
             LogTags.SCRCPY_CLIENT,
-            "Compatibility display capture will retry in ${retryDelayMs}ms " +
-                "after failure $consecutiveFailures/$MAX_CONSECUTIVE_CAPTURE_FAILURES",
+            "Compatibility display capture will retry in ${retryDelayMs}ms " + "after failure $consecutiveFailures/$MAX_CONSECUTIVE_CAPTURE_FAILURES",
         )
-        delay(retryDelayMs)
+        delay(retryDelayMs.milliseconds)
         return true
     }
 
@@ -611,21 +593,14 @@ internal class CompatibilityModeController(
     private fun isRecoverableClosedError(error: Throwable?): Boolean {
         var cursor = error
         while (cursor != null) {
+            if (cursor is IOException && cursor.message?.contains("closed", ignoreCase = true) == true) {
+                return true
+            }
             when (cursor) {
                 is EOFException,
                 is SocketException,
-                is SocketTimeoutException,
-                is IOException,
-                -> {
-                    if (cursor is IOException && cursor.message?.contains("closed", ignoreCase = true) == true) {
-                        return true
-                    }
-                    if (cursor is EOFException ||
-                        cursor is SocketException ||
-                        cursor is SocketTimeoutException
-                    ) {
-                        return true
-                    }
+                is SocketTimeoutException -> {
+                    return true
                 }
             }
             cursor = cursor.cause
@@ -667,7 +642,8 @@ internal class CompatibilityModeController(
 
     private fun clampX(x: Int): Int = remoteWidth.takeIf { it > 0 }?.let { x.coerceIn(0, it - 1) } ?: x.coerceAtLeast(0)
 
-    private fun clampY(y: Int): Int = remoteHeight.takeIf { it > 0 }?.let { y.coerceIn(0, it - 1) } ?: y.coerceAtLeast(0)
+    private fun clampY(y: Int): Int =
+        remoteHeight.takeIf { it > 0 }?.let { y.coerceIn(0, it - 1) } ?: y.coerceAtLeast(0)
 
     private fun String.shellQuoted(): String = "'" + replace("'", "'\\''") + "'"
 

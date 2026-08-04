@@ -1,7 +1,7 @@
 package com.screen.remote.android.feature.session.viewmodel
 
-import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.ConnectionCandidateData
+import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import org.junit.Assert.assertFalse
@@ -14,7 +14,13 @@ class ConnectionLatencyTestStateTest {
         val candidate = ConnectionCandidate(ConnectionTransport.TCP, "192.168.1.2", 5555)
         val unfinished =
             ConnectionLatencyTestState(
-                endpoints = mapOf(endpointKey(candidate) to ConnectionLatencyEndpointState(candidate, "TCP", finished = false)),
+                endpoints = mapOf(
+                    endpointKey(candidate) to ConnectionLatencyEndpointState(
+                        candidate,
+                        "TCP",
+                        finished = false
+                    )
+                ),
             )
         val finished =
             unfinished.copy(

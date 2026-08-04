@@ -49,7 +49,12 @@ internal object SessionMonitorEventProjector {
                 }
 
                 is SessionEvent.VideoEncoderDetectFailed -> {
-                    add(exception(event.issue.kind.toExceptionType(), "video encoder detect failed: ${event.issue.message}"))
+                    add(
+                        exception(
+                            event.issue.kind.toExceptionType(),
+                            "video encoder detect failed: ${event.issue.message}"
+                        )
+                    )
                 }
 
                 is SessionEvent.VideoEncoderError -> {
@@ -96,7 +101,7 @@ internal object SessionMonitorEventProjector {
             ServerIssueKind.ProcessExited,
             ServerIssueKind.MonitorException,
             ServerIssueKind.Unknown,
-            -> ExceptionType.SERVER_ERROR
+                -> ExceptionType.SERVER_ERROR
         }
 
     private fun SessionIssueKind.toExceptionType(): ExceptionType =
@@ -104,14 +109,14 @@ internal object SessionMonitorEventProjector {
             SessionIssueKind.RuntimeFailure -> ExceptionType.UNKNOWN
             SessionIssueKind.SessionNotFound,
             SessionIssueKind.Unknown,
-            -> ExceptionType.UNKNOWN
+                -> ExceptionType.UNKNOWN
         }
 
     private fun ForwardIssueKind.toExceptionType(): ExceptionType =
         when (this) {
             ForwardIssueKind.SetupFailed,
             ForwardIssueKind.Unknown,
-            -> ExceptionType.ADB_ERROR
+                -> ExceptionType.ADB_ERROR
         }
 
     private fun SocketIssueKind.toExceptionType(): ExceptionType =
@@ -120,7 +125,7 @@ internal object SessionMonitorEventProjector {
             SocketIssueKind.ConnectionLost,
             SocketIssueKind.HealthCheckFailed,
             SocketIssueKind.Unknown,
-            -> ExceptionType.SOCKET_ERROR
+                -> ExceptionType.SOCKET_ERROR
         }
 
     private fun DecoderIssueKind.toExceptionType(): ExceptionType =
@@ -130,7 +135,7 @@ internal object SessionMonitorEventProjector {
             DecoderIssueKind.ConnectionLost,
             DecoderIssueKind.RuntimeError,
             DecoderIssueKind.Unknown,
-            -> ExceptionType.DECODER_ERROR
+                -> ExceptionType.DECODER_ERROR
         }
 
     private fun ReconnectIssueKind.toExceptionType(): ExceptionType =
@@ -140,7 +145,7 @@ internal object SessionMonitorEventProjector {
             ReconnectIssueKind.RuntimeError,
             ReconnectIssueKind.ReconnectFailure,
             ReconnectIssueKind.Unknown,
-            -> ExceptionType.NETWORK_ERROR
+                -> ExceptionType.NETWORK_ERROR
         }
 
     private fun CodecIssueKind.toExceptionType(): ExceptionType =
@@ -149,6 +154,6 @@ internal object SessionMonitorEventProjector {
             CodecIssueKind.NoEncodersFound,
             CodecIssueKind.RuntimeError,
             CodecIssueKind.Unknown,
-            -> ExceptionType.UNKNOWN
+                -> ExceptionType.UNKNOWN
         }
 }

@@ -27,7 +27,8 @@ object ManagementTexts {
         val APPLY = TextPair("应用", "Apply")
         val EXAMPLE_5555 = TextPair("例如 5555", "Example: 5555")
         val SCREENSHOT = TextPair("屏幕截图", "Screenshot")
-        val CAPTURING_SCREENSHOT_FROM_DEVICE = TextPair("正在从目标设备获取截图并写入本机缓存目录。", "Capturing a screenshot from the device.")
+        val CAPTURING_SCREENSHOT_FROM_DEVICE =
+            TextPair("正在从目标设备获取截图并写入本机缓存目录。", "Capturing a screenshot from the device.")
         val SCREENSHOT_FAILED = TextPair("截图失败", "Screenshot failed")
         val CHANGE_DPI = TextPair("修改 DPI", "Change DPI")
         val DPI_VALUE = TextPair("DPI 数值", "DPI value")
@@ -39,12 +40,14 @@ object ManagementTexts {
         val ACTIVATE_APP = TextPair("激活应用", "Activate app")
         val RUNNING_ACTIVATION = TextPair("正在执行 %s 激活命令。", "Running activation for %s.")
         val ACTIVATION_COMMAND_SENT = TextPair("%s 激活命令已发送。", "Activation command sent for %s.")
-        val ACTIVATION_UNAVAILABLE = TextPair("%s 当前未安装或暂不支持激活。", "%s isn't installed or can't be activated here.")
+        val ACTIVATION_UNAVAILABLE =
+            TextPair("%s 当前未安装或暂不支持激活。", "%s isn't installed or can't be activated here.")
         val SCREEN_STANDBY = TextPair("熄屏待机", "Screen standby")
         val RUNNING_STANDBY_ACTION = TextPair("正在执行%s。", "Running %s.")
         val APPLYING_DPI = TextPair("正在应用 DPI %s。", "Applying DPI %s.")
         val DPI_CHANGED = TextPair("DPI 已修改为 %s。", "DPI changed to %s.")
-        val PORT_MUST_BE_NUMBER_BETWEEN_1024_65535 = TextPair("端口号无效，必须是 1024-65535 之间的数字。", "Port must be a number between 1024 and 65535.")
+        val PORT_MUST_BE_NUMBER_BETWEEN_1024_65535 =
+            TextPair("端口号无效，必须是 1024-65535 之间的数字。", "Port must be a number between 1024 and 65535.")
         val NO_ADB_CONNECTION_AVAILABLE = TextPair("当前没有可用的 ADB 连接。", "No ADB connection is available.")
         val CHANGE_RESOLUTION = TextPair("修改分辨率", "Change resolution")
         val APPLYING_X = TextPair("正在应用 %sx%s。", "Applying %sx%s.")
@@ -78,9 +81,6 @@ object ManagementTexts {
             )
         val UNKNOWN_DEVICE = TextPair("未知设备", "Unknown device")
         val DEVICE = TextPair("设备", "Device")
-        val DEVICE_INFO_LOAD_FAILED_SUMMARY = TextPair("设备已连接，但设备信息读取失败。", "Device connected, but device info couldn't be loaded.")
-        val SYNCING_DEVICE_SUMMARY = TextPair("设备已连接，正在同步首页参数信息。", "Device connected. Syncing overview data.")
-        val DEVICE_SUMMARY = TextPair("当前设备为 %s，系统 %s，屏幕 %s，数据存储 %s。", "Device: %s; system: %s; display: %s; storage: %s.")
     }
 
     object Scaffold {
@@ -91,20 +91,27 @@ object ManagementTexts {
         val ON = TextPair("已开启", "On")
         val OFF = TextPair("未开启", "Off")
         val FIXED_WIRELESS_DEBUGGING_PORT = TextPair("固定无线调试端口", "Fixed wireless debugging port")
-        val SET_ADB_TCP_PORT_DEVICE_WILL_RESTART_ADB = TextPair("设置 ADB TCP 端口号，设备将重启 ADB 服务", "Set the ADB TCP port. The device will restart ADB.")
+        val SET_ADB_TCP_PORT_DEVICE_WILL_RESTART_ADB =
+            TextPair("设置 ADB TCP 端口号，设备将重启 ADB 服务", "Set the ADB TCP port. The device will restart ADB.")
         val SCREENSHOT = TextPair("屏幕截图", "Screenshot")
-        val SAVE_SCREENSHOT_LOCAL_CACHE_THEN_PREVIEW_SAVE_IT = TextPair("截图到控制端本机缓存，可打开预览或保存到相册", "Save a screenshot to local cache, then preview or save it.")
+        val SAVE_SCREENSHOT_LOCAL_CACHE_THEN_PREVIEW_SAVE_IT = TextPair(
+            "截图到控制端本机缓存，可打开预览或保存到相册",
+            "Save a screenshot to local cache, then preview or save it."
+        )
         val ADVANCED_REBOOT = TextPair("高级重启", "Advanced reboot")
-        val RESTART_POWER_OFF_RECOVERY_FASTBOOT = TextPair("正常重启、关机、Recovery、FastBoot", "Restart, power off, Recovery, or Fastboot")
+        val RESTART_POWER_OFF_RECOVERY_FASTBOOT =
+            TextPair("正常重启、关机、Recovery、FastBoot", "Restart, power off, Recovery, or Fastboot")
         val ACTIVATE_APP = TextPair("激活应用", "Activate app")
-        val LOAD_LIST_SUPPORTED_ACTIVATION_APPS = TextPair("点击后加载可激活应用列表", "Load the list of supported activation apps")
+        val LOAD_LIST_SUPPORTED_ACTIVATION_APPS =
+            TextPair("点击后加载可激活应用列表", "Load the list of supported activation apps")
         val CHANGE_DPI = TextPair("修改DPI", "Change DPI")
         val CURRENT_TAP_ENTER_NEW_VALUE = TextPair("当前 %s，点击输入新数值", "Current %s. Tap to enter a new value")
         val ENTER_NEW_SCREEN_DENSITY = TextPair("输入新的屏幕密度", "Enter a new screen density")
         val CHANGE_RESOLUTION = TextPair("修改分辨率", "Change resolution")
         val ADJUST_SCREEN_RESOLUTION = TextPair("调整屏幕分辨率大小", "Adjust the screen resolution")
         val ANIMATION_SCALE = TextPair("动画调整", "Animation scale")
-        val SET_WINDOW_TRANSITION_DURATION_SCALES_TOGETHER = TextPair("统一设置窗口、过渡和时长动画倍率", "Set window, transition, and duration scales together")
+        val SET_WINDOW_TRANSITION_DURATION_SCALES_TOGETHER =
+            TextPair("统一设置窗口、过渡和时长动画倍率", "Set window, transition, and duration scales together")
         val SCREEN_STANDBY = TextPair("熄屏待机", "Screen standby")
         val PROVIDE_SLEEP_WAKE_ACTIONS = TextPair("提供息屏、亮屏两个操作", "Provide sleep and wake actions")
     }
@@ -117,7 +124,8 @@ object ManagementTexts {
         val CHOOSE_INSTALLED_APP = TextPair("选择已安装应用", "Choose installed app")
         val LEAVE_MANAGEMENT_PAGE = TextPair("确认退出管理页？", "Leave management page?")
         val LEAVE = TextPair("退出", "Leave")
-        val WILL_LEAVE_CURRENT_DEVICE_MANAGEMENT_PAGE = TextPair("返回键会离开当前设备管理页面。", "This will leave the current device management page.")
+        val WILL_LEAVE_CURRENT_DEVICE_MANAGEMENT_PAGE =
+            TextPair("返回键会离开当前设备管理页面。", "This will leave the current device management page.")
         val ADVANCED_REBOOT = TextPair("高级重启", "Advanced reboot")
         val CHANGE_RESOLUTION = TextPair("修改分辨率", "Change resolution")
         val APPLY = TextPair("应用", "Apply")
@@ -147,11 +155,12 @@ object ManagementTexts {
         val SORT_BY_PACKAGE = TextPair("按包名排序", "Sort by package")
         val SORT_BY_ENABLED_STATE = TextPair("按启用状态排序", "Sort by enabled state")
         val SORT_BY_SIZE = TextPair("按大小排序", "Sort by size")
-        val NO_CONNECTION_FOR_APP_LIST = TextPair("当前没有可用的 ADB 连接，无法读取应用列表。", "No ADB connection is available, so the app list can't be loaded.")
+        val NO_CONNECTION_FOR_APP_LIST = TextPair(
+            "当前没有可用的 ADB 连接，无法读取应用列表。",
+            "No ADB connection is available, so the app list can't be loaded."
+        )
         val APP_LIST_LOAD_FAILED = TextPair("读取应用列表失败。", "Couldn't load the app list.")
-        val NO_CONNECTION_FOR_APP_DETAILS = TextPair("当前没有可用的 ADB 连接，无法读取应用详情。", "No ADB connection is available, so app details can't be loaded.")
         val APP_DETAILS_LOAD_FAILED = TextPair("应用详情读取失败。", "Couldn't load app details.")
-        val APK_READ_FAILED = TextPair("无法读取选择的 APK 文件。", "Couldn't read the selected APK file.")
         val ANDROID_SYSTEM = TextPair("Android 系统", "Android System")
         val SETTINGS_APP = TextPair("设置", "Settings")
         val SYSTEM_UI = TextPair("系统 UI", "System UI")
@@ -224,14 +233,13 @@ object ManagementTexts {
         val LAUNCH_DEVICE = TextPair("在设备上启动", "Launch on device")
         val UNINSTALL = TextPair("卸载", "Uninstall")
         val CLEAR_DATA = TextPair("清除数据", "Clear data")
-        val CONFIRM_CLEAR_DATA = TextPair("确认清除 %s 的全部应用数据？此操作不可撤销。", "Clear all app data for %s? This can't be undone.")
+        val CONFIRM_CLEAR_DATA =
+            TextPair("确认清除 %s 的全部应用数据？此操作不可撤销。", "Clear all app data for %s? This can't be undone.")
         val EXPORT_APK = TextPair("下载安装包", "Export APK")
         val REFRESH_APPS = TextPair("刷新应用列表", "Refresh apps")
-        val SORT = TextPair("排序方式", "Sort")
-        val LOADING = TextPair("加载方式", "Loading")
         val PACKAGE_NAMES_ONLY = TextPair("只加载包名", "Package names only")
-        val FILTERS = TextPair("显示筛选", "Filters")
-        val SYSTEM_APP_UNINSTALL_CAREFULLY = TextPair("该应用为系统应用，请谨慎卸载", "This is a system app. Uninstall carefully.")
+        val SYSTEM_APP_UNINSTALL_CAREFULLY =
+            TextPair("该应用为系统应用，请谨慎卸载", "This is a system app. Uninstall carefully.")
         val CONFIRM_UNINSTALL_PACKAGE = TextPair("确认卸载 %s", "Uninstall %s")
         val KEEP_DATA = TextPair("保留", "Keep data")
         val REMOVE_DATA = TextPair("不保留", "Remove data")
@@ -267,15 +275,19 @@ object ManagementTexts {
         val MOVE_COMPLETE = TextPair("移动已完成。", "Move complete.")
         val THERE_NO_FILES_MOVE = TextPair("没有可移动的文件。", "There are no files to move.")
         val THERE_NO_FILES_COPY = TextPair("没有可复制的文件。", "There are no files to copy.")
-        val FOLDER_CAN_T_BE_MOVED_INTO_ITSELF = TextPair("不能将文件夹移动到其内部。", "A folder can't be moved into itself.")
-        val FOLDER_CAN_T_BE_COPIED_INTO_ITSELF = TextPair("不能将文件夹复制到其内部。", "A folder can't be copied into itself.")
+        val FOLDER_CAN_T_BE_MOVED_INTO_ITSELF =
+            TextPair("不能将文件夹移动到其内部。", "A folder can't be moved into itself.")
+        val FOLDER_CAN_T_BE_COPIED_INTO_ITSELF =
+            TextPair("不能将文件夹复制到其内部。", "A folder can't be copied into itself.")
         val DESTINATION_ALREADY_EXISTS = TextPair("目标已存在：%s", "Destination already exists: %s")
         val THERE_NO_FILES_DOWNLOAD = TextPair("没有可下载的文件。", "There are no files to download.")
         val COULDN_T_OPEN_DESTINATION_FILE = TextPair("无法打开保存文件。", "Couldn't open the destination file.")
         val SAVED_ITEM_S = TextPair("已保存 %s 项。", "Saved %s item(s).")
         val NO_FILES_WERE_SELECTED_UPLOAD = TextPair("没有选择要上传的文件。", "No files were selected for upload.")
-        val COULDN_T_DETERMINE_UPLOAD_FILE_NAME = TextPair("无法识别上传文件名。", "Couldn't determine the upload file name.")
-        val SELECTED_FILES_CONTAIN_DUPLICATE_NAMES = TextPair("选择的文件中存在同名文件。", "The selected files contain duplicate names.")
+        val COULDN_T_DETERMINE_UPLOAD_FILE_NAME =
+            TextPair("无法识别上传文件名。", "Couldn't determine the upload file name.")
+        val SELECTED_FILES_CONTAIN_DUPLICATE_NAMES =
+            TextPair("选择的文件中存在同名文件。", "The selected files contain duplicate names.")
         val COULDN_T_READ_FILE = TextPair("无法读取文件：%s", "Couldn't read file: %s")
         val UPLOADED_FILE_S = TextPair("已上传 %s 个文件。", "Uploaded %s file(s).")
         val SCREENSHOT_FILE_EMPTY = TextPair("截图文件为空。", "The screenshot file is empty.")
@@ -283,19 +295,34 @@ object ManagementTexts {
         val COULDN_T_CREATE_GALLERY_FILE = TextPair("无法创建相册文件", "Couldn't create a gallery file")
         val COULDN_T_WRITE_GALLERY_FILE = TextPair("无法写入相册文件", "Couldn't write the gallery file")
         val SCREENSHOT_SAVED_GALLERY = TextPair("截图已保存到相册。", "Screenshot saved to gallery.")
-        val FILE_DOESN_T_LOOK_LIKE_TEXT_USE_PREVIEW = TextPair("当前文件不像文本文件，请改用专门预览或外部打开。", "This file doesn't look like text. Use preview or open externally instead.")
-        val KEEP_EDITING_RESPONSIVE_BUILT_IN_EDITOR_SUPPORTS_TEXT = TextPair("为保证编辑流畅，内置编辑器仅支持 128 KB 以内文本文件。", "To keep editing responsive, the built-in editor supports text files up to 128 KB.")
-        val FILE_SAVED_PUSHED_BACK_DEVICE = TextPair("文件已保存并回写到设备。", "File saved and pushed back to the device.")
+        val FILE_DOESN_T_LOOK_LIKE_TEXT_USE_PREVIEW = TextPair(
+            "当前文件不像文本文件，请改用专门预览或外部打开。",
+            "This file doesn't look like text. Use preview or open externally instead."
+        )
+        val KEEP_EDITING_RESPONSIVE_BUILT_IN_EDITOR_SUPPORTS_TEXT = TextPair(
+            "为保证编辑流畅，内置编辑器仅支持 128 KB 以内文本文件。",
+            "To keep editing responsive, the built-in editor supports text files up to 128 KB."
+        )
+        val FILE_SAVED_PUSHED_BACK_DEVICE =
+            TextPair("文件已保存并回写到设备。", "File saved and pushed back to the device.")
         val OPEN_FILE = TextPair("打开文件", "Open file")
-        val OPENED_LOCAL_TEMP_FILE_EXTERNAL_APP = TextPair("已调用外部程序打开本机临时文件。", "Opened the local temp file with an external app.")
-        val NO_LOCAL_COPY_AVAILABLE_PUSH_BACK = TextPair("当前没有可回写的本机副本，请先打开或预览该文件。", "No local copy is available to push back yet.")
+        val OPENED_LOCAL_TEMP_FILE_EXTERNAL_APP =
+            TextPair("已调用外部程序打开本机临时文件。", "Opened the local temp file with an external app.")
+        val NO_LOCAL_COPY_AVAILABLE_PUSH_BACK =
+            TextPair("当前没有可回写的本机副本，请先打开或预览该文件。", "No local copy is available to push back yet.")
         val LOCAL_COPY_PUSHED_BACK_DEVICE = TextPair("本机副本已回写到设备。", "Local copy pushed back to the device.")
         val COULDN_T_READ_BINARY_PREVIEW = TextPair("无法读取二进制预览。", "Couldn't read the binary preview.")
         val EMPTY_FILE = TextPair("空文件", "Empty file")
-        val NO_ADB_CONNECTION_AVAILABLE_SO_FILE_DETAILS_CAN = TextPair("当前没有可用的 ADB 连接，无法读取文件详情。", "No ADB connection is available, so file details can't be loaded.")
+        val NO_ADB_CONNECTION_AVAILABLE_SO_FILE_DETAILS_CAN = TextPair(
+            "当前没有可用的 ADB 连接，无法读取文件详情。",
+            "No ADB connection is available, so file details can't be loaded."
+        )
         val COULDN_T_PARSE_FILE_DETAILS = TextPair("无法解析文件详情", "Couldn't parse file details")
         val COULDN_T_LOAD_FILE_DETAILS = TextPair("读取文件详情失败。", "Couldn't load file details.")
-        val NO_ADB_CONNECTION_AVAILABLE_SO_FOLDER_CAN_T = TextPair("当前没有可用的 ADB 连接，无法读取目录。", "No ADB connection is available, so the folder can't be loaded.")
+        val NO_ADB_CONNECTION_AVAILABLE_SO_FOLDER_CAN_T = TextPair(
+            "当前没有可用的 ADB 连接，无法读取目录。",
+            "No ADB connection is available, so the folder can't be loaded."
+        )
         val COULDN_T_LOAD_FOLDER = TextPair("目录读取失败。", "Couldn't load folder.")
         val COULDN_T_FIND_APK_PATH = TextPair("未找到安装包路径", "Couldn't find the APK path")
         val COULDN_T_WRITE_APK = TextPair("无法写入安装包。", "Couldn't write the APK.")
@@ -319,9 +346,11 @@ object ManagementTexts {
         val COPY = TextPair("复制", "Copy")
         val CUT = TextPair("剪切", "Cut")
         val RENAME = TextPair("重命名", "Rename")
-        val RENAME_ONLY_SUPPORTS_SINGLE_FILE_FOLDER = TextPair("重命名仅支持单个文件或文件夹。", "Rename only supports a single file or folder.")
+        val RENAME_ONLY_SUPPORTS_SINGLE_FILE_FOLDER =
+            TextPair("重命名仅支持单个文件或文件夹。", "Rename only supports a single file or folder.")
         val DETAILS = TextPair("详情", "Details")
-        val DETAILS_ONLY_SUPPORTS_SINGLE_FILE_FOLDER = TextPair("详情仅支持单个文件或文件夹。", "Details only supports a single file or folder.")
+        val DETAILS_ONLY_SUPPORTS_SINGLE_FILE_FOLDER =
+            TextPair("详情仅支持单个文件或文件夹。", "Details only supports a single file or folder.")
         val DELETE = TextPair("删除", "Delete")
         val COPYING_ITEM_S = TextPair("正在复制 %s 项", "Copying %s item(s)")
         val MOVING_ITEM_S = TextPair("正在移动 %s 项", "Moving %s item(s)")
@@ -359,7 +388,8 @@ object ManagementTexts {
         val UPLOAD_FROM_DEVICE = TextPair("从本地上传", "Upload from device")
         val PASTE = TextPair("粘贴", "Paste")
         val DELETE_ITEM_S = TextPair("确认删除 %s 项？", "Delete %s item(s)?")
-        val CAN_T_BE_UNDONE_PLEASE_CONFIRM = TextPair("删除后不可恢复，请确认继续。", "This can't be undone. Please confirm.")
+        val CAN_T_BE_UNDONE_PLEASE_CONFIRM =
+            TextPair("删除后不可恢复，请确认继续。", "This can't be undone. Please confirm.")
         val PATH = TextPair("所在路径", "Path")
         val TYPE = TextPair("类型", "Type")
         val PERMISSIONS = TextPair("权限", "Permissions")
@@ -402,7 +432,10 @@ object ManagementTexts {
         val BATTERY_COLD = TextPair("过冷", "Cold")
         val CPU_CORES_WITH_FREQUENCY = TextPair("%d 核 / %s", "%d cores / %s")
         val CPU_CORES = TextPair("%d 核", "%d cores")
-        val NO_CONNECTION_FOR_OVERVIEW = TextPair("当前没有可用的 ADB 连接，无法读取首页参数。", "No ADB connection is available, so overview data can't be loaded.")
+        val NO_CONNECTION_FOR_OVERVIEW = TextPair(
+            "当前没有可用的 ADB 连接，无法读取首页参数。",
+            "No ADB connection is available, so overview data can't be loaded."
+        )
         val OVERVIEW_LOAD_FAILED = TextPair("读取设备首页参数失败。", "Couldn't load device overview data.")
         val COULDN_T_LOAD_DEVICE_INFO = TextPair("设备信息读取失败", "Couldn't load device info")
         val SYSTEM_HARDWARE = TextPair("系统与硬件", "System and hardware")
@@ -441,8 +474,12 @@ object ManagementTexts {
     }
 
     object Commands {
-        val LIST_USER_APPS_DESCRIPTION = TextPair("列出用户安装应用，便于排障或核对包名。", "List installed user apps for debugging and package checks.")
-        val LOGCAT_SNAPSHOT_DESCRIPTION = TextPair("抓取最近 120 行日志，适合先做一次快照排查。", "Capture the latest 120 log lines for a quick check.")
+        val LIST_USER_APPS_DESCRIPTION = TextPair(
+            "列出用户安装应用，便于排障或核对包名。",
+            "List installed user apps for debugging and package checks."
+        )
+        val LOGCAT_SNAPSHOT_DESCRIPTION =
+            TextPair("抓取最近 120 行日志，适合先做一次快照排查。", "Capture the latest 120 log lines for a quick check.")
         val SHELL_CONNECTING = TextPair("# 正在连接交互式 shell...\n", "# Connecting to interactive shell...\n")
         val SHELL_CONNECTED = TextPair("# 已连接。\n", "# Connected.\n")
         val SHELL_EXITED = TextPair("\n# shell 已退出，exit=%s\n", "\n# Shell exited, exit=%s\n")
@@ -454,10 +491,6 @@ object ManagementTexts {
                 "# 已阻止 %s：当前 Shell 不支持交互式全屏程序，请使用 cat、sed、tail 等非交互命令。\n",
                 "# Blocked %s: this shell does not support interactive full-screen programs. Use a non-interactive command such as cat, sed, or tail.\n",
             )
-        val INTERRUPT = TextPair("中断 (Ctrl+C)", "Interrupt (Ctrl+C)")
-        val COMMAND_COMPLETED_NO_OUTPUT = TextPair("命令执行完成，无输出。", "Command completed with no output.")
-        val COMMAND_FAILED = TextPair("命令执行失败。", "Command failed.")
-        val OUTPUT_TRUNCATED = TextPair("...输出已截断，原始内容超过 %d 个字符。", "...Output truncated because the original exceeded %d characters.")
         val PREVIOUS_COMMAND = TextPair("上一条命令", "Previous command")
         val NEXT_COMMAND = TextPair("下一条命令", "Next command")
         val COMPLETE = TextPair("补全", "Complete")
@@ -470,27 +503,35 @@ object ManagementTexts {
         val RUN_COMMAND = TextPair("执行命令", "Run command")
         val QUICK_COMMANDS = TextPair("快捷命令", "Quick commands")
         val DEVICE_OVERVIEW = TextPair("设备概览", "Device overview")
-        val QUICK_CHECK_BRAND_MODEL_ANDROID_VERSION = TextPair("快速确认品牌、型号和系统版本。", "Quick check of brand, model, and Android version.")
+        val QUICK_CHECK_BRAND_MODEL_ANDROID_VERSION =
+            TextPair("快速确认品牌、型号和系统版本。", "Quick check of brand, model, and Android version.")
         val DISPLAY_METRICS = TextPair("屏幕参数", "Display metrics")
         val READ_CURRENT_RESOLUTION_DPI = TextPair("读取当前分辨率和 DPI 状态。", "Read the current resolution and DPI.")
         val FOREGROUND_WINDOW = TextPair("前台页面", "Foreground window")
-        val LOCATE_FOCUSED_WINDOW_FOREGROUND_ACTIVITY = TextPair("定位当前焦点窗口和前台 Activity。", "Locate the focused window and foreground activity.")
+        val LOCATE_FOCUSED_WINDOW_FOREGROUND_ACTIVITY =
+            TextPair("定位当前焦点窗口和前台 Activity。", "Locate the focused window and foreground activity.")
         val USER_APPS = TextPair("第三方应用", "User apps")
         val NETWORK_STATUS = TextPair("网络状态", "Network status")
-        val SHOW_WLAN_ADDRESS_WIRELESS_DEBUGGING_PORT = TextPair("查看 WLAN 地址和当前无线调试端口。", "Show WLAN address and wireless debugging port.")
+        val SHOW_WLAN_ADDRESS_WIRELESS_DEBUGGING_PORT =
+            TextPair("查看 WLAN 地址和当前无线调试端口。", "Show WLAN address and wireless debugging port.")
         val LOGCAT_SNAPSHOT = TextPair("Logcat 快照", "Logcat snapshot")
         val MEMORY_USAGE = TextPair("内存使用", "Memory usage")
-        val SHOW_TOTAL_USED_AVAILABLE_MEMORY = TextPair("查看系统内存使用情况和可用内存。", "Show total used and available memory.")
+        val SHOW_TOTAL_USED_AVAILABLE_MEMORY =
+            TextPair("查看系统内存使用情况和可用内存。", "Show total used and available memory.")
         val BATTERY_INFO = TextPair("电池信息", "Battery info")
-        val SHOW_BATTERY_LEVEL_TEMPERATURE_CHARGING_STATE = TextPair("查看电池电量、温度和充电状态。", "Show battery level, temperature, and charging state.")
+        val SHOW_BATTERY_LEVEL_TEMPERATURE_CHARGING_STATE =
+            TextPair("查看电池电量、温度和充电状态。", "Show battery level, temperature, and charging state.")
         val CPU_INFO = TextPair("CPU 信息", "CPU info")
-        val SHOW_CPU_ARCHITECTURE_CORE_COUNT = TextPair("查看 CPU 架构和核心数量。", "Show CPU architecture and core count.")
+        val SHOW_CPU_ARCHITECTURE_CORE_COUNT =
+            TextPair("查看 CPU 架构和核心数量。", "Show CPU architecture and core count.")
         val STORAGE = TextPair("存储空间", "Storage")
-        val SHOW_INTERNAL_STORAGE_SD_CARD_USAGE = TextPair("查看内部存储和 SD 卡的使用情况。", "Show internal storage and SD card usage.")
+        val SHOW_INTERNAL_STORAGE_SD_CARD_USAGE =
+            TextPair("查看内部存储和 SD 卡的使用情况。", "Show internal storage and SD card usage.")
         val RUNNING_PROCESSES = TextPair("正在运行的进程", "Running processes")
         val LIST_RUNNING_APP_PROCESSES = TextPair("列出当前正在运行的应用进程。", "List running app processes.")
         val KILL_BACKGROUND_APPS = TextPair("清理后台应用", "Kill background apps")
-        val FORCE_STOP_BACKGROUND_APPS_FREE_MEMORY = TextPair("强制停止所有后台应用释放内存。", "Force-stop background apps to free memory.")
+        val FORCE_STOP_BACKGROUND_APPS_FREE_MEMORY =
+            TextPair("强制停止所有后台应用释放内存。", "Force-stop background apps to free memory.")
         val SYSTEM_PROPERTIES = TextPair("系统属性", "System properties")
         val INSPECT_KEY_SYSTEM_PROPERTIES = TextPair("查看关键系统属性信息。", "Inspect key system properties.")
     }
@@ -516,8 +557,12 @@ object ManagementTexts {
         val COLLAPSE_CHILD_PROCESSES = TextPair("收起子进程", "Collapse child processes")
         val EXPAND_CHILD_PROCESSES = TextPair("展开子进程", "Expand child processes")
         val STOP_PROCESS = TextPair("结束进程", "Stop process")
-        val NO_ADB_CONNECTION_AVAILABLE_SO_PROCESS_LIST_CAN = TextPair("当前没有可用的 ADB 连接，无法读取进程列表。", "No ADB connection is available, so the process list can't be loaded.")
-        val NO_RUNNING_APP_PROCESSES_WERE_FOUND = TextPair("未读取到正在运行的应用进程。", "No running app processes were found.")
+        val NO_ADB_CONNECTION_AVAILABLE_SO_PROCESS_LIST_CAN = TextPair(
+            "当前没有可用的 ADB 连接，无法读取进程列表。",
+            "No ADB connection is available, so the process list can't be loaded."
+        )
+        val NO_RUNNING_APP_PROCESSES_WERE_FOUND =
+            TextPair("未读取到正在运行的应用进程。", "No running app processes were found.")
     }
 
     object PortForward {
@@ -528,7 +573,8 @@ object ManagementTexts {
             )
         val COULDN_T_READ_RELAY_STATUS = TextPair("读取转发状态失败。", "Couldn't read relay status.")
         val COULDN_T_OPEN_BROWSER = TextPair("无法打开浏览器。", "Couldn't open a browser.")
-        val FORWARDING_SETTINGS_INCOMPLETE = TextPair("转发设置不完整，请先修改设置。", "The forwarding settings are incomplete.")
+        val FORWARDING_SETTINGS_INCOMPLETE =
+            TextPair("转发设置不完整，请先修改设置。", "The forwarding settings are incomplete.")
         val COULDN_T_START_RELAY_HELPER = TextPair("启动转发 Helper 失败。", "Couldn't start the relay helper.")
         val RELAY_HELPER_STOPPED = TextPair("转发 Helper 已停止。", "The relay helper stopped.")
         val COULDN_T_STOP_RELAY_HELPER = TextPair("停止转发 Helper 失败。", "Couldn't stop the relay helper.")
@@ -557,10 +603,16 @@ object ManagementTexts {
         val RECENT_OUTPUT = TextPair("最近输出", "Recent output")
         val NO_LOG_OUTPUT = TextPair("暂无日志输出", "No log output yet")
         val NO_ADB_CONNECTION_AVAILABLE = TextPair("当前没有可用的 ADB 连接。", "No ADB connection is available.")
-        val AT_LEAST_ONE_PORT_FORWARD_REQUIRED = TextPair("至少需要一条端口转发。", "At least one port forward is required.")
-        val TARGET_MUST_BE_IPV4_ADDRESS_HOSTNAME = TextPair("目标地址不能为空，且只能使用 IPv4 地址或主机名。", "The target must be an IPv4 address or hostname.")
-        val PORTS_MUST_BE_BETWEEN_1_65535 = TextPair("端口必须在 1 到 65535 之间。", "Ports must be between 1 and 65535.")
-        val LOCAL_PORT_CANNOT_BE_LISTENED_MORE_THAN_ONCE = TextPair("同一个本地端口不能重复监听。", "A local port cannot be listened on more than once.")
+        val AT_LEAST_ONE_PORT_FORWARD_REQUIRED =
+            TextPair("至少需要一条端口转发。", "At least one port forward is required.")
+        val TARGET_MUST_BE_IPV4_ADDRESS_HOSTNAME = TextPair(
+            "目标地址不能为空，且只能使用 IPv4 地址或主机名。",
+            "The target must be an IPv4 address or hostname."
+        )
+        val PORTS_MUST_BE_BETWEEN_1_65535 =
+            TextPair("端口必须在 1 到 65535 之间。", "Ports must be between 1 and 65535.")
+        val LOCAL_PORT_CANNOT_BE_LISTENED_MORE_THAN_ONCE =
+            TextPair("同一个本地端口不能重复监听。", "A local port cannot be listened on more than once.")
     }
 
 }

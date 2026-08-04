@@ -9,11 +9,11 @@ import com.screen.remote.android.core.common.manager.HapticFeedbackManager
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.domain.model.AppSettings
+import com.screen.remote.android.core.i18n.SettingsTexts
 import com.screen.remote.android.feature.settings.ui.SettingsCard
 import com.screen.remote.android.feature.settings.ui.SettingsDivider
 import com.screen.remote.android.feature.settings.ui.SettingsItem
 import com.screen.remote.android.feature.settings.ui.SettingsSwitch
-import com.screen.remote.android.core.i18n.SettingsTexts
 
 @Composable
 internal fun SettingsScreenContent(

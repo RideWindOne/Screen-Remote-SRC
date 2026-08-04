@@ -33,12 +33,14 @@ internal object ScrcpyDeviceMessageReader {
                 val bytes = ByteArray(length).also(input::readFully)
                 ScrcpyDeviceMessage.Clipboard(bytes.toString(Charsets.UTF_8))
             }
+
             TYPE_ACK_CLIPBOARD -> ScrcpyDeviceMessage.ClipboardAck(input.readLong())
             TYPE_UHID_OUTPUT -> {
                 val id = input.readUnsignedShort()
                 val length = input.readUnsignedShort()
                 ScrcpyDeviceMessage.UhidOutput(id, ByteArray(length).also(input::readFully))
             }
+
             else -> throw IOException("Unknown scrcpy device message type: $type")
         }
 }

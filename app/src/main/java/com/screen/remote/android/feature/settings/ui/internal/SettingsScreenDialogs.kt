@@ -5,8 +5,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.device.ui.component.AdbPairingDialog
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 @Composable
 internal fun SettingsScreenDialogs(

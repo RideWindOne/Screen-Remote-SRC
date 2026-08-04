@@ -4,7 +4,6 @@ import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.domain.model.CodecCatalog
 import com.screen.remote.android.core.domain.model.CodecMediaType
-import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.resetForDevice
@@ -28,24 +27,6 @@ internal suspend fun Session.updateOptions(update: (ScrcpyOptions) -> ScrcpyOpti
     updateOptionsInMemory(update)
     storage.updateOptions(sessionId, update)
     LogManager.d(LogTags.SCRCPY_CLIENT, "Update configuration: sessionId=$sessionId")
-}
-
-/**
- * 保存远程检测到的编码器列表
- */
-internal suspend fun Session.saveDiscoveredEncoders(
-    remoteVideoEncoders: List<EncoderCapability>,
-    remoteAudioEncoders: List<EncoderCapability>,
-) {
-    updateOptions {
-        it.copy(
-            capabilityCache =
-                it.capabilityCache.copy(
-                    remoteVideoEncoders = remoteVideoEncoders,
-                    remoteAudioEncoders = remoteAudioEncoders,
-                ),
-        )
-    }
 }
 
 /**

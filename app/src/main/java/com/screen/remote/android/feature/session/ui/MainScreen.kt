@@ -3,31 +3,30 @@ package com.screen.remote.android.feature.session.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,44 +36,42 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.screen.remote.android.core.i18n.ManagementTexts
-import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
 import com.screen.remote.android.app.deeplink.ManageDestination
 import com.screen.remote.android.app.deeplink.ManageSection
 import com.screen.remote.android.app.deeplink.NewSessionPrefill
+import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
 import com.screen.remote.android.app.deeplink.resolveSessionTarget
-import com.screen.remote.android.app.deeplink.SettingsDestination as DeepLinkSettingsDestination
+import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.common.util.ApiCompatHelper
 import com.screen.remote.android.core.common.util.formatHostPort
-import com.screen.remote.android.core.common.manager.rememberText
-import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.data.repository.toData
 import com.screen.remote.android.core.designsystem.component.CompactGroupSelector
 import com.screen.remote.android.core.designsystem.component.GroupManagementDialog
 import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.SessionColor
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
-import com.screen.remote.android.core.data.repository.toData
+import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.core.telemetry.TelemetryManager
 import com.screen.remote.android.core.update.GitHubReleaseInfo
 import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.isAutomaticUpdateCheckDue
 import com.screen.remote.android.core.update.shouldShowAutomaticUpdate
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.feature.device.ui.component.AdbKeyManagementDialog
 import com.screen.remote.android.feature.remote.ui.RemoteDisplayScreen
 import com.screen.remote.android.feature.session.ui.component.AddSessionDialog
-import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
+import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
 import com.screen.remote.android.feature.session.viewmodel.SessionOnboardingState
 import com.screen.remote.android.feature.settings.ui.AboutScreen
 import com.screen.remote.android.feature.settings.ui.AppearanceScreen
@@ -85,6 +82,8 @@ import com.screen.remote.android.feature.settings.ui.LogManagementScreen
 import com.screen.remote.android.feature.settings.ui.SettingsScreen
 import com.screen.remote.android.feature.settings.ui.UpdateAvailableDialog
 import kotlinx.coroutines.flow.first
+import com.screen.remote.android.app.deeplink.SettingsDestination as DeepLinkSettingsDestination
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 private enum class MainScreenSettingsDestination {
     ROOT,
@@ -235,7 +234,8 @@ fun MainScreen(
                     is ScreenRemoteDeepLink.EditSession,
                     is ScreenRemoteDeepLink.ScrcpySession,
                     is ScreenRemoteDeepLink.ManageSession,
-                    -> viewModel.sessionRepository.sessionDataFlow.first()
+                        -> viewModel.sessionRepository.sessionDataFlow.first()
+
                     else -> emptyList()
                 }
             when (link) {
@@ -249,6 +249,7 @@ fun MainScreen(
                         LogManager.w("DeepLink", "Session not found for edit URL: ${link.sessionSelector}")
                     }
                 }
+
                 is ScreenRemoteDeepLink.ScrcpySession -> {
                     val storedSession = storedSessions.resolveDeepLinkSession(link.sessionSelector)
                     val session = storedSession ?: createTransientDeepLinkSession(link.sessionSelector)
@@ -258,6 +259,7 @@ fun MainScreen(
                         LogManager.w("DeepLink", "Session not found for scrcpy URL: ${link.sessionSelector}")
                     }
                 }
+
                 is ScreenRemoteDeepLink.ManageSession -> {
                     val storedSession = storedSessions.resolveDeepLinkSession(link.sessionSelector)
                     val session = storedSession ?: createTransientDeepLinkSession(link.sessionSelector)
@@ -272,15 +274,19 @@ fun MainScreen(
                         LogManager.w("DeepLink", "Session not found for management URL: ${link.sessionSelector}")
                     }
                 }
+
                 is ScreenRemoteDeepLink.Settings -> {
                     routeState.navigateToSettings(link.destination.toMainScreenDestination())
                 }
+
                 ScreenRemoteDeepLink.DiagnosticLogs -> {
                     routeState.navigateToSettings(MainScreenSettingsDestination.LOG_MANAGEMENT)
                 }
+
                 is ScreenRemoteDeepLink.SettingValue -> {
                     viewModel.applyUrlSetting(link.setting, link.value)
                 }
+
                 ScreenRemoteDeepLink.GenerateAdbKeys -> viewModel.generateAdbKeys()
                 ScreenRemoteDeepLink.Disconnect -> {
                     viewModel.clearConnectStatus()
@@ -408,6 +414,7 @@ fun MainScreen(
                             ManagementTexts.General.CONNECTING_TO_DEVICE.format(
                                 pendingSession?.name ?: ManagementTexts.General.TARGET_DEVICE.get(),
                             )
+
                         else -> ManagementTexts.General.PREPARING_MANAGEMENT.get()
                     }
                 ManagementLoadingDialog(

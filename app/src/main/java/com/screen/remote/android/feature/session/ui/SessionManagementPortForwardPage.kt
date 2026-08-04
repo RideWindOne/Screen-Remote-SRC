@@ -303,7 +303,10 @@ private fun PortForwardRuleEditor(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = AppDimens.listItemHeight).padding(horizontal = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = AppDimens.listItemHeight)
+                .padding(horizontal = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -468,12 +471,17 @@ private fun PortForwardRuleButton(
 ) {
     val shape = SessionManagementControlShape
     Surface(
-        modifier = modifier.clip(shape).clickable(onClick = onClick),
+        modifier = modifier
+            .clip(shape)
+            .clickable(onClick = onClick),
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(SessionManagementControlHeight).padding(horizontal = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(SessionManagementControlHeight)
+                .padding(horizontal = 10.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
@@ -535,7 +543,9 @@ private fun PortForwardLogCard(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {

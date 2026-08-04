@@ -1,7 +1,7 @@
 package com.screen.remote.android.infrastructure.media.video
 
-import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.LogDetailCategory
+import com.screen.remote.android.core.common.manager.LogManager
 
 internal object VideoDebugLog {
     inline fun d(

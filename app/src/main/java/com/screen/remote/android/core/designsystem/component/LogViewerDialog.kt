@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
@@ -90,23 +90,23 @@ fun LogViewerDialog(
     val loadingText = CommonTexts.STATUS_CONNECTING.get()
     val noResultsText = LogTexts.LOG_NO_RESULTS.get()
     val displayLines by
-        produceState(
-            initialValue = listOf(loadingText),
-            key1 = state.logContent,
-            key2 = state.searchQuery,
-            key3 = state.selectedTags,
-        ) {
-            value =
-                withContext(Dispatchers.Default) {
-                    buildLogDisplayLines(
-                        logContent = state.logContent,
-                        searchQuery = state.searchQuery,
-                        selectedTags = state.selectedTags,
-                        loadingText = loadingText,
-                        noResultsText = noResultsText,
-                    )
-                }
-        }
+    produceState(
+        initialValue = listOf(loadingText),
+        key1 = state.logContent,
+        key2 = state.searchQuery,
+        key3 = state.selectedTags,
+    ) {
+        value =
+            withContext(Dispatchers.Default) {
+                buildLogDisplayLines(
+                    logContent = state.logContent,
+                    searchQuery = state.searchQuery,
+                    selectedTags = state.selectedTags,
+                    loadingText = loadingText,
+                    noResultsText = noResultsText,
+                )
+            }
+    }
     val actions =
         rememberLogViewerActions(
             context = context,
@@ -399,7 +399,10 @@ internal fun LogViewerContent(
                 Modifier
                     .fillMaxWidth()
                     .height(IosDesignTokens.segmentedControlHeight)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(IosDesignTokens.searchFieldCornerRadius))
+                    .background(
+                        MaterialTheme.colorScheme.surface,
+                        RoundedCornerShape(IosDesignTokens.searchFieldCornerRadius)
+                    )
                     .padding(horizontal = IosDesignTokens.compactSpacing),
             textStyle =
                 TextStyle(
@@ -446,7 +449,9 @@ internal fun LogViewerContent(
 
     if (selectedTags.isNotEmpty()) {
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             selectedTags.forEach { tag ->
@@ -499,7 +504,9 @@ internal fun LogViewerContent(
     Spacer(modifier = Modifier.height(12.dp))
 
     Card(
-        modifier = Modifier.fillMaxWidth().height(400.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(400.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -681,23 +688,6 @@ internal fun buildLogDisplayLines(
     val filtered = filterLogLines(logContent, searchQuery, selectedTags)
     return if (filtered.isEmpty() && (searchQuery.isNotBlank() || selectedTags.isNotEmpty())) {
         listOf(noResultsText)
-    } else {
-        filtered
-    }
-}
-
-internal fun buildLogDisplayContent(
-    logContent: String,
-    searchQuery: String,
-    selectedTags: Set<String>,
-): String {
-    if (logContent.isEmpty()) {
-        return CommonTexts.STATUS_CONNECTING.get()
-    }
-
-    val filtered = filterLogContent(logContent, searchQuery, selectedTags)
-    return if (filtered.isEmpty() && (searchQuery.isNotBlank() || selectedTags.isNotEmpty())) {
-        LogTexts.LOG_NO_RESULTS.get()
     } else {
         filtered
     }

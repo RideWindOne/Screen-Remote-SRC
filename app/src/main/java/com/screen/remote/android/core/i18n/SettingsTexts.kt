@@ -19,7 +19,10 @@ object SettingsTexts {
     val CUSTOM_COMMANDS_SECTION = TextPair("Shell 快捷命令", "Shell Quick Commands")
     val CUSTOM_COMMANDS_REPLACE_DEFAULTS = TextPair("覆盖默认快捷命令", "Replace Default Quick Commands")
     val CUSTOM_COMMANDS_REPLACE_DEFAULTS_HELP =
-        TextPair("开启后，Shell 页面只显示下面的自定义命令。", "When enabled, the Shell page shows only the custom commands below.")
+        TextPair(
+            "开启后，Shell 页面只显示下面的自定义命令。",
+            "When enabled, the Shell page shows only the custom commands below."
+        )
     val CUSTOM_COMMANDS_LIST = TextPair("命令列表", "Command List")
     val CUSTOM_COMMANDS_EMPTY = TextPair("尚未添加自定义命令", "No custom commands added")
     val CUSTOM_COMMAND_ADD = TextPair("添加命令", "Add Command")
@@ -28,8 +31,6 @@ object SettingsTexts {
     val CUSTOM_COMMAND_NAME_PLACEHOLDER = TextPair("例如：查看电池", "For example: Battery status")
     val CUSTOM_COMMAND_VALUE = TextPair("Shell 命令", "Shell Command")
     val CUSTOM_COMMAND_VALUE_PLACEHOLDER = TextPair("例如：dumpsys battery", "For example: dumpsys battery")
-    val CUSTOM_COMMAND_MOVE_UP = TextPair("上移", "Move Up")
-    val CUSTOM_COMMAND_MOVE_DOWN = TextPair("下移", "Move Down")
     val CUSTOM_COMMAND_DELETE = TextPair("删除命令", "Delete Command")
     val SETTINGS_FLOATING_HAPTIC = TextPair("悬浮球触感反馈", "Floating Ball Haptic Feedback")
     val SETTINGS_PERFORMANCE_STATS = TextPair("显示帧率与网络速率", "Show FPS & Network Rates")
@@ -75,7 +76,6 @@ object SettingsTexts {
     val ABOUT_BASED_ON = TextPair("基于 Scrcpy", "Based on Scrcpy")
     val ABOUT_CHECK_UPDATE = TextPair("检查更新", "Check for updates")
     val ABOUT_AUTO_CHECK_UPDATE = TextPair("自动检测更新", "Automatically check for updates")
-    val ABOUT_CHECKING_UPDATE = TextPair("正在检查…", "Checking…")
     val ABOUT_UPDATE_AVAILABLE = TextPair("发现新版本", "Update available")
     val ABOUT_UPDATE_CURRENT_VERSION = TextPair("当前版本：%s", "Current version: %s")
     val ABOUT_UPDATE_LATEST_VERSION = TextPair("最新版本：%s", "Latest version: %s")
@@ -87,7 +87,6 @@ object SettingsTexts {
     val ABOUT_UPDATE_DOWNLOAD_FAILED = TextPair("下载更新失败，请稍后重试", "Update download failed. Please try again")
     val ABOUT_UPDATE_INSTALL_PERMISSION =
         TextPair("请允许 Screen Remote 安装应用后重试", "Allow Screen Remote to install apps, then try again")
-    val ABOUT_UPDATE_LATER = TextPair("稍后", "Later")
     val ABOUT_UPDATE_SKIP = TextPair("跳过", "Skip")
     val ABOUT_UPDATE_LATEST = TextPair("当前已是最新版本", "You're up to date")
     val ABOUT_UPDATE_FAILED = TextPair("检查更新失败，请稍后重试", "Update check failed. Please try again later")
@@ -108,7 +107,8 @@ object SettingsTexts {
     val ABOUT_TELEMETRY_UPLOAD = TextPair("立即上传今日日志和昨日日志", "Upload today's and yesterday's logs now")
     val ABOUT_TELEMETRY_UPLOAD_SUCCESS = TextPair("日志上传完成", "Log upload completed")
     val ABOUT_TELEMETRY_UPLOAD_PARTIAL = TextPair("部分日志上传失败", "Some logs failed to upload")
-    val ABOUT_TELEMETRY_UPLOAD_EMPTY = TextPair("今日和昨日没有可上传的日志", "No logs are available for today or yesterday")
+    val ABOUT_TELEMETRY_UPLOAD_EMPTY =
+        TextPair("今日和昨日没有可上传的日志", "No logs are available for today or yesterday")
     val ABOUT_DESCRIPTION =
         TextPair(
             "Screen Remote 是一款基于 ADB 协议的远程桌面工具，通常用于连接具有公网 IP 地址的服务或同一局域网内的服务。",

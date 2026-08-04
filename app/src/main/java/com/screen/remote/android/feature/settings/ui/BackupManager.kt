@@ -151,24 +151,6 @@ internal object BackupManager {
         File(root, name).writeText(content)
     }
 
-    private fun writeOptionalText(
-        root: File,
-        name: String,
-        content: String,
-    ) {
-        if (!root.exists()) {
-            root.mkdirs()
-        }
-        val file = File(root, name)
-        if (content.isBlank()) {
-            if (file.exists()) {
-                file.delete()
-            }
-            return
-        }
-        file.writeText(content)
-    }
-
     private suspend fun restoreGroupsAndSessions(
         viewModel: MainViewModel,
         backupData: BackupData,

@@ -12,13 +12,11 @@ object RemoteTexts {
 
     // 远程控制错误
     val ERROR_CONTROL_NOT_READY = TextPair("控制连接未就绪", "Control connection not ready")
-    val ERROR_SEND_FAILED = TextPair("发送失败", "Send failed")
     val ERROR_TEXT_TOO_LONG = TextPair("文本过长（最大 300 字节）", "Text too long (max 300 bytes)")
 
     // RemoteDisplayScreen
     val REMOTE_SWITCH_TO_BACKGROUND = TextPair("切换到后台", "Switch to background")
     val REMOTE_SCREEN_ROTATION_A = TextPair("A旋转", "A rotation")
-    val REMOTE_SCREEN_ROTATION_B = TextPair("B旋转", "B rotation")
     val REMOTE_LANDSCAPE = TextPair("横屏", "Landscape")
     val REMOTE_PORTRAIT = TextPair("竖屏", "Portrait")
     val REMOTE_ASPECT_RATIO = TextPair("宽高比", "Aspect ratio")
@@ -26,9 +24,11 @@ object RemoteTexts {
     val REMOTE_FILL_HEIGHT = TextPair("填满高度", "Fill height")
     val REMOTE_FILL_WIDTH = TextPair("填满宽度", "Fill width")
     val REMOTE_AUDIO_STREAM_EMPTY = TextPair("音频流为空，停止解码器", "Audio stream empty, stopping decoder")
-    val REMOTE_AUDIO_STREAM_CHANGED = TextPair("音频流已变化，停止旧解码器", "Audio stream changed, stopping old decoder")
+    val REMOTE_AUDIO_STREAM_CHANGED =
+        TextPair("音频流已变化，停止旧解码器", "Audio stream changed, stopping old decoder")
     val REMOTE_START_AUDIO_DECODER = TextPair("启动音频解码器", "Starting audio decoder")
-    val REMOTE_AUDIO_CONNECTION_LOST = TextPair("音频连接丢失，触发完整清理", "Audio connection lost, triggering cleanup")
+    val REMOTE_AUDIO_CONNECTION_LOST =
+        TextPair("音频连接丢失，触发完整清理", "Audio connection lost, triggering cleanup")
     val REMOTE_AUDIO_DECODER_CANCELLED = TextPair("音频解码器协程被取消", "Audio decoder coroutine cancelled")
     val REMOTE_AUDIO_DECODER_FAILED = TextPair("音频解码器失败", "Audio decoder failed")
     val REMOTE_INIT_AUDIO_DECODER_FAILED = TextPair("初始化音频解码器失败", "Failed to initialize audio decoder")
@@ -38,8 +38,6 @@ object RemoteTexts {
     val REMOTE_VIDEO_RESOLUTION = TextPair("视频分辨率", "Video resolution")
     val REMOTE_RECEIVED_VIDEO_SIZE = TextPair("收到视频尺寸", "Received video size")
     val REMOTE_INVALID_VIDEO_SIZE = TextPair("无效的视频尺寸", "Invalid video size")
-    val REMOTE_CACHED_VIDEO_DECODER = TextPair("已缓存视频解码器", "Cached video decoder")
-    val REMOTE_SAVE_DECODER_CACHE_FAILED = TextPair("保存解码器缓存失败", "Failed to save decoder cache")
     val REMOTE_CONNECTION_LOST_CLEANUP = TextPair("连接丢失，触发完整清理", "Connection lost, triggering cleanup")
     val REMOTE_DECODER_CANCELLED_UI_CLOSED = TextPair("解码器已取消（界面关闭）", "Decoder cancelled (UI closed)")
     val REMOTE_DECODER_START_FAILED = TextPair("解码器启动失败", "Decoder start failed")
@@ -58,7 +56,6 @@ object RemoteTexts {
         TextPair("Surface 已恢复，设置为就绪并恢复渲染", "Surface restored, set to ready and resume rendering")
     val REMOTE_SURFACE_UNAVAILABLE = TextPair("Surface 不可用", "Surface unavailable")
     val REMOTE_FOCUS_REQUEST_FAILED = TextPair("请求焦点失败", "Focus request failed")
-    val REMOTE_MORE_ACTIONS = TextPair("更多操作", "More actions")
     val REMOTE_ADAPT_DEVICE_RESOLUTION = TextPair("适配设备分辨率", "Adapt device resolution")
     val REMOTE_RESTORE_DEVICE_RESOLUTION = TextPair("恢复设备分辨率", "Restore device resolution")
     val REMOTE_DEVICE_RESOLUTION_ADAPTED = TextPair("已适配设备分辨率", "Device resolution adapted")
@@ -67,14 +64,6 @@ object RemoteTexts {
     val REMOTE_FILE_UPLOADED = TextPair("已上传到 %s", "Uploaded to %s")
     val REMOTE_APK_INSTALLED = TextPair("APK 安装成功：%s", "APK installed: %s")
     val REMOTE_FILE_SEND_FAILED = TextPair("文件发送失败", "Failed to send file")
-    val REMOTE_LAYOUT_RENDER = TextPair("UI 布局渲染", "UI layout render")
-    val REMOTE_LAYOUT_RENDER_DESC =
-        TextPair(
-            "抓取当前页面层级并把输入框、按钮、文本等边界叠加到远程画面上，适合在隐私/安全页辅助定位。",
-            "Capture the current hierarchy and overlay input, button and text bounds on top of the remote screen.",
-        )
-    val REMOTE_LAYOUT_RENDER_REFRESH = TextPair("刷新", "Refresh")
-    val REMOTE_LAYOUT_RENDER_NODES = TextPair("节点数", "Nodes")
     val REMOTE_LAYOUT_RENDER_EMPTY = TextPair("当前页面没有可渲染的布局节点", "No renderable layout nodes found")
     val REMOTE_LAYOUT_RENDER_FAILED = TextPair("布局抓取失败", "Layout capture failed")
     val REMOTE_TARGET_KEYBOARD_OPEN =
@@ -113,50 +102,14 @@ object RemoteTexts {
         )
     val REMOTE_SESSION_CONNECTION_FAILED_TITLE = TextPair("%s 连接失败", "%s connection failed")
 
-    // ScrcpyClient
-    val SCRCPY_ADB_CONNECTION_UNAVAILABLE = TextPair("ADB 连接不可用", "ADB connection unavailable")
     val SCRCPY_AUDIO_METADATA_READ = TextPair("音频元数据读取完成", "Audio metadata read complete")
-    val SCRCPY_AUDIO_SOCKET_CONNECTED = TextPair("音频 Socket 已连接", "Audio socket connected")
-    val SCRCPY_ADB_RECONNECT_SUCCESS = TextPair("ADB 重连成功", "ADB reconnection successful")
-    val SCRCPY_CLEANED_OLD_SERVER_PROCESS = TextPair("已清理旧的 scrcpy-server 进程", "Cleaned old scrcpy-server process")
+    val SCRCPY_CLEANED_OLD_SERVER_PROCESS =
+        TextPair("已清理旧的 scrcpy-server 进程", "Cleaned old scrcpy-server process")
     val SCRCPY_CLEANUP_OLD_RESOURCES_FAILED = TextPair("清理旧资源失败", "Failed to cleanup old resources")
-    val SCRCPY_PORT_FORWARD = TextPair("端口", "Port")
-    val SCRCPY_CONNECTION_FAILED = TextPair("Scrcpy 连接失败", "Scrcpy connection failed")
-    val SCRCPY_CONTROL_SOCKET_CONNECTED = TextPair("控制 Socket 已连接", "Control socket connected")
     val SCRCPY_VIDEO_SOCKET_CONNECTED = TextPair("视频 Socket 已连接", "Video socket connected")
     val SCRCPY_VIDEO_SOCKET_NOT_CONNECTED = TextPair("视频 Socket 未连接", "Video socket not connected")
     val SCRCPY_SOCKET_CONNECTION_FAILED = TextPair("Socket 连接失败", "Socket connection failed")
     val SCRCPY_VIDEO_RESOLUTION = TextPair("视频分辨率", "Video resolution")
-    val SCRCPY_START_MONITOR_OUTPUT = TextPair("开始监控 scrcpy-server 输出", "Start monitoring scrcpy-server output")
-    val SCRCPY_MONITOR_HEARTBEAT = TextPair("监控心跳", "Monitor heartbeat")
-    val SCRCPY_TOTAL_LINES = TextPair("总行数", "Total lines")
-    val SCRCPY_SINCE_LAST_OUTPUT = TextPair("距上次输出", "Since last output")
-    val SCRCPY_NO_OUTPUT_FOR_SECONDS = TextPair("秒无输出", "seconds without output")
-    val SCRCPY_NORMAL_EXIT = TextPair("正常退出", "Normal exit")
-    val SCRCPY_ABNORMAL_EXIT = TextPair("异常退出", "Abnormal exit")
-    val SCRCPY_EXITED = TextPair("已退出", "Exited")
-    val SCRCPY_MONITOR_OUTPUT_END = TextPair("scrcpy-server 输出监控结束", "scrcpy-server output monitoring ended")
-    val SCRCPY_WAIT_METADATA = TextPair("等待元数据...", "Waiting for metadata...")
-    val SCRCPY_START_READ_METADATA = TextPair("开始读取元数据，可用字节", "Start reading metadata, available bytes")
-    val SCRCPY_DEVICE_NAME = TextPair("设备名称", "Device name")
-    val SCRCPY_CODEC_ID = TextPair("Codec ID", "Codec ID")
-    val SCRCPY_RESOLUTION = TextPair("分辨率", "Resolution")
-    val SCRCPY_VIDEO_PACKET = TextPair("视频包", "Video packet")
-    val SCRCPY_SINCE_LAST_READ = TextPair("距上次读取", "Since last read")
-    val SCRCPY_CONSECUTIVE_TIMEOUTS = TextPair("连续超时", "Consecutive timeouts")
-    val SCRCPY_INVALID_PACKET_SIZE = TextPair("Invalid packet size", "Invalid packet size")
-    val SCRCPY_PACKET_SIZE_ABNORMAL = TextPair("数据包大小异常", "Packet size abnormal")
-    val SCRCPY_DATA_STREAM_OUT_OF_SYNC = TextPair("数据流不同步，可能需要重新连接", "Data stream out of sync, may need reconnection")
-    val SCRCPY_VIDEO_STREAM_TIMEOUT = TextPair("视频流超时", "Video stream timeout")
-    val SCRCPY_WAITED = TextPair("已等待", "Waited")
-    val SCRCPY_TOTAL_PACKETS = TextPair("总包数", "Total packets")
-    val SCRCPY_DEVICE_MAY_SLEEP =
-        TextPair(
-            "设备可能息屏，继续等待视频流恢复（控制流正常）",
-            "Device may be sleeping, continue waiting for video stream (control stream normal)",
-        )
-    val SCRCPY_CONTROL_STREAM_DISCONNECTED =
-        TextPair("控制流也断开，判定为连接断开", "Control stream also disconnected, determined as disconnected")
 
     // Server 推送和启动
     val REMOTE_PUSHING_SERVER = TextPair("推送 Server...", "Pushing Server...")
@@ -175,22 +128,13 @@ object RemoteTexts {
     val REMOTE_CONNECTING_SOCKET = TextPair("连接 Socket...", "Connecting Socket...")
     val REMOTE_SOCKET_CONNECTED = TextPair("Socket 连接成功", "Socket connected successfully")
     val REMOTE_SOCKET_ERROR = TextPair("Socket 错误", "Socket error")
-    val SCRCPY_CONNECTION_DISCONNECTED = TextPair("连接断开", "Connection disconnected")
-    val SCRCPY_VIDEO_STREAM_CLOSED = TextPair("视频流已关闭", "Video stream closed")
-    val SCRCPY_TOTAL_RECEIVED_PACKETS = TextPair("总共接收", "Total received")
-    val SCRCPY_PACKETS = TextPair("个包", "packets")
-    val SCRCPY_VIDEO_STREAM_READ_ERROR = TextPair("视频流读取错误", "Video stream read error")
-    val SCRCPY_CLOSE_VIDEO_STREAM = TextPair("关闭视频流", "Close video stream")
-    val SCRCPY_METADATA_READ_COMPLETE = TextPair("元数据读取完成", "Metadata read complete")
     val SCRCPY_METADATA_READ_FAILED = TextPair("元数据读取失败", "Metadata read failed")
-    val SCRCPY_SCREEN_WAKE_SIGNAL_SENT = TextPair("屏幕唤醒信号已发送（已触发关键帧）", "Screen wake signal sent (key frame triggered)")
+    val SCRCPY_SCREEN_WAKE_SIGNAL_SENT =
+        TextPair("屏幕唤醒信号已发送（已触发关键帧）", "Screen wake signal sent (key frame triggered)")
     val SCRCPY_WAKE_SCREEN_FAILED = TextPair("唤醒屏幕失败", "Failed to wake screen")
-    val SCRCPY_CONNECTION_FAILED_DETAIL = TextPair("连接失败", "Connection failed")
-    val SCRCPY_CLOSED_SHELL_STREAM = TextPair("已关闭 shell stream", "Closed shell stream")
-    val SCRCPY_CLOSE_SHELL_STREAM_FAILED = TextPair("关闭 shell stream 失败", "Failed to close shell stream")
     val SCRCPY_REMOVED_ADB_FORWARD = TextPair("已移除 ADB forward", "Removed ADB forward")
     val SCRCPY_REMOVE_FORWARD_FAILED = TextPair("移除 forward 失败", "Failed to remove forward")
     val SCRCPY_TERMINATED_SERVER_PROCESS = TextPair("已终止 scrcpy-server 进程", "Terminated scrcpy-server process")
-    val SCRCPY_TERMINATE_SERVER_FAILED = TextPair("终止 scrcpy-server 进程失败", "Failed to terminate scrcpy-server process")
-    val SCRCPY_DISCONNECTED_ADB_KEPT = TextPair("Scrcpy 已断开，ADB 连接保持", "Scrcpy disconnected, ADB connection kept")
+    val SCRCPY_TERMINATE_SERVER_FAILED =
+        TextPair("终止 scrcpy-server 进程失败", "Failed to terminate scrcpy-server process")
 }

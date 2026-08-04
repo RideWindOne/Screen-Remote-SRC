@@ -6,18 +6,18 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshots.Snapshot
-import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.core.common.util.compat.putIfAbsentCompat
+import com.screen.remote.android.core.i18n.ManagementTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import dadb.helper.RemoteAppField
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -155,7 +155,7 @@ private fun sanitizeAppTitle(
         title.startsWith("package:") ||
             title.endsWith(".apk") ||
             title.contains("/") &&
-                (title.contains("base.apk=") || title.contains(".apk"))
+            (title.contains("base.apk=") || title.contains(".apk"))
     if (isLikelyPathLike) {
         if (title.contains("=")) {
             val suffixAfterEquals = title.substringAfterLast("=").trim()
@@ -371,11 +371,6 @@ internal object SessionManagementAppCache {
                 .ifBlank { sanitizeAppTitle(fallback, packageName).ifBlank { guessAppTitle(packageName) } }
         }
 
-    fun cachedAppTitle(packageName: String): String? =
-        synchronized(this) {
-            titleCache[packageName]
-        }
-
     fun updateAppTitle(
         packageName: String,
         title: String,
@@ -411,30 +406,6 @@ internal object SessionManagementAppCache {
         synchronized(this) {
             iconCache[packageName] = icon
             bumpRevision()
-        }
-    }
-
-    fun markIconHelperUnavailable(reason: String) {
-        synchronized(this) {
-            if (iconHelperUnavailableReason == null) {
-                iconHelperUnavailableReason = reason
-            }
-        }
-    }
-
-    fun iconHelperUnavailableReason(): String? =
-        synchronized(this) {
-            iconHelperUnavailableReason
-        }
-
-    fun shouldCaptureIconHelperDiagnostics(): Boolean =
-        synchronized(this) {
-            !iconHelperDiagnosticsCaptured
-        }
-
-    fun markIconHelperDiagnosticsCaptured() {
-        synchronized(this) {
-            iconHelperDiagnosticsCaptured = true
         }
     }
 
@@ -1076,7 +1047,8 @@ internal suspend fun warmCachedAppPresentations(
                 if (!iconFile.exists()) {
                     return@mapNotNull null
                 }
-                val bitmap = runCatching { BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull() ?: return@mapNotNull null
+                val bitmap = runCatching { BitmapFactory.decodeFile(iconFile.absolutePath) }.getOrNull()
+                    ?: return@mapNotNull null
                 SessionManagementAppCache.updateIcon(entry.packageName, bitmap)
                 entry.packageName
             }
@@ -1269,58 +1241,12 @@ private class AppIconHelperGateway(
                 localHelperJar = helperJar,
             ).getOrThrow()
 
-    suspend fun runProbe(
-        command: String,
-        args: List<String>,
-    ) = connection.runAppHelperProbe(command, args, helperJar)
-
     companion object {
         fun current(helperJar: File): AppIconHelperGateway? =
             SessionManagementAdbConnection
                 .current()
                 ?.let { connection -> AppIconHelperGateway(connection, helperJar) }
 
-        fun current(context: Context): AppIconHelperGateway? =
-            current(ensureLocalDadbHelperJar(context))
-    }
-}
-
-private suspend fun captureAppHelperDiagnostics(
-    context: Context,
-    packageName: String,
-) {
-    val helperGateway = AppIconHelperGateway.current(context) ?: return
-    val probes =
-        listOf(
-            "ping" to emptyList(),
-            "runtime" to emptyList(),
-            "context" to emptyList(),
-            "pm" to emptyList(),
-            "apps" to emptyList(),
-            "iconprobe" to listOf(packageName),
-        )
-
-    probes.forEach { (command, args) ->
-        val result = helperGateway.runProbe(command, args)
-        result.fold(
-            onSuccess = { probe ->
-                com.screen.remote.android.core.common.manager.LogManager.e(
-                    com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                    "helper probe ${probe.command} exit=${probe.exitCode} stdout=${
-                        probe.stdout.ifBlank {
-                            "<empty>"
-                        }
-                    } stderr=${probe.stderr.ifBlank { "<empty>" }}",
-                )
-            },
-            onFailure = { error ->
-                com.screen.remote.android.core.common.manager.LogManager.e(
-                    com.screen.remote.android.core.common.LogTags.ADB_CONNECTION,
-                    "Helper probe $command failed to execute: ${error.message}",
-                    error,
-                )
-            },
-        )
     }
 }
 

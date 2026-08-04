@@ -70,18 +70,18 @@ import com.screen.remote.android.R
 import com.screen.remote.android.core.common.AppConstants
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
-import com.screen.remote.android.core.designsystem.component.IOSSwitch
-import com.screen.remote.android.core.designsystem.component.DialogPage
 import com.screen.remote.android.core.data.datastore.PreferencesManager
+import com.screen.remote.android.core.designsystem.component.DialogPage
+import com.screen.remote.android.core.designsystem.component.IOSSwitch
 import com.screen.remote.android.core.i18n.CommonTexts
 import com.screen.remote.android.core.i18n.SettingsTexts
-import com.screen.remote.android.core.telemetry.TelemetryPreferences
 import com.screen.remote.android.core.telemetry.TelemetryJournal
 import com.screen.remote.android.core.telemetry.TelemetryManager
-import com.screen.remote.android.core.update.GitHubReleaseInfo
-import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
+import com.screen.remote.android.core.telemetry.TelemetryPreferences
 import com.screen.remote.android.core.update.AppUpdateDownloader
 import com.screen.remote.android.core.update.DownloadedUpdate
+import com.screen.remote.android.core.update.GitHubReleaseInfo
+import com.screen.remote.android.core.update.GitHubReleaseUpdateChecker
 import com.screen.remote.android.core.update.selectApkAsset
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -392,7 +392,8 @@ fun AboutScreen(onBack: () -> Unit) {
                             .clickable {
                                 val intent = Intent(Intent.ACTION_VIEW, AppConstants.TELEGRAM_CHANNEL.toUri())
                                 context.startActivity(intent)
-                            }.padding(horizontal = 16.dp),
+                            }
+                            .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -457,7 +458,8 @@ fun AboutScreen(onBack: () -> Unit) {
                             .clickable {
                                 val intent = Intent(Intent.ACTION_VIEW, AppConstants.GITHUB_REPO.toUri())
                                 context.startActivity(intent)
-                            }.padding(horizontal = 16.dp),
+                            }
+                            .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

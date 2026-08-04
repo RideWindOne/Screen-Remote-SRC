@@ -1,6 +1,6 @@
 /*
  * UI API 兼容性工具
- * 
+ *
  * 从 ApiCompatHelper.kt 拆分而来
  * 职责：窗口、系统栏、触觉反馈、震动相关 API 兼容
  */
@@ -10,8 +10,8 @@ package com.screen.remote.android.core.common.util.compat
 import android.content.Context
 import android.graphics.Rect
 import android.os.Build
-import android.os.Vibrator
 import android.os.VibrationEffect
+import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -212,7 +212,7 @@ fun setFullScreen(
                     View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            )
+                )
         } else {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         }

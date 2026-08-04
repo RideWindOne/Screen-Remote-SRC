@@ -25,13 +25,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.AppColors
+import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.designsystem.component.AppDivider
 import com.screen.remote.android.core.designsystem.component.DialogPage
-import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 import com.screen.remote.android.core.designsystem.component.LogFileItem
 import com.screen.remote.android.core.designsystem.component.LogViewerDialog
 import com.screen.remote.android.core.designsystem.component.formatFileSize
@@ -41,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
 /**
  * 日志管理屏幕
@@ -127,7 +127,8 @@ fun LogManagementScreen(onDismiss: () -> Unit) {
                                 }
                                 loadLogFiles()
                             }
-                        }.padding(horizontal = 16.dp),
+                        }
+                        .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -14,65 +14,69 @@ internal object DeviceInfoProvider {
     /**
      * 获取设备信息
      */
-    fun getDeviceInfo(
+    suspend fun getDeviceInfo(
         dadb: Dadb,
         deviceId: String,
         customName: String?,
         connectionType: ConnectionType,
+        shellPassword: String = "",
     ): DeviceInfo =
-            try {
-                val command = buildBasicDeviceInfoCommand()
-                logShellCommandStart(LogTags.ADB_CONNECTION, command)
-                val response =
-                    try {
-                        dadb.shell(command)
-                    } catch (error: Exception) {
-                        logShellCommandFailure(LogTags.ADB_CONNECTION, command, error)
-                        throw error
-                    }
-                logShellCommandResult(
-                    tag = LogTags.ADB_CONNECTION,
-                    command = command,
-                    exitCode = response.exitCode,
-                    output = response.output,
-                    errorOutput = response.errorOutput,
-                )
-                check(response.exitCode == 0) { response.errorOutput.ifBlank { "Failed to read basic device information" } }
-                val properties = parseBasicDeviceInfo(response.output)
-                val displayName = customName ?: properties.model
-
-                DeviceInfo(
+        try {
+            val command = buildBasicDeviceInfoCommand()
+            val shellExecutor =
+                AdbConnectionShellExecutor(
+                    dadb = dadb,
                     deviceId = deviceId,
-                    name = displayName,
-                    model = properties.model,
-                    manufacturer = properties.manufacturer,
-                    androidVersion = properties.androidVersion,
-                    serialNumber = properties.serialNumber,
-                    connectionType = connectionType,
+                    shellPasswordProvider = { shellPassword },
                 )
-            } catch (e: java.net.ConnectException) {
-                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.english}: ${e.message}")
-                throw Exception(AdbTexts.ADB_RECONNECT_DEVICE.get(), e)
-            } catch (e: java.io.EOFException) {
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_HANDSHAKE_FAILED_OR_INTERRUPTED.english}: ${e.message}",
-                )
-                throw Exception(AdbTexts.ADB_COMMUNICATION_FAILED.get(), e)
-            } catch (e: IllegalStateException) {
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "The connection has been lost",
-                )
-                throw e
-            } catch (e: Exception) {
-                LogManager.e(
-                    LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED_DETAIL.english}: ${e.message}",
-                    e,
-                )
-                throw Exception("${AdbTexts.ADB_CANNOT_GET_DEVICE_INFO.get()}: ${e.message}", e)
+            val response = try {
+                shellExecutor.execute(
+                    command = command,
+                    retryOnFailure = false,
+                    allowShellPasswordFallback = true,
+                ).getOrThrow()
+            } catch (error: Exception) {
+                logShellCommandFailure(LogTags.ADB_CONNECTION, command, error)
+                throw error
             }
+            if (response.isBlank()) {
+                throw IllegalStateException("Failed to read basic device information")
+            }
+            val properties = parseBasicDeviceInfo(response)
+            val displayName = customName ?: properties.model
+
+            DeviceInfo(
+                deviceId = deviceId,
+                name = displayName,
+                model = properties.model,
+                manufacturer = properties.manufacturer,
+                androidVersion = properties.androidVersion,
+                serialNumber = properties.serialNumber,
+                connectionType = connectionType,
+            )
+        } catch (e: java.net.ConnectException) {
+            LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.english}: ${e.message}")
+            throw Exception(AdbTexts.ADB_RECONNECT_DEVICE.get(), e)
+        } catch (e: java.io.EOFException) {
+            LogManager.e(
+                LogTags.ADB_CONNECTION,
+                "${AdbTexts.ADB_HANDSHAKE_FAILED_OR_INTERRUPTED.english}: ${e.message}",
+            )
+            throw Exception(AdbTexts.ADB_COMMUNICATION_FAILED.get(), e)
+        } catch (e: IllegalStateException) {
+            LogManager.e(
+                LogTags.ADB_CONNECTION,
+                "The connection has been lost",
+            )
+            throw e
+        } catch (e: Exception) {
+            LogManager.e(
+                LogTags.ADB_CONNECTION,
+                "${AdbTexts.ADB_GET_DEVICE_INFO_FAILED_DETAIL.english}: ${e.message}",
+                e,
+            )
+            throw Exception("${AdbTexts.ADB_CANNOT_GET_DEVICE_INFO.get()}: ${e.message}", e)
+        }
 }
 
 internal data class BasicDeviceInfo(

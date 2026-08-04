@@ -5,11 +5,11 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -19,19 +19,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
-import com.screen.remote.android.core.common.util.ApiCompatHelper
-import com.screen.remote.android.core.common.util.compat.canDrawOverlaysCompat
-import com.screen.remote.android.core.common.manager.LanguageManager
-import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.data.datastore.PreferencesManager
-import com.screen.remote.android.feature.session.ui.MainScreen
-import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHandler
-import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHost
-import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
-import com.screen.remote.android.feature.settings.ui.DebugLogOverlay
-import com.screen.remote.android.core.designsystem.theme.ScreenRemoteTheme
 import com.screen.remote.android.app.deeplink.ScreenRemoteDeepLink
 import com.screen.remote.android.app.deeplink.parseScreenRemoteDeepLink
+import com.screen.remote.android.core.common.manager.LanguageManager
+import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.common.util.compat.canDrawOverlaysCompat
+import com.screen.remote.android.core.data.datastore.PreferencesManager
+import com.screen.remote.android.core.designsystem.theme.ScreenRemoteTheme
+import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHandler
+import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHost
+import com.screen.remote.android.feature.session.ui.MainScreen
+import com.screen.remote.android.feature.settings.ui.DebugLogOverlay
+import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
 
 class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
@@ -105,12 +105,12 @@ class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
                     )
                 }
             }
-            
+
             // 初始化语言管理器
             LaunchedEffect(settings.language) {
                 LanguageManager.setLanguage(settings.language)
             }
-            
+
             ScreenRemoteTheme(themeMode = settings.themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
             return
         }
         pendingDeepLink.value = parsed
-        setIntent(Intent(source).setData(null))
+        intent = Intent(source).setData(null)
         LogManager.i("DeepLink", "Accepted Screen Remote URL: $data")
     }
 }

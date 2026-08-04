@@ -91,7 +91,11 @@ class AudioTrackManager(
         }
 
         AudioDebugLog.d(LogTags.AUDIO_DECODER) {
-            "Reconstruct AudioTrack according to decoded output format: rate=$sampleRate, channels=$channelCount, encoding=${encodingName(encoding)}"
+            "Reconstruct AudioTrack according to decoded output format: rate=$sampleRate, channels=$channelCount, encoding=${
+                encodingName(
+                    encoding
+                )
+            }"
         }
 
         release()

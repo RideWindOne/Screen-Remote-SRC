@@ -18,15 +18,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.DataOutputStream
 import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.EOFException
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -302,13 +301,6 @@ internal class ScrcpyControllerTransport(
         dControl(LogTags.SDL) { "The control message sending thread has been canceled" }
     }
 
-    fun destroy() {
-        stop()
-        controlScope.cancel()
-        receiverScope.cancel()
-        controlDispatcher.close()
-    }
-
     fun enqueueTouch(
         action: Int,
         pointerId: Long,
@@ -428,6 +420,7 @@ internal class ScrcpyControllerTransport(
                                 iterator.next().value.also { iterator.remove() }
                             }
                         }
+
                         else -> null
                     }
                 } ?: return
@@ -524,7 +517,8 @@ internal class ScrcpyControllerTransport(
         e: Exception,
         isKeepalive: Boolean,
     ) {
-        val message = if (isKeepalive) "Control keepalive send failed: ${e.message}" else "Socket send failed: ${e.message}"
+        val message =
+            if (isKeepalive) "Control keepalive send failed: ${e.message}" else "Socket send failed: ${e.message}"
         LogManager.e(LogTags.SCRCPY_CLIENT, message)
         issueTracker.record("control.write", e.message ?: "Unknown control socket write error")
         output = null
@@ -534,7 +528,6 @@ internal class ScrcpyControllerTransport(
     }
 
     // This receiver is launched only on receiverScope, whose dispatcher is Dispatchers.IO.
-    @Suppress("BlockingMethodInNonBlockingContext")
     private suspend fun receiveDeviceMessages(deviceId: String) {
         var activeChannel: Pair<Socket, DataInputStream>? = null
         while (currentCoroutineContext().isActive) {
@@ -603,6 +596,7 @@ internal class ScrcpyControllerTransport(
 
     private companion object {
         const val NANOS_PER_MILLISECOND = 1_000_000L
+
         // INJECT_TEXT is capped at 300 UTF-8 bytes; all other buffered packets are smaller.
         const val MAX_BUFFERED_CONTROL_MESSAGE_SIZE = 512
         const val CONTROL_SOCKET_POLL_INTERVAL_MS = 50L

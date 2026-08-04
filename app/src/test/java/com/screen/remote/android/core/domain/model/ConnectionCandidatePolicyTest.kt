@@ -73,7 +73,13 @@ class ConnectionCandidatePolicyTest {
             )
         val lastSuccess =
             ConnectionCandidateAttempt(
-                ConnectionCandidate(ConnectionTransport.TCP, "192.168.1.3", 5555, priority = 1, lastSuccessfulAtMillis = 42),
+                ConnectionCandidate(
+                    ConnectionTransport.TCP,
+                    "192.168.1.3",
+                    5555,
+                    priority = 1,
+                    lastSuccessfulAtMillis = 42
+                ),
                 reachable = false,
             )
 

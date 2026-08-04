@@ -47,6 +47,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.rememberText
+import com.screen.remote.android.core.common.util.ApiCompatHelper
+import com.screen.remote.android.core.common.util.FilePickerHelper
+import com.screen.remote.android.core.common.util.LocalDisplaySpec
+import com.screen.remote.android.core.common.util.resolveLocalDisplaySpec
 import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.data.repository.SessionRepository
@@ -58,30 +62,26 @@ import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import com.screen.remote.android.core.domain.model.getDisplayText
 import com.screen.remote.android.core.domain.model.getIcon
-import com.screen.remote.android.core.common.util.ApiCompatHelper
-import com.screen.remote.android.core.common.util.FilePickerHelper
-import com.screen.remote.android.core.common.util.LocalDisplaySpec
-import com.screen.remote.android.core.common.util.resolveLocalDisplaySpec
 import com.screen.remote.android.core.i18n.RemoteTexts
-import com.screen.remote.android.feature.remote.model.RemoteUiLayoutNode
-import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
 import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHandler
 import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHost
-import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
+import com.screen.remote.android.feature.remote.model.RemoteUiLayoutNode
+import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
+import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
 import com.screen.remote.android.feature.remote.presentation.RemoteFileSendResult
 import com.screen.remote.android.feature.remote.presentation.VideoDecoderManager
 import com.screen.remote.android.feature.remote.presentation.rememberAudioDecoderManager
 import com.screen.remote.android.feature.remote.presentation.rememberVideoDecoderManager
 import com.screen.remote.android.feature.remote.ui.internal.RemoteLayoutInspectorOverlay
-import com.screen.remote.android.feature.remote.widget.connection.ConnectionStateOverlay
 import com.screen.remote.android.feature.remote.widget.connection.ConnectionActionOverlay
+import com.screen.remote.android.feature.remote.widget.connection.ConnectionStateOverlay
 import com.screen.remote.android.feature.remote.widget.floating.AutoFloatingMenu
 import com.screen.remote.android.feature.remote.widget.floating.FloatingMenuActions
 import com.screen.remote.android.feature.remote.widget.touch.KeyboardInputHandler
-import com.screen.remote.android.feature.remote.widget.video.VideoDisplayArea
 import com.screen.remote.android.feature.remote.widget.video.RemotePerformanceStatsOverlay
+import com.screen.remote.android.feature.remote.widget.video.VideoDisplayArea
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
 import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -182,7 +182,8 @@ internal fun shouldCancelConnectionOnBack(
 internal fun shouldInterceptRemoteBack(
     connectionState: ConnectionState,
     connectStatus: ConnectStatus,
-): Boolean = connectionState is ConnectionState.Connected || shouldCancelConnectionOnBack(connectionState, connectStatus)
+): Boolean =
+    connectionState is ConnectionState.Connected || shouldCancelConnectionOnBack(connectionState, connectStatus)
 
 internal fun connectionStateForRemoteOverlay(
     connectionState: ConnectionState,
@@ -505,6 +506,7 @@ private fun rememberRemoteDisplayScreenRouteState(
                         when (sendResult) {
                             is RemoteFileSendResult.FileUploaded ->
                                 RemoteTexts.REMOTE_FILE_UPLOADED.get().format(sendResult.remotePath)
+
                             is RemoteFileSendResult.ApkInstalled ->
                                 RemoteTexts.REMOTE_APK_INSTALLED.get().format(sendResult.fileName)
                         }
@@ -732,19 +734,25 @@ private fun RemoteDisplayScreenEffects(
 
             LogManager.d(
                 LogTags.REMOTE_DISPLAY,
-                "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.english}: A${if (isALandscape) {
-                    RemoteTexts.REMOTE_LANDSCAPE.english
-                } else {
-                    RemoteTexts.REMOTE_PORTRAIT.english
-                }}, B${if (isBLandscape) {
-                    RemoteTexts.REMOTE_LANDSCAPE.english
-                } else {
-                    RemoteTexts.REMOTE_PORTRAIT.english
-                }}, ${RemoteTexts.REMOTE_ASPECT_RATIO.english}=$aspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.english}: ${if (matchHeightFirst) {
-                    RemoteTexts.REMOTE_FILL_HEIGHT.english
-                } else {
-                    RemoteTexts.REMOTE_FILL_WIDTH.english
-                }}",
+                "🔄 ${RemoteTexts.REMOTE_SCREEN_ROTATION_A.english}: A${
+                    if (isALandscape) {
+                        RemoteTexts.REMOTE_LANDSCAPE.english
+                    } else {
+                        RemoteTexts.REMOTE_PORTRAIT.english
+                    }
+                }, B${
+                    if (isBLandscape) {
+                        RemoteTexts.REMOTE_LANDSCAPE.english
+                    } else {
+                        RemoteTexts.REMOTE_PORTRAIT.english
+                    }
+                }, ${RemoteTexts.REMOTE_ASPECT_RATIO.english}=$aspectRatio, ${RemoteTexts.REMOTE_SCALE_STRATEGY.english}: ${
+                    if (matchHeightFirst) {
+                        RemoteTexts.REMOTE_FILL_HEIGHT.english
+                    } else {
+                        RemoteTexts.REMOTE_FILL_WIDTH.english
+                    }
+                }",
             )
         }
     }
@@ -752,7 +760,10 @@ private fun RemoteDisplayScreenEffects(
     BackHandler(
         enabled = shouldInterceptRemoteBack(routeState.connectionState, routeState.connectStatus),
     ) {
-        LogManager.d(LogTags.REMOTE_DISPLAY, "The return key is triggered, current status: ${routeState.connectionState}")
+        LogManager.d(
+            LogTags.REMOTE_DISPLAY,
+            "The return key is triggered, current status: ${routeState.connectionState}"
+        )
         if (shouldCancelConnectionOnBack(routeState.connectionState, routeState.connectStatus)) {
             LogManager.d(LogTags.REMOTE_DISPLAY, "Connecting/reconnecting, canceling connection")
             connectionViewModel.cancelConnect()
@@ -930,7 +941,7 @@ private fun RemoteDisplayScreenContent(
             if (
                 routeState.settings.showPerformanceStats &&
                 routeState.videoStream != null
-                // && routeState.sessionData?.config?.gameMode != true // 游戏模式禁用帧率显示和网络速率
+            // && routeState.sessionData?.config?.gameMode != true // 游戏模式禁用帧率显示和网络速率
             ) {
                 RemotePerformanceStatsOverlay(
                     videoDecoderManager = routeState.videoDecoderManager,

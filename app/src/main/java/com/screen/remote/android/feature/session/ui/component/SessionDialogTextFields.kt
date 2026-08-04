@@ -121,56 +121,6 @@ fun LabeledTextField(
 }
 
 @Composable
-fun LabeledInputRow(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    modifier: Modifier = Modifier,
-    isError: Boolean = false,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    helpText: String? = null,
-) {
-    LabeledRow(
-        label = label,
-        modifier = modifier,
-        helpText = helpText,
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
-            textStyle =
-                dialogFieldTextStyle(
-                    isError = isError,
-                    textAlign = TextAlign.End,
-                ),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            visualTransformation = dialogFieldCursorGapTransformation(),
-            decorationBox = { innerTextField ->
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(start = IosDesignTokens.fieldContentStartPadding, end = DialogFieldTextEndPadding),
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    DialogFieldPlaceholder(
-                        visible = value.isEmpty(),
-                        placeholder = placeholder,
-                        isError = isError,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    innerTextField()
-                }
-            },
-        )
-    }
-}
-
-@Composable
 private fun DialogFieldRow(
     label: String,
     modifier: Modifier,

@@ -486,7 +486,10 @@ internal class FloatingMenuMenuInteractionBinder(
                 scope.launch {
                     val result = actions.controlViewModel.sendKeyEvent(keyCode)
                     if (result.isFailure) {
-                        LogManager.e(LogTags.FLOATING_CONTROLLER_MSG, "$failureLog: ${result.exceptionOrNull()?.message}")
+                        LogManager.e(
+                            LogTags.FLOATING_CONTROLLER_MSG,
+                            "$failureLog: ${result.exceptionOrNull()?.message}"
+                        )
                     }
                 }
             }
@@ -546,13 +549,13 @@ internal fun performHapticFeedbackCompat(feedbackConstant: Int) {
             HapticFeedbackConstants.CLOCK_TICK,
             HapticFeedbackConstants.KEYBOARD_TAP,
             HapticFeedbackConstants.VIRTUAL_KEY,
-            -> "tick"
+                -> "tick"
 
             HapticFeedbackConstants.CONTEXT_CLICK -> "click"
 
             HapticFeedbackConstants.LONG_PRESS,
             rejectConstant,
-            -> "heavy"
+                -> "heavy"
 
             else -> "tick"
         }

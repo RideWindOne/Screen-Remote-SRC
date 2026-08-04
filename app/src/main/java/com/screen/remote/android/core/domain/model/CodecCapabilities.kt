@@ -83,8 +83,6 @@ object CodecCatalog {
             CodecSpec("raw", "audio/raw", CodecMediaType.AUDIO, setOf("pcm")),
         )
 
-    val allSpecs: List<CodecSpec> = videoSpecs + audioSpecs
-
     fun find(
         mediaType: CodecMediaType,
         value: String,

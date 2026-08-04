@@ -17,10 +17,10 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -32,26 +32,28 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -79,12 +81,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.AppTextSizes
 import com.screen.remote.android.core.common.PlaceholderTexts
 import com.screen.remote.android.core.common.constants.IosDesignTokens
 import com.screen.remote.android.core.common.constants.NetworkConstants
 import com.screen.remote.android.core.common.constants.ScrcpyConstants
+import com.screen.remote.android.core.common.util.DeviceTransportSerial
+import com.screen.remote.android.core.common.util.formatHostPort
 import com.screen.remote.android.core.common.util.resolveLocalDisplaySpec
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.AppDivider
@@ -97,12 +102,10 @@ import com.screen.remote.android.core.designsystem.component.HelpIcon
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
 import com.screen.remote.android.core.designsystem.component.SectionTitle
-import com.screen.remote.android.core.common.util.DeviceTransportSerial
-import com.screen.remote.android.core.common.util.formatHostPort
-import com.screen.remote.android.core.domain.model.DeviceGroup
+import com.screen.remote.android.core.domain.model.CodecMediaType
 import com.screen.remote.android.core.domain.model.ConnectionCandidate
 import com.screen.remote.android.core.domain.model.ConnectionTransport
-import com.screen.remote.android.core.domain.model.CodecMediaType
+import com.screen.remote.android.core.domain.model.DeviceGroup
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.domain.model.ScreenRotationPolicy
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
@@ -120,16 +123,19 @@ import com.screen.remote.android.feature.codec.util.CodecUtils
 import com.screen.remote.android.feature.device.ui.component.UsbDeviceSelectionDialog
 import com.screen.remote.android.feature.session.ui.ConnectionLatencyTestPage
 import com.screen.remote.android.feature.session.ui.SessionManagementCenteredDialog
+import com.screen.remote.android.feature.session.ui.SessionManagementControlHeight
+import com.screen.remote.android.feature.session.ui.SessionManagementSearchField
 import com.screen.remote.android.feature.session.ui.quoteShellArg
+import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredConnectService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsDiscoveredTcpService
 import com.screen.remote.android.infrastructure.adb.mdns.MdnsSessionDiscoveryManager
-import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
-import com.screen.remote.android.app.deeplink.NewSessionPrefill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import java.util.Locale
+import androidx.compose.ui.platform.LocalLocale
 
 private val SessionDialogSectionShape = RoundedCornerShape(12.dp)
 private val AudioVolumeRowHorizontalPadding = 10.dp
@@ -145,6 +151,7 @@ private val VideoPickerHeight = 42.dp
 private val VideoPickerInnerMargin = 2.dp
 private val VideoPickerItemGap = 2.dp
 private val VideoPickerDragThreshold = 50.dp
+
 private const val PRIMARY_TCP_DISCOVERY_TARGET = -1
 
 private class EditableSessionAddress(
@@ -156,7 +163,6 @@ private class EditableSessionAddress(
     var host by mutableStateOf(host)
     var port by mutableStateOf(port)
     var showTypeMenu by mutableStateOf(false)
-
     fun selectType(nextType: SessionDeviceType) {
         type = nextType
         when (nextType) {
@@ -167,37 +173,26 @@ private class EditableSessionAddress(
     }
 
     fun toEndpoint(): String? {
-        val normalizedHost =
-            when (type) {
-                SessionDeviceType.USB -> DeviceTransportSerial.stripUsbPrefix(host)
-                SessionDeviceType.MDNS -> DeviceTransportSerial.mdnsDeviceSerial(host)
-                SessionDeviceType.TCP -> parseTcpHostPort(host.trim())?.host ?: DeviceTransportSerial.stripTcpPrefix(
-                    host
-                )
-            }
+        val normalizedHost = when (type) {
+            SessionDeviceType.USB -> DeviceTransportSerial.stripUsbPrefix(host)
+            SessionDeviceType.MDNS -> DeviceTransportSerial.mdnsDeviceSerial(host)
+            SessionDeviceType.TCP -> parseTcpHostPort(host.trim())?.host ?: DeviceTransportSerial.stripTcpPrefix(host)
+        }
         if (normalizedHost.isBlank()) {
             return null
         }
-
         return when (type) {
             SessionDeviceType.USB -> ConnectionCandidate(
-                ConnectionTransport.USB,
-                normalizedHost,
-                port = 0
+                ConnectionTransport.USB, normalizedHost, port = 0
             ).toAddressEndpoint()
 
             SessionDeviceType.MDNS -> ConnectionCandidate(
-                ConnectionTransport.MDNS,
-                normalizedHost,
-                0
+                ConnectionTransport.MDNS, normalizedHost, 0
             ).toAddressEndpoint()
 
             SessionDeviceType.TCP -> {
                 val parsed = parseTcpHostPort(host.trim())
-                val fallbackPort =
-                    parsed?.port
-                        ?: port.trim().toIntOrNull()
-                        ?: NetworkConstants.DEFAULT_ADB_PORT_INT
+                val fallbackPort = parsed?.port ?: port.trim().toIntOrNull() ?: NetworkConstants.DEFAULT_ADB_PORT_INT
                 ConnectionCandidate(ConnectionTransport.TCP, normalizedHost, fallbackPort).toAddressEndpoint()
             }
         }
@@ -208,17 +203,14 @@ private class EditableSessionAddress(
             val value = endpoint.trim()
             val candidate = parseSessionAddressCandidate(value)
             return when {
-                candidate != null ->
-                    EditableSessionAddress(
-                        type =
-                            when (candidate.transport) {
-                                ConnectionTransport.USB -> SessionDeviceType.USB
-                                ConnectionTransport.MDNS -> SessionDeviceType.MDNS
-                                ConnectionTransport.TCP -> SessionDeviceType.TCP
-                            },
-                        host = candidate.host,
-                        port = candidate.port.coerceAtLeast(0).toString(),
-                    )
+                candidate != null -> EditableSessionAddress(
+                    type = when (candidate.transport) {
+                        ConnectionTransport.USB -> SessionDeviceType.USB
+                        ConnectionTransport.MDNS -> SessionDeviceType.MDNS
+                        ConnectionTransport.TCP -> SessionDeviceType.TCP
+                    },
+                    host = candidate.host, port = candidate.port.coerceAtLeast(0).toString(),
+                )
 
                 else -> {
                     val parsed = parseTcpHostPort(value)
@@ -233,14 +225,15 @@ private class EditableSessionAddress(
     }
 }
 
-private class SessionAddressDialogState(
-    source: SessionDialogState,
-) {
+private class SessionAddressDialogState(source: SessionDialogState) {
     var deviceType by mutableStateOf(source.deviceType)
     var host by mutableStateOf(source.host)
     var port by mutableStateOf(source.port)
     var usbSerialNumber by mutableStateOf(source.usbSerialNumber)
-    var backupAddresses by mutableStateOf(source.backupEndpoints.map { EditableSessionAddress.from(it) })
+    var backupAddresses by mutableStateOf(
+        source.backupEndpoints.map {
+            EditableSessionAddress.from(it)
+        })
     var showDeviceTypeMenu by mutableStateOf(false)
     var showUsbDeviceDialog by mutableStateOf(false)
     var showMdnsServiceDialog by mutableStateOf(false)
@@ -248,7 +241,6 @@ private class SessionAddressDialogState(
     var selectedBackupUsbAddressIndex by mutableStateOf<Int?>(null)
     var selectedBackupMdnsAddressIndex by mutableStateOf<Int?>(null)
     var selectedBackupTcpAddressIndex by mutableStateOf<Int?>(null)
-
     fun selectDeviceType(type: SessionDeviceType) {
         deviceType = type
         when (type) {
@@ -281,23 +273,24 @@ private class SessionAddressDialogState(
         if (deviceType == SessionDeviceType.MDNS) {
             target.updateMdnsServiceName(host)
         }
-        target.backupEndpoints =
-            backupAddresses
-                .mapNotNull { it.toEndpoint() }
+        target.backupEndpoints = backupAddresses.mapNotNull {
+            it.toEndpoint()
+        }
     }
 }
 
-private fun Int?.adjustAfterRemoving(removedIndex: Int): Int? =
-    when {
-        this == null -> null
-        this == removedIndex -> null
-        this > removedIndex -> this - 1
-        else -> this
-    }
+private fun Int?.adjustAfterRemoving(removedIndex: Int): Int? = when {
+    this == null -> null
+    this == removedIndex -> null
+    this > removedIndex -> this - 1
+    else -> this
+}
 
 @Composable
 private fun rememberMdnsSessionDiscoveryManager(): MdnsSessionDiscoveryManager {
-    val manager = remember { MdnsSessionDiscoveryManager.get() }
+    val manager = remember {
+        MdnsSessionDiscoveryManager.get()
+    }
     DisposableEffect(manager) {
         val lease = manager.acquireInteractiveDiscovery()
         onDispose {
@@ -315,39 +308,40 @@ fun AddSessionDialog(
     onDismiss: () -> Unit,
     onConfirm: (SessionData) -> Unit,
 ) {
-    val state = remember(sessionData, initialPrefill) { SessionDialogState(sessionData, initialPrefill) }
-    val remoteAppCache = remember(state) { RemoteLaunchableAppCache() }
-    val sessionGroups = availableGroups
+    val state = remember(sessionData, initialPrefill) {
+        SessionDialogState(sessionData, initialPrefill)
+    }
+    val remoteAppCache = remember(state) {
+        RemoteLaunchableAppCache()
+    }
     val mdnsManager = rememberMdnsSessionDiscoveryManager()
     val mdnsState by mdnsManager.state.collectAsState()
-
     AddSessionDialogContent(
-        state = state,
-        isEditMode = sessionData != null,
-        availableGroups = sessionGroups,
-        onDismiss = onDismiss,
-        onConnectionLatencyTest = { state.showConnectionLatencyTest = true },
+        state = state, isEditMode = sessionData != null, availableGroups = availableGroups, onDismiss = onDismiss,
+        onConnectionLatencyTest = {
+            state.showConnectionLatencyTest = true
+        },
         onConfirm = {
             onConfirm(state.toSessionData(sessionData?.id))
             onDismiss()
         },
     )
-
     AddSessionDialogOverlays(
         state = state,
         sessionId = sessionData?.id,
-        availableGroups = sessionGroups,
+        availableGroups = availableGroups,
         mdnsConnectServices = mdnsState.connectServices,
         mdnsTcpServices = mdnsState.tcpServices,
         mdnsConnectLoading = mdnsState.loading,
         mdnsTcpLoading = mdnsState.refreshing && mdnsState.tcpServices.isEmpty(),
         remoteAppCache = remoteAppCache,
     )
-
     if (state.showConnectionLatencyTest && sessionData != null) {
         ConnectionLatencyTestPage(
             sessionData = state.toSessionData(sessionData.id),
-            onBack = { state.showConnectionLatencyTest = false },
+            onBack = {
+                state.showConnectionLatencyTest = false
+            },
         )
     }
 }
@@ -362,14 +356,12 @@ private fun AddSessionDialogContent(
     onConfirm: () -> Unit,
 ) {
     val context = LocalContext.current
-
     DialogPage(
-        title =
-            if (isEditMode) {
-                SessionTexts.SESSION_EDIT.get()
-            } else {
-                SessionTexts.SESSION_ADD.get()
-            },
+        title = if (isEditMode) {
+            SessionTexts.SESSION_EDIT.get()
+        } else {
+            SessionTexts.SESSION_ADD.get()
+        },
         onDismiss = onDismiss,
         leftButtonText = SessionTexts.SESSION_CANCEL.get(),
         rightButtonText = SessionTexts.SESSION_SAVE.get(),
@@ -388,17 +380,20 @@ private fun AddSessionDialogContent(
         verticalSpacing = 8.dp,
     ) {
         RemoteDeviceSection(
-            state = state,
-            availableGroups = availableGroups,
-            onGroupSelectorClick = { state.showGroupSelector = true },
-            onConnectionLatencyTest = onConnectionLatencyTest,
-            showConnectionLatencyTest = isEditMode,
+            state = state, availableGroups = availableGroups,
+            onGroupSelectorClick = {
+                state.showGroupSelector = true
+            },
+            onConnectionLatencyTest = onConnectionLatencyTest, showConnectionLatencyTest = isEditMode,
         )
         ConnectionOptionsSection(state)
         VideoConfigSection(state)
         AudioConfigSection(state)
         OtherOptionsSection(state)
         VirtualDisplaySection(state)
+        if (!state.config.newDisplayEnabled) {
+            StartAppSection(state)
+        }
     }
 }
 
@@ -413,26 +408,13 @@ private fun AddSessionDialogOverlays(
     mdnsTcpLoading: Boolean,
     remoteAppCache: RemoteLaunchableAppCache,
 ) {
-    VideoEncoderSelectionOverlay(
-        state = state,
-        sessionId = sessionId,
-    )
+    VideoEncoderSelectionOverlay(state = state, sessionId = sessionId)
     VideoDecoderSelectionOverlay(state = state)
-    AudioEncoderSelectionOverlay(
-        state = state,
-        sessionId = sessionId,
-    )
+    AudioEncoderSelectionOverlay(state = state, sessionId = sessionId)
     AudioDecoderSelectionOverlay(state = state)
     UsbDeviceSelectionOverlay(state)
-    MdnsServiceSelectionOverlay(
-        state = state,
-        services = mdnsConnectServices,
-        loading = mdnsConnectLoading,
-    )
-    GroupSelectionOverlay(
-        state = state,
-        availableGroups = availableGroups,
-    )
+    MdnsServiceSelectionOverlay(state = state, services = mdnsConnectServices, loading = mdnsConnectLoading)
+    GroupSelectionOverlay(state = state, availableGroups = availableGroups)
     SessionAddressOverlay(
         state = state,
         mdnsConnectServices = mdnsConnectServices,
@@ -440,27 +422,18 @@ private fun AddSessionDialogOverlays(
         mdnsConnectLoading = mdnsConnectLoading,
         mdnsTcpLoading = mdnsTcpLoading,
     )
-    RemoteAppSelectionOverlay(
-        state = state,
-        sessionId = sessionId,
-        cache = remoteAppCache,
-    )
+    RemoteAppSelectionOverlay(state = state, sessionId = sessionId, cache = remoteAppCache)
 }
 
 @Composable
-private fun SessionDialogSection(
-    title: String,
-    content: @Composable () -> Unit,
-) {
+private fun SessionDialogSection(title: String, content: @Composable () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         SectionTitle(title)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = SessionDialogSectionShape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            content()
-        }
+        ) { content() }
     }
 }
 
@@ -477,23 +450,21 @@ private fun RemoteDeviceSection(
             LabeledTextField(
                 label = SessionTexts.LABEL_SESSION_NAME.get(),
                 value = state.sessionName,
-                onValueChange = { state.sessionName = it },
+                onValueChange = {
+                    state.sessionName = it
+                },
                 placeholder = SessionTexts.PLACEHOLDER_SESSION_NAME.get(),
                 helpText = SessionTexts.HELP_SESSION_NAME.get(),
             )
-
             AppDivider()
-
             CompactClickableRow(
-                text = SessionTexts.LABEL_SESSION_ADDRESS.get(),
-                trailingText = state.sessionAddressPreview(),
-                onClick = { state.showSessionAddressDialog = true },
-                helpText = SessionTexts.HELP_CONNECTION_ENDPOINTS.get(),
-                showArrow = true,
+                text = SessionTexts.LABEL_SESSION_ADDRESS.get(), trailingText = state.sessionAddressPreview(),
+                onClick = {
+                    state.showSessionAddressDialog = true
+                },
+                helpText = SessionTexts.HELP_CONNECTION_ENDPOINTS.get(), showArrow = true,
             )
-
             AppDivider()
-
             CompactClickableRow(
                 text = SessionTexts.GROUP_SELECT.get(),
                 trailingText = formatGroupDisplay(state.selectedGroupIds, availableGroups),
@@ -501,10 +472,8 @@ private fun RemoteDeviceSection(
                 helpText = SessionTexts.HELP_SELECT_GROUP.get(),
                 showArrow = true,
             )
-
             if (showConnectionLatencyTest) {
                 AppDivider()
-
                 CompactClickableRow(
                     text = SessionTexts.LATENCY_TEST_ENTRY.get(),
                     trailingText = "10 × 10",
@@ -517,39 +486,11 @@ private fun RemoteDeviceSection(
     }
 }
 
-@Composable
-private fun DeviceTypeDropdownRow(state: SessionDialogState) {
-    LabeledDropdownRow(
-        label = SessionTexts.LABEL_DEVICE_TYPE.get(),
-        trailingText = state.deviceType.displayText(),
-        onClick = { state.showDeviceTypeMenu = true },
-        helpText = SessionTexts.HELP_DEVICE_TYPE.get(),
-    ) {
-        IOSStyledDropdownMenu(
-            expanded = state.showDeviceTypeMenu,
-            onDismissRequest = { state.showDeviceTypeMenu = false },
-            offset = DpOffset(0.dp, AppDimens.listItemHeight),
-            alignment = Alignment.TopEnd,
-        ) {
-            SessionDeviceType.entries.forEach { type ->
-                IOSStyledDropdownMenuItem(
-                    text = type.displayText(),
-                    onClick = {
-                        state.showDeviceTypeMenu = false
-                        state.selectDeviceType(type)
-                    },
-                )
-            }
-        }
-    }
+private fun SessionDeviceType.displayText(): String = when (this) {
+    SessionDeviceType.TCP -> SessionTexts.DEVICE_TYPE_TCP.get()
+    SessionDeviceType.USB -> SessionTexts.DEVICE_TYPE_USB.get()
+    SessionDeviceType.MDNS -> SessionTexts.DEVICE_TYPE_MDNS.get()
 }
-
-private fun SessionDeviceType.displayText(): String =
-    when (this) {
-        SessionDeviceType.TCP -> SessionTexts.DEVICE_TYPE_TCP.get()
-        SessionDeviceType.USB -> SessionTexts.DEVICE_TYPE_USB.get()
-        SessionDeviceType.MDNS -> SessionTexts.DEVICE_TYPE_MDNS.get()
-    }
 
 @Composable
 private fun SessionAddressOverlay(
@@ -562,10 +503,13 @@ private fun SessionAddressOverlay(
     if (!state.showSessionAddressDialog) {
         return
     }
-
-    val editorState = remember(state.showSessionAddressDialog) { SessionAddressDialogState(state) }
+    val editorState = remember(state.showSessionAddressDialog) {
+        SessionAddressDialogState(state)
+    }
     val context = LocalContext.current
-    var pendingTcpDiscoveryTarget by remember { mutableStateOf<Int?>(null) }
+    var pendingTcpDiscoveryTarget by remember {
+        mutableStateOf<Int?>(null)
+    }
     val localNetworkPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
@@ -575,17 +519,13 @@ private fun SessionAddressOverlay(
                     else -> editorState.selectedBackupTcpAddressIndex = target
                 }
             } else {
-                Toast.makeText(
-                    context,
-                    SessionTexts.MAIN_LOCAL_NETWORK_PERMISSION_REQUIRED.get(),
-                    Toast.LENGTH_SHORT,
-                ).show()
+                Toast.makeText(context, SessionTexts.MAIN_LOCAL_NETWORK_PERMISSION_REQUIRED.get(), Toast.LENGTH_SHORT)
+                    .show()
             }
             pendingTcpDiscoveryTarget = null
         }
     val openTcpDiscovery: (Int) -> Unit = { target ->
-        if (Build.VERSION.SDK_INT < 37 ||
-            ContextCompat.checkSelfPermission(
+        if (Build.VERSION.SDK_INT < 37 || ContextCompat.checkSelfPermission(
                 context,
                 android.Manifest.permission.ACCESS_LOCAL_NETWORK,
             ) == PackageManager.PERMISSION_GRANTED
@@ -600,10 +540,11 @@ private fun SessionAddressOverlay(
             localNetworkPermissionLauncher.launch(android.Manifest.permission.ACCESS_LOCAL_NETWORK)
         }
     }
-
     DialogPage(
         title = SessionTexts.DIALOG_SESSION_ADDRESS_TITLE.get(),
-        onDismiss = { state.showSessionAddressDialog = false },
+        onDismiss = {
+            state.showSessionAddressDialog = false
+        },
         leftButtonText = CommonTexts.BUTTON_CANCEL.get(),
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -628,19 +569,18 @@ private fun SessionAddressOverlay(
                 }
             }
         },
-        enableScroll = true,
-        verticalSpacing = 8.dp,
+        enableScroll = true, verticalSpacing = 8.dp,
     ) {
         PrimarySessionAddressCard(
-            state = editorState,
-            mdnsConnectServices = mdnsConnectServices,
-            mdnsConnectLoading = mdnsConnectLoading,
-            onUsbDeviceClick = { editorState.showUsbDeviceDialog = true },
-            mdnsTcpServices = mdnsTcpServices,
-            mdnsTcpLoading = mdnsTcpLoading,
-            onTcpDevicesClick = { openTcpDiscovery(PRIMARY_TCP_DISCOVERY_TARGET) },
+            state = editorState, mdnsConnectServices = mdnsConnectServices, mdnsConnectLoading = mdnsConnectLoading,
+            onUsbDeviceClick = {
+                editorState.showUsbDeviceDialog = true
+            },
+            mdnsTcpServices = mdnsTcpServices, mdnsTcpLoading = mdnsTcpLoading,
+            onTcpDevicesClick = {
+                openTcpDiscovery(PRIMARY_TCP_DISCOVERY_TARGET)
+            },
         )
-
         BackupEndpointsEditor(
             state = editorState,
             mdnsConnectServices = mdnsConnectServices,
@@ -649,7 +589,6 @@ private fun SessionAddressOverlay(
             mdnsTcpLoading = mdnsTcpLoading,
             onTcpDevicesClick = openTcpDiscovery,
         )
-
         SessionAddressUsbDeviceSelectionOverlay(editorState)
         SessionAddressMdnsServiceSelectionOverlay(
             state = editorState,
@@ -691,9 +630,7 @@ private fun PrimarySessionAddressCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         SessionAddressCardHeader(title = SessionTexts.LABEL_PRIMARY_ENDPOINT.get())
-
         AppDivider()
-
         PrimarySessionAddressEditor(
             state = state,
             mdnsConnectServices = mdnsConnectServices,
@@ -709,16 +646,18 @@ private fun PrimarySessionAddressCard(
 @Composable
 private fun SessionAddressDeviceTypeDropdownRow(state: SessionAddressDialogState) {
     LabeledDropdownRow(
-        label = SessionTexts.LABEL_DEVICE_TYPE.get(),
-        trailingText = state.deviceType.displayText(),
-        onClick = { state.showDeviceTypeMenu = true },
+        label = SessionTexts.LABEL_DEVICE_TYPE.get(), trailingText = state.deviceType.displayText(),
+        onClick = {
+            state.showDeviceTypeMenu = true
+        },
         helpText = SessionTexts.HELP_DEVICE_TYPE.get(),
     ) {
         IOSStyledDropdownMenu(
             expanded = state.showDeviceTypeMenu,
-            onDismissRequest = { state.showDeviceTypeMenu = false },
-            offset = DpOffset(0.dp, AppDimens.listItemHeight),
-            alignment = Alignment.TopEnd,
+            onDismissRequest = {
+                state.showDeviceTypeMenu = false
+            },
+            offset = DpOffset(0.dp, AppDimens.listItemHeight), alignment = Alignment.TopEnd,
         ) {
             SessionDeviceType.entries.forEach { type ->
                 IOSStyledDropdownMenuItem(
@@ -738,7 +677,6 @@ private fun SessionAddressUsbDeviceSelectionOverlay(state: SessionAddressDialogS
     if (!state.showUsbDeviceDialog) {
         return
     }
-
     UsbDeviceSelectionDialog(
         currentSerialNumber = state.usbSerialNumber,
         onDeviceSelected = { serialNumber, _ ->
@@ -757,7 +695,6 @@ private fun SessionAddressUsbDeviceSelectionOverlay(state: SessionAddressDialogS
 private fun BackupAddressUsbDeviceSelectionOverlay(state: SessionAddressDialogState) {
     val selectedIndex = state.selectedBackupUsbAddressIndex ?: return
     val address = state.backupAddresses.getOrNull(selectedIndex) ?: return
-
     UsbDeviceSelectionDialog(
         currentSerialNumber = address.host,
         onDeviceSelected = { serialNumber, _ ->
@@ -780,18 +717,17 @@ private fun SessionAddressMdnsServiceSelectionOverlay(
     if (!state.showMdnsServiceDialog) {
         return
     }
-
     MdnsDeviceSelectionDialog(
-        services = services,
-        loading = loading,
-        selectedDeviceSerial = state.host,
+        services = services, loading = loading, selectedDeviceSerial = state.host,
         onSelected = { service ->
             state.deviceType = SessionDeviceType.MDNS
             state.host = service.deviceSerial
             state.port = "0"
             state.showMdnsServiceDialog = false
         },
-        onDismiss = { state.showMdnsServiceDialog = false },
+        onDismiss = {
+            state.showMdnsServiceDialog = false
+        },
     )
 }
 
@@ -804,19 +740,17 @@ private fun SessionAddressTcpServiceSelectionOverlay(
     if (!state.showTcpServiceDialog) {
         return
     }
-
     TcpMdnsDeviceSelectionDialog(
-        services = services,
-        loading = loading,
-        selectedHost = state.host,
-        selectedPort = state.port.toIntOrNull(),
+        services = services, loading = loading, selectedHost = state.host, selectedPort = state.port.toIntOrNull(),
         onSelected = { service ->
             state.deviceType = SessionDeviceType.TCP
             state.host = service.host
             state.port = service.port.toString()
             state.showTcpServiceDialog = false
         },
-        onDismiss = { state.showTcpServiceDialog = false },
+        onDismiss = {
+            state.showTcpServiceDialog = false
+        },
     )
 }
 
@@ -841,9 +775,7 @@ private fun TcpMdnsDeviceSelectionDialog(
                 leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
                 centerTitleInWindow = true,
             )
-
             DialogHeaderSpacer()
-
             TcpMdnsServiceListContent(
                 services = services,
                 loading = loading,
@@ -864,19 +796,19 @@ private fun TcpMdnsServiceListContent(
     onSelected: (MdnsDiscoveredTcpService) -> Unit,
 ) {
     Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = AppDimens.paddingStandard,
-                    end = AppDimens.paddingStandard,
-                    bottom = AppDimens.paddingStandard,
-                ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = AppDimens.paddingStandard,
+                end = AppDimens.paddingStandard,
+                bottom = AppDimens.paddingStandard,
+            ),
     ) {
         if (services.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxWidth().height(150.dp),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp), contentAlignment = Alignment.Center
             ) {
                 if (loading) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -899,14 +831,18 @@ private fun TcpMdnsServiceListContent(
         } else {
             val selectedIndex = selectedTcpMdnsServiceIndex(services, selectedHost, selectedPort)
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 300.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 services.forEachIndexed { index, service ->
                     TcpMdnsServiceItem(
-                        service = service,
-                        isSelected = index == selectedIndex,
-                        onClick = { onSelected(service) },
+                        service = service, isSelected = index == selectedIndex,
+                        onClick = {
+                            onSelected(service)
+                        },
                     )
                 }
             }
@@ -918,44 +854,40 @@ internal fun selectedTcpMdnsServiceIndex(
     services: List<MdnsDiscoveredTcpService>,
     selectedHost: String,
     selectedPort: Int?,
-): Int =
-    services.indexOfFirst { service ->
-        service.host.equals(selectedHost.trim(), ignoreCase = true) && service.port == selectedPort
-    }
+): Int = services.indexOfFirst { service ->
+    service.host.equals(selectedHost.trim(), ignoreCase = true) && service.port == selectedPort
+}
 
 @Composable
-private fun TcpMdnsServiceItem(
-    service: MdnsDiscoveredTcpService,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
+private fun TcpMdnsServiceItem(service: MdnsDiscoveredTcpService, isSelected: Boolean, onClick: () -> Unit) {
     Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
-                .clickable(enabled = !service.confirming) { onClick() },
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.5.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
+            .clickable(enabled = !service.confirming) {
+                onClick()
+            },
+        color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 0.5.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = formatHostPort(service.host, service.port),
                 fontSize = AppTextSizes.body,
                 maxLines = 1,
-                modifier = Modifier.weight(1f).padding(start = 4.dp, end = 12.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp, end = 12.dp),
             )
             Text(
-                text =
-                    if (service.confirming) {
-                        SessionTexts.MDNS_DEVICE_CONFIRMING.get()
-                    } else {
-                        SessionTexts.ENDPOINT_STATUS_NEARBY.get()
-                    },
+                text = if (service.confirming) {
+                    SessionTexts.MDNS_DEVICE_CONFIRMING.get()
+                } else {
+                    SessionTexts.ENDPOINT_STATUS_NEARBY.get()
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp),
@@ -980,17 +912,16 @@ private fun BackupAddressMdnsServiceSelectionOverlay(
 ) {
     val selectedIndex = state.selectedBackupMdnsAddressIndex ?: return
     val address = state.backupAddresses.getOrNull(selectedIndex) ?: return
-
     MdnsDeviceSelectionDialog(
-        services = services,
-        loading = loading,
-        selectedDeviceSerial = address.host,
+        services = services, loading = loading, selectedDeviceSerial = address.host,
         onSelected = { service ->
             address.selectType(SessionDeviceType.MDNS)
             address.host = service.deviceSerial
             state.selectedBackupMdnsAddressIndex = null
         },
-        onDismiss = { state.selectedBackupMdnsAddressIndex = null },
+        onDismiss = {
+            state.selectedBackupMdnsAddressIndex = null
+        },
     )
 }
 
@@ -1002,19 +933,17 @@ private fun BackupAddressTcpServiceSelectionOverlay(
 ) {
     val selectedIndex = state.selectedBackupTcpAddressIndex ?: return
     val address = state.backupAddresses.getOrNull(selectedIndex) ?: return
-
     TcpMdnsDeviceSelectionDialog(
-        services = services,
-        loading = loading,
-        selectedHost = address.host,
-        selectedPort = address.port.toIntOrNull(),
+        services = services, loading = loading, selectedHost = address.host, selectedPort = address.port.toIntOrNull(),
         onSelected = { service ->
             address.selectType(SessionDeviceType.TCP)
             address.host = service.host
             address.port = service.port.toString()
             state.selectedBackupTcpAddressIndex = null
         },
-        onDismiss = { state.selectedBackupTcpAddressIndex = null },
+        onDismiss = {
+            state.selectedBackupTcpAddressIndex = null
+        },
     )
 }
 
@@ -1030,94 +959,78 @@ private fun PrimarySessionAddressEditor(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         SessionAddressDeviceTypeDropdownRow(state)
-
         AppDivider()
-
         when (state.deviceType) {
             SessionDeviceType.USB -> {
                 LabeledTextField(
-                    label = AdbTexts.USB_SERIAL_NUMBER.get(),
-                    value = state.usbSerialNumber,
-                    onValueChange = { state.usbSerialNumber = normalizeUsbAddress(it) },
-                    placeholder = "10AEAG2YZS0020P",
-                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                    label = AdbTexts.USB_SERIAL_NUMBER.get(), value = state.usbSerialNumber,
+                    onValueChange = {
+                        state.usbSerialNumber = normalizeUsbAddress(it)
+                    },
+                    placeholder = "10AEAG2YZS0020P", helpText = SessionTexts.HELP_USB_SERIAL.get(),
                 )
-
                 AppDivider()
-
                 CompactClickableRow(
                     text = AdbTexts.USB_SELECT_DEVICE.get(),
-                    trailingText =
-                        state.usbSerialNumber.ifBlank {
-                            AdbTexts.USB_NO_DEVICE_SELECTED.get()
-                        },
-                    onClick = onUsbDeviceClick,
-                    showArrow = true,
-                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                    trailingText = state.usbSerialNumber.ifBlank {
+                        AdbTexts.USB_NO_DEVICE_SELECTED.get()
+                    },
+                    onClick = onUsbDeviceClick, showArrow = true, helpText = SessionTexts.HELP_USB_SERIAL.get(),
                 )
             }
 
             SessionDeviceType.MDNS -> {
                 LabeledTextField(
-                    label = SessionTexts.LABEL_MDNS_SERVICE.get(),
-                    value = state.host,
+                    label = SessionTexts.LABEL_MDNS_SERVICE.get(), value = state.host,
                     onValueChange = {
                         state.host = normalizeMdnsAddress(it)
                         state.port = "0"
                     },
-                    placeholder = "R5CW730QLKB",
-                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                    placeholder = "R5CW730QLKB", helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
                 )
-
                 AppDivider()
-
                 CompactClickableRow(
                     text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
-                    trailingText =
-                        when {
-                            mdnsConnectServices.isNotEmpty() -> "${mdnsConnectServices.size}"
-                            mdnsConnectLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
-                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
-                        },
-                    onClick = { state.showMdnsServiceDialog = true },
-                    showArrow = true,
-                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                    trailingText = when {
+                        mdnsConnectServices.isNotEmpty() -> "${mdnsConnectServices.size}"
+                        mdnsConnectLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                        else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                    },
+                    onClick = {
+                        state.showMdnsServiceDialog = true
+                    },
+                    showArrow = true, helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
                 )
             }
 
             SessionDeviceType.TCP -> {
                 LabeledTextField(
-                    label = SessionTexts.LABEL_HOST.get(),
-                    value = state.host,
-                    onValueChange = { state.host = it },
-                    placeholder = PlaceholderTexts.HOST,
-                    helpText = SessionTexts.HELP_HOST.get(),
+                    label = SessionTexts.LABEL_HOST.get(), value = state.host,
+                    onValueChange = {
+                        state.host = it
+                    },
+                    placeholder = PlaceholderTexts.HOST, helpText = SessionTexts.HELP_HOST.get(),
                 )
-
                 AppDivider()
-
                 LabeledTextField(
                     label = SessionTexts.LABEL_PORT.get(),
                     value = state.port,
-                    onValueChange = { state.port = it },
+                    onValueChange = {
+                        state.port = it
+                    },
                     placeholder = PlaceholderTexts.PORT,
                     keyboardType = KeyboardType.Number,
                     helpText = SessionTexts.HELP_PORT.get(),
                 )
-
                 AppDivider()
-
                 CompactClickableRow(
                     text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
-                    trailingText =
-                        when {
-                            mdnsTcpServices.isNotEmpty() -> "${mdnsTcpServices.size}"
-                            mdnsTcpLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
-                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
-                        },
-                    onClick = onTcpDevicesClick,
-                    showArrow = true,
-                    helpText = SessionTexts.HELP_TCP_DISCOVERY.get(),
+                    trailingText = when {
+                        mdnsTcpServices.isNotEmpty() -> "${mdnsTcpServices.size}"
+                        mdnsTcpLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                        else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                    },
+                    onClick = onTcpDevicesClick, showArrow = true, helpText = SessionTexts.HELP_TCP_DISCOVERY.get(),
                 )
             }
         }
@@ -1142,11 +1055,7 @@ private fun BackupEndpointsEditor(
         )
         return
     }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         state.backupAddresses.forEachIndexed { index, address ->
             SessionAddressItemEditor(
                 address = address,
@@ -1154,10 +1063,18 @@ private fun BackupEndpointsEditor(
                 mdnsConnectLoading = mdnsConnectLoading,
                 mdnsTcpServices = mdnsTcpServices,
                 mdnsTcpLoading = mdnsTcpLoading,
-                onRemove = { state.removeBackupEndpoint(index) },
-                onUsbDeviceClick = { state.selectedBackupUsbAddressIndex = index },
-                onMdnsServicesClick = { state.selectedBackupMdnsAddressIndex = index },
-                onTcpDevicesClick = { onTcpDevicesClick(index) },
+                onRemove = {
+                    state.removeBackupEndpoint(index)
+                },
+                onUsbDeviceClick = {
+                    state.selectedBackupUsbAddressIndex = index
+                },
+                onMdnsServicesClick = {
+                    state.selectedBackupMdnsAddressIndex = index
+                },
+                onTcpDevicesClick = {
+                    onTcpDevicesClick(index)
+                },
             )
         }
     }
@@ -1189,95 +1106,76 @@ private fun SessionAddressItemEditor(
                 )
             }
         }
-
         AppDivider()
-
         EditableAddressTypeDropdownRow(address)
-
         AppDivider()
-
         when (address.type) {
             SessionDeviceType.TCP -> {
                 LabeledTextField(
-                    label = SessionTexts.LABEL_HOST.get(),
-                    value = address.host,
-                    onValueChange = { address.host = it },
-                    placeholder = PlaceholderTexts.HOST,
-                    helpText = SessionTexts.HELP_HOST.get(),
+                    label = SessionTexts.LABEL_HOST.get(), value = address.host,
+                    onValueChange = {
+                        address.host = it
+                    },
+                    placeholder = PlaceholderTexts.HOST, helpText = SessionTexts.HELP_HOST.get(),
                 )
-
                 AppDivider()
-
                 LabeledTextField(
                     label = SessionTexts.LABEL_PORT.get(),
                     value = address.port,
-                    onValueChange = { address.port = it },
+                    onValueChange = {
+                        address.port = it
+                    },
                     placeholder = PlaceholderTexts.PORT,
                     keyboardType = KeyboardType.Number,
                     helpText = SessionTexts.HELP_PORT.get(),
                 )
-
                 AppDivider()
-
                 CompactClickableRow(
                     text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
-                    trailingText =
-                        when {
-                            mdnsTcpServices.isNotEmpty() -> "${mdnsTcpServices.size}"
-                            mdnsTcpLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
-                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
-                        },
-                    onClick = onTcpDevicesClick,
-                    showArrow = true,
-                    helpText = SessionTexts.HELP_TCP_DISCOVERY.get(),
+                    trailingText = when {
+                        mdnsTcpServices.isNotEmpty() -> "${mdnsTcpServices.size}"
+                        mdnsTcpLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                        else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                    },
+                    onClick = onTcpDevicesClick, showArrow = true, helpText = SessionTexts.HELP_TCP_DISCOVERY.get(),
                 )
             }
 
             SessionDeviceType.USB -> {
                 LabeledTextField(
-                    label = AdbTexts.USB_SERIAL_NUMBER.get(),
-                    value = address.host,
-                    onValueChange = { address.host = normalizeUsbAddress(it) },
-                    placeholder = "10AEAG2YZS0020P",
-                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                    label = AdbTexts.USB_SERIAL_NUMBER.get(), value = address.host,
+                    onValueChange = {
+                        address.host = normalizeUsbAddress(it)
+                    },
+                    placeholder = "10AEAG2YZS0020P", helpText = SessionTexts.HELP_USB_SERIAL.get(),
                 )
-
                 AppDivider()
-
                 CompactClickableRow(
                     text = AdbTexts.USB_SELECT_DEVICE.get(),
-                    trailingText =
-                        address.host.ifBlank {
-                            AdbTexts.USB_NO_DEVICE_SELECTED.get()
-                        },
-                    onClick = onUsbDeviceClick,
-                    showArrow = true,
-                    helpText = SessionTexts.HELP_USB_SERIAL.get(),
+                    trailingText = address.host.ifBlank {
+                        AdbTexts.USB_NO_DEVICE_SELECTED.get()
+                    },
+                    onClick = onUsbDeviceClick, showArrow = true, helpText = SessionTexts.HELP_USB_SERIAL.get(),
                 )
             }
 
             SessionDeviceType.MDNS -> {
                 LabeledTextField(
-                    label = SessionTexts.LABEL_MDNS_SERVICE.get(),
-                    value = address.host,
-                    onValueChange = { address.host = normalizeMdnsAddress(it) },
-                    placeholder = "R5CW730QLKB",
-                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                    label = SessionTexts.LABEL_MDNS_SERVICE.get(), value = address.host,
+                    onValueChange = {
+                        address.host = normalizeMdnsAddress(it)
+                    },
+                    placeholder = "R5CW730QLKB", helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
                 )
-
                 AppDivider()
-
                 CompactClickableRow(
                     text = SessionTexts.MDNS_CONNECT_SERVICES.get(),
-                    trailingText =
-                        when {
-                            mdnsConnectServices.isNotEmpty() -> "${mdnsConnectServices.size}"
-                            mdnsConnectLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
-                            else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
-                        },
-                    onClick = onMdnsServicesClick,
-                    showArrow = true,
-                    helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
+                    trailingText = when {
+                        mdnsConnectServices.isNotEmpty() -> "${mdnsConnectServices.size}"
+                        mdnsConnectLoading -> SessionTexts.MDNS_CONNECT_SCANNING.get()
+                        else -> SessionTexts.MDNS_CONNECT_EMPTY.get()
+                    },
+                    onClick = onMdnsServicesClick, showArrow = true, helpText = SessionTexts.HELP_MDNS_SERVICE.get(),
                 )
             }
         }
@@ -1285,24 +1183,16 @@ private fun SessionAddressItemEditor(
 }
 
 @Composable
-private fun SessionAddressCardHeader(
-    title: String,
-    trailingContent: (@Composable () -> Unit)? = null,
-) {
+private fun SessionAddressCardHeader(title: String, trailingContent: (@Composable () -> Unit)? = null) {
     Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(AppDimens.listItemHeight)
-                .padding(horizontal = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(AppDimens.listItemHeight)
+            .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Text(text = title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
         if (trailingContent != null) {
             trailingContent()
         }
@@ -1312,16 +1202,18 @@ private fun SessionAddressCardHeader(
 @Composable
 private fun EditableAddressTypeDropdownRow(address: EditableSessionAddress) {
     LabeledDropdownRow(
-        label = SessionTexts.LABEL_DEVICE_TYPE.get(),
-        trailingText = address.type.displayText(),
-        onClick = { address.showTypeMenu = true },
+        label = SessionTexts.LABEL_DEVICE_TYPE.get(), trailingText = address.type.displayText(),
+        onClick = {
+            address.showTypeMenu = true
+        },
         helpText = SessionTexts.HELP_DEVICE_TYPE.get(),
     ) {
         IOSStyledDropdownMenu(
             expanded = address.showTypeMenu,
-            onDismissRequest = { address.showTypeMenu = false },
-            offset = DpOffset(0.dp, AppDimens.listItemHeight),
-            alignment = Alignment.TopEnd,
+            onDismissRequest = {
+                address.showTypeMenu = false
+            },
+            offset = DpOffset(0.dp, AppDimens.listItemHeight), alignment = Alignment.TopEnd,
         ) {
             SessionDeviceType.entries.forEach { type ->
                 IOSStyledDropdownMenuItem(
@@ -1345,19 +1237,15 @@ private fun MdnsServiceSelectionOverlay(
     if (!state.showMdnsServiceDialog) {
         return
     }
-
     MdnsDeviceSelectionDialog(
-        services = services,
-        loading = loading,
-        selectedDeviceSerial = state.host,
+        services = services, loading = loading, selectedDeviceSerial = state.host,
         onSelected = { service ->
-            state.selectMdnsService(
-                serviceName = service.deviceSerial,
-                displayName = service.name,
-            )
+            state.selectMdnsService(serviceName = service.deviceSerial, displayName = service.name)
             state.showMdnsServiceDialog = false
         },
-        onDismiss = { state.showMdnsServiceDialog = false },
+        onDismiss = {
+            state.showMdnsServiceDialog = false
+        },
     )
 }
 
@@ -1372,11 +1260,7 @@ private fun MdnsDeviceSelectionDialog(
     val context = LocalContext.current
     Dialog(
         onDismissRequest = onDismiss,
-        properties =
-            DialogProperties(
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-            ),
+        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true),
     ) {
         DialogContainer {
             DialogHeader(
@@ -1386,22 +1270,13 @@ private fun MdnsDeviceSelectionDialog(
                 leftButtonText = CommonTexts.BUTTON_CLOSE.get(),
                 centerTitleInWindow = true,
             )
-
             DialogHeaderSpacer()
-
             MdnsServiceListContent(
-                services = services,
-                loading = loading,
-                selectedDeviceSerial = selectedDeviceSerial,
+                services = services, loading = loading, selectedDeviceSerial = selectedDeviceSerial,
                 onSelected = { service ->
                     onSelected(service)
                     if (service.requiresPairingPrompt()) {
-                        Toast
-                            .makeText(
-                                context,
-                                SessionTexts.MDNS_PAIRING_REQUIRED.get(),
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                        Toast.makeText(context, SessionTexts.MDNS_PAIRING_REQUIRED.get(), Toast.LENGTH_SHORT).show()
                     }
                 },
             )
@@ -1417,22 +1292,19 @@ private fun MdnsServiceListContent(
     onSelected: (MdnsDiscoveredConnectService) -> Unit,
 ) {
     Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = AppDimens.paddingStandard,
-                    end = AppDimens.paddingStandard,
-                    bottom = AppDimens.paddingStandard,
-                ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = AppDimens.paddingStandard,
+                end = AppDimens.paddingStandard,
+                bottom = AppDimens.paddingStandard,
+            ),
     ) {
         if (services.isEmpty()) {
             Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp), contentAlignment = Alignment.Center
             ) {
                 if (loading) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1454,23 +1326,20 @@ private fun MdnsServiceListContent(
             }
         } else {
             val selectedServiceIndex =
-                selectedMdnsServiceIndex(
-                    services = services,
-                    selectedDeviceSerial = selectedDeviceSerial,
-                )
+                selectedMdnsServiceIndex(services = services, selectedDeviceSerial = selectedDeviceSerial)
             Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 300.dp)
-                        .verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 300.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 services.forEachIndexed { index, service ->
                     MdnsServiceItem(
-                        service = service,
-                        isSelected = index == selectedServiceIndex,
-                        onClick = { onSelected(service) },
+                        service = service, isSelected = index == selectedServiceIndex,
+                        onClick = {
+                            onSelected(service)
+                        },
                     )
                 }
             }
@@ -1486,72 +1355,58 @@ internal fun selectedMdnsServiceIndex(
     if (normalizedSerial.isBlank()) {
         return -1
     }
-    val matchingIndexes =
-        services.indices.filter { index ->
-            services[index].deviceSerial.equals(normalizedSerial, ignoreCase = true)
-        }
-    return matchingIndexes.firstOrNull { index -> !services[index].requiresPairing }
-        ?: matchingIndexes.firstOrNull()
-        ?: -1
+    val matchingIndexes = services.indices.filter { index ->
+        services[index].deviceSerial.equals(normalizedSerial, ignoreCase = true)
+    }
+    return matchingIndexes.firstOrNull { index ->
+        !services[index].requiresPairing
+    } ?: matchingIndexes.firstOrNull() ?: -1
 }
 
-internal fun MdnsDiscoveredConnectService.requiresPairingPrompt(): Boolean =
-    requiresPairing
+internal fun MdnsDiscoveredConnectService.requiresPairingPrompt(): Boolean = requiresPairing
 
 @Composable
-private fun MdnsServiceItem(
-    service: MdnsDiscoveredConnectService,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
+private fun MdnsServiceItem(service: MdnsDiscoveredConnectService, isSelected: Boolean, onClick: () -> Unit) {
     Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
-                .clickable(enabled = !service.confirming) { onClick() },
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.5.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AppDimens.cardCornerRadius))
+            .clickable(enabled = !service.confirming) {
+                onClick()
+            },
+        color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 0.5.dp,
     ) {
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = service.name,
                 fontSize = AppTextSizes.body,
                 maxLines = 1,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .padding(start = 4.dp, end = 12.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp, end = 12.dp),
             )
-
             Text(
-                text =
-                    if (service.confirming) {
-                        SessionTexts.MDNS_DEVICE_CONFIRMING.get()
-                    } else if (service.requiresPairing) {
-                        SessionTexts.MDNS_DEVICE_UNPAIRED.get()
-                    } else if (service.previouslyPaired) {
-                        AdbTexts.PAIRING_DISCOVERY_RECORDED.get()
-                    } else {
-                        AdbTexts.PAIRING_DISCOVERY_DISCOVERED.get()
-                    },
+                text = if (service.confirming) {
+                    SessionTexts.MDNS_DEVICE_CONFIRMING.get()
+                } else if (service.requiresPairing) {
+                    SessionTexts.MDNS_DEVICE_UNPAIRED.get()
+                } else if (service.previouslyPaired) {
+                    AdbTexts.PAIRING_DISCOVERY_RECORDED.get()
+                } else {
+                    AdbTexts.PAIRING_DISCOVERY_DISCOVERED.get()
+                },
                 style = MaterialTheme.typography.bodySmall,
-                color =
-                    if (service.requiresPairing && !service.confirming) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                color = if (service.requiresPairing && !service.confirming) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 modifier = Modifier.padding(end = 8.dp),
             )
-
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
@@ -1573,9 +1428,7 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
             onCheckedChange = state::updateCompatibilityMode,
             helpText = SessionTexts.HELP_COMPATIBILITY_MODE.get(),
         )
-
         AppDivider()
-
         CompactSwitchRow(
             text = SessionTexts.SWITCH_GAME_MODE.get(),
             checked = state.config.gameMode,
@@ -1583,76 +1436,89 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
             helpText = SessionTexts.HELP_GAME_MODE.get(),
             enabled = !state.config.compatibilityMode,
         )
-
         AppDivider()
-
         CompactSwitchRow(
             text = SessionTexts.SWITCH_FULL_SCREEN.get(),
             checked = state.config.useFullScreen && !state.config.gameMode,
-            onCheckedChange = { enabled -> state.updateConfig { copy(useFullScreen = enabled) } },
-            helpText =
-                if (state.config.compatibilityMode) {
-                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
-                } else if (state.config.gameMode) {
-                    SessionTexts.HELP_GAME_MODE_FULL_SCREEN_DISABLED.get()
-                } else {
-                    SessionTexts.HELP_USE_FULL_SCREEN.get()
-                },
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(useFullScreen = enabled)
+                }
+            },
+            helpText = if (state.config.compatibilityMode) {
+                SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+            } else if (state.config.gameMode) {
+                SessionTexts.HELP_GAME_MODE_FULL_SCREEN_DISABLED.get()
+            } else {
+                SessionTexts.HELP_USE_FULL_SCREEN.get()
+            },
             enabled = !state.config.gameMode && !state.config.compatibilityMode,
         )
-
         AppDivider()
-
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_SHOW_FLOATING_BALL.get(),
-            checked = state.config.showFloatingBall,
+            text = SessionTexts.SWITCH_SHOW_FLOATING_BALL.get(), checked = state.config.showFloatingBall,
             onCheckedChange = { enabled -> state.updateConfig { copy(showFloatingBall = enabled) } },
             helpText = SessionTexts.HELP_SHOW_FLOATING_BALL.get(),
         )
         AppDivider()
-
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_ENABLE_HARDWARE_DECODING.get(),
-            checked = state.config.enableHardwareDecoding,
-            onCheckedChange = { enabled -> state.updateConfig { copy(enableHardwareDecoding = enabled) } },
-            helpText =
-                if (state.config.compatibilityMode) {
-                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
-                } else {
-                    SessionTexts.HELP_ENABLE_HARDWARE_DECODING.get()
-                },
+            text = SessionTexts.SWITCH_ENABLE_HARDWARE_DECODING.get(), checked = state.config.enableHardwareDecoding,
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(enableHardwareDecoding = enabled)
+                }
+            },
+            helpText = if (state.config.compatibilityMode) {
+                SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+            } else {
+                SessionTexts.HELP_ENABLE_HARDWARE_DECODING.get()
+            },
             enabled = !state.config.compatibilityMode,
         )
-
         AppDivider()
-
         CompactSegmentedChoiceRow(
             text = SessionTexts.LABEL_SCREEN_ROTATION.get(),
-            choices =
-                listOf(
-                    ScreenRotationPolicy.NONE to SessionTexts.OPTION_ROTATION_NONE.get(),
-                    ScreenRotationPolicy.LOCAL to SessionTexts.OPTION_ROTATION_LOCAL.get(),
-                    ScreenRotationPolicy.TARGET to SessionTexts.OPTION_ROTATION_TARGET.get(),
-                ),
+            choices = listOf(
+                ScreenRotationPolicy.NONE to SessionTexts.OPTION_ROTATION_NONE.get(),
+                ScreenRotationPolicy.LOCAL to SessionTexts.OPTION_ROTATION_LOCAL.get(),
+                ScreenRotationPolicy.TARGET to SessionTexts.OPTION_ROTATION_TARGET.get(),
+            ),
             selectedChoice = state.config.screenRotationPolicy,
-            onChoiceChange = { policy -> state.updateConfig { copy(screenRotationPolicy = policy) } },
+            onChoiceChange = { policy ->
+                state.updateConfig {
+                    copy(screenRotationPolicy = policy)
+                }
+            },
             helpText = SessionTexts.HELP_FOLLOW_ORIENTATION.get(),
         )
-
         AppDivider()
-
+        LabeledTextField(
+            label = SessionTexts.LABEL_SHELL_PASSWORD.get(),
+            helpText = SessionTexts.HELP_SHELL_PASSWORD.get(),
+            value = state.config.shellPassword,
+            onValueChange = { value ->
+                state.updateConfig {
+                    copy(shellPassword = value)
+                }
+            },
+            placeholder = SessionTexts.PLACEHOLDER_SHELL_PASSWORD.get(),
+            keyboardType = KeyboardType.Password,
+        )
+        AppDivider()
         CompactSwitchRow(
             text = SessionTexts.SWITCH_USE_ADB_FORWARD.get(),
             checked = state.config.tunnelMode == ScrcpyTunnelMode.ADB_FORWARD,
             onCheckedChange = { enabled ->
                 state.updateConfig {
-                    copy(tunnelMode = if (enabled) ScrcpyTunnelMode.ADB_FORWARD else ScrcpyTunnelMode.DIRECT_ADB)
+                    copy(
+                        tunnelMode = if (enabled) ScrcpyTunnelMode.ADB_FORWARD
+                        else ScrcpyTunnelMode.DIRECT_ADB
+                    )
                 }
             },
             helpText = SessionTexts.HELP_USE_ADB_FORWARD.get(),
             enabled = !state.config.compatibilityMode,
         )
-
     }
 }
 
@@ -1661,25 +1527,23 @@ private fun VideoConfigSection(state: SessionDialogState) {
     SessionDialogSection(title = SessionTexts.SECTION_VIDEO_CONFIG.get()) {
         if (state.config.compatibilityMode) {
             VerticalOptionPicker(
-                label = SessionTexts.LABEL_MAX_SIZE.get(),
-                value = state.maxSize,
-                presets =
-                    listOf(
-                        "10%" to "10",
-                        "20%" to "20",
-                        "30%" to "30",
-                        "40%" to "40",
-                        "50%" to "50",
-                        "60%" to "60",
-                        "70%" to "70",
-                        "80%" to "80",
-                        "90%" to "90",
-                        SessionTexts.LABEL_ORIGINAL.get() to "",
-                    ),
-                customEnabled = true,
-                emptyCustomFallback = "",
-                alwaysApplyEmptyCustomFallback = true,
-                onValueChange = { state.maxSize = it },
+                label = SessionTexts.LABEL_MAX_SIZE.get(), value = state.maxSize,
+                presets = listOf(
+                    "10%" to "10",
+                    "20%" to "20",
+                    "30%" to "30",
+                    "40%" to "40",
+                    "50%" to "50",
+                    "60%" to "60",
+                    "70%" to "70",
+                    "80%" to "80",
+                    "90%" to "90",
+                    SessionTexts.LABEL_ORIGINAL.get() to "",
+                ),
+                customEnabled = true, emptyCustomFallback = "", alwaysApplyEmptyCustomFallback = true,
+                onValueChange = {
+                    state.maxSize = it
+                },
                 helpText = SessionTexts.HELP_COMPATIBILITY_QUALITY.get(),
             )
         } else {
@@ -1690,112 +1554,112 @@ private fun VideoConfigSection(state: SessionDialogState) {
 
 @Composable
 private fun ScrcpyVideoConfigRows(state: SessionDialogState) {
-        VerticalOptionPicker(
-            label = SessionTexts.LABEL_MAX_SIZE.get(),
-            value = state.maxSize,
-            presets =
-                if (state.config.gameMode) {
-                    listOf("720" to "720", "1080" to "1080", "1920" to "1920")
-                } else {
-                    listOf(
-                        "720" to "720",
-                        "1080" to "1080",
-                        "1920" to "1920",
-                        SessionTexts.LABEL_ORIGINAL.get() to "",
-                    )
-                },
-            customEnabled = !state.config.gameMode,
-            emptyCustomFallback = "",
-            alwaysApplyEmptyCustomFallback = true,
-            onValueChange = { state.maxSize = it },
-            helpText = if (state.config.gameMode) SessionTexts.HELP_GAME_MAX_SIZE.get() else SessionTexts.HELP_NORMAL_MAX_SIZE.get(),
-        )
-
-        AppDivider()
-
-        VerticalOptionPicker(
-            label = SessionTexts.LABEL_VIDEO_BITRATE.get(),
-            value = state.videoBitrate,
-            presets =
-                if (state.config.gameMode) {
-                    listOf(
-                        "1M" to "1M",
-                        "2M" to "2M",
-                        "4M" to "4M",
-                        "8M" to "8M",
-                        "12M" to "12M",
-                        "20M" to "20M",
-                    )
-                } else {
-                    listOf(
-                        "700K" to "700K",
-                        "1M" to "1M",
-                        "2M" to "2M",
-                        "4M" to "4M",
-                        "8M" to "8M",
-                        "12M" to "12M",
-                        "20M" to "20M",
-                        "40M" to "40M",
-                        "80M" to "80M",
-                        "120M" to "120M"
-                    )
-                },
-            customEnabled = !state.config.gameMode,
-            customUnits = listOf("K", "M"),
-            defaultCustomUnit = "M",
-            emptyCustomFallback = ScrcpyConstants.DEFAULT_VIDEO_BITRATE,
-            onValueChange = { state.videoBitrate = it },
-            helpText =
-                if (state.config.gameMode) {
-                    SessionTexts.HELP_GAME_VIDEO_BITRATE.get()
-                } else {
-                    SessionTexts.HELP_NORMAL_VIDEO_BITRATE.get()
-                },
-        )
-
-        AppDivider()
-
-        VerticalOptionPicker(
-            label = SessionTexts.LABEL_MAX_FPS.get(),
-            value = state.maxFps,
-            presets =
-                if (state.config.gameMode) {
-                    listOf("60" to "60", "90" to "90", "120" to "120")
-                } else {
-                    listOf("15" to "15", "30" to "30", "60" to "60", "90" to "90", "120" to "120")
-                },
-            customEnabled = !state.config.gameMode,
-            emptyCustomFallback = ScrcpyConstants.DEFAULT_MAX_FPS.toString(),
-            onValueChange = { state.maxFps = it },
-            helpText = if (state.config.gameMode) SessionTexts.HELP_GAME_MAX_FPS.get() else SessionTexts.HELP_NORMAL_MAX_FPS.get(),
-        )
-
-        AppDivider()
-
-        LabeledClickableRow(
-            label = SessionTexts.LABEL_VIDEO_ENCODER.get(),
-            trailingText =
-                when {
-                    !state.hasValidDevice() -> SessionTexts.ENCODER_ERROR_INPUT_HOST.get()
-                    state.config.userVideoEncoder.isNotEmpty() -> state.config.userVideoEncoder
-                    else -> SessionTexts.LABEL_DEFAULT.get()
-                },
-            onClick = {
-                if (state.hasValidDevice()) {
-                    state.showEncoderOptionsDialog = true
-                }
-            },
-            helpText = SessionTexts.HELP_VIDEO_ENCODER.get(),
-        )
-
-        AppDivider()
-
-        LabeledClickableRow(
-            label = SessionTexts.LABEL_VIDEO_DECODER.get(),
-            trailingText = state.config.userVideoDecoder.ifEmpty { SessionTexts.LABEL_DEFAULT.get() },
-            onClick = { state.showVideoDecoderSelector = true },
-            helpText = SessionTexts.HELP_VIDEO_DECODER.get(),
-        )
+    VerticalOptionPicker(
+        label = SessionTexts.LABEL_MAX_SIZE.get(), value = state.maxSize,
+        presets = if (state.config.gameMode) {
+            listOf(
+                "720" to "720", "1080" to "1080", "1920" to "1920"
+            )
+        } else {
+            listOf(
+                "720" to "720",
+                "1080" to "1080",
+                "1920" to "1920",
+                SessionTexts.LABEL_ORIGINAL.get() to "",
+            )
+        },
+        customEnabled = !state.config.gameMode, emptyCustomFallback = "", alwaysApplyEmptyCustomFallback = true,
+        onValueChange = {
+            state.maxSize = it
+        },
+        helpText = if (state.config.gameMode) SessionTexts.HELP_GAME_MAX_SIZE.get()
+        else SessionTexts.HELP_NORMAL_MAX_SIZE.get(),
+    )
+    AppDivider()
+    VerticalOptionPicker(
+        label = SessionTexts.LABEL_VIDEO_BITRATE.get(),
+        value = state.videoBitrate,
+        presets = if (state.config.gameMode) {
+            listOf(
+                "1M" to "1M",
+                "2M" to "2M",
+                "4M" to "4M",
+                "8M" to "8M",
+                "12M" to "12M",
+                "20M" to "20M",
+            )
+        } else {
+            listOf(
+                "700K" to "700K",
+                "1M" to "1M",
+                "2M" to "2M",
+                "4M" to "4M",
+                "8M" to "8M",
+                "12M" to "12M",
+                "20M" to "20M",
+                "40M" to "40M",
+                "80M" to "80M",
+                "120M" to "120M"
+            )
+        },
+        customEnabled = !state.config.gameMode,
+        customUnits = listOf("K", "M"),
+        defaultCustomUnit = "M",
+        emptyCustomFallback = ScrcpyConstants.DEFAULT_VIDEO_BITRATE,
+        onValueChange = {
+            state.videoBitrate = it
+        },
+        helpText = if (state.config.gameMode) {
+            SessionTexts.HELP_GAME_VIDEO_BITRATE.get()
+        } else {
+            SessionTexts.HELP_NORMAL_VIDEO_BITRATE.get()
+        },
+    )
+    AppDivider()
+    VerticalOptionPicker(
+        label = SessionTexts.LABEL_MAX_FPS.get(), value = state.maxFps,
+        presets = if (state.config.gameMode) {
+            listOf(
+                "60" to "60", "90" to "90", "120" to "120"
+            )
+        } else {
+            listOf(
+                "15" to "15", "30" to "30", "60" to "60", "90" to "90", "120" to "120"
+            )
+        },
+        customEnabled = !state.config.gameMode, emptyCustomFallback = ScrcpyConstants.DEFAULT_MAX_FPS.toString(),
+        onValueChange = {
+            state.maxFps = it
+        },
+        helpText = if (state.config.gameMode) SessionTexts.HELP_GAME_MAX_FPS.get()
+        else SessionTexts.HELP_NORMAL_MAX_FPS.get(),
+    )
+    AppDivider()
+    LabeledClickableRow(
+        label = SessionTexts.LABEL_VIDEO_ENCODER.get(),
+        trailingText = when {
+            !state.hasValidDevice() -> SessionTexts.ENCODER_ERROR_INPUT_HOST.get()
+            state.config.userVideoEncoder.isNotEmpty() -> state.config.userVideoEncoder
+            else -> SessionTexts.LABEL_DEFAULT.get()
+        },
+        onClick = {
+            if (state.hasValidDevice()) {
+                state.showEncoderOptionsDialog = true
+            }
+        },
+        helpText = SessionTexts.HELP_VIDEO_ENCODER.get(),
+    )
+    AppDivider()
+    LabeledClickableRow(
+        label = SessionTexts.LABEL_VIDEO_DECODER.get(),
+        trailingText = state.config.userVideoDecoder.ifEmpty {
+            SessionTexts.LABEL_DEFAULT.get()
+        },
+        onClick = {
+            state.showVideoDecoderSelector = true
+        },
+        helpText = SessionTexts.HELP_VIDEO_DECODER.get(),
+    )
 }
 
 @Composable
@@ -1811,69 +1675,82 @@ private fun VerticalOptionPicker(
     onValueChange: (String) -> Unit,
     helpText: String,
 ) {
-    val displayedValue =
-        if (value.isBlank() && !alwaysApplyEmptyCustomFallback) {
-            emptyCustomFallback.orEmpty()
-        } else {
-            value
-        }
-    val matchesPreset = presets.any { (_, storedValue) -> storedValue.equals(displayedValue, ignoreCase = true) }
-    var customValue by remember(customEnabled) {
-        mutableStateOf(if (customEnabled && !matchesPreset && displayedValue.isNotBlank()) displayedValue else "")
+    val displayedValue = if (value.isBlank() && !alwaysApplyEmptyCustomFallback) {
+        emptyCustomFallback.orEmpty()
+    } else {
+        value
     }
-    val options =
-        if (customEnabled) {
-            presets + (SessionTexts.LABEL_CUSTOM.get() to customValue)
-        } else {
-            presets
-        }
-    var pendingCustomSelection by remember { mutableStateOf(false) }
-    val selectedIndex =
-        if (pendingCustomSelection) {
-            options.lastIndex
-        } else {
-            options.indexOfFirst { (_, storedValue) -> storedValue.equals(displayedValue, ignoreCase = true) }
-                .takeIf { it >= 0 }
-                ?: 0
-        }
+    val matchesPreset = presets.any { (_, storedValue) ->
+        storedValue.equals(displayedValue, ignoreCase = true)
+    }
+    var customValue by remember(customEnabled) {
+        mutableStateOf(
+            if (customEnabled && !matchesPreset && displayedValue.isNotBlank()) displayedValue
+            else ""
+        )
+    }
+    val options = if (customEnabled) {
+        presets + (SessionTexts.LABEL_CUSTOM.get() to customValue)
+    } else {
+        presets
+    }
+    var pendingCustomSelection by remember {
+        mutableStateOf(false)
+    }
+    val selectedIndex = if (pendingCustomSelection) {
+        options.lastIndex
+    } else {
+        options.indexOfFirst { (_, storedValue) ->
+            storedValue.equals(displayedValue, ignoreCase = true)
+        }.takeIf { it >= 0 } ?: 0
+    }
     val selectedIsCustom = customEnabled && selectedIndex == options.lastIndex
-    var accumulatedDrag by remember { mutableFloatStateOf(0f) }
-    var isDragging by remember { mutableStateOf(false) }
-    var showCustomEditor by remember { mutableStateOf(false) }
+    var accumulatedDrag by remember {
+        mutableFloatStateOf(0f)
+    }
+    var isDragging by remember {
+        mutableStateOf(false)
+    }
+    var showCustomEditor by remember {
+        mutableStateOf(false)
+    }
     val density = LocalDensity.current
-    val dragThresholdPx = with(density) { VideoPickerDragThreshold.toPx() }
+    val dragThresholdPx = with(density) {
+        VideoPickerDragThreshold.toPx()
+    }
     val innerPickerHeight = VideoPickerHeight - VideoPickerInnerMargin * 2
-    val innerPickerHeightPx = with(density) { innerPickerHeight.toPx() }
-    val pickerHeightPx = with(density) { VideoPickerHeight.toPx() }
-    val itemPitchPx = innerPickerHeightPx + with(density) { VideoPickerItemGap.toPx() }
-    val renderedDragSteps = if (isDragging) -accumulatedDrag / dragThresholdPx else 0f
+    val innerPickerHeightPx = with(density) {
+        innerPickerHeight.toPx()
+    }
+    val pickerHeightPx = with(density) {
+        VideoPickerHeight.toPx()
+    }
+    val itemPitchPx = innerPickerHeightPx + with(density) {
+        VideoPickerItemGap.toPx()
+    }
+    val renderedDragSteps = if (isDragging) -accumulatedDrag / dragThresholdPx
+    else 0f
+
     fun optionIndexForDrag(): Int {
         val optionSteps = (-accumulatedDrag / dragThresholdPx).roundToInt()
         return (selectedIndex + optionSteps).coerceIn(options.indices)
     }
 
-    val dragState =
-        rememberDraggableState { delta ->
-            val maximumUpwardDrag = -(options.lastIndex - selectedIndex) * dragThresholdPx
-            val maximumDownwardDrag = selectedIndex * dragThresholdPx
-            accumulatedDrag =
-                (accumulatedDrag + delta).coerceIn(
-                    maximumUpwardDrag,
-                    maximumDownwardDrag,
-                )
-        }
-
+    val dragState = rememberDraggableState { delta ->
+        val maximumUpwardDrag = -(options.lastIndex - selectedIndex) * dragThresholdPx
+        val maximumDownwardDrag = selectedIndex * dragThresholdPx
+        accumulatedDrag = (accumulatedDrag + delta).coerceIn(maximumUpwardDrag, maximumDownwardDrag)
+    }
     val pickerColumnOffset =
-        pickerHeightPx / 2f -
-            innerPickerHeightPx / 2f -
-            (selectedIndex + renderedDragSteps) * itemPitchPx
+        pickerHeightPx / 2f - innerPickerHeightPx / 2f - (selectedIndex + renderedDragSteps) * itemPitchPx
 
-    fun optionLabel(index: Int): String =
-        if (customEnabled && index == options.lastIndex) {
-            customValue.ifBlank { SessionTexts.LABEL_CUSTOM.get() }
-        } else {
-            options[index].first
+    fun optionLabel(index: Int): String = if (customEnabled && index == options.lastIndex) {
+        customValue.ifBlank {
+            SessionTexts.LABEL_CUSTOM.get()
         }
+    } else {
+        options[index].first
+    }
 
     fun settleSelection() {
         val nextIndex = optionIndexForDrag()
@@ -1889,59 +1766,54 @@ private fun VerticalOptionPicker(
         accumulatedDrag = 0f
         isDragging = false
     }
-
-    LabeledRow(
-        label = label,
-        helpText = helpText,
-    ) {
+    LabeledRow(label = label, helpText = helpText) {
         Box(
-            modifier =
-                Modifier
-                    .width(VideoPickerWidth)
-                    .height(VideoPickerHeight)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clipToBounds()
-                    .draggable(
-                        state = dragState,
-                        orientation = Orientation.Vertical,
-                        startDragImmediately = true,
-                        onDragStarted = {
-                            accumulatedDrag = 0f
-                            isDragging = true
-                        },
-                        onDragStopped = { settleSelection() },
-                    )
-                    .clickable(enabled = selectedIsCustom) {
-                        pendingCustomSelection = false
-                        showCustomEditor = true
+            modifier = Modifier
+                .width(VideoPickerWidth)
+                .height(VideoPickerHeight)
+                .clip(RoundedCornerShape(8.dp))
+                .clipToBounds()
+                .draggable(
+                    state = dragState, orientation = Orientation.Vertical, startDragImmediately = true,
+                    onDragStarted = {
+                        accumulatedDrag = 0f
+                        isDragging = true
                     },
+                    onDragStopped = {
+                        settleSelection()
+                    },
+                )
+                .clickable(enabled = selectedIsCustom) {
+                    pendingCustomSelection = false
+                    showCustomEditor = true
+                },
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(align = Alignment.Top, unbounded = true)
-                        .graphicsLayer { translationY = pickerColumnOffset },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                    .graphicsLayer {
+                        translationY = pickerColumnOffset
+                    },
                 verticalArrangement = Arrangement.spacedBy(VideoPickerItemGap),
             ) {
                 options.indices.forEach { optionIndex ->
                     Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(innerPickerHeight)
-                                .padding(horizontal = VideoPickerInnerMargin)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(
-                                    width = 1.dp,
-                                    color =
-                                        MaterialTheme.colorScheme.primary.copy(
-                                            alpha = if (isDragging) 0.55f else 0.22f,
-                                        ),
-                                    shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(innerPickerHeight)
+                            .padding(horizontal = VideoPickerInnerMargin)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(
+                                    alpha = if (isDragging) 0.55f
+                                    else 0.22f,
                                 ),
+                                shape = RoundedCornerShape(6.dp),
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -1957,15 +1829,15 @@ private fun VerticalOptionPicker(
             }
         }
     }
-
     if (showCustomEditor) {
         var editorValue by remember(customValue) {
             mutableStateOf(customValue.filter(Char::isDigit))
         }
         var editorUnit by remember(customValue, customUnits) {
             mutableStateOf(
-                customUnits.firstOrNull { unit -> customValue.endsWith(unit, ignoreCase = true) }
-                    ?: defaultCustomUnit,
+                customUnits.firstOrNull { unit ->
+                    customValue.endsWith(unit, ignoreCase = true)
+                } ?: defaultCustomUnit,
             )
         }
         val parsedValue = editorValue.toIntOrNull()?.takeIf { it > 0 }
@@ -1999,25 +1871,25 @@ private fun VerticalOptionPicker(
             ) {
                 OutlinedTextField(
                     value = editorValue,
-                    onValueChange = { next -> editorValue = next.filter(Char::isDigit) },
-                    label = { Text(label) },
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                        ),
+                    onValueChange = { next ->
+                        editorValue = next.filter(Char::isDigit)
+                    },
+                    label = {
+                        Text(label)
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
                 if (customUnits.isNotEmpty()) {
                     val currentUnitIndex = customUnits.indexOf(editorUnit).coerceAtLeast(0)
                     Surface(
-                        modifier =
-                            Modifier
-                                .width(52.dp)
-                                .height(48.dp)
-                                .clickable {
-                                    editorUnit = customUnits[(currentUnitIndex + 1) % customUnits.size]
-                                },
+                        modifier = Modifier
+                            .width(52.dp)
+                            .height(48.dp)
+                            .clickable {
+                                editorUnit = customUnits[(currentUnitIndex + 1) % customUnits.size]
+                            },
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
@@ -2042,48 +1914,50 @@ private fun VerticalOptionPicker(
 private fun AudioConfigSection(state: SessionDialogState) {
     SessionDialogSection(title = SessionTexts.SECTION_AUDIO_CONFIG.get()) {
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_ENABLE_AUDIO.get(),
-            checked = state.config.enableAudio,
-            onCheckedChange = { enabled -> state.updateConfig { copy(enableAudio = enabled) } },
-            helpText =
-                if (state.config.compatibilityMode) {
-                    SessionTexts.HELP_COMPATIBILITY_AUDIO_DISABLED.get()
-                } else {
-                    SessionTexts.HELP_ENABLE_AUDIO.get()
-                },
+            text = SessionTexts.SWITCH_ENABLE_AUDIO.get(), checked = state.config.enableAudio,
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(enableAudio = enabled)
+                }
+            },
+            helpText = if (state.config.compatibilityMode) {
+                SessionTexts.HELP_COMPATIBILITY_AUDIO_DISABLED.get()
+            } else {
+                SessionTexts.HELP_ENABLE_AUDIO.get()
+            },
             enabled = !state.config.compatibilityMode,
         )
-
         if (state.config.enableAudio) {
             AppDivider()
-
             VerticalOptionPicker(
                 label = SessionTexts.LABEL_AUDIO_BITRATE.get(),
                 value = state.audioBitrate,
-                presets =
-                    if (state.config.gameMode) {
-                        listOf("64K" to "64K", "128K" to "128K")
-                    } else {
-                        listOf("64K" to "64K", "128K" to "128K", "192K" to "192K", "256K" to "256K")
-                    },
+                presets = if (state.config.gameMode) {
+                    listOf(
+                        "64K" to "64K", "128K" to "128K"
+                    )
+                } else {
+                    listOf(
+                        "64K" to "64K", "128K" to "128K", "192K" to "192K", "256K" to "256K"
+                    )
+                },
                 customEnabled = true,
                 customUnits = listOf("K", "M"),
                 defaultCustomUnit = "K",
                 emptyCustomFallback = "128K",
-                onValueChange = { state.audioBitrate = it },
+                onValueChange = {
+                    state.audioBitrate = it
+                },
                 helpText = SessionTexts.HELP_AUDIO_BITRATE_PICKER.get(),
             )
-
             AppDivider()
-
             LabeledClickableRow(
                 label = SessionTexts.LABEL_AUDIO_ENCODER.get(),
-                trailingText =
-                    when {
-                        !state.hasValidDevice() -> SessionTexts.ENCODER_ERROR_INPUT_HOST.get()
-                        state.config.userAudioEncoder.isNotEmpty() -> state.config.userAudioEncoder
-                        else -> SessionTexts.LABEL_DEFAULT.get()
-                    },
+                trailingText = when {
+                    !state.hasValidDevice() -> SessionTexts.ENCODER_ERROR_INPUT_HOST.get()
+                    state.config.userAudioEncoder.isNotEmpty() -> state.config.userAudioEncoder
+                    else -> SessionTexts.LABEL_DEFAULT.get()
+                },
                 onClick = {
                     if (state.hasValidDevice()) {
                         state.showAudioEncoderDialog = true
@@ -2091,66 +1965,56 @@ private fun AudioConfigSection(state: SessionDialogState) {
                 },
                 helpText = SessionTexts.HELP_AUDIO_ENCODER.get(),
             )
-
             AppDivider()
-
             LabeledClickableRow(
                 label = SessionTexts.LABEL_AUDIO_DECODER.get(),
-                trailingText = state.config.userAudioDecoder.ifEmpty { SessionTexts.LABEL_DEFAULT.get() },
-                onClick = { state.showAudioDecoderSelector = true },
+                trailingText = state.config.userAudioDecoder.ifEmpty {
+                    SessionTexts.LABEL_DEFAULT.get()
+                },
+                onClick = {
+                    state.showAudioDecoderSelector = true
+                },
                 helpText = SessionTexts.HELP_AUDIO_DECODER.get(),
             )
-
             AppDivider()
-
             Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(AppDimens.listItemHeight)
-                        .padding(horizontal = AudioVolumeRowHorizontalPadding),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(AppDimens.listItemHeight)
+                    .padding(horizontal = AudioVolumeRowHorizontalPadding),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(AudioVolumeLabelSpacing),
-                    modifier =
-                        Modifier
-                            .widthIn(min = AudioVolumeLabelMinWidth, max = AudioVolumeLabelMaxWidth)
-                            .wrapContentWidth(),
+                    modifier = Modifier
+                        .widthIn(min = AudioVolumeLabelMinWidth, max = AudioVolumeLabelMaxWidth)
+                        .wrapContentWidth(),
                 ) {
-                    Text(
-                        SessionTexts.LABEL_AUDIO_VOLUME.get(),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    Text(SessionTexts.LABEL_AUDIO_VOLUME.get(), style = MaterialTheme.typography.bodyLarge)
                     HelpIcon(helpText = SessionTexts.HELP_AUDIO_VOLUME.get())
                 }
                 Slider(
                     value = state.audioVolume,
-                    onValueChange = { state.audioVolume = it },
-                    valueRange = 0.1f..2.0f,
-                    steps = 18,
-                    modifier = Modifier.weight(1f),
+                    onValueChange = {
+                        state.audioVolume = it
+                    },
+                    valueRange = 0.1f..2.0f, steps = 18, modifier = Modifier.weight(1f),
                     thumb = {
                         Box(
-                            modifier =
-                                Modifier
-                                    .size(AudioVolumeSliderThumbHaloSize)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                        shape = CircleShape,
-                                    ),
+                            modifier = Modifier
+                                .size(AudioVolumeSliderThumbHaloSize)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    shape = CircleShape,
+                                ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Box(
-                                modifier =
-                                    Modifier
-                                        .size(AudioVolumeSliderThumbSize)
-                                        .background(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            shape = CircleShape,
-                                        ),
+                                modifier = Modifier
+                                    .size(AudioVolumeSliderThumbSize)
+                                    .background(color = MaterialTheme.colorScheme.primary, shape = CircleShape),
                             )
                         }
                     },
@@ -2158,25 +2022,23 @@ private fun AudioConfigSection(state: SessionDialogState) {
                         SliderDefaults.Track(
                             sliderState = sliderState,
                             modifier = Modifier.height(AudioVolumeSliderTrackHeight),
-                            colors =
-                                SliderDefaults.colors(
-                                    activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
-                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
-                                ),
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+                                inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+                            ),
                             drawStopIndicator = null,
                             thumbTrackGapSize = 0.dp,
                             trackInsideCornerSize = 2.dp,
                         )
                     },
-                    colors =
-                        SliderDefaults.colors(
-                            thumbColor = Color.Transparent,
-                            activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
-                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
-                        ),
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.Transparent,
+                        activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
+                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+                    ),
                 )
                 Text(
-                    "${String.format("%.1f", state.audioVolume)}x",
+                    "${String.format(LocalLocale.current.platformLocale, "%.1f", state.audioVolume)}x",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.width(AudioVolumeValueWidth),
@@ -2188,60 +2050,63 @@ private fun AudioConfigSection(state: SessionDialogState) {
 }
 
 internal fun isVideoCodecSelectionCompatible(state: SessionDialogState): Boolean =
-    state.config.compatibilityMode ||
-        CodecUtils.isEncoderDecoderCompatible(
-            encoders = state.capabilityCache.remoteVideoEncoders,
-            encoderName = state.config.userVideoEncoder,
-            decoderName = state.config.userVideoDecoder,
-            mediaType = CodecMediaType.VIDEO,
-        )
+    state.config.compatibilityMode || CodecUtils.isEncoderDecoderCompatible(
+        encoders = state.capabilityCache.remoteVideoEncoders,
+        encoderName = state.config.userVideoEncoder,
+        decoderName = state.config.userVideoDecoder,
+        mediaType = CodecMediaType.VIDEO,
+    )
 
 internal fun isAudioCodecSelectionCompatible(state: SessionDialogState): Boolean =
-    !state.config.enableAudio ||
-        CodecUtils.isEncoderDecoderCompatible(
-            encoders = state.capabilityCache.remoteAudioEncoders,
-            encoderName = state.config.userAudioEncoder,
-            decoderName = state.config.userAudioDecoder,
-            mediaType = CodecMediaType.AUDIO,
-        )
+    !state.config.enableAudio || CodecUtils.isEncoderDecoderCompatible(
+        encoders = state.capabilityCache.remoteAudioEncoders,
+        encoderName = state.config.userAudioEncoder,
+        decoderName = state.config.userAudioDecoder,
+        mediaType = CodecMediaType.AUDIO,
+    )
 
 @Composable
 private fun OtherOptionsSection(state: SessionDialogState) {
     SessionDialogSection(title = SessionTexts.SECTION_OTHER_OPTIONS.get()) {
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_CLIPBOARD_SYNC.get(),
-            checked = state.config.clipboardSync,
-            onCheckedChange = { enabled -> state.updateConfig { copy(clipboardSync = enabled) } },
+            text = SessionTexts.SWITCH_CLIPBOARD_SYNC.get(), checked = state.config.clipboardSync,
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(clipboardSync = enabled)
+                }
+            },
             helpText = SessionTexts.HELP_CLIPBOARD_SYNC.get(),
         )
         AppDivider()
-
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_TURN_SCREEN_OFF.get(),
-            checked = state.config.turnScreenOff,
-            onCheckedChange = { enabled -> state.updateConfig { copy(turnScreenOff = enabled) } },
-            helpText =
-                if (state.config.compatibilityMode) {
-                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
-                } else {
-                    SessionTexts.HELP_TURN_SCREEN_OFF.get()
-                },
+            text = SessionTexts.SWITCH_TURN_SCREEN_OFF.get(), checked = state.config.turnScreenOff,
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(turnScreenOff = enabled)
+                }
+            },
+            helpText = if (state.config.compatibilityMode) {
+                SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+            } else {
+                SessionTexts.HELP_TURN_SCREEN_OFF.get()
+            },
             enabled = !state.config.compatibilityMode,
         )
         AppDivider()
-
         CompactSwitchRow(
             text = SessionTexts.SWITCH_POWER_OFF_ON_CLOSE.get(),
             checked = state.config.powerOffOnClose && state.config.cleanupOnDisconnect,
-            onCheckedChange = { enabled -> state.updateConfig { copy(powerOffOnClose = enabled) } },
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(powerOffOnClose = enabled)
+                }
+            },
             helpText = SessionTexts.HELP_POWER_OFF_ON_CLOSE.get(),
             enabled = state.config.cleanupOnDisconnect && !state.config.compatibilityMode,
         )
         AppDivider()
-
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_CLEANUP_ON_DISCONNECT.get(),
-            checked = state.config.cleanupOnDisconnect,
+            text = SessionTexts.SWITCH_CLEANUP_ON_DISCONNECT.get(), checked = state.config.cleanupOnDisconnect,
             onCheckedChange = { cleanupEnabled ->
                 state.updateConfig {
                     copy(
@@ -2251,33 +2116,39 @@ private fun OtherOptionsSection(state: SessionDialogState) {
                     )
                 }
             },
-            helpText = SessionTexts.HELP_CLEANUP_ON_DISCONNECT.get(),
-            enabled = !state.config.compatibilityMode,
+            helpText = SessionTexts.HELP_CLEANUP_ON_DISCONNECT.get(), enabled = !state.config.compatibilityMode,
         )
         AppDivider()
-
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_KEEP_DEVICE_AWAKE.get(),
-            checked = state.config.keepDeviceAwake,
-            onCheckedChange = { enabled -> state.updateConfig { copy(keepDeviceAwake = enabled) } },
+            text = SessionTexts.SWITCH_KEEP_DEVICE_AWAKE.get(), checked = state.config.keepDeviceAwake,
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(keepDeviceAwake = enabled)
+                }
+            },
             helpText = SessionTexts.HELP_KEEP_DEVICE_AWAKE.get(),
         )
         AppDivider()
-
         CompactSwitchRow(
             text = SessionTexts.SWITCH_STAY_AWAKE.get(),
             checked = state.config.stayAwake && state.config.cleanupOnDisconnect,
-            onCheckedChange = { enabled -> state.updateConfig { copy(stayAwake = enabled) } },
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(stayAwake = enabled)
+                }
+            },
             helpText = SessionTexts.HELP_STAY_AWAKE.get(),
             enabled = state.config.cleanupOnDisconnect && !state.config.compatibilityMode,
         )
-
         AppDivider()
-
         CompactSwitchRow(
             text = SessionTexts.SWITCH_IGNORE_VIDEO_ENCODER_CONSTRAINTS.get(),
             checked = state.config.ignoreVideoEncoderConstraints,
-            onCheckedChange = { enabled -> state.updateConfig { copy(ignoreVideoEncoderConstraints = enabled) } },
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(ignoreVideoEncoderConstraints = enabled)
+                }
+            },
             helpText = SessionTexts.HELP_IGNORE_VIDEO_ENCODER_CONSTRAINTS.get(),
             enabled = !state.config.compatibilityMode,
         )
@@ -2287,112 +2158,183 @@ private fun OtherOptionsSection(state: SessionDialogState) {
 @Composable
 private fun VirtualDisplaySection(state: SessionDialogState) {
     val context = LocalContext.current
-
     SessionDialogSection(title = SessionTexts.SECTION_VIRTUAL_DISPLAY.get()) {
         CompactSwitchRow(
-            text = SessionTexts.SWITCH_NEW_DISPLAY.get(),
-            checked = state.config.newDisplayEnabled,
-            onCheckedChange = { enabled -> state.updateConfig { copy(newDisplayEnabled = enabled) } },
-            helpText =
-                if (state.config.compatibilityMode) {
-                    SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
-                } else {
-                    SessionTexts.HELP_NEW_DISPLAY.get()
-                },
+            text = SessionTexts.SWITCH_NEW_DISPLAY.get(), checked = state.config.newDisplayEnabled,
+            onCheckedChange = { enabled ->
+                state.updateConfig {
+                    copy(newDisplayEnabled = enabled)
+                }
+            },
+            helpText = if (state.config.compatibilityMode) {
+                SessionTexts.HELP_COMPATIBILITY_REQUIRES_SCRCPY.get()
+            } else {
+                SessionTexts.HELP_NEW_DISPLAY.get()
+            },
             enabled = !state.config.compatibilityMode,
         )
-
         if (state.config.newDisplayEnabled) {
             AppDivider()
-
+            StartAppFields(state)
+            AppDivider()
             CompactSwitchRow(
                 text = SessionTexts.SWITCH_VIRTUAL_DISPLAY_SYSTEM_DECORATIONS.get(),
                 checked = state.config.virtualDisplaySystemDecorations,
-                onCheckedChange = { enabled -> state.updateConfig { copy(virtualDisplaySystemDecorations = enabled) } },
+                onCheckedChange = { enabled ->
+                    state.updateConfig {
+                        copy(virtualDisplaySystemDecorations = enabled)
+                    }
+                },
                 helpText = SessionTexts.HELP_VIRTUAL_DISPLAY_SYSTEM_DECORATIONS.get(),
             )
             AppDivider()
-
             CompactSwitchRow(
                 text = SessionTexts.SWITCH_PRESERVE_VIRTUAL_DISPLAY_CONTENT.get(),
                 checked = state.config.preserveVirtualDisplayContent,
-                onCheckedChange = { enabled -> state.updateConfig { copy(preserveVirtualDisplayContent = enabled) } },
+                onCheckedChange = { enabled ->
+                    state.updateConfig {
+                        copy(preserveVirtualDisplayContent = enabled)
+                    }
+                },
                 helpText = SessionTexts.HELP_PRESERVE_VIRTUAL_DISPLAY_CONTENT.get(),
             )
             AppDivider()
-
-            LabeledRow(
-                label = SessionTexts.LABEL_START_APP.get(),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CompactTextField(
-                        value = state.config.startApp,
-                        onValueChange = { value -> state.updateConfig { copy(startApp = value.trim()) } },
-                        placeholder = SessionTexts.PLACEHOLDER_START_APP.get(),
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = { state.showRemoteAppSelector = true },
-                        modifier = Modifier.widthIn(min = 56.dp),
-                    ) {
-                        Text(SessionTexts.ACTION_SELECT_REMOTE_APP.get())
-                    }
-                }
-            }
-            AppDivider()
-
             LabeledRow(label = SessionTexts.LABEL_NEW_DISPLAY_SIZE.get()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     InlineDisplayMetricField(
                         value = state.newDisplayWidth,
-                        onValueChange = { state.newDisplayWidth = it.filter(Char::isDigit) },
-                        placeholder = SessionTexts.LABEL_NEW_DISPLAY_WIDTH.get(),
-                        modifier = Modifier.weight(1f),
+                        onValueChange = {
+                            state.newDisplayWidth = it.filter(Char::isDigit)
+                        },
+                        placeholder = SessionTexts.LABEL_NEW_DISPLAY_WIDTH.get(), modifier = Modifier.weight(1f),
                     )
                     Text("×", modifier = Modifier.padding(horizontal = 3.dp))
                     InlineDisplayMetricField(
                         value = state.newDisplayHeight,
-                        onValueChange = { state.newDisplayHeight = it.filter(Char::isDigit) },
-                        placeholder = SessionTexts.LABEL_NEW_DISPLAY_HEIGHT.get(),
-                        modifier = Modifier.weight(1f),
+                        onValueChange = {
+                            state.newDisplayHeight = it.filter(Char::isDigit)
+                        },
+                        placeholder = SessionTexts.LABEL_NEW_DISPLAY_HEIGHT.get(), modifier = Modifier.weight(1f),
                     )
                     Text("×", modifier = Modifier.padding(horizontal = 3.dp))
                     InlineDisplayMetricField(
                         value = state.newDisplayDpi,
-                        onValueChange = { state.newDisplayDpi = it.filter(Char::isDigit) },
-                        placeholder = SessionTexts.LABEL_NEW_DISPLAY_DPI.get(),
-                        modifier = Modifier.weight(0.8f),
-                    )
-                    TextButton(
-                        onClick = {
-                            val display = context.resolveLocalDisplaySpec()
-                            state.newDisplayWidth = display.width.toString()
-                            state.newDisplayHeight = display.height.toString()
-                            state.newDisplayDpi = display.densityDpi.takeIf { it > 0 }?.toString().orEmpty()
+                        onValueChange = {
+                            state.newDisplayDpi = it.filter(Char::isDigit)
                         },
-                        modifier = Modifier.width(48.dp),
-                        contentPadding = PaddingValues(0.dp),
-                    ) {
-                        Text(SessionTexts.ACTION_SYNC_LOCAL_DISPLAY_SIZE.get())
-                    }
-                    TextButton(
+                        placeholder = SessionTexts.LABEL_NEW_DISPLAY_DPI.get(), modifier = Modifier.weight(0.8f),
+                    )
+                    IconButton(
                         onClick = {
                             state.newDisplayWidth = ""
                             state.newDisplayHeight = ""
                             state.newDisplayDpi = ""
                         },
-                        modifier = Modifier.width(48.dp),
-                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.size(28.dp),
                     ) {
-                        Text(SessionTexts.ACTION_CLEAR_NEW_DISPLAY_SIZE.get())
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = SessionTexts.ACTION_CLEAR_NEW_DISPLAY_SIZE.get(),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(2.dp))
+                    IconButton(
+                        onClick = {
+                            val display = context.resolveLocalDisplaySpec()
+                            state.newDisplayWidth = display.width.toString()
+                            state.newDisplayHeight = display.height.toString()
+                            state.newDisplayDpi = display.densityDpi.takeIf {
+                                it > 0
+                            }?.toString().orEmpty()
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = SessionTexts.ACTION_SYNC_LOCAL_DISPLAY_SIZE.get(),
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StartAppSection(state: SessionDialogState) {
+    SessionDialogSection(title = SessionTexts.SECTION_START_APP.get()) {
+        StartAppFields(state)
+    }
+}
+
+@Composable
+private fun StartAppFields(state: SessionDialogState) {
+    LabeledRow(label = SessionTexts.LABEL_START_APP.get()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = state.config.startApp,
+                onValueChange = { value ->
+                    state.updateConfig {
+                        copy(startApp = value.trim())
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(AppDimens.listItemHeight),
+                textStyle = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.End,
+                ),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                singleLine = true,
+                decorationBox = { innerTextField ->
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
+                        if (state.config.startApp.isEmpty()) {
+                            Text(
+                                text = SessionTexts.PLACEHOLDER_START_APP.get(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.End,
+                                maxLines = 1,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            if (state.config.startApp.isNotEmpty()) {
+                IconButton(
+                    onClick = {
+                        state.updateConfig {
+                            copy(startApp = "")
+                        }
+                    },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = SessionTexts.ACTION_CLEAR_START_APP.get(),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(2.dp))
+            }
+            IconButton(
+                onClick = {
+                    state.showRemoteAppSelector = true
+                },
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = SessionTexts.ACTION_SELECT_REMOTE_APP.get(),
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }
@@ -2408,17 +2350,15 @@ private fun InlineDisplayMetricField(
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier =
-            modifier
-                .height(32.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 4.dp),
-        textStyle =
-            MaterialTheme.typography.bodySmall.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            ),
+        modifier = modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 4.dp),
+        textStyle = MaterialTheme.typography.bodySmall.copy(
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        ),
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         decorationBox = { innerTextField ->
@@ -2437,19 +2377,11 @@ private fun InlineDisplayMetricField(
     )
 }
 
-private data class RemoteLaunchableApp(
-    val packageName: String,
-)
-
+private data class RemoteLaunchableApp(val packageName: String)
 private class RemoteLaunchableAppCache {
     private val appsByDevice = mutableMapOf<String, List<RemoteLaunchableApp>>()
-
     fun get(deviceKey: String): List<RemoteLaunchableApp>? = appsByDevice[deviceKey]
-
-    fun put(
-        deviceKey: String,
-        apps: List<RemoteLaunchableApp>,
-    ) {
+    fun put(deviceKey: String, apps: List<RemoteLaunchableApp>) {
         appsByDevice[deviceKey] = apps
     }
 }
@@ -2461,26 +2393,41 @@ private fun RemoteAppSelectionOverlay(
     cache: RemoteLaunchableAppCache,
 ) {
     if (!state.showRemoteAppSelector) return
-
     val context = LocalContext.current
-    val connectionManager = remember(context) { AdbConnectionManager.getInstance(context) }
+    val connectionManager = remember(context) {
+        AdbConnectionManager.getInstance(context)
+    }
     val scope = rememberCoroutineScope()
-    var loading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var apps by remember { mutableStateOf<List<RemoteLaunchableApp>>(emptyList()) }
-    var query by remember { mutableStateOf("") }
-    var hasSearched by remember { mutableStateOf(false) }
+    var loading by remember {
+        mutableStateOf(false)
+    }
+    var error by remember {
+        mutableStateOf<String?>(null)
+    }
+    var apps by remember {
+        mutableStateOf<List<RemoteLaunchableApp>>(emptyList())
+    }
+    var query by remember {
+        mutableStateOf("")
+    }
+    var hasSearched by remember {
+        mutableStateOf(false)
+    }
 
     fun search() {
         val keyword = query.trim()
         if (loading) return
         val candidates = state.codecDetectionCandidates(sessionId)
-        val deviceKey = candidates.sortedBy(ConnectionCandidate::priority).joinToString("|") { it.deviceIdentifier() }
+        val deviceKey = candidates.sortedBy(ConnectionCandidate::priority).joinToString("|") {
+            it.deviceIdentifier()
+        }
         val filterApps: (List<RemoteLaunchableApp>) -> List<RemoteLaunchableApp> = { source ->
             if (keyword.isEmpty()) {
                 source
             } else {
-                source.filter { it.packageName.contains(keyword, ignoreCase = true) }
+                source.filter {
+                    it.packageName.contains(keyword, ignoreCase = true)
+                }
             }
         }
         cache.get(deviceKey)?.let { cached ->
@@ -2489,89 +2436,70 @@ private fun RemoteAppSelectionOverlay(
             hasSearched = true
             return
         }
-
         loading = true
         error = null
         hasSearched = true
         scope.launch {
-            val result =
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val connection =
-                            candidates
-                                .sortedBy(ConnectionCandidate::priority)
-                                .firstNotNullOfOrNull { candidate ->
-                                    connectionManager.connectCandidate(candidate).getOrNull()
-                                } ?: error("No reachable remote device")
-                        val remoteFilter =
-                            keyword.takeIf(String::isNotEmpty)?.let { value ->
-                                " | grep -i -F -- ${quoteShellArg(value)} || true"
-                            }.orEmpty()
-                        val launcherOutput =
-                            connection.executeShell(
-                                "cmd package query-activities --brief -a android.intent.action.MAIN " +
-                                    "-c android.intent.category.LAUNCHER$remoteFilter",
-                                retryOnFailure = false,
-                            ).getOrThrow()
-                        val homeOutput =
-                            connection.executeShell(
-                                "cmd package query-activities --brief -a android.intent.action.MAIN " +
-                                    "-c android.intent.category.HOME$remoteFilter",
-                                retryOnFailure = false,
-                            ).getOrNull().orEmpty()
-                        parseRemoteLaunchableApps("$launcherOutput\n$homeOutput")
-                    }
+            val result = withContext(Dispatchers.IO) {
+                            runCatching {
+                                val connection =
+                                    candidates.sortedBy(ConnectionCandidate::priority).firstNotNullOfOrNull { candidate ->
+                                        connectionManager.connectCandidate(
+                                            candidate,
+                                            shellPassword = state.config.shellPassword,
+                                        ).getOrNull()
+                                    } ?: error("No reachable remote device")
+                                val remoteFilter = keyword.takeIf(String::isNotEmpty)?.let { value ->
+                                    " | grep -i -F -- ${quoteShellArg(value)} || true"
+                                }.orEmpty()
+                    val launcherOutput = connection.executeShell(
+                        "cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER$remoteFilter",
+                        retryOnFailure = false,
+                    ).getOrThrow()
+                    val homeOutput = connection.executeShell(
+                        "cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME$remoteFilter",
+                        retryOnFailure = false,
+                    ).getOrNull().orEmpty()
+                    parseRemoteLaunchableApps("$launcherOutput\n$homeOutput")
                 }
+            }
             result.onSuccess { loadedApps ->
                 if (keyword.isEmpty()) {
                     cache.put(deviceKey, loadedApps)
                 }
                 apps = filterApps(loadedApps)
             }
-            result.onFailure { failure ->
-                error = failure.message ?: SessionTexts.ERROR_REMOTE_APP_LIST.get()
-            }
+            result.onFailure { failure -> error = failure.message ?: SessionTexts.ERROR_REMOTE_APP_LIST.get() }
             loading = false
         }
     }
-
     SessionManagementCenteredDialog(
         title = SessionTexts.DIALOG_SELECT_REMOTE_APP.get(),
-        onDismiss = { state.showRemoteAppSelector = false },
+        onDismiss = {
+            state.showRemoteAppSelector = false
+        },
         contentPadding = 12.dp,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text(SessionTexts.PLACEHOLDER_SEARCH_REMOTE_APP.get()) },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
-                onClick = ::search,
-                enabled = !loading,
-                modifier = Modifier.widthIn(min = 64.dp),
-            ) {
-                Text(
-                    if (query.isBlank()) {
-                        SessionTexts.ACTION_QUERY_ALL_REMOTE_APPS.get()
-                    } else {
-                        "Q"
-                    },
-                )
-            }
-        }
+        SessionManagementSearchField(
+            value = query,
+            onValueChange = {
+                query = it
+            },
+            onSearch = {
+                search()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(SessionManagementControlHeight),
+            placeholder = SessionTexts.PLACEHOLDER_SEARCH_REMOTE_APP.get(),
+            contentDescription = SessionTexts.ACTION_QUERY_ALL_REMOTE_APPS.get(),
+        )
         when {
             loading -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp),
-                    contentAlignment = Alignment.Center,
+                        .height(160.dp), contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
@@ -2616,13 +2544,14 @@ private fun RemoteAppSelectionOverlay(
                 ) {
                     items(apps, key = RemoteLaunchableApp::packageName) { app ->
                         Surface(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        state.updateConfig { copy(startApp = app.packageName) }
-                                        state.showRemoteAppSelector = false
-                                    },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    state.updateConfig {
+                                        copy(startApp = app.packageName)
+                                    }
+                                    state.showRemoteAppSelector = false
+                                },
                             color = Color.Transparent,
                         ) {
                             Text(
@@ -2640,59 +2569,57 @@ private fun RemoteAppSelectionOverlay(
 }
 
 private fun parseRemoteLaunchableApps(output: String): List<RemoteLaunchableApp> =
-    output
-        .lineSequence()
-        .map(String::trim)
-        .mapNotNull { line ->
-            val component = line.substringAfterLast(' ').substringBefore('/')
-            component.takeIf { it.matches(Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")) }
+    output.lineSequence().map(String::trim).mapNotNull { line ->
+        val component = line.substringAfterLast(' ').substringBefore('/')
+        component.takeIf {
+            it.matches(Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+"))
         }
-        .distinct()
-        .sortedWith(String.CASE_INSENSITIVE_ORDER)
-        .map(::RemoteLaunchableApp)
-        .toList()
+    }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER).map(::RemoteLaunchableApp).toList()
 
 @Composable
-private fun VideoEncoderSelectionOverlay(
-    state: SessionDialogState,
-    sessionId: String?,
-) {
+private fun VideoEncoderSelectionOverlay(state: SessionDialogState, sessionId: String?) {
     if (!state.showEncoderOptionsDialog) {
         return
     }
-
     EncoderSelectionDialog(
         encoderType = EncoderType.VIDEO,
         connectionCandidates = state.codecDetectionCandidates(sessionId),
         currentEncoder = state.config.userVideoEncoder,
         currentCodec = state.capabilityCache.selectedVideoCodec,
         cachedEncoders = state.capabilityCache.remoteVideoEncoders,
-        onDismiss = { state.showEncoderOptionsDialog = false },
+        onDismiss = {
+            state.showEncoderOptionsDialog = false
+        },
         onEncoderSelected = { encoder, _ ->
-            state.updateConfig { copy(userVideoEncoder = encoder) }
+            state.updateConfig {
+                copy(userVideoEncoder = encoder)
+            }
             state.updateCapabilityCache {
                 copy(selectedVideoCodec = "", selectedVideoEncoder = "", selectedVideoDecoder = "")
             }
             state.showEncoderOptionsDialog = false
         },
         onEncodersDetected = { encoders ->
-            state.updateCapabilityCache { copy(remoteVideoEncoders = encoders) }
+            state.updateCapabilityCache {
+                copy(remoteVideoEncoders = encoders)
+            }
         },
     )
 }
 
 @Composable
-private fun VideoDecoderSelectionOverlay(
-    state: SessionDialogState,
-) {
+private fun VideoDecoderSelectionOverlay(state: SessionDialogState) {
     if (!state.showVideoDecoderSelector) {
         return
     }
-
     VideoCodecSelectorScreen(
-        currentCodecName = state.config.userVideoDecoder.ifBlank { null },
+        currentCodecName = state.config.userVideoDecoder.ifBlank {
+            null
+        },
         onCodecSelected = { decoder ->
-            state.updateConfig { copy(userVideoDecoder = decoder) }
+            state.updateConfig {
+                copy(userVideoDecoder = decoder)
+            }
             state.updateCapabilityCache {
                 copy(selectedVideoCodec = "", selectedVideoEncoder = "", selectedVideoDecoder = "")
             }
@@ -2705,23 +2632,23 @@ private fun VideoDecoderSelectionOverlay(
 }
 
 @Composable
-private fun AudioEncoderSelectionOverlay(
-    state: SessionDialogState,
-    sessionId: String?,
-) {
+private fun AudioEncoderSelectionOverlay(state: SessionDialogState, sessionId: String?) {
     if (!state.showAudioEncoderDialog) {
         return
     }
-
     EncoderSelectionDialog(
         encoderType = EncoderType.AUDIO,
         connectionCandidates = state.codecDetectionCandidates(sessionId),
         currentEncoder = state.config.userAudioEncoder,
         currentCodec = state.capabilityCache.selectedAudioCodec,
         cachedEncoders = state.capabilityCache.remoteAudioEncoders,
-        onDismiss = { state.showAudioEncoderDialog = false },
+        onDismiss = {
+            state.showAudioEncoderDialog = false
+        },
         onEncoderSelected = { encoder, _ ->
-            state.updateConfig { copy(userAudioEncoder = encoder) }
+            state.updateConfig {
+                copy(userAudioEncoder = encoder)
+            }
             state.updateCapabilityCache {
                 copy(selectedAudioCodec = "", selectedAudioEncoder = "", selectedAudioDecoder = "")
             }
@@ -2734,13 +2661,10 @@ private fun AudioEncoderSelectionOverlay(
 }
 
 @Composable
-private fun AudioDecoderSelectionOverlay(
-    state: SessionDialogState,
-) {
+private fun AudioDecoderSelectionOverlay(state: SessionDialogState) {
     if (!state.showAudioDecoderSelector) {
         return
     }
-
     AudioCodecSelectorScreen(
         currentCodecName = state.config.userAudioDecoder.ifBlank { null },
         onCodecSelected = { decoder ->
@@ -2761,7 +2685,6 @@ private fun UsbDeviceSelectionOverlay(state: SessionDialogState) {
     if (!state.showUsbDeviceDialog) {
         return
     }
-
     UsbDeviceSelectionDialog(
         currentSerialNumber = state.usbSerialNumber,
         onDeviceSelected = { serialNumber, deviceName ->
@@ -2769,7 +2692,6 @@ private fun UsbDeviceSelectionOverlay(state: SessionDialogState) {
             state.selectDeviceType(SessionDeviceType.USB)
             state.host = ""
             state.showUsbDeviceDialog = false
-
             if (state.sessionName.isBlank()) {
                 state.sessionName = deviceName
             }
@@ -2785,17 +2707,12 @@ private fun UsbDeviceSelectionOverlay(state: SessionDialogState) {
 }
 
 @Composable
-private fun GroupSelectionOverlay(
-    state: SessionDialogState,
-    availableGroups: List<DeviceGroup>,
-) {
+private fun GroupSelectionOverlay(state: SessionDialogState, availableGroups: List<DeviceGroup>) {
     if (!state.showGroupSelector) {
         return
     }
-
     GroupSelectorDialog(
-        selectedGroupIds = state.selectedGroupIds,
-        availableGroups = availableGroups,
+        selectedGroupIds = state.selectedGroupIds, availableGroups = availableGroups,
         onGroupsSelected = { selectedIds ->
             state.selectedGroupIds = selectedIds
             state.showGroupSelector = false
@@ -2806,19 +2723,16 @@ private fun GroupSelectionOverlay(
     )
 }
 
-private fun formatGroupDisplay(
-    selectedGroupIds: List<String>,
-    availableGroups: List<DeviceGroup>,
-): String {
+private fun formatGroupDisplay(selectedGroupIds: List<String>, availableGroups: List<DeviceGroup>): String {
     if (selectedGroupIds.isEmpty()) {
         return SessionTexts.GROUP_UNGROUPED.get()
     }
-
-    val groupNames = availableGroups.filter { it.id in selectedGroupIds }.map { it.name }
+    val groupNames = availableGroups.filter {
+        it.id in selectedGroupIds
+    }.map { it.name }
     if (groupNames.isEmpty()) {
         return SessionTexts.GROUP_UNGROUPED.get()
     }
-
     return if (groupNames.size <= 3) {
         groupNames.joinToString(", ")
     } else {
@@ -2828,20 +2742,11 @@ private fun formatGroupDisplay(
     }
 }
 
-private fun normalizeUsbAddress(raw: String): String =
-    DeviceTransportSerial.stripUsbPrefix(raw)
-
+private fun normalizeUsbAddress(raw: String): String = DeviceTransportSerial.stripUsbPrefix(raw)
 internal fun SessionDialogState.codecDetectionCandidates(sessionId: String?): List<ConnectionCandidate> =
     toSessionData(sessionId ?: "codec-detection").toConnectionCandidates()
 
-private fun normalizeMdnsAddress(raw: String): String =
-    DeviceTransportSerial.mdnsDeviceSerial(raw)
-
+private fun normalizeMdnsAddress(raw: String): String = DeviceTransportSerial.mdnsDeviceSerial(raw)
 private fun showCodecProtocolMismatch(context: Context) {
-    Toast
-        .makeText(
-            context,
-            CodecTexts.CODEC_PROTOCOL_MISMATCH.get(),
-            Toast.LENGTH_SHORT,
-        ).show()
+    Toast.makeText(context, CodecTexts.CODEC_PROTOCOL_MISMATCH.get(), Toast.LENGTH_SHORT).show()
 }

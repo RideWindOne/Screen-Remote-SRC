@@ -1,8 +1,6 @@
 package com.screen.remote.android.feature.remote.presentation
 
 import android.annotation.SuppressLint
-import com.screen.remote.android.core.common.manager.LogManager.dShell
-
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -10,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
+import com.screen.remote.android.core.common.manager.LogManager.dShell
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutBounds
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -22,10 +21,8 @@ import com.screen.remote.android.infrastructure.adb.connection.shellLogPreview
 import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager.execute
 import com.screen.remote.android.infrastructure.scrcpy.client.ScrcpyClient
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 设备控制 ViewModel
@@ -84,55 +81,6 @@ class ControlViewModel(
         screenHeight: Int,
         pressure: Float = 1.0f,
     ): Result<Boolean> = scrcpyClient.sendTouchEvent(action, pointerId, x, y, screenWidth, screenHeight, pressure)
-
-    /**
-     * 发送滑动手势
-     * @param startX 起始 X 坐标
-     * @param startY 起始 Y 坐标
-     * @param endX 结束 X 坐标
-     * @param endY 结束 Y 坐标
-     * @param duration 滑动持续时间（毫秒）
-     */
-    suspend fun sendSwipeGesture(
-        startX: Int,
-        startY: Int,
-        endX: Int,
-        endY: Int,
-        duration: Long = 300,
-    ): Result<Boolean> =
-        withContext(Dispatchers.IO) {
-            try {
-                val resolution =
-                    scrcpyClient.videoResolution.value
-                        ?: return@withContext Result.failure(Exception("无法获取视频分辨率"))
-                val (screenWidth, screenHeight) = resolution
-
-                // 计算滑动步数（每 16ms 一帧，约 60fps）
-                val steps = (duration / 16).toInt().coerceAtLeast(10)
-                val pointerId = 0L
-
-                // 发送按下事件
-                sendTouchEvent(0, pointerId, startX, startY, screenWidth, screenHeight)
-                delay(16.milliseconds)
-
-                // 发送移动事件
-                for (i in 1..steps) {
-                    val progress = i.toFloat() / steps
-                    val currentX = (startX + (endX - startX) * progress).toInt()
-                    val currentY = (startY + (endY - startY) * progress).toInt()
-                    sendTouchEvent(2, pointerId, currentX, currentY, screenWidth, screenHeight)
-                    delay(16.milliseconds)
-                }
-
-                // 发送抬起事件
-                sendTouchEvent(1, pointerId, endX, endY, screenWidth, screenHeight)
-
-                Result.success(true)
-            } catch (e: Exception) {
-                LogManager.e(LogTags.CONTROL_VM, "Failed to send swipe gesture: ${e.message}", e)
-                Result.failure(e)
-            }
-        }
 
     // ============ 屏幕控制 ============
 
@@ -240,7 +188,7 @@ class ControlViewModel(
                 if (systemResult.isSuccess) {
                     LogManager.d(
                         LogTags.CONTROL_VM,
-                        "Triggered system screenshot: key=$systemScreenshotKeyName, sdk=${sdkInt ?:"unknown"}",
+                        "Triggered system screenshot: key=$systemScreenshotKeyName, sdk=${sdkInt ?: "unknown"}",
                     )
                     return@withContext Result.success(systemScreenshotKeyName)
                 }
@@ -324,9 +272,11 @@ class ControlViewModel(
                         logShellStreamReady(LogTags.CONTROL_VM, UI_LAYOUT_DUMP_COMMAND)
                         val response = shellStream.readAll()
                         dShell(LogTags.CONTROL_VM) {
-                            "ui-layout shell result: exit=${response.exitCode} stdout=${shellLogPreview(
-                                response.output,
-                            )} stderr=${shellLogPreview(response.errorOutput)}"
+                            "ui-layout shell result: exit=${response.exitCode} stdout=${
+                                shellLogPreview(
+                                    response.output,
+                                )
+                            } stderr=${shellLogPreview(response.errorOutput)}"
                         }
                         if (response.exitCode != 0) {
                             return@withContext Result.failure(

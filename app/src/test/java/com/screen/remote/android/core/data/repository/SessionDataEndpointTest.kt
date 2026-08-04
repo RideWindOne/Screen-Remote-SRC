@@ -6,13 +6,13 @@ import com.screen.remote.android.core.domain.model.DeviceCapabilityCache
 import com.screen.remote.android.core.domain.model.EncoderCapability
 import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 
 class SessionDataEndpointTest {
     @Test
