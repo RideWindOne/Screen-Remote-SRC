@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -134,8 +135,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
-import java.util.Locale
-import androidx.compose.ui.platform.LocalLocale
 
 private val SessionDialogSectionShape = RoundedCornerShape(12.dp)
 private val AudioVolumeRowHorizontalPadding = 10.dp
@@ -1475,7 +1474,9 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
             },
             enabled = !state.config.compatibilityMode,
         )
+
         AppDivider()
+
         CompactSegmentedChoiceRow(
             text = SessionTexts.LABEL_SCREEN_ROTATION.get(),
             choices = listOf(
@@ -1491,20 +1492,37 @@ private fun ConnectionOptionsSection(state: SessionDialogState) {
             },
             helpText = SessionTexts.HELP_FOLLOW_ORIENTATION.get(),
         )
+
         AppDivider()
+
         LabeledTextField(
             label = SessionTexts.LABEL_SHELL_PASSWORD.get(),
             helpText = SessionTexts.HELP_SHELL_PASSWORD.get(),
             value = state.config.shellPassword,
-            onValueChange = { value ->
-                state.updateConfig {
-                    copy(shellPassword = value)
-                }
-            },
+            onValueChange = { value -> state.updateConfig { copy(shellPassword = value) } },
             placeholder = SessionTexts.PLACEHOLDER_SHELL_PASSWORD.get(),
             keyboardType = KeyboardType.Password,
+            trailingContent = if (state.config.shellPassword.isNotEmpty()) {
+                {
+                    IconButton(
+                        onClick = { state.updateConfig { copy(shellPassword = "") } },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = SessionTexts.ACTION_CLEAR_SHELL_PASSWORD.get(),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            } else {
+                null
+            },
         )
+
         AppDivider()
+
         CompactSwitchRow(
             text = SessionTexts.SWITCH_USE_ADB_FORWARD.get(),
             checked = state.config.tunnelMode == ScrcpyTunnelMode.ADB_FORWARD,
@@ -1874,9 +1892,7 @@ private fun VerticalOptionPicker(
                     onValueChange = { next ->
                         editorValue = next.filter(Char::isDigit)
                     },
-                    label = {
-                        Text(label)
-                    },
+                    label = { Text(label) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.weight(1f),
@@ -2276,11 +2292,7 @@ private fun StartAppFields(state: SessionDialogState) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicTextField(
                 value = state.config.startApp,
-                onValueChange = { value ->
-                    state.updateConfig {
-                        copy(startApp = value.trim())
-                    }
-                },
+                onValueChange = { value -> state.updateConfig { copy(startApp = value.trim()) } },
                 modifier = Modifier
                     .weight(1f)
                     .height(AppDimens.listItemHeight),
@@ -2308,11 +2320,7 @@ private fun StartAppFields(state: SessionDialogState) {
             Spacer(modifier = Modifier.width(2.dp))
             if (state.config.startApp.isNotEmpty()) {
                 IconButton(
-                    onClick = {
-                        state.updateConfig {
-                            copy(startApp = "")
-                        }
-                    },
+                    onClick = { state.updateConfig { copy(startApp = "") } },
                     modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
@@ -2325,9 +2333,7 @@ private fun StartAppFields(state: SessionDialogState) {
                 Spacer(modifier = Modifier.width(2.dp))
             }
             IconButton(
-                onClick = {
-                    state.showRemoteAppSelector = true
-                },
+                onClick = { state.showRemoteAppSelector = true },
                 modifier = Modifier.size(28.dp),
             ) {
                 Icon(
@@ -2441,17 +2447,17 @@ private fun RemoteAppSelectionOverlay(
         hasSearched = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                            runCatching {
-                                val connection =
-                                    candidates.sortedBy(ConnectionCandidate::priority).firstNotNullOfOrNull { candidate ->
-                                        connectionManager.connectCandidate(
-                                            candidate,
-                                            shellPassword = state.config.shellPassword,
-                                        ).getOrNull()
-                                    } ?: error("No reachable remote device")
-                                val remoteFilter = keyword.takeIf(String::isNotEmpty)?.let { value ->
-                                    " | grep -i -F -- ${quoteShellArg(value)} || true"
-                                }.orEmpty()
+                runCatching {
+                    val connection =
+                        candidates.sortedBy(ConnectionCandidate::priority).firstNotNullOfOrNull { candidate ->
+                            connectionManager.connectCandidate(
+                                candidate,
+                                shellPassword = state.config.shellPassword,
+                            ).getOrNull()
+                        } ?: error("No reachable remote device")
+                    val remoteFilter = keyword.takeIf(String::isNotEmpty)?.let { value ->
+                        " | grep -i -F -- ${quoteShellArg(value)} || true"
+                    }.orEmpty()
                     val launcherOutput = connection.executeShell(
                         "cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER$remoteFilter",
                         retryOnFailure = false,

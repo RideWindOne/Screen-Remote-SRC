@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -92,6 +93,14 @@ class MainActivity : ComponentActivity(), RemoteHardwareKeyEventHost {
                 rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
                     overlayPermissionGranted.value = canDrawOverlaysCompat(this)
                 }
+
+            LaunchedEffect(settings.allowScreenCapture) {
+                if (settings.allowScreenCapture) {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
 
             LaunchedEffect(settings.enableDebugMode) {
                 val permissionGranted = canDrawOverlaysCompat(this@MainActivity)

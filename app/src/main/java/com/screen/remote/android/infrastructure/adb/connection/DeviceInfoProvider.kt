@@ -19,7 +19,6 @@ internal object DeviceInfoProvider {
         deviceId: String,
         customName: String?,
         connectionType: ConnectionType,
-        shellPassword: String = "",
     ): DeviceInfo =
         try {
             val command = buildBasicDeviceInfoCommand()
@@ -27,13 +26,11 @@ internal object DeviceInfoProvider {
                 AdbConnectionShellExecutor(
                     dadb = dadb,
                     deviceId = deviceId,
-                    shellPasswordProvider = { shellPassword },
                 )
             val response = try {
                 shellExecutor.execute(
                     command = command,
                     retryOnFailure = false,
-                    allowShellPasswordFallback = true,
                 ).getOrThrow()
             } catch (error: Exception) {
                 logShellCommandFailure(LogTags.ADB_CONNECTION, command, error)

@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
 
 @OptIn(ExperimentalDadbAndroidApi::class)
 internal class AdbConnectionConnector(
@@ -45,6 +46,7 @@ internal class AdbConnectionConnector(
         withContext(Dispatchers.IO) {
             val normalizedHost = normalizeEndpointHost(host)
             val deviceId = transportDeviceId ?: DeviceTransportSerial.tcp(normalizedHost, port)
+            val passwordHolder = AtomicReference(shellPassword)
             try {
                 connectionRegistry.getConnection(deviceId)?.let { existingConnection ->
                     existingConnection.bindSessionContext(sessionContext)
@@ -82,6 +84,7 @@ internal class AdbConnectionConnector(
                             connectTimeout = 5000,
                             socketTimeout = 5000,
                             warmStreaming = false,
+                            passwordProvider = { passwordHolder.get() },
                         )
                     } catch (e: java.net.ConnectException) {
                         LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_CONNECTION_REFUSED.english}: ${e.message}")
@@ -96,7 +99,6 @@ internal class AdbConnectionConnector(
                     AdbConnectionVerifier.verifyDadb(
                         dadb,
                         deviceId,
-                        shellPassword = shellPassword,
                         sessionContext = sessionContext,
                     )
                 if (verifyResult.isFailure) {
@@ -132,7 +134,7 @@ internal class AdbConnectionConnector(
                         host = normalizedHost,
                         port = port,
                         dadb = dadb,
-                        initialShellPassword = shellPassword,
+                        passwordHolder = passwordHolder,
                         deviceInfo =
                             DeviceInfo(
                                 deviceId = deviceId,
@@ -144,15 +146,14 @@ internal class AdbConnectionConnector(
                     )
 
                 connectionRegistry.put(connection)
-                enrichDeviceInfo(
-                    connection = connection,
-                    dadb = dadb,
-                    deviceId = deviceId,
-                    deviceName = deviceName,
-                    connectionType = connectionType,
-                    shellPassword = shellPassword,
-                )
-                Result.success(connection)
+                    enrichDeviceInfo(
+                        connection = connection,
+                        dadb = dadb,
+                        deviceId = deviceId,
+                        deviceName = deviceName,
+                        connectionType = connectionType,
+                    )
+                    Result.success(connection)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (e: Exception) {
@@ -171,6 +172,7 @@ internal class AdbConnectionConnector(
             try {
                 val serialNumber = ApiCompatHelper.getUsbDeviceSerialNumber(usbDevice) ?: usbDevice.deviceName
                 val deviceId = DeviceTransportSerial.usb(serialNumber)
+                val passwordHolder = AtomicReference(shellPassword)
 
                 LogManager.d(LogTags.ADB_CONNECTION, "========== ${AdbTexts.USB_CONNECTING_DEVICE.english} ==========")
                 LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.USB_SERIAL_NUMBER.english}: $serialNumber")
@@ -252,6 +254,7 @@ internal class AdbConnectionConnector(
                                 usbDevice = activeUsbDevice,
                                 description = deviceId,
                                 features = features,
+                                passwordProvider = { passwordHolder.get() },
                             )
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -264,7 +267,6 @@ internal class AdbConnectionConnector(
                         AdbConnectionVerifier.verifyDadb(
                             dadb,
                             deviceId,
-                            shellPassword = shellPassword,
                             sessionContext = sessionContext,
                         )
                     if (verifyResult.isSuccess) {
@@ -279,7 +281,7 @@ internal class AdbConnectionConnector(
                                 host = "usb",
                                 port = 0,
                                 dadb = dadb,
-                                initialShellPassword = shellPassword,
+                                passwordHolder = passwordHolder,
                                 deviceInfo =
                                     DeviceInfo(
                                         deviceId = deviceId,
@@ -300,7 +302,6 @@ internal class AdbConnectionConnector(
                             deviceId = deviceId,
                             deviceName = deviceName,
                             connectionType = ConnectionType.USB,
-                            shellPassword = shellPassword,
                         )
                         return@withContext Result.success(connection)
                     }
@@ -506,7 +507,6 @@ internal class AdbConnectionConnector(
         deviceId: String,
         deviceName: String?,
         connectionType: ConnectionType,
-        shellPassword: String,
     ) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -516,7 +516,6 @@ internal class AdbConnectionConnector(
                         deviceId = deviceId,
                         customName = deviceName,
                         connectionType = connectionType,
-                        shellPassword = shellPassword,
                     )
                 connection.deviceInfo = detailedDeviceInfo
                 connectionRegistry.refreshConnectedDevices()

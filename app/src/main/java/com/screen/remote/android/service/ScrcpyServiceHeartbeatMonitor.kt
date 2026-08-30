@@ -3,7 +3,6 @@ package com.screen.remote.android.service
 import android.content.Context
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
-import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.parseSessionAddressCandidate
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
@@ -205,26 +204,17 @@ internal class ScrcpyServiceHeartbeatMonitor(
         if (!isStillProtected(deviceId, protectedDevice)) return true
 
         val result =
-            when (candidate.transport) {
-                ConnectionTransport.USB -> adbManager.connectUsbDeviceById(deviceId)
-                ConnectionTransport.MDNS ->
-                    adbManager.connectMdnsService(
-                        serviceName = candidate.host,
-                    )
-
-                ConnectionTransport.TCP ->
-                    adbManager.connectDevice(
-                        host = candidate.host,
-                        port = candidate.port,
-                    )
-            }
+            adbManager.connectCandidate(
+                candidate = candidate,
+                shellPassword = protectedDevice.shellPassword,
+            )
 
         result.exceptionOrNull()?.let { error ->
             if (error is CancellationException) throw error
         }
         if (!isStillProtected(deviceId, protectedDevice)) return true
 
-        val connectedDeviceId = result.getOrNull()
+        val connectedDeviceId = result.getOrNull()?.deviceId
         if (result.isSuccess && connectedDeviceId == deviceId) {
             LogManager.d(LogTags.SCRCPY_SERVICE, "ADB original connection reconnected successfully: $deviceId")
             return true

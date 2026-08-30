@@ -52,9 +52,17 @@ class ScrcpyServiceHeartbeatMonitorTest {
         assertNull(parseExactProtectedConnection("tcp:192.168.1.8"))
     }
 
-    private fun protectedDevice() =
+    @Test
+    fun `protected connection retains shell password for reconnect`() {
+        val protectedDevice = protectedDevice(shellPassword = "secret")
+
+        assertEquals("secret", protectedDevice.shellPassword)
+    }
+
+    private fun protectedDevice(shellPassword: String = "") =
         ProtectedAdbDevice(
             deviceName = "device",
+            shellPassword = shellPassword,
         )
 
     private companion object {

@@ -330,6 +330,7 @@ object SessionTexts {
     val SWITCH_VIRTUAL_DISPLAY_SYSTEM_DECORATIONS = TextPair("显示虚拟屏系统界面", "Show Virtual Display System UI")
     val SWITCH_PRESERVE_VIRTUAL_DISPLAY_CONTENT = TextPair("断开后保留虚拟屏内容", "Preserve Virtual Display Content")
     val ACTION_SYNC_LOCAL_DISPLAY_SIZE = TextPair("同步", "Sync")
+    val ACTION_CLEAR_SHELL_PASSWORD = TextPair("清空", "Clear")
     val ACTION_CLEAR_NEW_DISPLAY_SIZE = TextPair("清空", "Clear")
     val ACTION_SELECT_REMOTE_APP = TextPair("选择", "Select")
     val ACTION_CLEAR_START_APP = TextPair("清空", "Clear")
@@ -558,7 +559,7 @@ object SessionTexts {
         "Keep apps running when the virtual display closes by moving them to the physical device's main display instead of destroying them.",
     )
     val HELP_SHELL_PASSWORD = TextPair(
-        "部分设备的 ADB shell 命令可能需要密码（例如部分查询/控制场景）。如有需要请填写，不需要可留空。",
-        "Some head units require an extra password for ADB shell commands (for example, certain query/control scenarios). Fill this in when needed; otherwise leave it empty.",
+        "部分设备在兼容模式下启动指定 App 时需要 Shell 密码。如有需要请填写，不需要可留空。",
+        "Some devices require a shell password to launch the selected app in compatibility mode. Fill it in when needed; otherwise leave it empty.",
     )
 }

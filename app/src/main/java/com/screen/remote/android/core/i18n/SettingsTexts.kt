@@ -33,6 +33,7 @@ object SettingsTexts {
     val CUSTOM_COMMAND_VALUE_PLACEHOLDER = TextPair("例如：dumpsys battery", "For example: dumpsys battery")
     val CUSTOM_COMMAND_DELETE = TextPair("删除命令", "Delete Command")
     val SETTINGS_FLOATING_HAPTIC = TextPair("悬浮球触感反馈", "Floating Ball Haptic Feedback")
+    val SETTINGS_ALLOW_SCREEN_CAPTURE = TextPair("允许录屏", "Allow Screen Capture")
     val SETTINGS_PERFORMANCE_STATS = TextPair("显示帧率与网络速率", "Show FPS & Network Rates")
     val SETTINGS_MANAGE_ADB_KEYS = TextPair("管理 ADB 密钥", "Manage ADB Keys")
     val SETTINGS_DEVICE_PAIRING = TextPair("使用配对码进行 ADB 配对", "ADB Pairing with Pairing Code")
@@ -155,6 +156,11 @@ object SettingsTexts {
         TextPair(
             "启用后，点击悬浮球按钮时会产生触感反馈（震动）。触感反馈可以提供更好的操作体验，但会略微增加电量消耗。",
             "When enabled, tapping floating ball buttons will produce haptic feedback (vibration). Haptic feedback provides better user experience but slightly increases battery consumption.",
+        )
+    val HELP_ALLOW_SCREEN_CAPTURE =
+        TextPair(
+            "开启后，允许系统截图和录屏；关闭后，应用窗口将使用 FLAG_SECURE 阻止截图和录屏。",
+            "Allow system screenshots and screen recording when enabled. When disabled, the app window uses FLAG_SECURE to block them.",
         )
     val HELP_PERFORMANCE_STATS =
         TextPair(

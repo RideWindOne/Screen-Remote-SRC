@@ -309,6 +309,7 @@ class ScrcpyClient(
                 context = context,
                 deviceId = deviceId,
                 deviceName = deviceName,
+                shellPassword = getCurrentSessionOptions()?.config?.shellPassword.orEmpty(),
             )
             protectedDeviceId = deviceId
 

@@ -186,7 +186,7 @@ internal suspend fun raceAdbConnections(
     val selectedConnection = selected.result.getOrThrow()
     LogManager.i(
         logTag,
-        "$logLabel Race winner: ${formatAdbRaceCandidate(selected.candidate)}" +
+        "$logLabel Race winner: ${formatAdbRaceCandidate(selected.candidate)} " +
             "deviceId=${selectedConnection.deviceId} ${selected.elapsedMillis(startedAtNanos)}ms",
     )
     return selected

@@ -347,7 +347,7 @@ internal class CompatibilityModeController(
             return Result.success(true)
         }
         val launchCommand = "monkey -p ${normalizedName.shellQuoted()} -c android.intent.category.LAUNCHER 1"
-        return executeInput(launchCommand, allowShellPasswordFallback = true)
+        return executeInput(launchCommand, useShellPassword = true)
     }
 
     suspend fun wakeUpScreen(): Result<Boolean> = executeInput("input keyevent ${KeyEvent.KEYCODE_WAKEUP}")
@@ -504,7 +504,7 @@ internal class CompatibilityModeController(
 
     private suspend fun executeInput(
         command: String,
-        allowShellPasswordFallback: Boolean = true,
+        useShellPassword: Boolean = false,
     ): Result<Boolean> {
         if (!isStarted) {
             return Result.failure(IllegalStateException("Compatibility mode is not active"))
@@ -516,7 +516,7 @@ internal class CompatibilityModeController(
             connection.executeShell(
                 checkedCommand,
                 retryOnFailure = false,
-                allowShellPasswordFallback = allowShellPasswordFallback,
+                useShellPassword = useShellPassword,
             ).mapCatching { output ->
                 val exitCode = output.lineSequence().map(String::trim).firstOrNull { it.startsWith(INPUT_EXIT_MARKER) }
                     ?.removePrefix(INPUT_EXIT_MARKER)?.toIntOrNull() ?: throw IllegalStateException(

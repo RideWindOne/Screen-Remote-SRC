@@ -36,6 +36,7 @@ class PreferencesManager(
         val ENABLE_MANAGEMENT_LOG = booleanPreferencesKey("enable_management_log")
         val ENABLE_DEBUG_MODE = booleanPreferencesKey("enable_debug_mode")
         val ENABLE_FLOATING_HAPTIC_FEEDBACK = booleanPreferencesKey("enable_floating_haptic_feedback")
+        val ALLOW_SCREEN_CAPTURE = booleanPreferencesKey("allow_screen_capture")
         val SHOW_PERFORMANCE_STATS = booleanPreferencesKey("show_performance_stats")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val UPDATE_CHANNEL = stringPreferencesKey("update_channel")
@@ -120,6 +121,7 @@ class PreferencesManager(
                 enableManagementLog = preferences[Keys.ENABLE_MANAGEMENT_LOG] ?: false,
                 enableDebugMode = preferences[Keys.ENABLE_DEBUG_MODE] ?: false,
                 enableFloatingHapticFeedback = preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] ?: true,
+                allowScreenCapture = preferences[Keys.ALLOW_SCREEN_CAPTURE] ?: true,
                 showPerformanceStats = preferences[Keys.SHOW_PERFORMANCE_STATS] ?: false,
                 autoCheckUpdates = preferences[Keys.AUTO_CHECK_UPDATES] ?: true,
                 updateChannel =
@@ -147,6 +149,7 @@ class PreferencesManager(
             preferences[Keys.ENABLE_MANAGEMENT_LOG] = settings.enableManagementLog
             preferences[Keys.ENABLE_DEBUG_MODE] = settings.enableDebugMode
             preferences[Keys.ENABLE_FLOATING_HAPTIC_FEEDBACK] = settings.enableFloatingHapticFeedback
+            preferences[Keys.ALLOW_SCREEN_CAPTURE] = settings.allowScreenCapture
             preferences[Keys.SHOW_PERFORMANCE_STATS] = settings.showPerformanceStats
             preferences[Keys.AUTO_CHECK_UPDATES] = settings.autoCheckUpdates
             preferences[Keys.UPDATE_CHANNEL] = settings.updateChannel.name

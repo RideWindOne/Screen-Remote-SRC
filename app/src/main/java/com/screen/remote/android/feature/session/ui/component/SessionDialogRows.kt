@@ -87,9 +87,7 @@ fun <T> CompactSegmentedChoiceRow(
     helpText: String? = null,
 ) {
     Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
                 .height(AppDimens.listItemHeight)
                 .padding(horizontal = IosDesignTokens.compactHorizontalPadding),
         verticalAlignment = Alignment.CenterVertically,
@@ -97,10 +95,7 @@ fun <T> CompactSegmentedChoiceRow(
         DialogRowLabel(
             label = text,
             helpText = helpText,
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .padding(end = DialogRowSpacing),
+            modifier = Modifier.weight(1f).padding(end = DialogRowSpacing),
         )
 
         Row(

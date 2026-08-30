@@ -48,10 +48,13 @@ class ScrcpyForegroundService : Service() {
 
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_DEVICE_NAME = "device_name"
+        const val EXTRA_SHELL_PASSWORD = "shell_password"
+
         fun protectDevice(
             context: android.content.Context,
             deviceId: String,
             deviceName: String,
+            shellPassword: String = "",
         ) {
             require(deviceId.isNotBlank()) { "Protected devices must include an exact ADB connection identifier" }
             val intent =
@@ -59,6 +62,7 @@ class ScrcpyForegroundService : Service() {
                     action = ACTION_ADD_DEVICE
                     putExtra(EXTRA_DEVICE_ID, deviceId)
                     putExtra(EXTRA_DEVICE_NAME, deviceName)
+                    putExtra(EXTRA_SHELL_PASSWORD, shellPassword)
                 }
             ServiceApiCompat.startForegroundServiceCompat(context, intent)
         }
@@ -100,10 +104,12 @@ class ScrcpyForegroundService : Service() {
 
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
                 val deviceName = intent.getStringExtra(EXTRA_DEVICE_NAME) ?: "Unknown device"
+                val shellPassword = intent.getStringExtra(EXTRA_SHELL_PASSWORD).orEmpty()
                 if (!deviceId.isNullOrBlank()) {
                     addDevice(
                         deviceId = deviceId,
                         deviceName = deviceName,
+                        shellPassword = shellPassword,
                     )
                 } else {
                     LogManager.e(
@@ -152,10 +158,12 @@ class ScrcpyForegroundService : Service() {
     private fun addDevice(
         deviceId: String,
         deviceName: String,
+        shellPassword: String,
     ) {
         protectedDevices[deviceId] =
             ProtectedAdbDevice(
                 deviceName = deviceName,
+                shellPassword = shellPassword,
             )
         LogManager.d(
             LogTags.SCRCPY_SERVICE,
@@ -276,4 +284,5 @@ class ScrcpyForegroundService : Service() {
 // 使用引用身份区分每一次保护请求，防止旧心跳结果删除刚刚以相同参数重新添加的设备。
 internal class ProtectedAdbDevice(
     val deviceName: String,
+    val shellPassword: String,
 )

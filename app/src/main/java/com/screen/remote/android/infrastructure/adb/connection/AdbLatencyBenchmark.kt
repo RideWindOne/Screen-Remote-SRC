@@ -122,6 +122,7 @@ class AdbLatencyBenchmark {
                             usbDevice = preparedDevice,
                             description = candidate.host,
                             features = Dadb.connectFeatures(withDelayedAck = true),
+                            passwordProvider = passwordProviderForBenchmark(shellPassword),
                         )
                     } else {
                         val networkEndpoint = requireNotNull(endpoint)
@@ -131,6 +132,7 @@ class AdbLatencyBenchmark {
                             connectTimeout = CONNECT_TIMEOUT_MS,
                             socketTimeout = SOCKET_TIMEOUT_MS,
                             features = Dadb.connectFeatures(withDelayedAck = true),
+                            passwordProvider = passwordProviderForBenchmark(shellPassword),
                         )
                     }
 
@@ -139,7 +141,6 @@ class AdbLatencyBenchmark {
                 val shellExecutor = AdbConnectionShellExecutor(
                     dadb = dadb,
                     deviceId = candidate.deviceIdentifier(),
-                    shellPasswordProvider = { shellPassword },
                 )
 
                 val shellSamples =
@@ -152,7 +153,6 @@ class AdbLatencyBenchmark {
                                     shellExecutor.execute(
                                         command = "echo -n $token",
                                         retryOnFailure = false,
-                                        allowShellPasswordFallback = shellPassword.isNotBlank(),
                                     ).getOrThrow()
                                 }
                             check(response.trim() == token) {
@@ -201,6 +201,9 @@ class AdbLatencyBenchmark {
 
 private fun elapsedMillis(startedAtNanos: Long): Double =
     (System.nanoTime() - startedAtNanos) / 1_000_000.0
+
+private fun passwordProviderForBenchmark(shellPassword: String): (() -> String)? =
+    if (shellPassword.isNotBlank()) { { shellPassword } } else null
 
 private fun Throwable.shortMessage(): String {
     val detail = message?.trim().orEmpty()

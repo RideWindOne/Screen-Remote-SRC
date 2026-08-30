@@ -142,6 +142,15 @@ private fun GeneralSettingsSection(
         )
         SettingsDivider()
         SettingsSwitch(
+            title = texts.allowScreenCapture,
+            checked = settings.allowScreenCapture,
+            helpText = texts.helpAllowScreenCapture,
+            onCheckedChange = {
+                onUpdateSettings(settings.copy(allowScreenCapture = it))
+            },
+        )
+        SettingsDivider()
+        SettingsSwitch(
             title = texts.performanceStats,
             checked = settings.showPerformanceStats,
             helpText = texts.helpPerformanceStats,

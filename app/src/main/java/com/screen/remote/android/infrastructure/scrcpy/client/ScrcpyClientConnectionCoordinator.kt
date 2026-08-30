@@ -4,6 +4,7 @@ import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.event.ScrcpyEventBus
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.common.manager.SessionIssueTracker
+import com.screen.remote.android.core.domain.model.ScrcpyConfig
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.infrastructure.adb.connection.AdbBridge
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
@@ -27,6 +28,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
+
+internal fun resolveControlStartApp(config: ScrcpyConfig): String? =
+    config.startApp.trim().takeIf { !config.compatibilityMode && it.isNotEmpty() }
 
 internal class ScrcpyClientConnectionCoordinator(
     private val stateMachine: ConnectionStateMachine,
@@ -97,18 +101,13 @@ internal class ScrcpyClientConnectionCoordinator(
                     controller.start(activeDeviceId, gameMode = options.config.gameMode)
                 }
 
-                if (!options.config.compatibilityMode && !options.config.newDisplayEnabled) {
-                    options.config.startApp
-                        .trim()
-                        .takeIf(String::isNotEmpty)
-                        ?.let { startApp ->
-                            controller.startApp(startApp)
-                                .onFailure { error ->
-                                    LogManager.w(
-                                        LogTags.SCRCPY_CLIENT,
-                                        "Request to launch app on virtual display failed: ${error.message}",
-                                    )
-                                }
+                resolveControlStartApp(options.config)?.let { startApp ->
+                    controller.startApp(startApp)
+                        .onFailure { error ->
+                            LogManager.w(
+                                LogTags.SCRCPY_CLIENT,
+                                "Request to launch app failed: ${error.message}",
+                            )
                         }
                 }
 

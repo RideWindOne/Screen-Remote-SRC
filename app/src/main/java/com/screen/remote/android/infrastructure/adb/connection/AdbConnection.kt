@@ -66,6 +66,7 @@ import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -79,7 +80,7 @@ class AdbConnection(
     private val dadb: DadbSession,
     var deviceInfo: DeviceInfo,
     private var sessionContext: SessionContext? = null,
-    initialShellPassword: String = "",
+    private val passwordHolder: AtomicReference<String> = AtomicReference(""),
 ) {
     private val transportDisconnectNotified = AtomicBoolean(false)
     private val forcePrimaryStreaming = AtomicBoolean(false)
@@ -94,13 +95,9 @@ class AdbConnection(
     @Volatile
     private var cachedCandidatePreflight: AdbCandidatePreflight? = null
 
-    @Volatile
-    private var shellPassword: String = initialShellPassword
-
     private val shellExecutor = AdbConnectionShellExecutor(
         dadb = dadb,
         deviceId = deviceId,
-        shellPasswordProvider = { shellPassword },
     )
 
     private val forwardRegistry = AdbConnectionForwardRegistry(
@@ -113,7 +110,6 @@ class AdbConnection(
         AdbConnectionVerifier.verifyDadb(
             dadb,
             deviceId,
-            shellPassword = shellPassword,
             sessionContext = sessionContext,
         )
 
@@ -121,7 +117,6 @@ class AdbConnection(
         AdbConnectionVerifier.verifyDadb(
             dadb,
             deviceId,
-            shellPassword = shellPassword,
             sessionContext = null,
         )
 
@@ -163,11 +158,11 @@ class AdbConnection(
     }
 
     fun setShellPassword(password: String) {
-        shellPassword = password
+        passwordHolder.set(password)
     }
 
     fun clearShellPassword() {
-        shellPassword = ""
+        passwordHolder.set("")
     }
 
     fun handleTransportDisconnected(reason: String) {
@@ -200,8 +195,8 @@ class AdbConnection(
     suspend fun executeShell(
         command: String,
         retryOnFailure: Boolean = true,
-        allowShellPasswordFallback: Boolean = true,
-    ): Result<String> = shellExecutor.execute(command, retryOnFailure, allowShellPasswordFallback)
+        useShellPassword: Boolean = false,
+    ): Result<String> = shellExecutor.execute(command, retryOnFailure, useShellPassword)
 
     suspend fun executeShellAsync(command: String) {
         shellExecutor.executeAsync(command)
@@ -245,7 +240,10 @@ class AdbConnection(
             )
             return null
         }
-        return AdbConnectionShellExecutor(streamingDadb, deviceId).openStream(command)
+        return AdbConnectionShellExecutor(
+            dadb = streamingDadb,
+            deviceId = deviceId,
+        ).openStream(command)
     }
 
     suspend fun openLocalAbstractSocket(socketName: String): Result<Socket> = withContext(Dispatchers.IO) {
@@ -488,7 +486,10 @@ class AdbConnection(
         val streamingDadb = runCatching { streamingDadb() }.getOrElse { error ->
             return Result.failure(error)
         }
-        val streamingShellExecutor = AdbConnectionShellExecutor(streamingDadb, deviceId)
+        val streamingShellExecutor = AdbConnectionShellExecutor(
+            dadb = streamingDadb,
+            deviceId = deviceId,
+        )
         val result = AdbEncoderDetector.detectEncoders(
             streamingDadb,
             context,
@@ -553,19 +554,13 @@ class AdbConnection(
 internal class AdbConnectionShellExecutor(
     private val dadb: Dadb,
     private val deviceId: String,
-    private val shellPasswordProvider: () -> String = { "" },
 ) {
     suspend fun execute(
         command: String,
         retryOnFailure: Boolean,
-        allowShellPasswordFallback: Boolean = true,
+        useShellPassword: Boolean = false,
     ): Result<String> = withContext(Dispatchers.IO) {
-        executeShellCommand(
-            command = command,
-            retryOnFailure = retryOnFailure,
-            allowShellPasswordFallback = allowShellPasswordFallback,
-            logCommand = command,
-        )
+        executeShellCommand(command, retryOnFailure, useShellPassword)
     }
 
     suspend fun executeAsync(command: String) = withContext(Dispatchers.IO) {
@@ -597,6 +592,7 @@ internal class AdbConnectionShellExecutor(
     private suspend fun retryShellCommand(
         command: String,
         retryOnFailure: Boolean,
+        useShellPassword: Boolean,
         originalError: Exception,
         commandForLog: String = command,
     ): Result<String> {
@@ -611,7 +607,7 @@ internal class AdbConnectionShellExecutor(
         LogManager.d(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_AUTO_RECONNECT_RETRY.english}: $commandForLog")
         return try {
             delay(100.milliseconds)
-            val retryResponse = dadb.shell(command)
+            val retryResponse = executeDadbShell(command, useShellPassword)
             logShellCommandResult(
                 tag = LogTags.ADB_CONNECTION,
                 command = commandForLog,
@@ -645,39 +641,25 @@ internal class AdbConnectionShellExecutor(
     private suspend fun executeShellCommand(
         command: String,
         retryOnFailure: Boolean,
-        allowShellPasswordFallback: Boolean,
-        logCommand: String,
+        useShellPassword: Boolean,
     ): Result<String> {
-        val commandForLog = logCommand.ifBlank { command }
         return try {
-            logShellCommandStart(LogTags.ADB_CONNECTION, commandForLog)
-            val response = dadb.shell(command)
+            logShellCommandStart(LogTags.ADB_CONNECTION, command)
+            val response = executeDadbShell(command, useShellPassword)
             logShellCommandResult(
                 tag = LogTags.ADB_CONNECTION,
-                command = commandForLog,
+                command = command,
                 exitCode = response.exitCode,
                 output = response.output,
                 errorOutput = response.errorOutput,
             )
-
-            if (allowShellPasswordFallback && shouldUseShellPasswordFallback(
-                    command, response.exitCode
-                )
-            ) {
-                return executeShellCommand(
-                    command = buildShellPasswordCommand(command),
-                    retryOnFailure = retryOnFailure,
-                    allowShellPasswordFallback = false,
-                    logCommand = buildShellPasswordLogCommand(command),
-                )
-            }
 
             if (response.exitCode == 0) {
                 Result.success(response.output)
             } else {
                 Result.failure(
                     ShellCommandException(
-                        command = commandForLog,
+                        command = command,
                         exitCode = response.exitCode,
                         output = response.output,
                         stderr = response.errorOutput,
@@ -685,28 +667,28 @@ internal class AdbConnectionShellExecutor(
                 )
             }
         } catch (e: ConnectException) {
-            logShellCommandFailure(LogTags.ADB_CONNECTION, commandForLog, e)
+            logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
             LogManager.d(
                 LogTags.ADB_CONNECTION,
-                "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.english} (ECONNREFUSED)，${AdbTexts.ADB_CANNOT_EXECUTE_COMMAND.english}: $commandForLog - ${e.message}",
+                "${AdbTexts.ADB_DISCONNECTED_ECONNREFUSED.english} (ECONNREFUSED)，${AdbTexts.ADB_CANNOT_EXECUTE_COMMAND.english}: $command - ${e.message}",
             )
             Result.failure(Exception(AdbTexts.ERROR_ADB_CONNECTION_DISCONNECTED.get(), e))
         } catch (e: EOFException) {
-            logShellCommandFailure(LogTags.ADB_CONNECTION, commandForLog, e)
-            retryShellCommand(command, retryOnFailure, e, commandForLog)
+            logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
+            retryShellCommand(command, retryOnFailure, useShellPassword, e, command)
         } catch (e: SocketException) {
-            logShellCommandFailure(LogTags.ADB_CONNECTION, commandForLog, e)
+            logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
             if (e.message?.contains("ECONNREFUSED", ignoreCase = true) == true) {
                 LogManager.d(
                     LogTags.ADB_CONNECTION,
-                    "${AdbTexts.ADB_SOCKET_EXCEPTION.english} (ECONNREFUSED): $commandForLog - ${e.message}",
+                    "${AdbTexts.ADB_SOCKET_EXCEPTION.english} (ECONNREFUSED): $command - ${e.message}",
                 )
                 Result.failure(Exception(AdbTexts.ERROR_ADB_CONNECTION_DISCONNECTED.get(), e))
             } else {
-                retryShellCommand(command, retryOnFailure, e, commandForLog)
+                retryShellCommand(command, retryOnFailure, useShellPassword, e, command)
             }
         } catch (e: Exception) {
-            logShellCommandFailure(LogTags.ADB_CONNECTION, commandForLog, e)
+            logShellCommandFailure(LogTags.ADB_CONNECTION, command, e)
             LogManager.e(
                 LogTags.ADB_CONNECTION,
                 "${AdbTexts.ADB_EXECUTE_COMMAND_FAILED.english}: device=$deviceId, msg=${e.message}",
@@ -716,33 +698,10 @@ internal class AdbConnectionShellExecutor(
         }
     }
 
-    private fun shouldUseShellPasswordFallback(
+    private fun executeDadbShell(
         command: String,
-        exitCode: Int,
-    ): Boolean {
-        if (shellPasswordProvider().isBlank()) {
-            return false
-        }
-        val normalizedCommand = command.lowercase()
-        if (normalizedCommand.startsWith("su ")) {
-            return false
-        }
-
-        if (exitCode == 0) {
-            return false
-        }
-
-        return true
-    }
-
-    private fun buildShellPasswordCommand(command: String): String =
-        "printf '%s\\n' ${shellPasswordProvider().shellQuoted()} | su -c ${command.shellQuoted()}"
-
-    private fun buildShellPasswordLogCommand(command: String): String =
-        "su -c ${command.shellQuoted()} [shell-password-redacted]"
-
-    private fun String.shellQuoted(): String = "'" + replace("'", "'\\''") + "'"
-
+        useShellPassword: Boolean,
+    ) = if (useShellPassword) dadb.shellWithSuPassword(command) else dadb.shell(command)
 }
 
 private data class ShellCommandException(
@@ -912,7 +871,6 @@ internal object AdbConnectionVerifier {
     suspend fun verifyDadb(
         dadb: Dadb,
         deviceId: String,
-        shellPassword: String = "",
         timeoutMs: Long = 5000,
         sessionContext: SessionContext? = null,
     ): Result<String> {
@@ -928,7 +886,6 @@ internal object AdbConnectionVerifier {
                     AdbConnectionShellExecutor(
                         dadb = dadb,
                         deviceId = deviceId,
-                        shellPasswordProvider = { shellPassword },
                     )
                 val command = "getprop ro.serialno"
                 try {
@@ -936,7 +893,6 @@ internal object AdbConnectionVerifier {
                         executor.execute(
                             command = command,
                             retryOnFailure = false,
-                            allowShellPasswordFallback = true,
                         ).getOrThrow()
                     }
                 } catch (e: TimeoutCancellationException) {

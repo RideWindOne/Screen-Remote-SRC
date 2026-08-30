@@ -2,10 +2,12 @@ package com.screen.remote.android.feature.session.ui.component
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,6 +24,7 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.screen.remote.android.core.common.AppDimens
 import com.screen.remote.android.core.common.IosDesignTokens
@@ -79,44 +82,53 @@ fun LabeledTextField(
     isError: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     helpText: String? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     DialogFieldRow(
         label = label,
         modifier = modifier,
         helpText = helpText,
     ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier =
-                Modifier.fillMaxWidth(),
-            textStyle =
-                dialogFieldTextStyle(
-                    isError = isError,
-                    textAlign = TextAlign.End,
-                ),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            visualTransformation = dialogFieldCursorGapTransformation(),
-            decorationBox = { innerTextField ->
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(start = IosDesignTokens.fieldContentStartPadding, end = DialogFieldTextEndPadding),
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    DialogFieldPlaceholder(
-                        visible = value.isEmpty(),
-                        placeholder = placeholder,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                textStyle =
+                    dialogFieldTextStyle(
                         isError = isError,
                         textAlign = TextAlign.End,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    innerTextField()
+                    ),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                visualTransformation = dialogFieldCursorGapTransformation(),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = IosDesignTokens.fieldContentStartPadding,
+                                    end = if (trailingContent == null) DialogFieldTextEndPadding else 0.dp,
+                                ),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        DialogFieldPlaceholder(
+                            visible = value.isEmpty(),
+                            placeholder = placeholder,
+                            isError = isError,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        innerTextField()
+                    }
                 }
-            },
-        )
+            )
+            if (trailingContent != null) {
+                Spacer(modifier = Modifier.width(2.dp))
+                trailingContent()
+            }
+        }
     }
 }
 

@@ -422,6 +422,7 @@ private class ManagementAdbSessionController(
             existingBridgeConnection?.deviceId == existingDeviceId
         ) {
             val existingConnection = adbConnectionManager.getConnection(existingDeviceId)
+            existingConnection?.setShellPassword(sessionData.config.shellPassword)
             if (
                 existingConnection != null &&
                 existingConnection.verifyWithoutSessionEvents().isSuccess
@@ -449,6 +450,9 @@ private class ManagementAdbSessionController(
                     .mapTo(linkedSetOf(), ConnectionCandidate::deviceIdentifier)
             val matchesCandidate = existingDeviceId in candidateDeviceIds
             val existingConnection = adbConnectionManager.getConnection(existingDeviceId)
+            if (matchesCandidate) {
+                existingConnection?.setShellPassword(sessionData.config.shellPassword)
+            }
             if (
                 matchesCandidate &&
                 existingConnection != null &&
@@ -506,6 +510,7 @@ private class ManagementAdbSessionController(
             context = dependencies.appContext,
             deviceId = connectedDeviceId,
             deviceName = connection.deviceInfo.name,
+            shellPassword = sessionData.config.shellPassword,
         )
         _deviceId.value = connectedDeviceId
         _status.value = ManagementConnectStatus.Connected(sessionData.id)
@@ -590,6 +595,7 @@ private class ManagementAdbSessionController(
                     logTag = LogTags.MANAGEMENT,
                     logLabel = "management ADB",
                     deviceName = sessionData.name.takeIf { it.isNotBlank() },
+                    shellPassword = sessionData.config.shellPassword,
                     isCurrentRace = { connectGeneration.get() == generation },
                 )
             Result.success(selected.result.getOrThrow().deviceId)
