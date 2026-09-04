@@ -60,6 +60,31 @@ object NotificationMonitorManager {
     private var isFirstPoll = true
 
     /**
+     * 需要过滤的系统服务包名关键词
+     * 这些是常驻系统服务通知，不是用户消息
+     */
+    private val BLOCKED_PACKAGE_KEYWORDS = listOf(
+        "clipboard",           // 剪贴板服务（含跨设备剪贴板）
+        "universalclipboard",  // 小米跨设备剪贴板服务
+    )
+
+    /**
+     * 判断是否为需要过滤的系统服务通知
+     * 过滤规则：
+     * 1. 包名包含系统服务关键词（如剪贴板服务）
+     * 2. 标题包含"服务"且内容为空（系统常驻服务）
+     * 保留：短信、电话、所有第三方应用通知
+     */
+    private fun isBlockedNotification(packageName: String, title: String, text: String): Boolean {
+        val lowerPackage = packageName.lowercase()
+        // 过滤剪贴板等系统服务
+        if (BLOCKED_PACKAGE_KEYWORDS.any { lowerPackage.contains(it) }) return true
+        // 过滤标题含"服务"且无内容的常驻通知（如"XX服务正在运行"）
+        if (title.contains("服务") && text.isBlank()) return true
+        return false
+    }
+
+    /**
      * 启动通知监控
      */
     fun start(context: Context, sessionData: SessionData): Boolean {
@@ -127,6 +152,9 @@ object NotificationMonitorManager {
                     showToast(appContext, "通知监控连接失败: $errorMsg")
                     stop(appContext)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 协程被正常取消（关闭通知监控），不显示错误
+                throw e
             } catch (e: Exception) {
                 LogManager.e(LogTags.CONTROL_VM, "通知监控异常: ${e.message}", e)
                 showToast(appContext, "通知监控异常: ${e.message}")
@@ -289,6 +317,12 @@ object NotificationMonitorManager {
 
             // 跳过没有标题和内容的通知（可能是进行中的通知）
             if (title.isBlank() && text.isBlank()) continue
+
+            // 过滤系统服务通知（如剪贴板服务），保留短信、电话等重要通知
+            if (isBlockedNotification(packageName, title, text)) {
+                LogManager.d(LogTags.CONTROL_VM, "通知监控过滤系统服务通知: $packageName | $title")
+                continue
+            }
 
             notifications.add(
                 DeviceNotification(
