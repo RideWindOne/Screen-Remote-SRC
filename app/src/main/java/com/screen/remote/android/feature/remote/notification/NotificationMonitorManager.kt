@@ -70,6 +70,11 @@ object NotificationMonitorManager {
     private val knownNotificationKeys = mutableSetOf<String>()
     private val lastNotificationContent = mutableMapOf<String, String>()
     private var isFirstPoll = true
+    private var currentSessionData: SessionData? = null
+    private var consecutiveFailures = 0
+    private val MAX_CONSECUTIVE_FAILURES = 3
+    private val MAX_RECONNECT_ATTEMPTS = 5
+    private var reconnectAttempts = 0
 
     /**
      * 需要过滤的系统服务包名关键词
@@ -115,9 +120,12 @@ object NotificationMonitorManager {
         isRunning = true
         monitoringSessionId = sessionData.id
         currentDeviceName = sessionData.name
+        currentSessionData = sessionData
         isFirstPoll = true
         knownNotificationKeys.clear()
         lastNotificationContent.clear()
+        consecutiveFailures = 0
+        reconnectAttempts = 0
 
         // 显示前台服务通知（保持后台运行）
         showForegroundNotification(appContext, sessionData.name)
@@ -233,6 +241,14 @@ object NotificationMonitorManager {
             try {
                 val connection = adbManager.getConnection(deviceId)
                 if (connection == null) {
+                    consecutiveFailures++
+                    LogManager.w(LogTags.CONTROL_VM, "通知监控: ADB 连接为空，连续失败 $consecutiveFailures 次")
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        if (attemptReconnect(context)) {
+                            consecutiveFailures = 0
+                            reconnectAttempts = 0
+                        }
+                    }
                     delay(POLL_INTERVAL_MS)
                     continue
                 }
@@ -241,6 +257,8 @@ object NotificationMonitorManager {
                 val output = result.getOrNull()
 
                 if (output != null) {
+                    consecutiveFailures = 0
+                    reconnectAttempts = 0
                     val notifications = parseNotifications(output)
                     LogManager.d(LogTags.CONTROL_VM, "通知监控轮询: 输出长度=${output.length}, 解析到通知=${notifications.size}, 已知keys=${knownNotificationKeys.size}")
 
@@ -283,13 +301,99 @@ object NotificationMonitorManager {
                         lastNotificationContent.keys.retainAll(currentKeys)
                     }
                 } else {
-                    LogManager.w(LogTags.CONTROL_VM, "通知监控轮询: dumpsys 输出为空")
+                    consecutiveFailures++
+                    LogManager.w(LogTags.CONTROL_VM, "通知监控轮询: dumpsys 输出为空，连续失败 $consecutiveFailures 次")
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        if (attemptReconnect(context)) {
+                            consecutiveFailures = 0
+                            reconnectAttempts = 0
+                        }
+                    }
                 }
-            } catch (_: Exception) {
-                // 忽略单次轮询错误
+            } catch (e: Exception) {
+                consecutiveFailures++
+                LogManager.w(LogTags.CONTROL_VM, "通知监控轮询异常: ${e.message}，连续失败 $consecutiveFailures 次")
+                if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                    if (attemptReconnect(context)) {
+                        consecutiveFailures = 0
+                        reconnectAttempts = 0
+                    }
+                }
             }
 
             delay(POLL_INTERVAL_MS)
+        }
+    }
+
+    /**
+     * 尝试重新连接 ADB
+     * @return true 表示重连成功，false 表示重连失败
+     */
+    private suspend fun attemptReconnect(context: Context): Boolean {
+        val sessionData = currentSessionData ?: return false
+        reconnectAttempts++
+
+        if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+            LogManager.e(LogTags.CONTROL_VM, "通知监控: 重连次数超过上限 $MAX_RECONNECT_ATTEMPTS，停止监控")
+            showToast(context, "通知监控连接失败，已停止（${currentDeviceName ?: "设备"}）")
+            stop(context)
+            return false
+        }
+
+        LogManager.d(LogTags.CONTROL_VM, "通知监控: 尝试第 $reconnectAttempts 次重连 ${sessionData.name}")
+        updateForegroundNotification(context, "${currentDeviceName ?: "设备"} - 正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）")
+        showToast(context, "通知监控连接断开，正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）...")
+
+        // 断开旧连接
+        val oldDeviceId = connectedDeviceId
+        if (oldDeviceId != null) {
+            try {
+                AdbConnectionManager.getInstance(context.applicationContext).disconnectDevice(oldDeviceId)
+            } catch (_: Exception) {}
+        }
+        connectedDeviceId = null
+
+        // 重新建立连接（复用 start 中的连接逻辑）
+        val adbManager = AdbConnectionManager.getInstance(context.applicationContext)
+        val candidates = sessionData.toConnectionCandidates().sortedBy { it.priority }
+
+        var connectedId: String? = null
+        var lastError: Throwable? = null
+
+        for (candidate in candidates) {
+            if (!isRunning) return false
+            if (candidate.transport == ConnectionTransport.USB) {
+                continue
+            }
+            try {
+                val result = adbManager.connectCandidate(
+                    candidate = candidate,
+                    deviceName = sessionData.name,
+                )
+                if (result.isSuccess) {
+                    connectedId = result.getOrNull()?.deviceId
+                    LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功: $connectedId")
+                    break
+                } else {
+                    lastError = result.exceptionOrNull()
+                }
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+
+        if (connectedId != null) {
+            connectedDeviceId = connectedId
+            isFirstPoll = true
+            knownNotificationKeys.clear()
+            lastNotificationContent.clear()
+            updateForegroundNotification(context, currentDeviceName ?: "设备")
+            showToast(context, "通知监控已恢复（${currentDeviceName ?: "设备"}）")
+            LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功，恢复监控")
+            return true
+        } else {
+            LogManager.w(LogTags.CONTROL_VM, "通知监控重连失败: ${lastError?.message}")
+            return false
         }
     }
 
@@ -454,6 +558,25 @@ object NotificationMonitorManager {
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("通知监控运行中")
             .setContentText("正在监控 $deviceName 的通知")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setSilent(true)
+
+        notificationManager.notify(FOREGROUND_NOTIFICATION_ID, builder.build())
+    }
+
+    /**
+     * 更新前台服务通知内容（用于显示重连状态等）
+     */
+    private fun updateForegroundNotification(context: Context, contentText: String) {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ensureNotificationChannel(notificationManager)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle("通知监控运行中")
+            .setContentText(contentText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setSilent(true)
