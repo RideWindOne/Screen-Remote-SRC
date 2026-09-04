@@ -25,14 +25,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.common.util.DeviceTransportSerial
+import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.data.repository.SessionData
+import com.screen.remote.android.core.domain.model.AppSettings
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.domain.model.SessionColor
 import com.screen.remote.android.core.i18n.SessionTexts
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
+import com.screen.remote.android.feature.remote.notification.NotificationMonitorManager
 import com.screen.remote.android.feature.session.viewmodel.MainViewModel
 import com.screen.remote.android.feature.session.viewmodel.ManagementConnectStatus
+import com.screen.remote.android.feature.settings.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
 import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as AlertDialog
 
@@ -43,6 +47,12 @@ fun SessionsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val preferencesManager = remember { PreferencesManager(context) }
+    val settingsViewModel: SettingsViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel(
+            factory = SettingsViewModel.provideFactory(preferencesManager),
+        )
+    val settings by settingsViewModel.settings.collectAsState()
     val filteredSessions by viewModel.filteredSessions.collectAsState()
     val connectStatus by viewModel.connectStatus.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
@@ -142,6 +152,13 @@ fun SessionsScreen(
                         },
                         onDelete = {
                             sessionToDelete = sessionCardModel(sessionData, isConnected = false)
+                        },
+                        isNotificationMonitoring = NotificationMonitorManager.monitoringSessionId == sessionData.id,
+                        onStartNotificationMonitor = {
+                            NotificationMonitorManager.start(context, sessionData)
+                        },
+                        onStopNotificationMonitor = {
+                            NotificationMonitorManager.stop(context)
                         },
                     )
                 }
