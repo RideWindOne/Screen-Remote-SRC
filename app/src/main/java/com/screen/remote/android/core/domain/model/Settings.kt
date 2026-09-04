@@ -48,7 +48,6 @@ data class AppSettings(
     val enableFloatingHapticFeedback: Boolean = true,
     val allowScreenCapture: Boolean = true,
     val showPerformanceStats: Boolean = false,
-    val enableNotificationMonitor: Boolean = false,
     val autoCheckUpdates: Boolean = true,
     val updateChannel: UpdateChannel = UpdateChannel.STABLE,
     val customShellCommands: List<CustomShellCommand> = emptyList(),

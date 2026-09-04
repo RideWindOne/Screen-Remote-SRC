@@ -159,15 +159,6 @@ private fun GeneralSettingsSection(
             },
         )
         SettingsDivider()
-        SettingsSwitch(
-            title = "通知监控",
-            checked = settings.enableNotificationMonitor,
-            helpText = "远程控制时实时检测被控端消息通知并在控制端提示",
-            onCheckedChange = {
-                onUpdateSettings(settings.copy(enableNotificationMonitor = it))
-            },
-        )
-        SettingsDivider()
         SettingsItem(
             title = texts.language,
             onClick = onNavigateToLanguage,

@@ -26,6 +26,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
+ * 被控端通知信息
+ */
+data class DeviceNotification(
+    val key: String,
+    val packageName: String,
+    val title: String,
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis(),
+)
+
+/**
  * 独立通知监控管理器
  * 负责建立 ADB 连接、轮询被控端通知、保持连接活跃、发送系统通知
  */
