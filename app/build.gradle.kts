@@ -63,6 +63,7 @@ val appVersionName = requireStringProperty("VERSION_NAME")
 val appVersionCodeInt = appVersionCode.toInt()
 val appDisplayVersion = "$appVersionName.$appVersionCode"
 val appId = "com.screen.remote.android"
+val calcAppId = "com.screen.remote.calc"
 val scrcpyServerVersion = "4.1"
 val scrcpyServerSha256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"
 val telemetryBaseUrl =
@@ -109,10 +110,10 @@ android {
     namespace = appId
     compileSdk = 37
     buildToolsVersion = "37.0.0"
-    ndkVersion = "30.0.15729638"
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = appId
+        applicationId = calcAppId
         minSdk = 23
         targetSdk = 37
         versionCode = appVersionCodeInt

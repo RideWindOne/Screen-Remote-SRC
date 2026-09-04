@@ -47,6 +47,16 @@
         tools:targetApi="33">
 
         <activity
+            android:name=".app.CalculatorActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ScreenRemote">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".app.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:enableOnBackInvokedCallback="true"
@@ -54,10 +64,6 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.ScreenRemote"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 

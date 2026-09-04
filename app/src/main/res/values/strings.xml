@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Android 系统必需：应用名称 -->
-    <string name="app_name">Screen Remote</string>
+    <string name="app_name">简易计算器</string>
     <string name="floating_menu_upload">Upload</string>
     <string name="floating_menu_layout_inspector">Layout Inspector</string>
     <string name="floating_menu_adapt_device_resolution">Adapt device resolution</string>

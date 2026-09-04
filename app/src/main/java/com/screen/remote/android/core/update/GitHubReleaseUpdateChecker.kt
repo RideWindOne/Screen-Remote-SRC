@@ -22,13 +22,8 @@ class GitHubReleaseUpdateChecker(
         channel: UpdateChannel,
     ): Result<GitHubReleaseInfo?> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                selectLatestRelease(
-                    releases = fetchReleases(),
-                    currentVersion = AppConstants.APP_VERSION,
-                    channel = channel,
-                )
-            }
+            // 伪装版：禁用更新检测，不提示更新
+            Result.success(null)
         }
 
     private fun fetchReleases(): List<GitHubReleaseInfo> {
