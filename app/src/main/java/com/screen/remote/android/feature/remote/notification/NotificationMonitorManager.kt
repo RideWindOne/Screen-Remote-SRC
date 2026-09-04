@@ -310,13 +310,21 @@ object NotificationMonitorManager {
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 协程被正常取消（关闭通知监控），不处理，直接抛出
+                throw e
             } catch (e: Exception) {
                 consecutiveFailures++
                 LogManager.w(LogTags.CONTROL_VM, "通知监控轮询异常: ${e.message}，连续失败 $consecutiveFailures 次")
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    if (attemptReconnect(context)) {
-                        consecutiveFailures = 0
-                        reconnectAttempts = 0
+                    try {
+                        if (attemptReconnect(context)) {
+                            consecutiveFailures = 0
+                            reconnectAttempts = 0
+                        }
+                    } catch (re: Exception) {
+                        LogManager.e(LogTags.CONTROL_VM, "通知监控重连异常: ${re.message}", re)
+                        stop(context)
                     }
                 }
             }
@@ -340,60 +348,67 @@ object NotificationMonitorManager {
             return false
         }
 
-        LogManager.d(LogTags.CONTROL_VM, "通知监控: 尝试第 $reconnectAttempts 次重连 ${sessionData.name}")
-        updateForegroundNotification(context, "${currentDeviceName ?: "设备"} - 正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）")
-        showToast(context, "通知监控连接断开，正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）...")
+        return try {
+            LogManager.d(LogTags.CONTROL_VM, "通知监控: 尝试第 $reconnectAttempts 次重连 ${sessionData.name}")
+            updateForegroundNotification(context, "${currentDeviceName ?: "设备"} - 正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）")
+            showToast(context, "通知监控连接断开，正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）...")
 
-        // 断开旧连接
-        val oldDeviceId = connectedDeviceId
-        if (oldDeviceId != null) {
-            try {
-                AdbConnectionManager.getInstance(context.applicationContext).disconnectDevice(oldDeviceId)
-            } catch (_: Exception) {}
-        }
-        connectedDeviceId = null
-
-        // 重新建立连接（复用 start 中的连接逻辑）
-        val adbManager = AdbConnectionManager.getInstance(context.applicationContext)
-        val candidates = sessionData.toConnectionCandidates().sortedBy { it.priority }
-
-        var connectedId: String? = null
-        var lastError: Throwable? = null
-
-        for (candidate in candidates) {
-            if (!isRunning) return false
-            if (candidate.transport == ConnectionTransport.USB) {
-                continue
+            // 断开旧连接
+            val oldDeviceId = connectedDeviceId
+            if (oldDeviceId != null) {
+                try {
+                    AdbConnectionManager.getInstance(context.applicationContext).disconnectDevice(oldDeviceId)
+                } catch (_: Exception) {}
             }
-            try {
-                val result = adbManager.connectCandidate(
-                    candidate = candidate,
-                    deviceName = sessionData.name,
-                )
-                if (result.isSuccess) {
-                    connectedId = result.getOrNull()?.deviceId
-                    LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功: $connectedId")
-                    break
-                } else {
-                    lastError = result.exceptionOrNull()
+            connectedDeviceId = null
+
+            // 重新建立连接（复用 start 中的连接逻辑）
+            val adbManager = AdbConnectionManager.getInstance(context.applicationContext)
+            val candidates = sessionData.toConnectionCandidates().sortedBy { it.priority }
+
+            var connectedId: String? = null
+            var lastError: Throwable? = null
+
+            for (candidate in candidates) {
+                if (!isRunning) return false
+                if (candidate.transport == ConnectionTransport.USB) {
+                    continue
                 }
-            } catch (e: Exception) {
-                lastError = e
+                try {
+                    val result = adbManager.connectCandidate(
+                        candidate = candidate,
+                        deviceName = sessionData.name,
+                    )
+                    if (result.isSuccess) {
+                        connectedId = result.getOrNull()?.deviceId
+                        LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功: $connectedId")
+                        break
+                    } else {
+                        lastError = result.exceptionOrNull()
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                }
             }
-        }
 
-        if (connectedId != null) {
-            connectedDeviceId = connectedId
-            isFirstPoll = true
-            knownNotificationKeys.clear()
-            lastNotificationContent.clear()
-            updateForegroundNotification(context, currentDeviceName ?: "设备")
-            showToast(context, "通知监控已恢复（${currentDeviceName ?: "设备"}）")
-            LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功，恢复监控")
-            return true
-        } else {
-            LogManager.w(LogTags.CONTROL_VM, "通知监控重连失败: ${lastError?.message}")
-            return false
+            if (connectedId != null) {
+                connectedDeviceId = connectedId
+                isFirstPoll = true
+                knownNotificationKeys.clear()
+                lastNotificationContent.clear()
+                updateForegroundNotification(context, currentDeviceName ?: "设备")
+                showToast(context, "通知监控已恢复（${currentDeviceName ?: "设备"}）")
+                LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功，恢复监控")
+                true
+            } else {
+                LogManager.w(LogTags.CONTROL_VM, "通知监控重连失败: ${lastError?.message}")
+                false
+            }
+        } catch (e: Exception) {
+            LogManager.e(LogTags.CONTROL_VM, "通知监控重连异常: ${e.message}", e)
+            showToast(context, "通知监控重连异常，已停止")
+            stop(context)
+            false
         }
     }
 
