@@ -67,6 +67,9 @@ import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHand
 import com.screen.remote.android.feature.remote.input.RemoteHardwareKeyEventHost
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutNode
 import com.screen.remote.android.feature.remote.model.RemoteUiLayoutSnapshot
+import com.screen.remote.android.feature.remote.notification.DeviceNotification
+import com.screen.remote.android.feature.remote.notification.NotificationMonitor
+import com.screen.remote.android.feature.remote.notification.NotificationOverlay
 import com.screen.remote.android.feature.remote.presentation.ConnectStatus
 import com.screen.remote.android.feature.remote.presentation.ConnectionViewModel
 import com.screen.remote.android.feature.remote.presentation.ControlViewModel
@@ -231,6 +234,8 @@ private data class RemoteDisplayScreenRouteState(
     val videoWidth: Int,
     val videoHeight: Int,
     val onVideoMetricsChanged: (Int, Int, Float) -> Unit,
+    val currentNotification: DeviceNotification?,
+    val onNotificationDismiss: () -> Unit,
 )
 
 @SuppressLint("ClickableViewAccessibility", "ConfigurationScreenWidthHeight")
@@ -340,6 +345,18 @@ private fun rememberRemoteDisplayScreenRouteState(
     var videoHeight by remember { mutableIntStateOf(0) }
     val deviceResolutionAdaptedState = remember { mutableStateOf(false) }
 
+    // ============ 通知监控 ============
+    var currentNotification by remember { mutableStateOf<DeviceNotification?>(null) }
+    val notificationMonitor = remember {
+        NotificationMonitor(
+            shellExecutor = { command -> controlViewModel.executeShellCommand(command) },
+            scope = scope,
+            onNewNotification = { notification ->
+                currentNotification = notification
+            },
+        )
+    }
+
     LaunchedEffect(resolvedSessionData?.config?.compatibilityMode, videoResolution) {
         if (resolvedSessionData?.config?.compatibilityMode == true) {
             videoResolution?.let { (width, height) ->
@@ -352,15 +369,21 @@ private fun rememberRemoteDisplayScreenRouteState(
         }
     }
 
-    LaunchedEffect(connectionState) {
+    LaunchedEffect(connectionState, settings.enableNotificationMonitor) {
         if (connectionState is ConnectionState.Connected) {
             controlViewModel.getTargetDisplayInfo()
                 .onSuccess { displayInfo ->
                     deviceResolutionAdaptedState.value =
                         isDisplayAdaptedToLocalDevice(displayInfo, context.resolveLocalDisplaySpec())
                 }
+            if (settings.enableNotificationMonitor) {
+                notificationMonitor.start(intervalMs = 3000)
+            } else {
+                notificationMonitor.stop()
+            }
         } else {
             deviceResolutionAdaptedState.value = false
+            notificationMonitor.stop()
         }
     }
 
@@ -568,6 +591,8 @@ private fun rememberRemoteDisplayScreenRouteState(
             videoHeight = height
             videoAspectRatio = aspectRatio
         },
+        currentNotification = currentNotification,
+        onNotificationDismiss = { currentNotification = null },
     )
 }
 
@@ -950,6 +975,14 @@ private fun RemoteDisplayScreenContent(
                         Modifier
                             .align(Alignment.TopStart)
                             .padding(8.dp),
+                )
+            }
+
+            // 通知监控覆盖层
+            if (routeState.settings.enableNotificationMonitor) {
+                NotificationOverlay(
+                    notification = routeState.currentNotification,
+                    onDismiss = routeState.onNotificationDismiss,
                 )
             }
 
