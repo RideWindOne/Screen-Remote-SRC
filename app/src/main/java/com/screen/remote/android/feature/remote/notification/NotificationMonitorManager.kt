@@ -24,6 +24,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * 被控端通知信息
@@ -54,12 +57,10 @@ object NotificationMonitorManager {
     @Volatile
     private var connectedDeviceId: String? = null
 
-    @Volatile
-    var isRunning: Boolean = false
+    var isRunning: Boolean by mutableStateOf(false)
         private set
 
-    @Volatile
-    var monitoringSessionId: String? = null
+    var monitoringSessionId: String? by mutableStateOf(null)
         private set
 
     @Volatile
@@ -97,9 +98,16 @@ object NotificationMonitorManager {
 
     /**
      * 启动通知监控
+     * 如果已有其他设备在监控，会先停止旧的再启动新的（自动切换）
      */
     fun start(context: Context, sessionData: SessionData): Boolean {
-        if (isRunning) return false
+        // 如果已经在监控同一个设备，不重复启动
+        if (isRunning && monitoringSessionId == sessionData.id) return false
+
+        // 如果正在监控其他设备，先停止旧的
+        if (isRunning) {
+            stop(context.applicationContext)
+        }
 
         val appContext = context.applicationContext
         val adbManager = AdbConnectionManager.getInstance(appContext)
