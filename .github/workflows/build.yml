@@ -78,8 +78,8 @@ jobs:
           VERSION_CODE=$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2)
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "release_tag=v$VERSION_NAME-$VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "apk_name=Screen-Remote-Calculator-v${VERSION_NAME}-${VERSION_CODE}.apk" >> $GITHUB_OUTPUT
+          echo "release_tag=$VERSION_NAME-$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "apk_name=Screen-Remote-Calculator-${VERSION_NAME}-${VERSION_CODE}.apk" >> $GITHUB_OUTPUT
 
       - name: Rename APK
         run: |
@@ -115,7 +115,7 @@ jobs:
             点击下方 Assets 中的 APK 文件下载安装。
           files: |
             app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}
-          prerelease: ${{ github.ref_name != 'main' && github.ref_name != 'master' }}
+          prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
