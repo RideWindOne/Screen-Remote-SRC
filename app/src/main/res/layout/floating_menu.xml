@@ -88,6 +88,20 @@
             android:paddingBottom="3dp"
             android:scaleType="centerInside"
             android:src="@drawable/ic_toolbar_reconnect" />
+
+        <ImageButton
+            android:id="@+id/btn_back_to_app"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/floating_menu_back_to_app"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_back_to_app" />
     </LinearLayout>
 
     <LinearLayout

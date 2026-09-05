@@ -462,6 +462,12 @@ internal class FloatingMenuMenuInteractionBinder(
             }
         }
 
+        menu.findViewById<ImageButton>(R.id.btn_back_to_app)?.let { button ->
+            bindSimpleButton(button, onHideMenu) {
+                actions.backToApp()
+            }
+        }
+
         menu.findViewById<ImageButton>(R.id.btn_menu)?.let { button ->
             button.setOnClickListener {
                 if (hapticEnabled) {

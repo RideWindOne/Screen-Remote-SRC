@@ -239,6 +239,7 @@ fun RemoteDisplayScreen(
     sessionId: String,
     mainViewModel: MainViewModel,
     onClose: () -> Unit,
+    onBackToApp: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -267,6 +268,7 @@ fun RemoteDisplayScreen(
             controlViewModel = controlViewModel,
             connectionViewModel = connectionViewModel,
             settingsViewModel = settingsViewModel,
+            onBackToApp = onBackToApp,
         )
 
     RemoteDisplayScreenEffects(
@@ -293,6 +295,7 @@ private fun rememberRemoteDisplayScreenRouteState(
     controlViewModel: ControlViewModel,
     connectionViewModel: ConnectionViewModel,
     settingsViewModel: SettingsViewModel,
+    onBackToApp: () -> Unit,
 ): RemoteDisplayScreenRouteState {
     val videoStream by connectionViewModel.getVideoStream().collectAsState()
     val compatibilityFrame by connectionViewModel.getCompatibilityFrame().collectAsState()
@@ -475,6 +478,9 @@ private fun rememberRemoteDisplayScreenRouteState(
                 },
                 reconnect = {
                     connectionViewModel.reconnectActiveSession()
+                },
+                backToApp = {
+                    onBackToApp()
                 },
                 showKeyboardInput = {
                     showKeyboardInput = true

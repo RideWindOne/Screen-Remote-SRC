@@ -381,6 +381,10 @@ fun MainScreen(
                 viewModel.clearConnectStatus()
                 viewModel.disconnectFromDevice()
             },
+            onBackToApp = {
+                // 只清除连接状态，不断开连接，返回应用主界面
+                viewModel.clearConnectStatus()
+            },
         )
         return
     }
