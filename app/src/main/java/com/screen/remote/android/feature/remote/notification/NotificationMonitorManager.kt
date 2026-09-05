@@ -517,6 +517,8 @@ object NotificationMonitorManager {
         sessionData: SessionData,
         blockSystemNotifications: Boolean = true,
     ): List<DeviceNotification> {
+        // 同步成员变量，确保 isBlockedNotification 使用正确的设置
+        this.blockSystemNotifications = blockSystemNotifications
         val appContext = context.applicationContext
         val adbManager = AdbConnectionManager.getInstance(appContext)
 
