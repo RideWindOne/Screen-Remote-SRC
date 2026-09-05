@@ -318,7 +318,10 @@ object NotificationMonitorManager {
 
         while (isRunning) {
             try {
-                val connection = adbManager.getConnection(deviceId)
+                // 使用 connectedDeviceId 成员变量，而不是传入的 deviceId 参数
+                // 因为重连后 connectedDeviceId 会更新为新连接，而 deviceId 参数还是旧的
+                val currentDeviceId = connectedDeviceId
+                val connection = currentDeviceId?.let { adbManager.getConnection(it) }
                 if (connection == null) {
                     consecutiveFailures++
                     LogManager.w(LogTags.CONTROL_VM, "通知监控: ADB 连接为空，连续失败 $consecutiveFailures 次")
