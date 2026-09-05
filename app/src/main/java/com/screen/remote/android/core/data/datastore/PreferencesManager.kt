@@ -48,6 +48,7 @@ class PreferencesManager(
         val CUSTOM_SHELL_COMMANDS = stringPreferencesKey("custom_shell_commands")
         val REPLACE_DEFAULT_SHELL_COMMANDS = booleanPreferencesKey("replace_default_shell_commands")
         val NOTIFY_ALL_NOTIFICATIONS_ON_START = booleanPreferencesKey("notify_all_notifications_on_start")
+        val BLOCK_SYSTEM_NOTIFICATIONS = booleanPreferencesKey("block_system_notifications")
     }
 
     val lastSeenOnboardingVersionFlow: Flow<String?> =
@@ -135,6 +136,7 @@ class PreferencesManager(
                         .orEmpty(),
                 replaceDefaultShellCommands = preferences[Keys.REPLACE_DEFAULT_SHELL_COMMANDS] ?: false,
                 notifyAllNotificationsOnStart = preferences[Keys.NOTIFY_ALL_NOTIFICATIONS_ON_START] ?: false,
+                blockSystemNotifications = preferences[Keys.BLOCK_SYSTEM_NOTIFICATIONS] ?: true,
             )
         }
 
@@ -158,6 +160,7 @@ class PreferencesManager(
             preferences[Keys.CUSTOM_SHELL_COMMANDS] = Json.encodeToString(settings.customShellCommands)
             preferences[Keys.REPLACE_DEFAULT_SHELL_COMMANDS] = settings.replaceDefaultShellCommands
             preferences[Keys.NOTIFY_ALL_NOTIFICATIONS_ON_START] = settings.notifyAllNotificationsOnStart
+            preferences[Keys.BLOCK_SYSTEM_NOTIFICATIONS] = settings.blockSystemNotifications
         }
     }
 }

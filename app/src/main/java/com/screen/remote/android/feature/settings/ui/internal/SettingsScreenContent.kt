@@ -168,6 +168,15 @@ private fun GeneralSettingsSection(
             },
         )
         SettingsDivider()
+        SettingsSwitch(
+            title = "屏蔽系统通知",
+            checked = settings.blockSystemNotifications,
+            helpText = "开启后，屏蔽系统服务通知（如小米互联、跨屏协同等），保留微信、短信、电话等应用通知",
+            onCheckedChange = {
+                onUpdateSettings(settings.copy(blockSystemNotifications = it))
+            },
+        )
+        SettingsDivider()
         SettingsItem(
             title = texts.language,
             onClick = onNavigateToLanguage,

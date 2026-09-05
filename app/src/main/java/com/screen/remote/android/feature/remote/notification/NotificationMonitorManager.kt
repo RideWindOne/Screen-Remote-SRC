@@ -71,6 +71,7 @@ object NotificationMonitorManager {
     private val lastNotificationContent = mutableMapOf<String, String>()
     private var isFirstPoll = true
     private var notifyAllOnStart = false
+    private var blockSystemNotifications = true
     private var currentSessionData: SessionData? = null
     private var consecutiveFailures = 0
     private val MAX_CONSECUTIVE_FAILURES = 3
@@ -87,18 +88,86 @@ object NotificationMonitorManager {
     )
 
     /**
+     * 系统应用包名前缀（开启"屏蔽系统通知"时过滤）
+     */
+    private val SYSTEM_PACKAGE_PREFIXES = listOf(
+        // 小米/红米
+        "com.miui.",
+        "com.xiaomi.",
+        "com.milink.",
+        // 华为/荣耀
+        "com.huawei.",
+        "com.hihonor.",
+        "com.honor.",
+        // OPPO/一加/真我
+        "com.oppo.",
+        "com.coloros.",
+        "com.oneplus.",
+        "com.realme.",
+        "com.oplus.",
+        // vivo/iQOO
+        "com.vivo.",
+        "com.funtouch.",
+        "com.iqoo.",
+        // 三星
+        "com.samsung.",
+        // 魅族
+        "com.meizu.",
+        // 努比亚/红魔
+        "com.nubia.",
+        "com.redmagic.",
+        // 联想/摩托罗拉
+        "com.lenovo.",
+        "com.motorola.",
+        // 索尼
+        "com.sonymobile.",
+        "com.sony.",
+        // 系统核心服务
+        "com.android.systemui",
+        "com.android.settings",
+        "com.android.providers",
+        "com.android.server",
+        "android",
+    )
+
+    /**
+     * 需要保留的系统应用白名单（即使开启屏蔽系统通知也不过滤）
+     * 包括短信、电话等重要通知
+     */
+    private val ALLOWED_SYSTEM_PACKAGES = listOf(
+        "com.android.mms",           // 短信
+        "com.android.dialer",        // 电话
+        "com.android.server.telecom", // 电话服务
+        "com.android.incallui",      // 通话界面
+        "com.android.contacts",      // 联系人
+        "com.android.messaging",     // 信息
+        "com.google.android.gm",     // Gmail
+        "com.google.android.talk",   // Google Chat
+    )
+
+    /**
      * 判断是否为需要过滤的系统服务通知
      * 过滤规则：
      * 1. 包名包含系统服务关键词（如剪贴板服务）
      * 2. 标题包含"服务"且内容为空（系统常驻服务）
+     * 3. 如果开启了 blockSystemNotifications，过滤所有系统应用通知（保留白名单中的短信、电话等）
      * 保留：短信、电话、所有第三方应用通知
      */
     private fun isBlockedNotification(packageName: String, title: String, text: String): Boolean {
         val lowerPackage = packageName.lowercase()
-        // 过滤剪贴板等系统服务
+        // 过滤剪贴板等系统服务（始终过滤）
         if (BLOCKED_PACKAGE_KEYWORDS.any { lowerPackage.contains(it) }) return true
-        // 过滤标题含"服务"且无内容的常驻通知（如"XX服务正在运行"）
+        // 过滤标题含"服务"且无内容的常驻通知（如"XX服务正在运行"）（始终过滤）
         if (title.contains("服务") && text.isBlank()) return true
+
+        // 如果开启了屏蔽系统通知，过滤系统应用通知
+        if (blockSystemNotifications) {
+            // 白名单中的系统应用（短信、电话等）保留
+            if (ALLOWED_SYSTEM_PACKAGES.any { lowerPackage.startsWith(it.lowercase()) }) return false
+            // 其他系统应用过滤
+            if (SYSTEM_PACKAGE_PREFIXES.any { lowerPackage.startsWith(it.lowercase()) }) return true
+        }
+
         return false
     }
 
@@ -106,8 +175,14 @@ object NotificationMonitorManager {
      * 启动通知监控
      * 如果已有其他设备在监控，会先停止旧的再启动新的（自动切换）
      * @param notifyAllOnStart 打开时是否提示所有当前未读消息
+     * @param blockSystemNotifications 是否屏蔽系统服务通知
      */
-    fun start(context: Context, sessionData: SessionData, notifyAllOnStart: Boolean = false): Boolean {
+    fun start(
+        context: Context,
+        sessionData: SessionData,
+        notifyAllOnStart: Boolean = false,
+        blockSystemNotifications: Boolean = true,
+    ): Boolean {
         // 如果已经在监控同一个设备，不重复启动
         if (isRunning && monitoringSessionId == sessionData.id) return false
 
@@ -125,6 +200,7 @@ object NotificationMonitorManager {
         currentSessionData = sessionData
         isFirstPoll = true
         this.notifyAllOnStart = notifyAllOnStart
+        this.blockSystemNotifications = blockSystemNotifications
         knownNotificationKeys.clear()
         lastNotificationContent.clear()
         consecutiveFailures = 0
@@ -433,9 +509,14 @@ object NotificationMonitorManager {
     /**
      * 一次性查询被控端最近的通知（不启动持续监控）
      * 如果通知监控正在运行，复用现有连接；否则临时建立连接，查询完成后断开
+     * @param blockSystemNotifications 是否屏蔽系统服务通知
      * @return 通知列表，失败时返回空列表
      */
-    suspend fun queryNotifications(context: Context, sessionData: SessionData): List<DeviceNotification> {
+    suspend fun queryNotifications(
+        context: Context,
+        sessionData: SessionData,
+        blockSystemNotifications: Boolean = true,
+    ): List<DeviceNotification> {
         val appContext = context.applicationContext
         val adbManager = AdbConnectionManager.getInstance(appContext)
 
@@ -497,8 +578,14 @@ object NotificationMonitorManager {
 
         // 解析通知
         val notifications = parseNotifications(output)
-        LogManager.d(LogTags.CONTROL_VM, "查询通知: 解析到 ${notifications.size} 条通知")
-        return notifications
+        // 应用系统通知过滤
+        val filtered = if (blockSystemNotifications) {
+            notifications.filter { !isBlockedNotification(it.packageName, it.title, it.text) }
+        } else {
+            notifications
+        }
+        LogManager.d(LogTags.CONTROL_VM, "查询通知: 解析到 ${notifications.size} 条，过滤后 ${filtered.size} 条")
+        return filtered
     }
 
     /**

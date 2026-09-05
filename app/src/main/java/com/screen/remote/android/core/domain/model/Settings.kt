@@ -53,4 +53,5 @@ data class AppSettings(
     val customShellCommands: List<CustomShellCommand> = emptyList(),
     val replaceDefaultShellCommands: Boolean = false,
     val notifyAllNotificationsOnStart: Boolean = false,
+    val blockSystemNotifications: Boolean = true,
 )

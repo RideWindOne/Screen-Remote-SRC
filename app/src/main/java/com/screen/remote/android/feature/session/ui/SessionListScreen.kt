@@ -229,7 +229,12 @@ fun SessionsScreen(
                         },
                         isNotificationMonitoring = NotificationMonitorManager.monitoringSessionId == sessionData.id,
                         onStartNotificationMonitor = {
-                            NotificationMonitorManager.start(context, sessionData, settings.notifyAllNotificationsOnStart)
+                            NotificationMonitorManager.start(
+                                context,
+                                sessionData,
+                                settings.notifyAllNotificationsOnStart,
+                                settings.blockSystemNotifications,
+                            )
                         },
                         onStopNotificationMonitor = {
                             NotificationMonitorManager.stop(context)
@@ -239,7 +244,11 @@ fun SessionsScreen(
                             isQueryingNotifications = true
                             showQueryNotificationDialog = true
                             scope.launch {
-                                val result = NotificationMonitorManager.queryNotifications(context, sessionData)
+                                val result = NotificationMonitorManager.queryNotifications(
+                                    context,
+                                    sessionData,
+                                    settings.blockSystemNotifications,
+                                )
                                 queriedNotifications = result
                                 isQueryingNotifications = false
                             }
