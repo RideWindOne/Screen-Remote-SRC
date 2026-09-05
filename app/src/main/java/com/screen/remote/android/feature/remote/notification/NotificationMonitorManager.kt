@@ -447,6 +447,10 @@ object NotificationMonitorManager {
             updateForegroundNotification(context, "${currentDeviceName ?: "设备"} - 正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）")
             showToast(context, "通知监控连接断开，正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）...")
 
+            // 先停止旧的心跳
+            heartbeatJob?.cancel()
+            heartbeatJob = null
+
             // 断开旧连接
             val oldDeviceId = connectedDeviceId
             if (oldDeviceId != null) {
@@ -490,9 +494,11 @@ object NotificationMonitorManager {
                 isFirstPoll = true
                 knownNotificationKeys.clear()
                 lastNotificationContent.clear()
+                // 启动心跳保活（关键：重连后必须启动心跳，否则连接很快又会断开）
+                startHeartbeat(context, connectedId)
                 updateForegroundNotification(context, currentDeviceName ?: "设备")
                 showToast(context, "通知监控已恢复（${currentDeviceName ?: "设备"}）")
-                LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功，恢复监控")
+                LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功，恢复监控，心跳已启动")
                 true
             } else {
                 LogManager.w(LogTags.CONTROL_VM, "通知监控重连失败: ${lastError?.message}")
