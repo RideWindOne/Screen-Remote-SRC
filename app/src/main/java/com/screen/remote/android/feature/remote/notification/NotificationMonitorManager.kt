@@ -301,8 +301,8 @@ object NotificationMonitorManager {
         }
         connectedDeviceId = null
 
-        // 取消前台通知
-        cancelForegroundNotification(context.applicationContext)
+        // 取消前台通知和所有系统消息通知
+        cleanupResidualNotifications(context.applicationContext)
 
         // 提示已停止
         showToast(context.applicationContext, "通知监控已停止${deviceName?.let { "（$it）" } ?: ""}")
@@ -781,6 +781,18 @@ object NotificationMonitorManager {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(FOREGROUND_NOTIFICATION_ID)
+    }
+
+    /**
+     * 清理所有通知监控相关的通知（前台服务通知 + 系统消息通知）
+     * 用于应用启动时清理闪退后残留的通知
+     */
+    fun cleanupResidualNotifications(context: Context) {
+        val notificationManager =
+            context.applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 取消当前应用的所有通知（通知监控的通知都在本应用中）
+        notificationManager.cancelAll()
+        LogManager.d(LogTags.CONTROL_VM, "应用启动，清理残留通知")
     }
 
     private fun ensureNotificationChannel(notificationManager: NotificationManager) {

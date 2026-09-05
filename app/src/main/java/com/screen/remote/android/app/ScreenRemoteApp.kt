@@ -9,6 +9,7 @@ import com.screen.remote.android.core.data.datastore.PreferencesManager
 import com.screen.remote.android.core.telemetry.TelemetryJournal
 import com.screen.remote.android.core.telemetry.TelemetryManager
 import com.screen.remote.android.core.telemetry.TelemetryPreferences
+import com.screen.remote.android.feature.remote.notification.NotificationMonitorManager
 import com.screen.remote.android.infrastructure.adb.AdbRuntimeProvider
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
 import com.screen.remote.android.infrastructure.adb.key.core.adb.AdbKeyManager
@@ -29,6 +30,9 @@ class ScreenRemoteApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        // 清理闪退后残留的通知监控通知
+        NotificationMonitorManager.cleanupResidualNotifications(this)
 
         // 初始化日志管理器（启用文件日志）
         LogManager.init(this, true)
