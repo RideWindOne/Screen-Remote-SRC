@@ -79,7 +79,7 @@ jobs:
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "release_tag=$VERSION_NAME-$VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "apk_name=Screen-Remote-Calculator-${VERSION_NAME}-${VERSION_CODE}.apk" >> $GITHUB_OUTPUT
+          echo "apk_name=Screen-Remote-Calculator-arm64-v8a-${VERSION_NAME}-${VERSION_CODE}.apk" >> $GITHUB_OUTPUT
 
       - name: Rename APK
         run: |
