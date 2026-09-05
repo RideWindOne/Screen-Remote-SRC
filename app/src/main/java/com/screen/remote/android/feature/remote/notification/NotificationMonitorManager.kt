@@ -529,12 +529,13 @@ object NotificationMonitorManager {
         val appContext = context.applicationContext
         val adbManager = AdbConnectionManager.getInstance(appContext)
 
-        // 尝试使用现有连接
+        // 尝试使用现有连接（仅当连接属于当前查询的设备时才复用）
         var deviceId = connectedDeviceId
         var shouldDisconnect = false
+        val isCurrentDeviceMonitored = monitoringSessionId == sessionData.id
 
-        // 如果没有现有连接或连接已失效，临时建立连接
-        if (deviceId == null || adbManager.getConnection(deviceId) == null) {
+        // 如果没有现有连接、连接不属于当前设备、或连接已失效，临时建立连接
+        if (deviceId == null || !isCurrentDeviceMonitored || adbManager.getConnection(deviceId) == null) {
             val candidates = sessionData.toConnectionCandidates().sortedBy { it.priority }
             for (candidate in candidates) {
                 if (candidate.transport == ConnectionTransport.USB) continue
@@ -546,13 +547,15 @@ object NotificationMonitorManager {
                     if (result.isSuccess) {
                         deviceId = result.getOrNull()?.deviceId
                         shouldDisconnect = true
-                        LogManager.d(LogTags.CONTROL_VM, "查询通知: 临时连接成功 $deviceId")
+                        LogManager.d(LogTags.CONTROL_VM, "查询通知: 临时连接成功 $deviceId (设备=${sessionData.name})")
                         break
                     }
                 } catch (e: Exception) {
                     LogManager.w(LogTags.CONTROL_VM, "查询通知: 连接候选失败 ${e.message}")
                 }
             }
+        } else {
+            LogManager.d(LogTags.CONTROL_VM, "查询通知: 复用通知监控现有连接 $deviceId (设备=${sessionData.name})")
         }
 
         if (deviceId == null) {
