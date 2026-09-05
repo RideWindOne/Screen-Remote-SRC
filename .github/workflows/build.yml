@@ -33,24 +33,21 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK components
-        run: |
-          sdkmanager "platforms;android-37"
-          sdkmanager "build-tools;37.0.0"
-          sdkmanager "ndk;29.0.14206865"
-          sdkmanager "cmake;3.22.1"
-
       - name: Accept licenses
         run: yes | sdkmanager --licenses || true
 
       - name: Create local.properties
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "ndk.dir=$ANDROID_HOME/ndk/29.0.14206865" >> local.properties
 
-      - name: Remove local JDK path from gradle.properties
+      - name: Configure Gradle for preview SDK
         run: |
+          # 移除本地 JDK 路径
           sed -i '/org.gradle.java.home/d' gradle.properties
+          # 启用预览版 SDK 自动下载（API 37 是预览版，需要 canary 频道）
+          echo "android.sdk.channel=3" >> gradle.properties
+          # 允许 Gradle 自动下载所需的 SDK、build-tools、NDK
+          echo "android.builder.sdkDownload=true" >> gradle.properties
 
       - name: Make gradlew executable
         run: chmod +x gradlew
