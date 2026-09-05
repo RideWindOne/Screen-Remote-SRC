@@ -413,6 +413,77 @@ object NotificationMonitorManager {
     }
 
     /**
+     * 一次性查询被控端最近的通知（不启动持续监控）
+     * 如果通知监控正在运行，复用现有连接；否则临时建立连接，查询完成后断开
+     * @return 通知列表，失败时返回空列表
+     */
+    suspend fun queryNotifications(context: Context, sessionData: SessionData): List<DeviceNotification> {
+        val appContext = context.applicationContext
+        val adbManager = AdbConnectionManager.getInstance(appContext)
+
+        // 尝试使用现有连接
+        var deviceId = connectedDeviceId
+        var shouldDisconnect = false
+
+        // 如果没有现有连接或连接已失效，临时建立连接
+        if (deviceId == null || adbManager.getConnection(deviceId) == null) {
+            val candidates = sessionData.toConnectionCandidates().sortedBy { it.priority }
+            for (candidate in candidates) {
+                if (candidate.transport == ConnectionTransport.USB) continue
+                try {
+                    val result = adbManager.connectCandidate(
+                        candidate = candidate,
+                        deviceName = sessionData.name,
+                    )
+                    if (result.isSuccess) {
+                        deviceId = result.getOrNull()?.deviceId
+                        shouldDisconnect = true
+                        LogManager.d(LogTags.CONTROL_VM, "查询通知: 临时连接成功 $deviceId")
+                        break
+                    }
+                } catch (e: Exception) {
+                    LogManager.w(LogTags.CONTROL_VM, "查询通知: 连接候选失败 ${e.message}")
+                }
+            }
+        }
+
+        if (deviceId == null) {
+            LogManager.w(LogTags.CONTROL_VM, "查询通知: 无法连接到 ${sessionData.name}")
+            return emptyList()
+        }
+
+        // 执行查询
+        val connection = adbManager.getConnection(deviceId)
+        if (connection == null) {
+            LogManager.w(LogTags.CONTROL_VM, "查询通知: 连接为空")
+            return emptyList()
+        }
+
+        val output = try {
+            val result = AdbShellManager.execute(connection, "dumpsys notification --noredact")
+            result.getOrNull()
+        } catch (e: Exception) {
+            LogManager.e(LogTags.CONTROL_VM, "查询通知: 执行命令失败 ${e.message}", e)
+            null
+        }
+
+        // 如果是临时建立的连接，查询完成后断开
+        if (shouldDisconnect) {
+            try {
+                adbManager.disconnectDevice(deviceId)
+                LogManager.d(LogTags.CONTROL_VM, "查询通知: 临时连接已断开")
+            } catch (_: Exception) {}
+        }
+
+        if (output == null) return emptyList()
+
+        // 解析通知
+        val notifications = parseNotifications(output)
+        LogManager.d(LogTags.CONTROL_VM, "查询通知: 解析到 ${notifications.size} 条通知")
+        return notifications
+    }
+
+    /**
      * 心跳保活
      */
     private fun startHeartbeat(context: Context, deviceId: String) {

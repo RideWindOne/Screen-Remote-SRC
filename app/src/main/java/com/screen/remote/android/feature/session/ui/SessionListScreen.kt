@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,6 +78,12 @@ fun SessionsScreen(
     val connectionResetFailed = rememberText(SessionTexts.SESSION_RESET_CONNECTION_FAILED)
     val sessionUrlCopied = rememberText(SessionTexts.SESSION_URL_COPIED)
 
+    // 查询通知相关状态
+    var showQueryNotificationDialog by remember { mutableStateOf(false) }
+    var isQueryingNotifications by remember { mutableStateOf(false) }
+    var queriedNotifications by remember { mutableStateOf<List<com.screen.remote.android.feature.remote.notification.DeviceNotification>>(emptyList()) }
+    var queryDeviceName by remember { mutableStateOf("") }
+
     SessionDeleteDialog(
         sessionToDelete = sessionToDelete,
         onConfirmDelete = { session ->
@@ -82,6 +92,70 @@ fun SessionsScreen(
         },
         onDismiss = { sessionToDelete = null },
     )
+
+    // 查询通知结果对话框
+    if (showQueryNotificationDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                showQueryNotificationDialog = false
+                queriedNotifications = emptyList()
+            },
+            title = {
+                Text(
+                    text = if (isQueryingNotifications) "正在查询 $queryDeviceName 的通知..." else "$queryDeviceName 的通知（${queriedNotifications.size}条）",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            },
+            text = {
+                if (isQueryingNotifications) {
+                    Text("请稍候，正在连接设备并查询通知...")
+                } else if (queriedNotifications.isEmpty()) {
+                    Text("暂无通知")
+                } else {
+                    androidx.compose.foundation.layout.Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        queriedNotifications.forEach { notification ->
+                            androidx.compose.foundation.layout.Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Text(
+                                    text = notification.title.ifBlank { "(无标题)" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                )
+                                if (notification.text.isNotBlank()) {
+                                    Text(
+                                        text = notification.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Text(
+                                    text = notification.packageName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                            androidx.compose.material3.HorizontalDivider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showQueryNotificationDialog = false
+                    queriedNotifications = emptyList()
+                }) {
+                    Text("关闭")
+                }
+            },
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (filteredSessions.isEmpty()) {
@@ -159,6 +233,16 @@ fun SessionsScreen(
                         },
                         onStopNotificationMonitor = {
                             NotificationMonitorManager.stop(context)
+                        },
+                        onQueryNotifications = {
+                            queryDeviceName = sessionData.name
+                            isQueryingNotifications = true
+                            showQueryNotificationDialog = true
+                            scope.launch {
+                                val result = NotificationMonitorManager.queryNotifications(context, sessionData)
+                                queriedNotifications = result
+                                isQueryingNotifications = false
+                            }
                         },
                     )
                 }

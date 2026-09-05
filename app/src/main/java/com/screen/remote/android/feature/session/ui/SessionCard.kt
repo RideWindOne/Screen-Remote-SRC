@@ -77,6 +77,7 @@ fun SessionCard(
     onDelete: () -> Unit = {},
     onStartNotificationMonitor: () -> Unit = {},
     onStopNotificationMonitor: () -> Unit = {},
+    onQueryNotifications: () -> Unit = {},
     isNotificationMonitoring: Boolean = false,
 ) {
     val cardColor = getCardColorByIndex(index)
@@ -232,6 +233,13 @@ fun SessionCard(
                                     showMenu = false
                                     onStopNotificationMonitor()
                                 }
+                            },
+                        )
+                        IOSStyledDropdownMenuItem(
+                            text = "查询通知",
+                            onClick = {
+                                showMenu = false
+                                onQueryNotifications()
                             },
                         )
                         IOSStyledDropdownMenuItem(
