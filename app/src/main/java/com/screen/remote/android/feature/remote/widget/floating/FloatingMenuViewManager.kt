@@ -394,6 +394,7 @@ internal class FloatingMenuMenuInteractionBinder(
         bindActionButton(menu, R.id.btn_back, 4, "Failed to send the Back key", onHideMenu)
         bindActionButton(menu, R.id.btn_home, 3, "Failed to send the Home key", onHideMenu)
         bindActionButton(menu, R.id.btn_recent, 187, "Failed to send the Recents key", onHideMenu)
+        bindActionButton(menu, R.id.btn_lock_screen, 26, "Failed to send the Power key", onHideMenu)
 
         menu.findViewById<ImageButton>(R.id.btn_rotate_target)?.let { button ->
             bindSimpleButton(button, onHideMenu) {

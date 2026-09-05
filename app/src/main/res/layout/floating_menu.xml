@@ -116,6 +116,17 @@
             android:src="@drawable/ic_toolbar_switch" />
 
         <ImageButton
+            android:id="@+id/btn_lock_screen"
+            android:layout_width="40.dp"
+            android:layout_height="40.dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/floating_menu_lock_screen"
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_lock" />
+
+        <ImageButton
             android:id="@+id/btn_keyboard"
             android:layout_width="40.dp"
             android:layout_height="40.dp"

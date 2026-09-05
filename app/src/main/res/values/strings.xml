@@ -9,6 +9,7 @@
     <string name="floating_menu_back">Back</string>
     <string name="floating_menu_home">Home</string>
     <string name="floating_menu_recents">Recents</string>
+    <string name="floating_menu_lock_screen">Lock screen</string>
     <string name="floating_menu_keyboard">Keyboard</string>
     <string name="floating_menu_options">Options</string>
     <string name="floating_menu_disconnect">Disconnect</string>
