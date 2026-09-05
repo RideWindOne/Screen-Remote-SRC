@@ -9,6 +9,7 @@ import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager
 import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager.killProcess
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.cleanupOldResources
@@ -363,6 +364,23 @@ class ConnectionLifecycle(
                         LogTags.SCRCPY_CLIENT,
                         "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.english}: ${e.message}",
                     )
+                }
+
+                // 5. 恢复 stay_on_while_plugged_in 设置
+                // scrcpy 被强制杀死时可能无法恢复此设置，导致设备充电时屏幕常亮
+                try {
+                    val stayAwakeEnabled = sessionContext.currentSession()?.options?.config?.stayAwake ?: false
+                    if (stayAwakeEnabled) {
+                        AdbShellManager.execute(
+                            connectionSnapshot.adbConnection,
+                            "settings put system stay_on_while_plugged_in 0",
+                            retryOnFailure = false,
+                            reportToEventBus = false,
+                        )
+                        LogManager.d(LogTags.SCRCPY_CLIENT, "Restored stay_on_while_plugged_in to 0 after disconnect")
+                    }
+                } catch (e: Exception) {
+                    LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to restore stay_on_while_plugged_in: ${e.message}")
                 }
             }
 

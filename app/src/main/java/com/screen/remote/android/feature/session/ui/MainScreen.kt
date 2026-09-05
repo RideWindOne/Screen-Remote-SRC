@@ -125,6 +125,17 @@ private class MainScreenRouteState {
     var managementParameters by mutableStateOf<Map<String, String>>(emptyMap())
         private set
 
+    var remoteDisplayMinimized by mutableStateOf(false)
+        private set
+
+    fun minimizeRemoteDisplay() {
+        remoteDisplayMinimized = true
+    }
+
+    fun restoreRemoteDisplay() {
+        remoteDisplayMinimized = false
+    }
+
     fun openSettings() {
         openDevicePairingOnSettingsEntry = false
         devicePairingHostPort = ""
@@ -373,17 +384,18 @@ fun MainScreen(
         }
     }
 
-    if (connectedSessionId != null) {
+    if (connectedSessionId != null && !routeState.remoteDisplayMinimized) {
         RemoteDisplayScreen(
             sessionId = connectedSessionId!!,
             mainViewModel = viewModel,
             onClose = {
+                routeState.restoreRemoteDisplay()
                 viewModel.clearConnectStatus()
                 viewModel.disconnectFromDevice()
             },
             onBackToApp = {
-                // 只清除连接状态，不断开连接，返回应用主界面
-                viewModel.clearConnectStatus()
+                // 只最小化远程界面，不断开连接
+                routeState.minimizeRemoteDisplay()
             },
         )
         return
@@ -637,6 +649,9 @@ private fun MainScreenContent(
                     onManageSession = { sessionData ->
                         routeState.requestSessionManagement(sessionData.id)
                         viewModel.connectManagementSession(sessionData.id)
+                    },
+                    onResumeConnectedSession = {
+                        routeState.restoreRemoteDisplay()
                     },
                 )
             }

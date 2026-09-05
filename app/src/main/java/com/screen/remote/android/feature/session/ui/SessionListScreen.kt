@@ -48,6 +48,7 @@ import com.screen.remote.android.core.designsystem.component.IOSAlertDialog as A
 fun SessionsScreen(
     viewModel: MainViewModel,
     onManageSession: (SessionData) -> Unit = {},
+    onResumeConnectedSession: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -190,8 +191,20 @@ fun SessionsScreen(
                         displayTransport = badgeState.displayTransport,
                         isConnecting = isConnecting,
                         isResettingConnection = sessionData.id in resettingConnectionSessionIds,
-                        onClick = { viewModel.connectSession(sessionData.id) },
-                        onConnect = { viewModel.connectSession(sessionData.id) },
+                        onClick = {
+                            if (isRemoteConnected) {
+                                onResumeConnectedSession()
+                            } else {
+                                viewModel.connectSession(sessionData.id)
+                            }
+                        },
+                        onConnect = {
+                            if (isRemoteConnected) {
+                                onResumeConnectedSession()
+                            } else {
+                                viewModel.connectSession(sessionData.id)
+                            }
+                        },
                         onManage = { onManageSession(sessionData) },
                         onEdit = { viewModel.showEditSessionDialog(sessionData.id) },
                         onCopy = { data -> viewModel.copySession(data) },
