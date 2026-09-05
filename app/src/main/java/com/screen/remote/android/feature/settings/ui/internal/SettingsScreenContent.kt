@@ -159,6 +159,15 @@ private fun GeneralSettingsSection(
             },
         )
         SettingsDivider()
+        SettingsSwitch(
+            title = "打开通知时提示所有未读消息",
+            checked = settings.notifyAllNotificationsOnStart,
+            helpText = "开启后，打开通知监控时会提示当前所有未读消息；关闭后只提示之后新来的消息",
+            onCheckedChange = {
+                onUpdateSettings(settings.copy(notifyAllNotificationsOnStart = it))
+            },
+        )
+        SettingsDivider()
         SettingsItem(
             title = texts.language,
             onClick = onNavigateToLanguage,

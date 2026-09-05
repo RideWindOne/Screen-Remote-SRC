@@ -70,6 +70,7 @@ object NotificationMonitorManager {
     private val knownNotificationKeys = mutableSetOf<String>()
     private val lastNotificationContent = mutableMapOf<String, String>()
     private var isFirstPoll = true
+    private var notifyAllOnStart = false
     private var currentSessionData: SessionData? = null
     private var consecutiveFailures = 0
     private val MAX_CONSECUTIVE_FAILURES = 3
@@ -104,8 +105,9 @@ object NotificationMonitorManager {
     /**
      * 启动通知监控
      * 如果已有其他设备在监控，会先停止旧的再启动新的（自动切换）
+     * @param notifyAllOnStart 打开时是否提示所有当前未读消息
      */
-    fun start(context: Context, sessionData: SessionData): Boolean {
+    fun start(context: Context, sessionData: SessionData, notifyAllOnStart: Boolean = false): Boolean {
         // 如果已经在监控同一个设备，不重复启动
         if (isRunning && monitoringSessionId == sessionData.id) return false
 
@@ -122,6 +124,7 @@ object NotificationMonitorManager {
         currentDeviceName = sessionData.name
         currentSessionData = sessionData
         isFirstPoll = true
+        this.notifyAllOnStart = notifyAllOnStart
         knownNotificationKeys.clear()
         lastNotificationContent.clear()
         consecutiveFailures = 0
@@ -267,6 +270,21 @@ object NotificationMonitorManager {
                         notifications.forEach { lastNotificationContent[it.key] = "${it.title}|${it.text}" }
                         isFirstPoll = false
                         LogManager.d(LogTags.CONTROL_VM, "通知监控首次轮询，记录 ${notifications.size} 条已知通知")
+
+                        // 如果设置了打开时提示所有未读消息，则把当前所有通知都提示一遍
+                        if (notifyAllOnStart) {
+                            LogManager.d(LogTags.CONTROL_VM, "打开时提示所有未读消息，共 ${notifications.size} 条")
+                            notifications.forEach { notification ->
+                                if (!isBlockedNotification(notification.packageName, notification.title, notification.text)) {
+                                    sendSystemNotification(
+                                        context = context,
+                                        notificationManager = notificationManager,
+                                        deviceName = currentDeviceName ?: "设备",
+                                        notification = notification,
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         notifications.forEach { notification ->
                             val contentKey = "${notification.title}|${notification.text}"

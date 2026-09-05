@@ -229,7 +229,7 @@ fun SessionsScreen(
                         },
                         isNotificationMonitoring = NotificationMonitorManager.monitoringSessionId == sessionData.id,
                         onStartNotificationMonitor = {
-                            NotificationMonitorManager.start(context, sessionData)
+                            NotificationMonitorManager.start(context, sessionData, settings.notifyAllNotificationsOnStart)
                         },
                         onStopNotificationMonitor = {
                             NotificationMonitorManager.stop(context)
