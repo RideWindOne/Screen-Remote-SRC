@@ -25,13 +25,13 @@ jobs:
       - name: Checkout dadb (included build dependency)
         run: |
           mkdir -p ../external
-          # 尝试原作者的 fork（包含 dadb-helper 子项目）
-          if git clone --depth 1 https://github.com/XRSec/dadb.git ../external/dadb 2>/dev/null; then
-            echo "Cloned XRSec/dadb"
+          # 使用用户的 fork（包含传输优化：移除频繁flush）
+          if git clone --depth 1 https://github.com/RideWindOne/dadb.git ../external/dadb 2>/dev/null; then
+            echo "Cloned RideWindOne/dadb (with transfer optimization)"
           else
-            # 回退到官方仓库
-            git clone --depth 1 https://github.com/mobile-dev-inc/dadb.git ../external/dadb
-            echo "Cloned mobile-dev-inc/dadb"
+            # 回退到原作者的 fork
+            git clone --depth 1 https://github.com/XRSec/dadb.git ../external/dadb
+            echo "Cloned XRSec/dadb (fallback)"
           fi
           ls -la ../external/dadb/
 
