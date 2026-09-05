@@ -328,6 +328,17 @@ class AdbConnection(
         onProgressBytes: (Long) -> Unit = {},
     ): Result<Boolean> = AdbFileOperations.pushFile(dadb, localPath, remotePath, onProgressBytes)
 
+    /**
+     * 从输入流直接推送文件（跳过本地缓存，提升上传速度）
+     */
+    suspend fun pushStream(
+        inputStream: java.io.InputStream,
+        remotePath: String,
+        fileSize: Long,
+        lastModified: Long = System.currentTimeMillis(),
+        onProgressBytes: (Long) -> Unit = {},
+    ): Result<Boolean> = AdbFileOperations.pushStream(dadb, inputStream, remotePath, fileSize, lastModified, onProgressBytes)
+
     suspend fun pullFile(
         remotePath: String,
         localPath: String,
