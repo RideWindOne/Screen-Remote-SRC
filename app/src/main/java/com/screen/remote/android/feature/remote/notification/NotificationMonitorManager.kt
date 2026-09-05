@@ -47,8 +47,10 @@ object NotificationMonitorManager {
     private const val CHANNEL_ID = "notification_monitor_channel"
     private const val CHANNEL_NAME = "通知监控"
     private const val FOREGROUND_NOTIFICATION_ID = 772373
+    // 轮询间隔保持3秒，保证通知实时性
     private const val POLL_INTERVAL_MS = 3000L
-    private const val HEARTBEAT_INTERVAL_MS = 10000L
+    // 心跳间隔从10秒增加到30秒，ADB连接不需要频繁心跳
+    private const val HEARTBEAT_INTERVAL_MS = 30000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitorJob: Job? = null
@@ -343,7 +345,8 @@ object NotificationMonitorManager {
                     consecutiveFailures = 0
                     reconnectAttempts = 0
                     val notifications = parseNotifications(output)
-                    LogManager.d(LogTags.CONTROL_VM, "通知监控轮询: 输出长度=${output.length}, 解析到通知=${notifications.size}, 已知keys=${knownNotificationKeys.size}")
+                    // 优化耗电：只在有新通知时记录详细日志
+                    LogManager.d(LogTags.CONTROL_VM, "通知监控轮询: 输出长度=${output.length}, 解析到通知=${notifications.size}")
 
                     if (isFirstPoll) {
                         knownNotificationKeys.addAll(notifications.map { it.key })
