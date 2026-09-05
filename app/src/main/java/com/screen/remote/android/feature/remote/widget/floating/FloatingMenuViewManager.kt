@@ -454,6 +454,14 @@ internal class FloatingMenuMenuInteractionBinder(
             }
         }
 
+        menu.findViewById<ImageButton>(R.id.btn_reconnect)?.let { button ->
+            bindSimpleButton(button, onHideMenu) {
+                scope.launch {
+                    actions.reconnect()
+                }
+            }
+        }
+
         menu.findViewById<ImageButton>(R.id.btn_menu)?.let { button ->
             button.setOnClickListener {
                 if (hapticEnabled) {

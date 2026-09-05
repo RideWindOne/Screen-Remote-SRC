@@ -18,6 +18,7 @@ data class FloatingMenuActions(
     val toggleDeviceResolutionAdaptation: suspend () -> Result<Boolean>,
     val isDeviceResolutionAdapted: () -> Boolean,
     val disconnect: suspend () -> Unit,
+    val reconnect: suspend () -> Unit,
     val showKeyboardInput: () -> Unit,
     val requestUploadFilePicker: () -> Unit,
     val requestLayoutInspectorRender: () -> Unit,

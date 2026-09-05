@@ -74,6 +74,20 @@
             android:paddingBottom="3dp"
             android:scaleType="centerInside"
             android:src="@drawable/ic_toolbar_resolution" />
+
+        <ImageButton
+            android:id="@+id/btn_reconnect"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/floating_menu_reconnect"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_reconnect" />
     </LinearLayout>
 
     <LinearLayout

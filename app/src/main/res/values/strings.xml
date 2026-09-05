@@ -5,6 +5,7 @@
     <string name="floating_menu_upload">Upload</string>
     <string name="floating_menu_layout_inspector">Layout Inspector</string>
     <string name="floating_menu_adapt_device_resolution">Adapt device resolution</string>
+    <string name="floating_menu_reconnect">Reconnect</string>
     <string name="floating_menu_rotate_target">Rotate target device</string>
     <string name="floating_menu_back">Back</string>
     <string name="floating_menu_home">Home</string>

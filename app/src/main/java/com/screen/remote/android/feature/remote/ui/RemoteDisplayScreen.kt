@@ -473,6 +473,9 @@ private fun rememberRemoteDisplayScreenRouteState(
                     connectionViewModel.clearConnectStatus()
                     connectionViewModel.disconnectFromDevice()
                 },
+                reconnect = {
+                    connectionViewModel.reconnectActiveSession()
+                },
                 showKeyboardInput = {
                     showKeyboardInput = true
                     keyboardRequestToken += 1
