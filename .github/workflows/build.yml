@@ -22,7 +22,15 @@ jobs:
       - name: Checkout dadb (included build dependency)
         run: |
           mkdir -p ../external
-          git clone --depth 1 https://github.com/mobile-dev-inc/dadb.git ../external/dadb
+          # 尝试原作者的 fork（包含 dadb-helper 子项目）
+          if git clone --depth 1 https://github.com/XRSec/dadb.git ../external/dadb 2>/dev/null; then
+            echo "Cloned XRSec/dadb"
+          else
+            # 回退到官方仓库
+            git clone --depth 1 https://github.com/mobile-dev-inc/dadb.git ../external/dadb
+            echo "Cloned mobile-dev-inc/dadb"
+          fi
+          ls -la ../external/dadb/
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
