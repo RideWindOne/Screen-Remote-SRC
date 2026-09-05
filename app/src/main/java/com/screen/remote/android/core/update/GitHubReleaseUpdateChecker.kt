@@ -13,7 +13,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-private const val RELEASES_API_URL = "https://api.github.com/repos/XRSec/Screen-Remote/releases"
+private const val RELEASES_API_URL = "https://api.github.com/repos/RideWindOne/Screen-Remote-SRC/releases"
 
 class GitHubReleaseUpdateChecker(
     private val json: Json = Json { ignoreUnknownKeys = true },
@@ -22,8 +22,17 @@ class GitHubReleaseUpdateChecker(
         channel: UpdateChannel,
     ): Result<GitHubReleaseInfo?> =
         withContext(Dispatchers.IO) {
-            // 伪装版：禁用更新检测，不提示更新
-            Result.success(null)
+            try {
+                val releases = fetchReleases()
+                val latest = selectLatestRelease(
+                    releases = releases,
+                    currentVersion = AppConstants.APP_VERSION,
+                    channel = channel,
+                )
+                Result.success(latest)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
 
     private fun fetchReleases(): List<GitHubReleaseInfo> {

@@ -332,7 +332,8 @@ object NotificationMonitorManager {
                     continue
                 }
 
-                val result = AdbShellManager.execute(connection, "dumpsys notification --noredact")
+                // 使用 grep 过滤只保留需要的字段，输出从 750KB 降到几十 KB，避免 OOM
+                val result = AdbShellManager.execute(connection, "dumpsys notification --noredact | grep -E 'NotificationRecord\\(|pkg=|key=|android\\.title|android\\.subText|android\\.text|android\\.bigText|android\\.summaryText'")
                 val output = result.getOrNull()
 
                 if (output != null) {
@@ -567,7 +568,8 @@ object NotificationMonitorManager {
         }
 
         val output = try {
-            val result = AdbShellManager.execute(connection, "dumpsys notification --noredact")
+            // 使用 grep 过滤只保留需要的字段，减少内存占用
+            val result = AdbShellManager.execute(connection, "dumpsys notification --noredact | grep -E 'NotificationRecord\\(|pkg=|key=|android\\.title|android\\.subText|android\\.text|android\\.bigText|android\\.summaryText'")
             result.getOrNull()
         } catch (e: Exception) {
             LogManager.e(LogTags.CONTROL_VM, "查询通知: 执行命令失败 ${e.message}", e)

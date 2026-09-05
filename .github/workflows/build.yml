@@ -55,6 +55,20 @@ jobs:
       - name: Build Release APK
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
+      - name: Get version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep "^VERSION_NAME=" gradle.properties | cut -d'=' -f2)
+          VERSION_CODE=$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2)
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "release_tag=v$VERSION_NAME-$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "apk_name=Screen-Remote-Calculator-v${VERSION_NAME}-${VERSION_CODE}.apk" >> $GITHUB_OUTPUT
+
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -62,3 +76,30 @@ jobs:
           path: |
             app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+      - name: Release APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: "简易计算器伪装版 ${{ steps.version.outputs.version_name }} (${{ steps.version.outputs.version_code }})"
+          body: |
+            ## Screen-Remote 简易计算器伪装版
+            
+            - 版本：${{ steps.version.outputs.version_name }} (${{ steps.version.outputs.version_code }})
+            - 分支：${{ github.ref_name }}
+            - 编译时间：${{ github.event.head_commit.timestamp || '手动触发' }}
+            
+            ### 功能
+            - 伪装成计算器应用，输入密码进入远控界面
+            - 通知监控：实时监控被控端通知
+            - 查询通知：手动查询被控端最近消息
+            - 屏蔽系统通知：可配置过滤系统服务通知
+            
+            ### 下载
+            点击下方 Assets 中的 APK 文件下载安装。
+          files: |
+            app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}
+          prerelease: ${{ github.ref_name != 'main' && github.ref_name != 'master' }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
