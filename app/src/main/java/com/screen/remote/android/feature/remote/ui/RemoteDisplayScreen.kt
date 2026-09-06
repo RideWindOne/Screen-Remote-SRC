@@ -480,10 +480,16 @@ private fun rememberRemoteDisplayScreenRouteState(
                     connectionViewModel.reconnectActiveSession()
                 },
                 backToApp = {
-                    // 使用 moveTaskToBack 将 Activity 移到后台，保持所有连接和解码器状态
-                    // 避免 RemoteDisplayScreen 被移除导致解码器停止、恢复后黑屏
-                    val activity = context as? android.app.Activity
-                    activity?.moveTaskToBack(true)
+                    onBackToApp()
+                },
+                disableStayAwake = {
+                    val result = connectionViewModel.disableStayAwake()
+                    result.onSuccess {
+                        Toast.makeText(context, "已关闭屏幕常亮", Toast.LENGTH_SHORT).show()
+                    }.onFailure { error ->
+                        Toast.makeText(context, "关闭失败：${error.message}", Toast.LENGTH_SHORT).show()
+                    }
+                    result
                 },
                 showKeyboardInput = {
                     showKeyboardInput = true

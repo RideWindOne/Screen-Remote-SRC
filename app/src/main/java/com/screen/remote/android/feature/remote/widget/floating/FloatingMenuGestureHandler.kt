@@ -20,6 +20,7 @@ data class FloatingMenuActions(
     val disconnect: suspend () -> Unit,
     val reconnect: suspend () -> Unit,
     val backToApp: () -> Unit,
+    val disableStayAwake: suspend () -> Result<Boolean>,
     val showKeyboardInput: () -> Unit,
     val requestUploadFilePicker: () -> Unit,
     val requestLayoutInspectorRender: () -> Unit,

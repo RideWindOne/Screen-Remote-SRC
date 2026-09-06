@@ -365,25 +365,6 @@ class ConnectionLifecycle(
                         "${RemoteTexts.SCRCPY_TERMINATE_SERVER_FAILED.english}: ${e.message}",
                     )
                 }
-
-                // 5. 恢复 stay_on_while_plugged_in 设置（在终止服务器进程之后执行）
-                // 必须在 killProcess 之后执行，因为 scrcpy 退出时会恢复原始值
-                // 延迟 500ms 确保 scrcpy 完全退出，避免设置被覆盖
-                try {
-                    delay(500.milliseconds)
-                    val restoreResult = AdbShellManager.execute(
-                        connectionSnapshot.adbConnection,
-                        "settings put system stay_on_while_plugged_in 0",
-                        retryOnFailure = true,
-                        reportToEventBus = false,
-                    )
-                    LogManager.d(
-                        LogTags.SCRCPY_CLIENT,
-                        "Restored stay_on_while_plugged_in to 0 after kill: success=${restoreResult.isSuccess}, result=${restoreResult.getOrNull()}"
-                    )
-                } catch (e: Exception) {
-                    LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to restore stay_on_while_plugged_in: ${e.message}")
-                }
             }
 
             stateMachine.clearProgress()

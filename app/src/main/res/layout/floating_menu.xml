@@ -90,18 +90,32 @@
             android:src="@drawable/ic_toolbar_reconnect" />
 
         <ImageButton
-            android:id="@+id/btn_back_to_app"
+            android:id="@+id/btn_stay_awake"
             android:layout_width="42dp"
             android:layout_height="42dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:contentDescription="@string/floating_menu_back_to_app"
+            android:contentDescription="@string/floating_menu_stay_awake"
             android:paddingStart="5dp"
             android:paddingTop="7dp"
             android:paddingEnd="5dp"
             android:paddingBottom="3dp"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_toolbar_back_to_app" />
+            android:src="@drawable/ic_toolbar_stay_awake" />
+
+        <ImageButton
+            android:id="@+id/btn_lock_screen"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="3dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="@string/floating_menu_lock_screen"
+            android:paddingStart="5dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="5dp"
+            android:paddingBottom="3dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_toolbar_lock" />
     </LinearLayout>
 
     <LinearLayout
@@ -144,15 +158,15 @@
             android:src="@drawable/ic_toolbar_switch" />
 
         <ImageButton
-            android:id="@+id/btn_lock_screen"
+            android:id="@+id/btn_back_to_app"
             android:layout_width="40.dp"
             android:layout_height="40.dp"
             android:layout_marginStart="3dp"
             android:background="@android:color/transparent"
-            android:contentDescription="@string/floating_menu_lock_screen"
+            android:contentDescription="@string/floating_menu_back_to_app"
             android:padding="7dp"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_toolbar_lock" />
+            android:src="@drawable/ic_toolbar_back_to_app" />
 
         <ImageButton
             android:id="@+id/btn_keyboard"

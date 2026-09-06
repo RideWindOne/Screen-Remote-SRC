@@ -462,6 +462,21 @@ internal class FloatingMenuMenuInteractionBinder(
             }
         }
 
+        menu.findViewById<ImageButton>(R.id.btn_stay_awake)?.let { button ->
+            bindSimpleButton(button, onHideMenu) {
+                scope.launch {
+                    val result = actions.disableStayAwake()
+                    result.onFailure { error ->
+                        LogManager.e(
+                            LogTags.FLOATING_CONTROLLER_MSG,
+                            "Failed to disable stay awake: ${error.message}",
+                            error,
+                        )
+                    }
+                }
+            }
+        }
+
         menu.findViewById<ImageButton>(R.id.btn_back_to_app)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
                 actions.backToApp()

@@ -16,6 +16,7 @@ import com.screen.remote.android.core.domain.model.ConnectionProgress
 import com.screen.remote.android.core.domain.model.ScrcpyOptions
 import com.screen.remote.android.core.domain.model.compatibilityCaptureSettings
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionLifecycle
 import com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionMetadataReader
@@ -341,6 +342,25 @@ class ScrcpyClient(
         lifecycle.activeDeviceId ?: sessionManager.currentOrNull?.adbConnection?.deviceId
 
     fun getCurrentSessionOptions(): ScrcpyOptions? = sessionManager.currentOrNull?.options
+
+    /**
+     * 通过当前 ADB 连接执行 shell 命令
+     */
+    suspend fun executeShellCommand(command: String): Result<String> {
+        val adbConnection = sessionManager.currentOrNull?.adbConnection
+            ?: return Result.failure(Exception("No active ADB connection"))
+        return try {
+            val result = AdbShellManager.execute(
+                connection = adbConnection,
+                command = command,
+                retryOnFailure = false,
+                reportToEventBus = false,
+            )
+            result
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     private fun isCompatibilityMode(): Boolean = getCurrentSessionOptions()?.config?.compatibilityMode == true
 

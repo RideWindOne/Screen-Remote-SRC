@@ -179,6 +179,43 @@ class ConnectionViewModel(
         _activeSessionData.value = null
     }
 
+    /**
+     * 关闭被控端屏幕常亮（充电时保持唤醒）
+     */
+    suspend fun disableStayAwake(): Result<Boolean> {
+        return try {
+            LogManager.d(LogTags.CONNECTION_VM, "Disabling stay awake...")
+
+            // 先查询当前值（用于调试）
+            val queryResult = scrcpyClient.executeShellCommand("settings get global stay_on_while_plugged_in")
+            LogManager.d(LogTags.CONNECTION_VM, "Current stay_on_while_plugged_in (global): ${queryResult.getOrNull()}")
+
+            val querySystemResult = scrcpyClient.executeShellCommand("settings get system stay_on_while_plugged_in")
+            LogManager.d(LogTags.CONNECTION_VM, "Current stay_on_while_plugged_in (system): ${querySystemResult.getOrNull()}")
+
+            // 设置 global
+            val setGlobalResult = scrcpyClient.executeShellCommand("settings put global stay_on_while_plugged_in 0")
+            LogManager.d(LogTags.CONNECTION_VM, "Set global result: success=${setGlobalResult.isSuccess}, value=${setGlobalResult.getOrNull()}")
+
+            // 同时设置 system（兼容旧版本）
+            val setSystemResult = scrcpyClient.executeShellCommand("settings put system stay_on_while_plugged_in 0")
+            LogManager.d(LogTags.CONNECTION_VM, "Set system result: success=${setSystemResult.isSuccess}, value=${setSystemResult.getOrNull()}")
+
+            // 验证设置是否生效
+            val verifyResult = scrcpyClient.executeShellCommand("settings get global stay_on_while_plugged_in")
+            LogManager.d(LogTags.CONNECTION_VM, "Verify stay_on_while_plugged_in after set: ${verifyResult.getOrNull()}")
+
+            if (setGlobalResult.isSuccess) {
+                Result.success(true)
+            } else {
+                Result.failure(setGlobalResult.exceptionOrNull() ?: Exception("Failed to set global stay_on_while_plugged_in"))
+            }
+        } catch (e: Exception) {
+            LogManager.e(LogTags.CONNECTION_VM, "disableStayAwake exception: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     fun disconnectFromDevice() {
         // 取消正在进行的连接任务
         connectJob?.cancel()

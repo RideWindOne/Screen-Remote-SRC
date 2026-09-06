@@ -3,6 +3,7 @@ package com.screen.remote.android.core.designsystem.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.ClickableText
@@ -81,7 +82,8 @@ private fun HelpDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier,
+        modifier = Modifier.padding(horizontal = 24.dp),
+        widthRatio = 0.75f,
         title = {
             Text(
                 text = CommonTexts.HELP_DIALOG_TITLE.get(),
