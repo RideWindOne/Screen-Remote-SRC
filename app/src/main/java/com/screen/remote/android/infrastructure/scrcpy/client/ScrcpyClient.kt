@@ -208,6 +208,16 @@ class ScrcpyClient(
      */
     suspend fun disconnect(): Result<Boolean> {
         compatibilityModeController.stop()
+        // 断开连接前先移除前台服务保护，避免状态栏通知残留
+        protectedDeviceId?.let { deviceId ->
+            try {
+                ScrcpyForegroundService.unprotectDevice(context, deviceId)
+                LogManager.d(LogTags.SCRCPY_CLIENT, "Removed device from keepalive list: $deviceId")
+            } catch (e: Exception) {
+                LogManager.w(LogTags.SCRCPY_CLIENT, "Failed to unprotect device: ${e.message}")
+            }
+            protectedDeviceId = null
+        }
         return connectionCoordinator.disconnect()
     }
 

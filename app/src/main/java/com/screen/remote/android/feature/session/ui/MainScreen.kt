@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -384,31 +385,42 @@ fun MainScreen(
         }
     }
 
-    if (connectedSessionId != null && !routeState.remoteDisplayMinimized) {
-        RemoteDisplayScreen(
-            sessionId = connectedSessionId!!,
-            mainViewModel = viewModel,
-            onClose = {
-                routeState.restoreRemoteDisplay()
-                viewModel.clearConnectStatus()
-                viewModel.disconnectFromDevice()
-            },
-            onBackToApp = {
-                // 只最小化远程界面，不断开连接
-                routeState.minimizeRemoteDisplay()
-            },
-        )
-        return
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        MainScreenContent(
-            routeState = routeState,
-            viewModel = viewModel,
-            groups = groups,
-            selectedGroupPath = selectedGroupPath,
-            nearbyAdbScanController = nearbyAdbScanController,
-        )
+        // RemoteDisplayScreen 始终在组合中，保持解码器运行，避免最小化后恢复黑屏
+        // 当 connectedSessionId != null && !remoteDisplayMinimized 时显示
+        // 当 remoteDisplayMinimized 时用 alpha(0f) 隐藏，保持组合状态
+        if (connectedSessionId != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .alpha(if (routeState.remoteDisplayMinimized) 0f else 1f),
+            ) {
+                RemoteDisplayScreen(
+                    sessionId = connectedSessionId!!,
+                    mainViewModel = viewModel,
+                    onClose = {
+                        routeState.restoreRemoteDisplay()
+                        viewModel.clearConnectStatus()
+                        viewModel.disconnectFromDevice()
+                    },
+                    onBackToApp = {
+                        routeState.minimizeRemoteDisplay()
+                    },
+                )
+            }
+        }
+
+        // 当没有连接或 minimized 时，显示设备列表
+        if (connectedSessionId == null || routeState.remoteDisplayMinimized) {
+            MainScreenContent(
+                routeState = routeState,
+                viewModel = viewModel,
+                groups = groups,
+                selectedGroupPath = selectedGroupPath,
+                nearbyAdbScanController = nearbyAdbScanController,
+            )
+        }
 
         if (onboardingState == SessionOnboardingState.HIDDEN) {
             MainScreenDialogs(
