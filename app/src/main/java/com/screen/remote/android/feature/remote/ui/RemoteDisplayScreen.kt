@@ -480,7 +480,10 @@ private fun rememberRemoteDisplayScreenRouteState(
                     connectionViewModel.reconnectActiveSession()
                 },
                 backToApp = {
-                    onBackToApp()
+                    // 使用 moveTaskToBack 将 Activity 移到后台，保持所有连接和解码器状态
+                    // 避免 RemoteDisplayScreen 被移除导致解码器停止、恢复后黑屏
+                    val activity = context as? android.app.Activity
+                    activity?.moveTaskToBack(true)
                 },
                 showKeyboardInput = {
                     showKeyboardInput = true
