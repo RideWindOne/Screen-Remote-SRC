@@ -5,16 +5,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,26 +34,32 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
- * 图案密码输入对话框
- * 用户在 3x3 点阵上绘制图案，完成后回调选中的点索引序列（0-8）
+ * 密码输入对话框
+ * 支持图案密码和文本密码/PIN码两种模式，通过切换选择
  */
 @Composable
 fun PatternLockInputDialog(
     onDismiss: () -> Unit,
     onPatternComplete: (List<Int>) -> Unit,
+    onTextPasswordComplete: (String) -> Unit,
     onClearCache: (() -> Unit)? = null,
     useCache: Boolean = true,
     onUseCacheChange: ((Boolean) -> Unit)? = null,
 ) {
+    // 密码模式：true=图案密码，false=文本密码
+    var isPatternMode by remember { mutableStateOf(true) }
     // 选中的点索引序列（0-8，按行优先排列）
     val selectedPoints = remember { mutableStateListOf<Int>() }
     var currentDragPosition by remember { mutableStateOf<Offset?>(null) }
     var isDragging by remember { mutableStateOf(false) }
+    // 文本密码
+    var textPassword by remember { mutableStateOf("") }
 
     // 9个点的中心位置（在 Canvas 中的相对位置，0-1）
     val pointPositions = remember {
@@ -62,151 +72,206 @@ fun PatternLockInputDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("绘制图案密码") },
+        title = {
+            Column {
+                Text(if (isPatternMode) "绘制图案密码" else "输入文本密码/PIN码")
+                Spacer(modifier = Modifier.height(8.dp))
+                // 模式切换
+                Row {
+                    FilterChip(
+                        selected = isPatternMode,
+                        onClick = { isPatternMode = true },
+                        label = { Text("图案密码") },
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilterChip(
+                        selected = !isPatternMode,
+                        onClick = { isPatternMode = false },
+                        label = { Text("文本密码") },
+                    )
+                }
+            }
+        },
         text = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = "在下方点阵上绘制解锁图案",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 图案绘制区域
-                Box(
-                    modifier = Modifier
-                        .size(280.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(12.dp),
-                        )
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    selectedPoints.clear()
-                                    currentDragPosition = offset
-                                    // 检查是否点中了某个点
-                                    checkPointHit(offset, pointPositions, size.width, size.height)?.let {
-                                        selectedPoints.add(it)
-                                    }
-                                },
-                                onDrag = { change, _ ->
-                                    currentDragPosition = change.position
-                                    // 检查是否经过了某个点
-                                    checkPointHit(change.position, pointPositions, size.width, size.height)?.let {
-                                        if (it !in selectedPoints) {
-                                            // 检查是否需要添加中间点
-                                            addPointWithIntermediate(it, selectedPoints, pointPositions)
-                                        }
-                                    }
-                                },
-                                onDragEnd = {
-                                    isDragging = false
-                                    currentDragPosition = null
-                                },
-                                onDragCancel = {
-                                    isDragging = false
-                                    currentDragPosition = null
-                                },
-                            )
-                        },
+            if (isPatternMode) {
+                // 图案密码模式
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Canvas(modifier = Modifier.matchParentSize()) {
-                        val canvasWidth = size.width
-                        val canvasHeight = size.height
-                        val pointRadius = canvasWidth / 12f
-                        val hitRadius = canvasWidth / 8f
+                    Text(
+                        text = "在下方点阵上绘制解锁图案",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                        // 绘制连接线
-                        if (selectedPoints.size >= 2) {
-                            val path = Path()
-                            val firstPoint = pointPositions[selectedPoints[0]]
-                            path.moveTo(firstPoint.x * canvasWidth, firstPoint.y * canvasHeight)
-                            for (i in 1 until selectedPoints.size) {
-                                val point = pointPositions[selectedPoints[i]]
-                                path.lineTo(point.x * canvasWidth, point.y * canvasHeight)
-                            }
-                            // 绘制到当前拖拽位置
-                            if (isDragging && currentDragPosition != null) {
-                                path.lineTo(currentDragPosition!!.x, currentDragPosition!!.y)
-                            }
-                            drawPath(
-                                path = path,
-                                color = Color(0xFF4CAF50),
-                                style = Stroke(width = 8f),
+                    // 图案绘制区域
+                    Box(
+                        modifier = Modifier
+                            .size(280.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(12.dp),
                             )
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        isDragging = true
+                                        selectedPoints.clear()
+                                        currentDragPosition = offset
+                                        // 检查是否点中了某个点
+                                        checkPointHit(offset, pointPositions, size.width, size.height)?.let {
+                                            selectedPoints.add(it)
+                                        }
+                                    },
+                                    onDrag = { change, _ ->
+                                        currentDragPosition = change.position
+                                        // 检查是否经过了某个点
+                                        checkPointHit(change.position, pointPositions, size.width, size.height)?.let {
+                                            if (it !in selectedPoints) {
+                                                // 检查是否需要添加中间点
+                                                addPointWithIntermediate(it, selectedPoints, pointPositions)
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        isDragging = false
+                                        currentDragPosition = null
+                                    },
+                                    onDragCancel = {
+                                        isDragging = false
+                                        currentDragPosition = null
+                                    },
+                                )
+                            },
+                    ) {
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            val canvasWidth = size.width
+                            val canvasHeight = size.height
+                            val pointRadius = canvasWidth / 12f
+                            val hitRadius = canvasWidth / 8f
+
+                            // 绘制连接线
+                            if (selectedPoints.size >= 2) {
+                                val path = Path()
+                                val firstPoint = pointPositions[selectedPoints[0]]
+                                path.moveTo(firstPoint.x * canvasWidth, firstPoint.y * canvasHeight)
+                                for (i in 1 until selectedPoints.size) {
+                                    val point = pointPositions[selectedPoints[i]]
+                                    path.lineTo(point.x * canvasWidth, point.y * canvasHeight)
+                                }
+                                // 绘制到当前拖拽位置
+                                if (isDragging && currentDragPosition != null) {
+                                    path.lineTo(currentDragPosition!!.x, currentDragPosition!!.y)
+                                }
+                                drawPath(
+                                    path = path,
+                                    color = Color(0xFF4CAF50),
+                                    style = Stroke(width = 8f),
+                                )
+                            }
+
+                            // 绘制9个点
+                            pointPositions.forEachIndexed { index, pos ->
+                                val cx = pos.x * canvasWidth
+                                val cy = pos.y * canvasHeight
+                                val isSelected = index in selectedPoints
+
+                                // 外圈
+                                drawCircle(
+                                    color = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
+                                    radius = pointRadius,
+                                    center = Offset(cx, cy),
+                                    style = Stroke(width = 3f),
+                                )
+                                // 内点
+                                drawCircle(
+                                    color = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
+                                    radius = pointRadius / 3f,
+                                    center = Offset(cx, cy),
+                                )
+                            }
                         }
+                    }
 
-                        // 绘制9个点
-                        pointPositions.forEachIndexed { index, pos ->
-                            val cx = pos.x * canvasWidth
-                            val cy = pos.y * canvasHeight
-                            val isSelected = index in selectedPoints
-
-                            // 外圈
-                            drawCircle(
-                                color = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
-                                radius = pointRadius,
-                                center = Offset(cx, cy),
-                                style = Stroke(width = 3f),
-                            )
-                            // 内点
-                            drawCircle(
-                                color = if (isSelected) Color(0xFF4CAF50) else Color.Gray,
-                                radius = pointRadius / 3f,
-                                center = Offset(cx, cy),
-                            )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "已选择 ${selectedPoints.size} 个点",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (onClearCache != null || onUseCacheChange != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (onUseCacheChange != null) {
+                                Text(
+                                    text = "使用位置缓存",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Switch(
+                                    checked = useCache,
+                                    onCheckedChange = onUseCacheChange,
+                                )
+                            }
+                            if (onClearCache != null) {
+                                Spacer(modifier = Modifier.weight(1f))
+                                OutlinedButton(
+                                    onClick = onClearCache,
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                ) {
+                                    Text("清除位置缓存", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "已选择 ${selectedPoints.size} 个点",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (onClearCache != null || onUseCacheChange != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    androidx.compose.foundation.layout.Row(
+            } else {
+                // 文本密码模式
+                Column {
+                    Text(
+                        text = "输入锁屏密码/PIN码，确认后自动发送到远程设备",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = textPassword,
+                        onValueChange = { textPassword = it },
+                        label = { Text("密码/PIN码") },
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (onUseCacheChange != null) {
-                            Text(
-                                text = "使用缓存",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Switch(
-                                checked = useCache,
-                                onCheckedChange = onUseCacheChange,
-                            )
-                        }
-                        if (onClearCache != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedButton(
-                                onClick = onClearCache,
-                            ) {
-                                Text("清除缓存")
-                            }
-                        }
-                    }
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                    )
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (selectedPoints.size >= 4) {
-                        onPatternComplete(selectedPoints.toList())
-                    }
-                },
-                enabled = selectedPoints.size >= 4,
-            ) {
-                Text("确认")
+            if (isPatternMode) {
+                Button(
+                    onClick = {
+                        if (selectedPoints.size >= 4) {
+                            onPatternComplete(selectedPoints.toList())
+                        }
+                    },
+                    enabled = selectedPoints.size >= 4,
+                ) {
+                    Text("确认")
+                }
+            } else {
+                Button(
+                    onClick = {
+                        if (textPassword.isNotBlank()) {
+                            onTextPasswordComplete(textPassword)
+                        }
+                    },
+                    enabled = textPassword.isNotBlank(),
+                ) {
+                    Text("发送")
+                }
             }
         },
         dismissButton = {

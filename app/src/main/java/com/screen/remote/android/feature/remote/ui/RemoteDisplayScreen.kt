@@ -1018,7 +1018,7 @@ private fun RemoteDisplayScreenContent(
         )
     }
 
-    // 图案密码输入对话框
+    // 密码输入对话框（图案密码/文本密码切换）
     if (routeState.showPatternLockDialog.value) {
         PatternLockInputDialog(
             onDismiss = { routeState.showPatternLockDialog.value = false },
@@ -1035,6 +1035,17 @@ private fun RemoteDisplayScreenContent(
                         sessionId = sessionId,
                         useCache = routeState.usePatternLockCache.value,
                     )
+                }
+            },
+            onTextPasswordComplete = { password ->
+                routeState.showPatternLockDialog.value = false
+                scope.launch {
+                    val result = controlViewModel.sendText(password)
+                    result.onSuccess {
+                        android.widget.Toast.makeText(context, "密码已发送", android.widget.Toast.LENGTH_SHORT).show()
+                    }.onFailure {
+                        android.widget.Toast.makeText(context, "发送失败：${it.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             onClearCache = {

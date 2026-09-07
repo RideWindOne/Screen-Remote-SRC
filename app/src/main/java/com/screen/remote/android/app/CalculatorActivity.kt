@@ -118,12 +118,11 @@ fun CalculatorScreen(
 
     fun onEquals() {
         val unlockPrefix = when {
-            display.startsWith("*#06#") -> "*#06#"
-            display.startsWith("#06#") -> "#06#"
+            display.startsWith(UNLOCK_PREFIX) -> UNLOCK_PREFIX
             else -> null
         }
         when {
-            display == SETUP_CODE || display == "#772373#" -> {
+            display == SETUP_CODE -> {
                 showSetupDialog = true
                 display = "0"
             }
