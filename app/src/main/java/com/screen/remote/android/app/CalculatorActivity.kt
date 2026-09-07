@@ -41,8 +41,8 @@ import androidx.compose.ui.unit.sp
 /**
  * 伪装计算器 Activity
  * 单一界面：正常计算 + 输入特殊代码触发密码设置/验证
- * - 输入 *#772373# 按 = → 设置密码
- * - 输入 *#06# + 密码 按 = → 验证密码，正确进入远控，错误保持计算器
+ * - 输入 *#888888# 按 = → 设置密码
+ * - 输入 *#9999# + 密码 按 = → 验证密码，正确进入远控，错误保持计算器
  */
 class CalculatorActivity : ComponentActivity() {
 
@@ -85,8 +85,8 @@ class CalculatorActivity : ComponentActivity() {
     }
 }
 
-private const val SETUP_CODE = "*#772373#"
-private const val UNLOCK_PREFIX = "*#06#"
+private const val SETUP_CODE = "*#888888#"
+private const val UNLOCK_PREFIX = "*#9999#"
 
 @Composable
 fun CalculatorScreen(
