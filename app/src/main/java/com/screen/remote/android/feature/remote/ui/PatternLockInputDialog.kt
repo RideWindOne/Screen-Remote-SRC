@@ -15,6 +15,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +43,8 @@ fun PatternLockInputDialog(
     onDismiss: () -> Unit,
     onPatternComplete: (List<Int>) -> Unit,
     onClearCache: (() -> Unit)? = null,
+    useCache: Boolean = true,
+    onUseCacheChange: ((Boolean) -> Unit)? = null,
 ) {
     // 选中的点索引序列（0-8，按行优先排列）
     val selectedPoints = remember { mutableStateListOf<Int>() }
@@ -165,13 +168,31 @@ fun PatternLockInputDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (onClearCache != null) {
+                if (onClearCache != null || onUseCacheChange != null) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = onClearCache,
+                    androidx.compose.foundation.layout.Row(
                         modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("清除位置缓存")
+                        if (onUseCacheChange != null) {
+                            Text(
+                                text = "使用缓存",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = useCache,
+                                onCheckedChange = onUseCacheChange,
+                            )
+                        }
+                        if (onClearCache != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onClearCache,
+                            ) {
+                                Text("清除缓存")
+                            }
+                        }
                     }
                 }
             }

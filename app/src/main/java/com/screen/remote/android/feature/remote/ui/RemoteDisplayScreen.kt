@@ -232,6 +232,7 @@ private data class RemoteDisplayScreenRouteState(
     val videoHeight: Int,
     val onVideoMetricsChanged: (Int, Int, Float) -> Unit,
     val showPatternLockDialog: androidx.compose.runtime.MutableState<Boolean>,
+    val usePatternLockCache: androidx.compose.runtime.MutableState<Boolean>,
 )
 
 @SuppressLint("ClickableViewAccessibility", "ConfigurationScreenWidthHeight")
@@ -344,6 +345,7 @@ private fun rememberRemoteDisplayScreenRouteState(
     var videoHeight by remember { mutableIntStateOf(0) }
     val deviceResolutionAdaptedState = remember { mutableStateOf(false) }
     val showPatternLockDialog = remember { mutableStateOf(false) }
+    val usePatternLockCache = remember { mutableStateOf(true) }
 
     LaunchedEffect(resolvedSessionData?.config?.compatibilityMode, videoResolution) {
         if (resolvedSessionData?.config?.compatibilityMode == true) {
@@ -592,6 +594,7 @@ private fun rememberRemoteDisplayScreenRouteState(
             videoAspectRatio = aspectRatio
         },
         showPatternLockDialog = showPatternLockDialog,
+        usePatternLockCache = usePatternLockCache,
     )
 }
 
@@ -1030,6 +1033,7 @@ private fun RemoteDisplayScreenContent(
                         context = context,
                         pollInterval = activeSessionData?.config?.patternLockPollInterval ?: 200,
                         sessionId = sessionId,
+                        useCache = routeState.usePatternLockCache.value,
                     )
                 }
             },
@@ -1040,6 +1044,8 @@ private fun RemoteDisplayScreenContent(
                 }
                 android.widget.Toast.makeText(context, "当前设备图案密码位置缓存已清除", android.widget.Toast.LENGTH_SHORT).show()
             },
+            useCache = routeState.usePatternLockCache.value,
+            onUseCacheChange = { routeState.usePatternLockCache.value = it },
         )
     }
 }
@@ -1061,6 +1067,7 @@ private suspend fun sendPatternToRemote(
     context: android.content.Context,
     pollInterval: Int = 200,
     sessionId: String = "",
+    useCache: Boolean = true,
 ) {
     if (pattern.isEmpty()) return
 
@@ -1080,7 +1087,7 @@ private suspend fun sendPatternToRemote(
         kotlinx.coroutines.delay(500)
 
         // 循环检测图案锁，直到出现为止（自动滑动或用户手动滑动后自动检测）
-        val patternArea = waitForPatternLock(controlViewModel, actualWidth, actualHeight, context, pollInterval, sessionId)
+        val patternArea = waitForPatternLock(controlViewModel, actualWidth, actualHeight, context, pollInterval, sessionId, useCache)
         val patternAreaLeft = patternArea.left
         val patternAreaTop = patternArea.top
         val patternAreaWidth = patternArea.width
@@ -1286,9 +1293,10 @@ private suspend fun waitForPatternLock(
     context: android.content.Context,
     pollInterval: Int = 200,
     sessionId: String = "",
+    useCache: Boolean = true,
 ): PatternLockArea {
-    // 如果有持久化缓存，直接使用缓存位置，不再重新检测
-    val cached = if (sessionId.isNotBlank()) {
+    // 如果启用缓存且有持久化缓存，直接使用缓存位置，不再重新检测
+    val cached = if (useCache && sessionId.isNotBlank()) {
         PatternLockCacheManager.load(context, sessionId)
     } else null
     if (cached != null) {
