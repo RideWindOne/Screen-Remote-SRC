@@ -1034,9 +1034,9 @@ private fun RemoteDisplayScreenContent(
                 }
             },
             onClearCache = {
-                // 清除当前会话的缓存位置
+                // 清除当前会话的持久化缓存位置
                 if (sessionId.isNotBlank()) {
-                    cachedPatternLockAreas.remove(sessionId)
+                    PatternLockCacheManager.clear(context, sessionId)
                 }
                 android.widget.Toast.makeText(context, "当前设备图案密码位置缓存已清除", android.widget.Toast.LENGTH_SHORT).show()
             },
@@ -1231,11 +1231,49 @@ private data class PatternLockArea(
 )
 
 /**
- * 图案锁位置缓存，按设备序列号单独存储
- * 用于网络延迟导致检测超时时使用缓存位置
+ * 图案锁位置缓存管理器（持久化到 SharedPreferences）
+ * 使用设备唯一标识作为 key，重新添加设备也能找到缓存
  */
-@Volatile
-private var cachedPatternLockAreas = mutableMapOf<String, PatternLockArea>()
+private object PatternLockCacheManager {
+    private const val PREFS_NAME = "pattern_lock_cache"
+    private const val KEY_PREFIX = "pattern_lock_"
+
+    fun save(context: android.content.Context, deviceIdentifier: String, area: PatternLockArea) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = KEY_PREFIX + deviceIdentifier
+        prefs.edit()
+            .putInt("$key.left", area.left)
+            .putInt("$key.top", area.top)
+            .putInt("$key.width", area.width)
+            .putInt("$key.height", area.height)
+            .apply()
+        android.util.Log.d("PatternLock", "Cached position saved for: $deviceIdentifier")
+    }
+
+    fun load(context: android.content.Context, deviceIdentifier: String): PatternLockArea? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = KEY_PREFIX + deviceIdentifier
+        val left = prefs.getInt("$key.left", -1)
+        if (left == -1) return null
+        val top = prefs.getInt("$key.top", 0)
+        val width = prefs.getInt("$key.width", 0)
+        val height = prefs.getInt("$key.height", 0)
+        android.util.Log.d("PatternLock", "Cached position loaded for: $deviceIdentifier")
+        return PatternLockArea(left, top, width, height)
+    }
+
+    fun clear(context: android.content.Context, deviceIdentifier: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = KEY_PREFIX + deviceIdentifier
+        prefs.edit()
+            .remove("$key.left")
+            .remove("$key.top")
+            .remove("$key.width")
+            .remove("$key.height")
+            .apply()
+        android.util.Log.d("PatternLock", "Cached position cleared for: $deviceIdentifier")
+    }
+}
 
 /**
  * 循环等待图案锁出现
@@ -1249,8 +1287,10 @@ private suspend fun waitForPatternLock(
     pollInterval: Int = 200,
     sessionId: String = "",
 ): PatternLockArea {
-    // 如果有缓存位置，直接使用缓存位置，不再重新检测（按会话ID存储）
-    val cached = if (sessionId.isNotBlank()) cachedPatternLockAreas[sessionId] else null
+    // 如果有持久化缓存，直接使用缓存位置，不再重新检测
+    val cached = if (sessionId.isNotBlank()) {
+        PatternLockCacheManager.load(context, sessionId)
+    } else null
     if (cached != null) {
         android.util.Log.d("PatternLock", "Using cached pattern lock position directly for session: $sessionId")
         android.widget.Toast.makeText(context, "采用缓存位置，正在输入...", android.widget.Toast.LENGTH_SHORT).show()
@@ -1265,9 +1305,9 @@ private suspend fun waitForPatternLock(
         val result = tryFindPatternLockArea(controlViewModel, screenWidth, screenHeight)
         if (result != null) {
             android.util.Log.d("PatternLock", "Pattern lock detected after ${System.currentTimeMillis() - startTime}ms")
-            // 更新缓存位置（按会话ID存储）
+            // 保存到持久化缓存（按会话ID存储）
             if (sessionId.isNotBlank()) {
-                cachedPatternLockAreas[sessionId] = result
+                PatternLockCacheManager.save(context, sessionId, result)
             }
             android.widget.Toast.makeText(context, "已检测到图案密码框，正在输入...", android.widget.Toast.LENGTH_SHORT).show()
             return result
