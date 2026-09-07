@@ -20,6 +20,7 @@ import com.screen.remote.android.infrastructure.scrcpy.session.runtime.SessionCo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -115,8 +116,42 @@ class ConnectionViewModel(
                 }
                 val sessionId = sessionData.id
 
-                // 判断是否为重连（已经有 connectedSessionId）
-                val isReconnecting = _connectedSessionId.value != null
+                // 判断是否为重连（已经有 connectedSessionId 且是同一个设备）
+                val isReconnecting = _connectedSessionId.value != null && _connectedSessionId.value == sessionId
+                val isDifferentDevice = _connectedSessionId.value != null && _connectedSessionId.value != sessionId
+
+                // 如果连接的是不同设备，先断开旧连接并等待完全断开
+                if (isDifferentDevice) {
+                    LogManager.d(LogTags.CONNECTION_VM, "Connecting to different device, disconnecting old connection: ${_connectedSessionId.value} -> $sessionId")
+                    try {
+                        scrcpyClient.disconnect()
+                    } catch (e: Exception) {
+                        LogManager.w(LogTags.CONNECTION_VM, "Failed to disconnect old connection: ${e.message}")
+                    }
+                    // 等待旧连接完全断开，最多等待 2 秒
+                    var waitCount = 0
+                    while (waitCount < 20) {
+                        val currentState = scrcpyClient.connectionState.value
+                        if (currentState is com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState.Disconnected ||
+                            currentState is com.screen.remote.android.infrastructure.scrcpy.connection.ConnectionState.Error) {
+                            LogManager.d(LogTags.CONNECTION_VM, "Old connection fully disconnected after ${waitCount * 100}ms")
+                            break
+                        }
+                        delay(100)
+                        waitCount++
+                    }
+                    if (waitCount >= 20) {
+                        LogManager.w(LogTags.CONNECTION_VM, "Old connection did not disconnect within 2 seconds, proceeding anyway")
+                    }
+                    // 清除旧的连接状态
+                    withContext(Dispatchers.Main) {
+                        _connectStatus.value = ConnectStatus.Idle
+                        _connectedSessionId.value = null
+                        _activeSessionData.value = null
+                    }
+                    // 再等待一下确保状态清除完成
+                    delay(100)
+                }
 
                 // 立即设置 connectedSessionId，让 RemoteDisplayScreen 显示（即使连接失败也能看到进度）
                 withContext(Dispatchers.Main) {

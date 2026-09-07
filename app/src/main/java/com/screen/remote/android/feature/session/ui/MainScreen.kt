@@ -227,6 +227,14 @@ fun MainScreen(
         }
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
+
+    // 当 connectedSessionId 变化且不为 null 时，自动恢复 RemoteDisplayScreen 显示
+    // 解决切换设备后 RemoteDisplayScreen 仍然隐藏的问题
+    LaunchedEffect(connectedSessionId) {
+        if (connectedSessionId != null && routeState.remoteDisplayMinimized) {
+            routeState.restoreRemoteDisplay()
+        }
+    }
     val groups by viewModel.groups.collectAsState()
     val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
     val onboardingState by viewModel.sessionOnboardingState.collectAsState()
