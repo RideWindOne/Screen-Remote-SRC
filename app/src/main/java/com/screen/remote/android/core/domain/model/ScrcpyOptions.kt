@@ -51,6 +51,7 @@ data class ScrcpyConfig(
     val displayId: Int = 0,
     val showTouches: Boolean = false,
     val codecOptions: String = ScrcpyConstants.DEFAULT_CODEC_OPTIONS,
+    val patternLockPollInterval: Int = 200, // 图案密码循环检测间隔（毫秒）
 )
 
 /** 连接过程自动生成的设备能力缓存，不属于用户配置。 */

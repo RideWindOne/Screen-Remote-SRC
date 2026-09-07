@@ -95,6 +95,9 @@ class SessionDialogState(
     var videoBitrate by mutableStateOf(formatBitrateForEditor(initialConfig.videoBitRate))
     var maxFps by mutableStateOf(initialConfig.maxFps.toString())
 
+    // 图案密码配置
+    var patternLockPollInterval by mutableStateOf(initialConfig.patternLockPollInterval.toString())
+
     // 音频配置
     var audioBitrate by mutableStateOf(formatBitrateForEditor(initialConfig.audioBitRate))
     var audioVolume by mutableFloatStateOf(1.0f)
@@ -246,6 +249,7 @@ class SessionDialogState(
                 showTouches = config.showTouches && !config.compatibilityMode,
                 startApp = config.startApp.trim(),
                 shellPassword = config.shellPassword,
+                patternLockPollInterval = patternLockPollInterval.toIntOrNull()?.coerceIn(50, 2000) ?: 200,
             ),
             tcpPortForwardRules = tcpPortForwardRules
                 ?: listOf(com.screen.remote.android.core.data.repository.TcpPortForwardRule()),

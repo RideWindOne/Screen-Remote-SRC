@@ -396,6 +396,12 @@ internal class FloatingMenuMenuInteractionBinder(
         bindActionButton(menu, R.id.btn_recent, 187, "Failed to send the Recents key", onHideMenu)
         bindActionButton(menu, R.id.btn_lock_screen, 26, "Failed to send the Power key", onHideMenu)
 
+        menu.findViewById<ImageButton>(R.id.btn_pattern_lock)?.let { button ->
+            bindSimpleButton(button, onHideMenu) {
+                actions.showPatternLock()
+            }
+        }
+
         menu.findViewById<ImageButton>(R.id.btn_rotate_target)?.let { button ->
             bindSimpleButton(button, onHideMenu) {
                 scope.launch {
