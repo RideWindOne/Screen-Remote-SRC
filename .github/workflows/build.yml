@@ -79,11 +79,19 @@ jobs:
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "release_tag=v$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "apk_name=Screen-Remote-Calculator-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
 
-      - name: Rename APK
+      - name: Rename all ABI APKs
         run: |
-          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}
+          VERSION_NAME=$(grep "^VERSION_NAME=" gradle.properties | cut -d'=' -f2)
+          cd app/build/outputs/apk/release/
+          # 重命名各 ABI 版本
+          for abi in arm64-v8a armeabi-v7a x86 x86_64 universal; do
+            if [ -f "app-${abi}-release.apk" ]; then
+              cp "app-${abi}-release.apk" "Screen-Remote-Calculator-v${VERSION_NAME}-${abi}.apk"
+              echo "Renamed: Screen-Remote-Calculator-v${VERSION_NAME}-${abi}.apk"
+            fi
+          done
+          ls -lh *.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -121,7 +129,7 @@ jobs:
             ### 下载
             点击下方 Assets 中的 APK 文件下载安装。
           files: |
-            app/build/outputs/apk/release/${{ steps.version.outputs.apk_name }}
+            app/build/outputs/apk/release/Screen-Remote-Calculator-*.apk
           prerelease: false
           generate_release_notes: true
         env:
