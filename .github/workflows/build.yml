@@ -78,8 +78,8 @@ jobs:
           VERSION_CODE=$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2)
           echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "release_tag=$VERSION_NAME-$VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "apk_name=Screen-Remote-Calculator-arm64-v8a-${VERSION_NAME}-${VERSION_CODE}.apk" >> $GITHUB_OUTPUT
+          echo "release_tag=v$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "apk_name=Screen-Remote-Calculator-v${VERSION_NAME}.apk" >> $GITHUB_OUTPUT
 
       - name: Rename APK
         run: |
@@ -97,19 +97,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.release_tag }}
-          name: "简易计算器伪装版 ${{ steps.version.outputs.version_name }} (${{ steps.version.outputs.version_code }})"
+          name: "简易计算器伪装版 v${{ steps.version.outputs.version_name }}"
           body: |
             ## Screen-Remote 简易计算器伪装版
             
-            - 版本：${{ steps.version.outputs.version_name }} (${{ steps.version.outputs.version_code }})
+            - 版本：v${{ steps.version.outputs.version_name }} (${{ steps.version.outputs.version_code }})
             - 分支：${{ github.ref_name }}
             - 编译时间：${{ github.event.head_commit.timestamp || '手动触发' }}
             
             ### 功能
             - 伪装成计算器应用，输入密码进入远控界面
+            - 图案密码输入：悬浮窗绘制图案，自动检测位置并输入到远程设备
+            - 图案密码位置缓存：按会话单独存储，首次检测后直接使用
             - 通知监控：实时监控被控端通知
             - 查询通知：手动查询被控端最近消息
             - 屏蔽系统通知：可配置过滤系统服务通知
+            - 悬浮窗：锁屏/重连/返回应用/关闭屏幕常亮/图案密码按钮
             
             ### 下载
             点击下方 Assets 中的 APK 文件下载安装。
