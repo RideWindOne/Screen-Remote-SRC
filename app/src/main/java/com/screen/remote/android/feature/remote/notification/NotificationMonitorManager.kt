@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.screen.remote.android.BuildConfig
 import com.screen.remote.android.core.common.LogTags
 import com.screen.remote.android.core.common.manager.LogManager
 import com.screen.remote.android.core.data.repository.SessionData
@@ -51,6 +52,29 @@ object NotificationMonitorManager {
     private const val POLL_INTERVAL_MS = 3000L
     // 心跳间隔从10秒增加到30秒，ADB连接不需要频繁心跳
     private const val HEARTBEAT_INTERVAL_MS = 30000L
+
+    // ========== 缓存的正则表达式（只编译一次，避免每3秒重新编译耗CPU）==========
+    private val REGEX_NOTIFICATION_RECORD = Regex("NotificationRecord\\(")
+    private val REGEX_PKG = Regex("pkg=(\\S+)")
+    private val REGEX_KEY = Regex("key=(\\S+)")
+    private val REGEX_BUNDLE = Regex("Bundle\\[\\{(.+?)\\}\\]")
+    private val REGEX_TYPED_VALUE = Regex("\\w+\\s*\\((.*)\\)")
+
+    // 按字段名缓存的正则（避免每次动态编译）
+    private val fieldRegexCache = mutableMapOf<String, Regex>()
+    private val bundleFieldRegexCache = mutableMapOf<String, Regex>()
+
+    private fun getFieldRegex(fieldName: String): Regex {
+        return fieldRegexCache.getOrPut(fieldName) {
+            Regex("$fieldName\\s*=\\s*(.+?)(?:\\n\\s*\\w|\\n\\s*$|$)")
+        }
+    }
+
+    private fun getBundleFieldRegex(fieldName: String): Regex {
+        return bundleFieldRegexCache.getOrPut(fieldName) {
+            Regex("$fieldName\\s*=\\s*([^,}]+)")
+        }
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var monitorJob: Job? = null
@@ -208,8 +232,8 @@ object NotificationMonitorManager {
         consecutiveFailures = 0
         reconnectAttempts = 0
 
-        // 显示前台服务通知（保持后台运行）
-        showForegroundNotification(appContext, sessionData.name)
+        // 启动前台服务，保持应用在后台持续运行
+        NotificationMonitorService.start(appContext, sessionData.name)
 
         // 提示正在连接
         showToast(appContext, "正在连接 ${sessionData.name}...")
@@ -303,6 +327,9 @@ object NotificationMonitorManager {
         }
         connectedDeviceId = null
 
+        // 停止前台服务
+        NotificationMonitorService.stop(context.applicationContext)
+
         // 取消前台通知和所有系统消息通知
         cleanupResidualNotifications(context.applicationContext)
 
@@ -337,16 +364,19 @@ object NotificationMonitorManager {
                     continue
                 }
 
-                // 使用 grep 过滤只保留需要的字段，输出从 750KB 降到几十 KB，避免 OOM
-                val result = AdbShellManager.execute(connection, "dumpsys notification --noredact | grep -E 'NotificationRecord\\(|pkg=|key=|android\\.title|android\\.subText|android\\.text|android\\.bigText|android\\.summaryText'")
+                // 优化：只提取通知列表部分（Notification List: 到下一个大标题之间），避免输出所有渠道配置和历史
+                // 使用 grep 只保留需要的字段，输出从几百KB降到几十KB
+                val result = AdbShellManager.execute(connection, "dumpsys notification --noredact | sed -n '/Notification List:/,/^  [A-Z]/p' | grep -E 'NotificationRecord\\(|pkg=|key=|android\\.title|android\\.subText|android\\.text|android\\.bigText|android\\.summaryText'")
                 val output = result.getOrNull()
 
                 if (output != null) {
                     consecutiveFailures = 0
                     reconnectAttempts = 0
                     val notifications = parseNotifications(output)
-                    // 优化耗电：只在有新通知时记录详细日志
-                    LogManager.d(LogTags.CONTROL_VM, "通知监控轮询: 输出长度=${output.length}, 解析到通知=${notifications.size}")
+                    // 优化：只在调试模式下记录轮询日志，避免频繁日志IO耗CPU
+                    if (BuildConfig.DEBUG) {
+                        LogManager.d(LogTags.CONTROL_VM, "通知监控轮询: 输出长度=${output.length}, 解析到通知=${notifications.size}")
+                    }
 
                     if (isFirstPoll) {
                         knownNotificationKeys.addAll(notifications.map { it.key })
@@ -451,7 +481,7 @@ object NotificationMonitorManager {
 
         return try {
             LogManager.d(LogTags.CONTROL_VM, "通知监控: 尝试第 $reconnectAttempts 次重连 ${sessionData.name}")
-            updateForegroundNotification(context, "${currentDeviceName ?: "设备"} - 正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）")
+            updateMonitorNotification(context, "${currentDeviceName ?: "设备"} - 正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）")
             showToast(context, "通知监控连接断开，正在重连（$reconnectAttempts/$MAX_RECONNECT_ATTEMPTS）...")
 
             // 先停止旧的心跳
@@ -503,7 +533,7 @@ object NotificationMonitorManager {
                 lastNotificationContent.clear()
                 // 启动心跳保活（关键：重连后必须启动心跳，否则连接很快又会断开）
                 startHeartbeat(context, connectedId)
-                updateForegroundNotification(context, currentDeviceName ?: "设备")
+                updateMonitorNotification(context, currentDeviceName ?: "设备")
                 showToast(context, "通知监控已恢复（${currentDeviceName ?: "设备"}）")
                 LogManager.d(LogTags.CONTROL_VM, "通知监控重连成功，恢复监控，心跳已启动")
                 true
@@ -580,8 +610,8 @@ object NotificationMonitorManager {
         }
 
         val output = try {
-            // 使用 grep 过滤只保留需要的字段，减少内存占用
-            val result = AdbShellManager.execute(connection, "dumpsys notification --noredact | grep -E 'NotificationRecord\\(|pkg=|key=|android\\.title|android\\.subText|android\\.text|android\\.bigText|android\\.summaryText'")
+            // 优化：只提取通知列表部分，减少输出量
+            val result = AdbShellManager.execute(connection, "dumpsys notification --noredact | sed -n '/Notification List:/,/^  [A-Z]/p' | grep -E 'NotificationRecord\\(|pkg=|key=|android\\.title|android\\.subText|android\\.text|android\\.bigText|android\\.summaryText'")
             result.getOrNull()
         } catch (e: Exception) {
             LogManager.e(LogTags.CONTROL_VM, "查询通知: 执行命令失败 ${e.message}", e)
@@ -631,10 +661,12 @@ object NotificationMonitorManager {
 
     /**
      * 解析 dumpsys notification 输出
+     * 优化：使用缓存的正则表达式，避免每次重新编译耗CPU
      */
     private fun parseNotifications(output: String): List<DeviceNotification> {
         val notifications = mutableListOf<DeviceNotification>()
-        val records = output.split("NotificationRecord(")
+        // 使用缓存的正则分割
+        val records = REGEX_NOTIFICATION_RECORD.split(output)
 
         for (record in records) {
             if (record.isBlank()) continue
@@ -656,7 +688,6 @@ object NotificationMonitorManager {
 
             // 过滤系统服务通知（如剪贴板服务），保留短信、电话等重要通知
             if (isBlockedNotification(packageName, title, text)) {
-                LogManager.d(LogTags.CONTROL_VM, "通知监控过滤系统服务通知: $packageName | $title")
                 continue
             }
 
@@ -674,22 +705,32 @@ object NotificationMonitorManager {
     }
 
     private fun extractField(record: String, fieldName: String): String? {
-        val pattern = Regex("""$fieldName(\S+)""")
-        return pattern.find(record)?.groupValues?.get(1)?.trim()
+        // pkg= 和 key= 使用简单的字符串处理，避免正则
+        val prefix = fieldName
+        val startIndex = record.indexOf(prefix)
+        if (startIndex == -1) return null
+        val valueStart = startIndex + prefix.length
+        // 找到值的结束（空格、换行、或字符串结束）
+        var valueEnd = valueStart
+        while (valueEnd < record.length && record[valueEnd] != ' ' && record[valueEnd] != '\n' && record[valueEnd] != '\r') {
+            valueEnd++
+        }
+        val value = record.substring(valueStart, valueEnd).trim()
+        return value.ifBlank { null }
     }
 
     /**
      * 从 extras 中提取字段值，支持两种格式：
      * 1. 逐行格式: android.title=String (Ride_Wind)
      * 2. Bundle 格式: Bundle[{android.title=String (Ride_Wind), ...}]
+     * 优化：使用缓存的正则表达式
      */
     private fun extractExtrasField(record: String, fieldName: String): String? {
         // 先尝试 Bundle[{...}] 格式
-        val bundlePattern = Regex("""Bundle\[\{(.+?)\}\]""")
-        val bundleMatch = bundlePattern.find(record)
+        val bundleMatch = REGEX_BUNDLE.find(record)
         if (bundleMatch != null) {
             val bundleContent = bundleMatch.groupValues[1]
-            val fieldPattern = Regex("""$fieldName\s*=\s*([^,}]+)""")
+            val fieldPattern = getBundleFieldRegex(fieldName)
             val fieldMatch = fieldPattern.find(bundleContent)
             if (fieldMatch != null) {
                 val value = parseTypedValue(fieldMatch.groupValues[1].trim())
@@ -698,7 +739,7 @@ object NotificationMonitorManager {
         }
 
         // 再尝试逐行格式: android.title=String (Ride_Wind)
-        val linePattern = Regex("""$fieldName\s*=\s*(.+?)(?:\n\s*\w|\n\s*$|$)""")
+        val linePattern = getFieldRegex(fieldName)
         val lineMatch = linePattern.find(record) ?: return null
         val rawValue = lineMatch.groupValues[1].trim()
             .removePrefix("Bundle[")
@@ -710,13 +751,13 @@ object NotificationMonitorManager {
     /**
      * 解析带类型的值，如 "String (Ride_Wind)" -> "Ride_Wind"
      * 也支持普通值如 "Ride_Wind" -> "Ride_Wind"
+     * 优化：使用缓存的正则表达式
      */
     private fun parseTypedValue(rawValue: String): String? {
         if (rawValue.isBlank() || rawValue == "null") return null
 
         // 匹配 "String (value)" 或 "Integer (123)" 格式
-        val typedPattern = Regex("""\w+\s*\((.*)\)""")
-        val match = typedPattern.matchEntire(rawValue)
+        val match = REGEX_TYPED_VALUE.matchEntire(rawValue)
         if (match != null) {
             val value = match.groupValues[1].trim()
             return value.takeIf { it.isNotBlank() && it != "null" }
@@ -760,28 +801,9 @@ object NotificationMonitorManager {
     }
 
     /**
-     * 显示前台服务通知（保持后台运行）
+     * 更新前台服务通知内容
      */
-    private fun showForegroundNotification(context: Context, deviceName: String) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        ensureNotificationChannel(notificationManager)
-
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("通知监控运行中")
-            .setContentText("正在监控 $deviceName 的通知")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .setSilent(true)
-
-        notificationManager.notify(FOREGROUND_NOTIFICATION_ID, builder.build())
-    }
-
-    /**
-     * 更新前台服务通知内容（用于显示重连状态等）
-     */
-    private fun updateForegroundNotification(context: Context, contentText: String) {
+    private fun updateMonitorNotification(context: Context, contentText: String) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureNotificationChannel(notificationManager)
@@ -795,12 +817,6 @@ object NotificationMonitorManager {
             .setSilent(true)
 
         notificationManager.notify(FOREGROUND_NOTIFICATION_ID, builder.build())
-    }
-
-    private fun cancelForegroundNotification(context: Context) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(FOREGROUND_NOTIFICATION_ID)
     }
 
     /**
