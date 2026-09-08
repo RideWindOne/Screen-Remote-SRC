@@ -108,7 +108,14 @@ fun selectApkAsset(
 ): GitHubReleaseAsset? {
     val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
     supportedAbis.forEach { abi ->
-        apkAssets.firstOrNull { it.name.contains("-$abi-", ignoreCase = true) }?.let { return it }
+        // 支持两种格式：-$abi-（ABI在中间）和 -$abi.apk（ABI在末尾）
+        apkAssets.firstOrNull {
+            it.name.contains("-$abi-", ignoreCase = true) ||
+                it.name.endsWith("-$abi.apk", ignoreCase = true)
+        }?.let { return it }
     }
-    return apkAssets.firstOrNull { it.name.contains("-universal-", ignoreCase = true) }
+    return apkAssets.firstOrNull {
+        it.name.contains("-universal-", ignoreCase = true) ||
+            it.name.endsWith("-universal.apk", ignoreCase = true)
+    }
 }
