@@ -70,7 +70,8 @@ fun isAutomaticUpdateCheckDue(
 }
 
 fun parseAppVersion(raw: String): AppVersion? {
-    val normalized = raw.trim()
+    // 去掉开头的 v/V 前缀（GitHub tag 通常是 v1.2.3 格式）
+    val normalized = raw.trim().removePrefix("v").removePrefix("V")
     val core = normalized.substringBefore('-')
     val prerelease = normalized.substringAfter('-', "")
     val parts = core.split('.')
