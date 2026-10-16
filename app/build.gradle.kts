@@ -61,7 +61,8 @@ fun requireStringProperty(key: String): String =
 val appVersionCode = requireStringProperty("VERSION_CODE")
 val appVersionName = requireStringProperty("VERSION_NAME")
 val appVersionCodeInt = appVersionCode.toInt()
-val appDisplayVersion = "$appVersionName.$appVersionCode"
+// APP_VERSION 与 CI release tag (v$VERSION_NAME) 保持一致，保证更新检测能匹配到新版本
+val appDisplayVersion = appVersionName
 val appId = "com.screen.remote.android"
 val scrcpyServerVersion = "4.1"
 val scrcpyServerSha256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"

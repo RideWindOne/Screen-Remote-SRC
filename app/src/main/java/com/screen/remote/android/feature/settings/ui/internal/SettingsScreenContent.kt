@@ -159,6 +159,24 @@ private fun GeneralSettingsSection(
             },
         )
         SettingsDivider()
+        SettingsSwitch(
+            title = "打开通知时提示所有未读消息",
+            checked = settings.notifyAllNotificationsOnStart,
+            helpText = "开启后，打开通知监控时会提示当前所有未读消息；关闭后只提示之后新来的消息",
+            onCheckedChange = {
+                onUpdateSettings(settings.copy(notifyAllNotificationsOnStart = it))
+            },
+        )
+        SettingsDivider()
+        SettingsSwitch(
+            title = "屏蔽系统通知",
+            checked = settings.blockSystemNotifications,
+            helpText = "开启后，屏蔽系统服务通知（如小米互联、跨屏协同等），保留微信、短信、电话等应用通知",
+            onCheckedChange = {
+                onUpdateSettings(settings.copy(blockSystemNotifications = it))
+            },
+        )
+        SettingsDivider()
         SettingsItem(
             title = texts.language,
             onClick = onNavigateToLanguage,

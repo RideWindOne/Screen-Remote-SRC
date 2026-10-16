@@ -360,27 +360,24 @@ internal suspend fun uploadLocalFilesToRemoteDirectory(
                 }
             executeManagementShell(destinationChecks).getOrThrow()
 
-            val uploadDir = File(context.cacheDir, "session-management/uploads").apply { mkdirs() }
-            val localCopies =
-                sources.map { (uri, name) ->
-                    val localFile = File(uploadDir, "${sha256(uri.toString().toByteArray()).take(12)}_$name")
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        localFile.outputStream().use { output -> input.copyTo(output) }
-                    } ?: error(ManagementTexts.Files.COULDN_T_READ_FILE.format(name))
-                    localFile to name
-                }
+            // 优化：直接从 ContentResolver 流上传，跳过本地缓存，减少磁盘 I/O
             val uploadedPaths = mutableListOf<String>()
-            val totalBytes = localCopies.sumOf { it.first.length() }
+            val totalBytes = sources.sumOf { (uri, _) ->
+                resolveContentFileSize(context, uri)
+            }
             var completedBytes = 0L
 
             runCatching {
-                localCopies.forEachIndexed { index, (localFile, name) ->
+                sources.forEachIndexed { index, (uri, name) ->
                     val remotePath = joinRemotePath(normalizedTarget, name)
-                    val localFileSize = localFile.length()
+                    val localFileSize = resolveContentFileSize(context, uri)
                     var currentFileUploaded = 0L
-                    connection.pushFile(
-                        localPath = localFile.absolutePath,
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                        ?: error(ManagementTexts.Files.COULDN_T_READ_FILE.format(name))
+                    connection.pushStream(
+                        inputStream = inputStream,
                         remotePath = remotePath,
+                        fileSize = localFileSize,
                         onProgressBytes = { bytes ->
                             currentFileUploaded = (currentFileUploaded + bytes).coerceAtMost(localFileSize)
                             onProgress(
@@ -402,7 +399,7 @@ internal suspend fun uploadLocalFilesToRemoteDirectory(
                     onProgress(
                         FileUploadProgress(
                             fileIndex = index + 1,
-                            totalFiles = localCopies.size,
+                            totalFiles = sources.size,
                             fileName = name,
                             fileUploadedBytes = localFileSize,
                             fileTotalBytes = localFileSize,
@@ -434,6 +431,20 @@ private fun resolveContentDisplayName(
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (index >= 0 && cursor.moveToFirst()) cursor.getString(index).orEmpty() else ""
         }.orEmpty()
+
+/**
+ * 从 ContentResolver 获取文件大小
+ */
+private fun resolveContentFileSize(
+    context: Context,
+    uri: Uri,
+): Long =
+    context.contentResolver
+        .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+        ?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getLong(index) else 0L
+        } ?: 0L
 
 internal suspend fun captureDeviceScreenshot(context: Context): Result<File> {
     val connection =

@@ -39,6 +39,10 @@ class VideoDecoderManager(
     var isDecoderStarting: Boolean = false
         private set
 
+    // 待设置的 Surface，用于解码器启动完成后恢复渲染
+    private var pendingSurfaceHolder: SurfaceHolder? = null
+    private var pendingSurface: Surface? = null
+
     fun performanceSnapshot(): VideoPerformanceSnapshot = performanceCounters.snapshot()
 
     fun startDecoder(
@@ -124,6 +128,22 @@ class VideoDecoderManager(
             scope.launch {
                 try {
                     videoDecoder?.start(stream, width, height)
+                    // 解码器启动完成后，检查是否有待设置的 Surface
+                    pendingSurfaceHolder?.let { holder ->
+                        val surface = holder.surface
+                        if (surface != null && surface.isValid) {
+                            videoDecoder?.setSurface(surface)
+                            LogManager.d(LogTags.VIDEO_DECODER, "Applied pending SurfaceHolder after decoder started")
+                        }
+                        pendingSurfaceHolder = null
+                    }
+                    pendingSurface?.let { surface ->
+                        if (surface.isValid) {
+                            videoDecoder?.setSurface(surface)
+                            LogManager.d(LogTags.VIDEO_DECODER, "Applied pending Texture Surface after decoder started")
+                        }
+                        pendingSurface = null
+                    }
                 } catch (_: kotlinx.coroutines.CancellationException) {
                     LogManager.d(LogTags.VIDEO_DECODER, RemoteTexts.REMOTE_DECODER_CANCELLED_UI_CLOSED.english)
                     stopDecoder()
@@ -148,6 +168,8 @@ class VideoDecoderManager(
         videoDecoder?.stop()
         videoDecoder = null
         isDecoderStarting = false
+        pendingSurfaceHolder = null
+        pendingSurface = null
     }
 
     fun setSurface(
@@ -214,16 +236,44 @@ class VideoDecoderManager(
     }
 
     fun setSurfaceImmediate(surfaceHolder: SurfaceHolder?) {
-        val decoder = videoDecoder ?: return
-        val surface = surfaceHolder?.surface
+        if (surfaceHolder == null) {
+            pendingSurfaceHolder = null
+            videoDecoder?.setSurface(null)
+            return
+        }
+        val surface = surfaceHolder.surface
         if (surface != null && surface.isValid) {
-            decoder.setSurface(surface)
+            val decoder = videoDecoder
+            if (decoder != null) {
+                decoder.setSurface(surface)
+                pendingSurfaceHolder = null
+            } else {
+                // 解码器还在启动中，保存 Surface 待启动完成后设置
+                pendingSurfaceHolder = surfaceHolder
+                pendingSurface = null
+                LogManager.d(LogTags.VIDEO_DECODER, "Surface ready but decoder not started, saved as pending")
+            }
         }
     }
 
     fun setSurfaceImmediate(surface: Surface?) {
-        val decoder = videoDecoder ?: return
-        decoder.setSurface(surface?.takeIf { it.isValid })
+        if (surface == null) {
+            pendingSurface = null
+            videoDecoder?.setSurface(null)
+            return
+        }
+        if (surface.isValid) {
+            val decoder = videoDecoder
+            if (decoder != null) {
+                decoder.setSurface(surface)
+                pendingSurface = null
+            } else {
+                // 解码器还在启动中，保存 Surface 待启动完成后设置
+                pendingSurface = surface
+                pendingSurfaceHolder = null
+                LogManager.d(LogTags.VIDEO_DECODER, "Texture Surface ready but decoder not started, saved as pending")
+            }
+        }
     }
 
 }

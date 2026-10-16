@@ -66,6 +66,51 @@ object AdbFileOperations {
         }
 
     /**
+     * 从输入流直接推送文件（跳过本地缓存，提升上传速度）
+     */
+    suspend fun pushStream(
+        dadb: Dadb,
+        inputStream: java.io.InputStream,
+        remotePath: String,
+        fileSize: Long,
+        lastModified: Long = System.currentTimeMillis(),
+        onProgressBytes: (Long) -> Unit = {},
+    ): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            try {
+                val source = inputStream.source()
+                val sourceWithProgress = object : Source {
+                    override fun read(sink: Buffer, byteCount: Long): Long {
+                        val read = source.read(sink, byteCount)
+                        if (read > 0L) {
+                            onProgressBytes(read)
+                        }
+                        return read
+                    }
+
+                    override fun timeout(): Timeout = source.timeout()
+
+                    override fun close() {
+                        source.close()
+                        inputStream.close()
+                    }
+                }
+                when (val operation = dadb.push(sourceWithProgress, remotePath, 0b110100100, lastModified)) {
+                    SyncResult.Success -> Unit
+                    is SyncResult.Failure -> throw AdbOperationFailedException(operation.reason)
+                }
+                LogManager.d(
+                    LogTags.ADB_CONNECTION,
+                    "${AdbTexts.ADB_FILE_PUSH_SUCCESS.english}: stream -> $remotePath ($fileSize bytes)",
+                )
+                Result.success(true)
+            } catch (e: Exception) {
+                LogManager.e(LogTags.ADB_CONNECTION, "${AdbTexts.ADB_FILE_PUSH_FAILED.english}: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+
+    /**
      * 拉取文件
      */
     suspend fun pullFile(

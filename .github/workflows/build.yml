@@ -1,0 +1,142 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - feature/enhancements
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Checkout dadb (included build dependency)
+        run: |
+          mkdir -p ../external
+          # 使用用户的 fork（包含传输优化：移除频繁flush）
+          if git clone --depth 1 https://github.com/RideWindOne/dadb.git ../external/dadb 2>/dev/null; then
+            echo "Cloned RideWindOne/dadb (with transfer optimization)"
+          else
+            # 回退到原作者的 fork
+            git clone --depth 1 https://github.com/XRSec/dadb.git ../external/dadb
+            echo "Cloned XRSec/dadb (fallback)"
+          fi
+          ls -la ../external/dadb/
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Create local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Configure Gradle for preview SDK
+        run: |
+          # 移除本地 JDK 路径
+          sed -i '/org.gradle.java.home/d' gradle.properties
+          # 启用预览版 SDK 自动下载（API 37 是预览版，需要 canary 频道）
+          echo "android.sdk.channel=3" >> gradle.properties
+          # 允许 Gradle 自动下载所需的 SDK、build-tools、NDK
+          echo "android.builder.sdkDownload=true" >> gradle.properties
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep "^VERSION_NAME=" gradle.properties | cut -d'=' -f2)
+          VERSION_CODE=$(grep "^VERSION_CODE=" gradle.properties | cut -d'=' -f2)
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "release_tag=v$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      - name: Rename all ABI APKs
+        run: |
+          VERSION_NAME=$(grep "^VERSION_NAME=" gradle.properties | cut -d'=' -f2)
+          cd app/build/outputs/apk/release/
+          # 重命名各 ABI 版本
+          for abi in arm64-v8a armeabi-v7a x86 x86_64 universal; do
+            if [ -f "app-${abi}-release.apk" ]; then
+              cp "app-${abi}-release.apk" "Screen-Remote-v${VERSION_NAME}-${abi}.apk"
+              echo "Renamed: Screen-Remote-v${VERSION_NAME}-${abi}.apk"
+            fi
+          done
+          ls -lh *.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-remote-apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      - name: Release APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: "Screen-Remote v${{ steps.version.outputs.version_name }}"
+          body: |
+            ## Screen-Remote 增强版
+            
+            - 版本：v${{ steps.version.outputs.version_name }} (${{ steps.version.outputs.version_code }})
+            - 分支：${{ github.ref_name }}
+            - 编译时间：${{ github.event.head_commit.timestamp || '手动触发' }}
+            
+            ### 功能
+            - **图案密码输入**：悬浮窗绘制图案，自动检测位置并输入到远程设备
+              - 适用于远程控制时无法查看图形密码框的场景（如黑屏、锁屏）
+              - 在 3x3 点阵上手绘图案，自动转换为触摸事件发送到被控端
+              - 支持自动检测图案密码框位置，也可使用位置缓存
+              - 位置缓存按会话单独存储，持久化保存，应用重启不丢失
+            - 通知监控：实时监控被控端通知（含声音振动提醒）
+            - 查询通知：手动查询被控端最近消息
+            - 屏蔽系统通知：可配置过滤系统服务通知
+            - 悬浮窗：锁屏/重连/返回应用/关闭屏幕常亮/图案密码按钮
+            - 文件管理上传优化：大幅提升局域网文件上传速度
+            
+            ### 重要提示
+            - **使用通知监控时，必须在系统设置中允许应用后台运行**，否则切到后台后可能收不到通知
+              - 荣耀/华为：手机管家 → 应用启动管理 → 关闭自动管理 → 允许后台活动
+              - 小米/红米：设置 → 应用设置 → 应用管理 → 电池 → 无限制
+              - 其他机型：设置 → 应用 → 电池 → 不优化 / 允许后台活动
+            - 建议在多任务界面锁定应用，防止被系统清理
+            
+            ### 下载
+            点击下方 Assets 中的 APK 文件下载安装。
+          files: |
+            app/build/outputs/apk/release/Screen-Remote-*.apk
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

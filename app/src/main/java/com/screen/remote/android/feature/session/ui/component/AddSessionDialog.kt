@@ -387,6 +387,7 @@ private fun AddSessionDialogContent(
         )
         ConnectionOptionsSection(state)
         VideoConfigSection(state)
+        PatternLockConfigSection(state)
         AudioConfigSection(state)
         OtherOptionsSection(state)
         VirtualDisplaySection(state)
@@ -1921,6 +1922,29 @@ private fun VerticalOptionPicker(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PatternLockConfigSection(state: SessionDialogState) {
+    SessionDialogSection(title = "图案密码配置") {
+        VerticalOptionPicker(
+            label = "循环检测间隔（毫秒）",
+            value = state.patternLockPollInterval,
+            presets = listOf(
+                "100ms" to "100",
+                "200ms" to "200",
+                "300ms" to "300",
+                "500ms" to "500",
+                "1000ms" to "1000",
+            ),
+            customEnabled = true,
+            emptyCustomFallback = "200",
+            onValueChange = {
+                state.patternLockPollInterval = it
+            },
+            helpText = "图案密码界面循环检测的时间间隔，值越小检测越快但消耗更多资源",
+        )
     }
 }
 

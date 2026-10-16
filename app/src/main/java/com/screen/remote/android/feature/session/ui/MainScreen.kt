@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -124,6 +125,17 @@ private class MainScreenRouteState {
 
     var managementParameters by mutableStateOf<Map<String, String>>(emptyMap())
         private set
+
+    var remoteDisplayMinimized by mutableStateOf(false)
+        private set
+
+    fun minimizeRemoteDisplay() {
+        remoteDisplayMinimized = true
+    }
+
+    fun restoreRemoteDisplay() {
+        remoteDisplayMinimized = false
+    }
 
     fun openSettings() {
         openDevicePairingOnSettingsEntry = false
@@ -215,6 +227,14 @@ fun MainScreen(
         }
     val connectedSessionId by viewModel.connectedSessionId.collectAsState()
     val managementConnectStatus by viewModel.managementConnectStatus.collectAsState()
+
+    // 当 connectedSessionId 变化且不为 null 时，自动恢复 RemoteDisplayScreen 显示
+    // 解决切换设备后 RemoteDisplayScreen 仍然隐藏的问题
+    LaunchedEffect(connectedSessionId) {
+        if (connectedSessionId != null && routeState.remoteDisplayMinimized) {
+            routeState.restoreRemoteDisplay()
+        }
+    }
     val groups by viewModel.groups.collectAsState()
     val selectedGroupPath by viewModel.selectedGroupPath.collectAsState()
     val onboardingState by viewModel.sessionOnboardingState.collectAsState()
@@ -373,26 +393,42 @@ fun MainScreen(
         }
     }
 
-    if (connectedSessionId != null) {
-        RemoteDisplayScreen(
-            sessionId = connectedSessionId!!,
-            mainViewModel = viewModel,
-            onClose = {
-                viewModel.clearConnectStatus()
-                viewModel.disconnectFromDevice()
-            },
-        )
-        return
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        MainScreenContent(
-            routeState = routeState,
-            viewModel = viewModel,
-            groups = groups,
-            selectedGroupPath = selectedGroupPath,
-            nearbyAdbScanController = nearbyAdbScanController,
-        )
+        // RemoteDisplayScreen 始终在组合中，保持解码器运行，避免最小化后恢复黑屏
+        // 当 connectedSessionId != null && !remoteDisplayMinimized 时显示
+        // 当 remoteDisplayMinimized 时用 alpha(0f) 隐藏，保持组合状态
+        if (connectedSessionId != null) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .alpha(if (routeState.remoteDisplayMinimized) 0f else 1f),
+            ) {
+                RemoteDisplayScreen(
+                    sessionId = connectedSessionId!!,
+                    mainViewModel = viewModel,
+                    onClose = {
+                        routeState.restoreRemoteDisplay()
+                        viewModel.clearConnectStatus()
+                        viewModel.disconnectFromDevice()
+                    },
+                    onBackToApp = {
+                        routeState.minimizeRemoteDisplay()
+                    },
+                )
+            }
+        }
+
+        // 当没有连接或 minimized 时，显示设备列表
+        if (connectedSessionId == null || routeState.remoteDisplayMinimized) {
+            MainScreenContent(
+                routeState = routeState,
+                viewModel = viewModel,
+                groups = groups,
+                selectedGroupPath = selectedGroupPath,
+                nearbyAdbScanController = nearbyAdbScanController,
+            )
+        }
 
         if (onboardingState == SessionOnboardingState.HIDDEN) {
             MainScreenDialogs(
@@ -633,6 +669,9 @@ private fun MainScreenContent(
                     onManageSession = { sessionData ->
                         routeState.requestSessionManagement(sessionData.id)
                         viewModel.connectManagementSession(sessionData.id)
+                    },
+                    onResumeConnectedSession = {
+                        routeState.restoreRemoteDisplay()
                     },
                 )
             }

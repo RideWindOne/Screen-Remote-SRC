@@ -9,6 +9,7 @@ import com.screen.remote.android.core.domain.model.ScrcpyTunnelMode
 import com.screen.remote.android.core.i18n.RemoteTexts
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnection
 import com.screen.remote.android.infrastructure.adb.connection.AdbConnectionManager
+import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager
 import com.screen.remote.android.infrastructure.adb.shell.AdbShellManager.killProcess
 import com.screen.remote.android.infrastructure.media.audio.AudioStream
 import com.screen.remote.android.infrastructure.scrcpy.connection.internal.cleanupOldResources

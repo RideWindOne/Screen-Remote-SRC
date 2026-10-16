@@ -50,6 +50,7 @@ import com.screen.remote.android.core.common.manager.rememberText
 import com.screen.remote.android.core.data.repository.SessionData
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenu
 import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuItem
+import com.screen.remote.android.core.designsystem.component.IOSStyledDropdownMenuSwitchItem
 import com.screen.remote.android.core.domain.model.ConnectionTransport
 import com.screen.remote.android.core.domain.model.ScrcpySession
 import com.screen.remote.android.core.i18n.SessionTexts
@@ -74,6 +75,10 @@ fun SessionCard(
     isResettingConnection: Boolean = false,
     onResetConnection: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onStartNotificationMonitor: () -> Unit = {},
+    onStopNotificationMonitor: () -> Unit = {},
+    onQueryNotifications: () -> Unit = {},
+    isNotificationMonitoring: Boolean = false,
 ) {
     val cardColor = getCardColorByIndex(index)
     val connectionResetEnabled = !isConnecting && !isResettingConnection
@@ -208,6 +213,33 @@ fun SessionCard(
                             onClick = {
                                 showMenu = false
                                 onConnect()
+                            },
+                        )
+                        IOSStyledDropdownMenuItem(
+                            text = "打开通知",
+                            textColor = if (isNotificationMonitoring) Color.Gray else MaterialTheme.colorScheme.onSurface,
+                            onClick = {
+                                if (!isNotificationMonitoring) {
+                                    showMenu = false
+                                    onStartNotificationMonitor()
+                                }
+                            },
+                        )
+                        IOSStyledDropdownMenuItem(
+                            text = "关闭通知",
+                            textColor = if (isNotificationMonitoring) MaterialTheme.colorScheme.onSurface else Color.Gray,
+                            onClick = {
+                                if (isNotificationMonitoring) {
+                                    showMenu = false
+                                    onStopNotificationMonitor()
+                                }
+                            },
+                        )
+                        IOSStyledDropdownMenuItem(
+                            text = "查询通知",
+                            onClick = {
+                                showMenu = false
+                                onQueryNotifications()
                             },
                         )
                         IOSStyledDropdownMenuItem(
