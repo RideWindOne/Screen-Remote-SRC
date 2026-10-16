@@ -47,10 +47,19 @@ jobs:
           gradle-home-cache-cleanup: true
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        # ubuntu-latest runner 已预装 Android SDK，此处仅确认环境变量
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/cmdline-tools/" || true
 
       - name: Accept licenses
-        run: yes | sdkmanager --licenses || true
+        run: |
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMGR" ]; then
+            yes | "$SDKMGR" --licenses || true
+          else
+            echo "sdkmanager not found at $SDKMGR, skipping license acceptance"
+          fi
 
       - name: Create local.properties
         run: |
