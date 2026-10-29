@@ -231,6 +231,8 @@ private data class RemoteDisplayScreenRouteState(
     val videoWidth: Int,
     val videoHeight: Int,
     val onVideoMetricsChanged: (Int, Int, Float) -> Unit,
+    val showPatternLockDialog: androidx.compose.runtime.MutableState<Boolean>,
+    val usePatternLockCache: androidx.compose.runtime.MutableState<Boolean>,
 )
 
 @SuppressLint("ClickableViewAccessibility", "ConfigurationScreenWidthHeight")
@@ -339,6 +341,8 @@ private fun rememberRemoteDisplayScreenRouteState(
     var videoWidth by remember { mutableIntStateOf(0) }
     var videoHeight by remember { mutableIntStateOf(0) }
     val deviceResolutionAdaptedState = remember { mutableStateOf(false) }
+    val showPatternLockDialog = remember { mutableStateOf(false) }
+    val usePatternLockCache = remember { mutableStateOf(true) }
 
     LaunchedEffect(resolvedSessionData?.config?.compatibilityMode, videoResolution) {
         if (resolvedSessionData?.config?.compatibilityMode == true) {
@@ -473,6 +477,9 @@ private fun rememberRemoteDisplayScreenRouteState(
                     connectionViewModel.clearConnectStatus()
                     connectionViewModel.disconnectFromDevice()
                 },
+                showPatternLock = {
+                    showPatternLockDialog.value = true
+                },
                 showKeyboardInput = {
                     showKeyboardInput = true
                     keyboardRequestToken += 1
@@ -554,6 +561,8 @@ private fun rememberRemoteDisplayScreenRouteState(
         },
         showKeyboardInput = showKeyboardInput,
         onKeyboardInputVisibleChange = { showKeyboardInput = it },
+        showPatternLockDialog = showPatternLockDialog,
+        usePatternLockCache = usePatternLockCache,
         surfaceHolder = surfaceHolder,
         onSurfaceHolderChanged = { surfaceHolder = it },
         renderSurface = renderSurface,
@@ -857,6 +866,9 @@ private fun RemoteDisplayScreenContent(
 ) {
     val configuration = LocalConfiguration.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val activeSessionData by connectionViewModel.activeSessionData.collectAsState()
     val uploadLauncher =
         FilePickerHelper.rememberImportFileLauncher { uri ->
             uri?.let(routeState.sendSelectedFile)
@@ -986,6 +998,362 @@ private fun RemoteDisplayScreenContent(
                 onClose()
             },
         )
+    }
+
+    // 密码输入对话框（图案密码/文本密码切换）
+    if (routeState.showPatternLockDialog.value) {
+        PatternLockInputDialog(
+            onDismiss = { routeState.showPatternLockDialog.value = false },
+            onPatternComplete = { pattern ->
+                routeState.showPatternLockDialog.value = false
+                scope.launch {
+                    sendPatternToRemote(
+                        pattern = pattern,
+                        controlViewModel = controlViewModel,
+                        screenWidth = routeState.videoWidth,
+                        screenHeight = routeState.videoHeight,
+                        context = context,
+                        pollInterval = activeSessionData?.config?.patternLockPollInterval ?: 200,
+                        sessionId = sessionId,
+                        useCache = routeState.usePatternLockCache.value,
+                    )
+                }
+            },
+            onTextPasswordComplete = { password ->
+                routeState.showPatternLockDialog.value = false
+                scope.launch {
+                    val result = controlViewModel.sendText(password)
+                    result.onSuccess {
+                        android.widget.Toast.makeText(context, "密码已发送", android.widget.Toast.LENGTH_SHORT).show()
+                    }.onFailure {
+                        android.widget.Toast.makeText(context, "发送失败：${it.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onClearCache = {
+                // 清除当前会话的持久化缓存位置
+                if (sessionId.isNotBlank()) {
+                    PatternLockCacheManager.clear(context, sessionId)
+                }
+                android.widget.Toast.makeText(context, "当前设备图案密码位置缓存已清除", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            useCache = routeState.usePatternLockCache.value,
+            onUseCacheChange = { routeState.usePatternLockCache.value = it },
+        )
+    }
+}
+
+/**
+ * 将图案密码发送到远程设备
+ * @param pattern 选中的点索引列表（0-8，按行优先排列）
+ * @param controlViewModel ControlViewModel 用于发送触摸事件
+ * @param screenWidth 远程设备屏幕宽度
+ * @param screenHeight 远程设备屏幕高度
+ * @param context Context 用于显示 Toast
+ * @param pollInterval 图案密码循环检测间隔（毫秒）
+ */
+private suspend fun sendPatternToRemote(
+    pattern: List<Int>,
+    controlViewModel: ControlViewModel,
+    screenWidth: Int,
+    screenHeight: Int,
+    context: android.content.Context,
+    pollInterval: Int = 200,
+    sessionId: String = "",
+    useCache: Boolean = true,
+) {
+    if (pattern.isEmpty()) return
+
+    try {
+        // 获取远程设备的实际屏幕分辨率
+        val displayInfo = controlViewModel.getTargetDisplayInfo(refresh = true).getOrNull()
+        val actualWidth = displayInfo?.currentWidth ?: screenWidth
+        val actualHeight = displayInfo?.currentHeight ?: screenHeight
+
+        // 唤醒屏幕
+        android.util.Log.d("PatternLock", "Waking up screen...")
+        controlViewModel.sendKeyEvent(224) // KEYCODE_WAKEUP
+        kotlinx.coroutines.delay(500)
+
+        // 斜向上滑动（从右下角滑到左上角）
+        swipeDiagonalUp(controlViewModel, actualWidth, actualHeight)
+        kotlinx.coroutines.delay(500)
+
+        // 循环检测图案锁，直到出现为止（自动滑动或用户手动滑动后自动检测）
+        val patternArea = waitForPatternLock(controlViewModel, actualWidth, actualHeight, context, pollInterval, sessionId, useCache)
+        val patternAreaLeft = patternArea.left
+        val patternAreaTop = patternArea.top
+        val patternAreaWidth = patternArea.width
+        val patternAreaHeight = patternArea.height
+
+        android.util.Log.d("PatternLock", "actualWidth=$actualWidth, actualHeight=$actualHeight")
+        android.util.Log.d("PatternLock", "patternArea: left=$patternAreaLeft, top=$patternAreaTop, width=$patternAreaWidth, height=$patternAreaHeight")
+
+        // 计算9个点的实际坐标（3x3点阵）
+        val pointCoordinates = List(9) { index ->
+            val row = index / 3
+            val col = index % 3
+            val x = patternAreaLeft + (col + 0.5f) * (patternAreaWidth / 3f)
+            val y = patternAreaTop + (row + 0.5f) * (patternAreaHeight / 3f)
+            Pair(x.toInt(), y.toInt())
+        }
+
+        android.util.Log.d("PatternLock", "pointCoordinates: ${pointCoordinates.mapIndexed { i, p -> "$i=(${p.first},${p.second})" }.joinToString()}")
+        android.util.Log.d("PatternLock", "pattern: $pattern")
+
+        val pointerId = 1L
+
+        // 发送 ACTION_DOWN
+        val firstPoint = pointCoordinates[pattern[0]]
+        val downResult = controlViewModel.sendTouchEvent(
+            action = android.view.MotionEvent.ACTION_DOWN,
+            pointerId = pointerId,
+            x = firstPoint.first,
+            y = firstPoint.second,
+            screenWidth = actualWidth,
+            screenHeight = actualHeight,
+        )
+        android.util.Log.d("PatternLock", "ACTION_DOWN at (${firstPoint.first},${firstPoint.second}), result=$downResult")
+        kotlinx.coroutines.delay(100)
+
+        // 发送 ACTION_MOVE（经过每个点）
+        for (i in 1 until pattern.size) {
+            val point = pointCoordinates[pattern[i]]
+            // 在两个点之间插入一些中间点，模拟滑动
+            val prevPoint = pointCoordinates[pattern[i - 1]]
+            val steps = 10
+            for (step in 1..steps) {
+                val interpolatedX = prevPoint.first + (point.first - prevPoint.first) * step / steps
+                val interpolatedY = prevPoint.second + (point.second - prevPoint.second) * step / steps
+                val moveResult = controlViewModel.sendTouchEvent(
+                    action = android.view.MotionEvent.ACTION_MOVE,
+                    pointerId = pointerId,
+                    x = interpolatedX,
+                    y = interpolatedY,
+                    screenWidth = actualWidth,
+                    screenHeight = actualHeight,
+                )
+                if (step == steps) {
+                    android.util.Log.d("PatternLock", "ACTION_MOVE to (${point.first},${point.second}), result=$moveResult")
+                }
+                kotlinx.coroutines.delay(15)
+            }
+        }
+
+        // 发送 ACTION_UP
+        val lastPoint = pointCoordinates[pattern.last()]
+        val upResult = controlViewModel.sendTouchEvent(
+            action = android.view.MotionEvent.ACTION_UP,
+            pointerId = pointerId,
+            x = lastPoint.first,
+            y = lastPoint.second,
+            screenWidth = actualWidth,
+            screenHeight = actualHeight,
+        )
+        android.util.Log.d("PatternLock", "ACTION_UP at (${lastPoint.first},${lastPoint.second}), result=$upResult")
+
+        android.widget.Toast.makeText(context, "图案密码已发送", android.widget.Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        android.util.Log.e("PatternLock", "sendPatternToRemote exception", e)
+        android.widget.Toast.makeText(context, "发送失败：${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * 斜向上滑动（从右下角滑到左上角）
+ */
+private suspend fun swipeDiagonalUp(
+    controlViewModel: ControlViewModel,
+    screenWidth: Int,
+    screenHeight: Int,
+) {
+    try {
+        // 从右下角滑到左上角
+        val startX = (screenWidth * 0.8).toInt()
+        val startY = (screenHeight * 0.8).toInt()
+        val endX = (screenWidth * 0.2).toInt()
+        val endY = (screenHeight * 0.2).toInt()
+        val pointerId = 2L
+
+        android.util.Log.d("PatternLock", "Swiping diagonal up: from ($startX,$startY) to ($endX,$endY)")
+
+        // ACTION_DOWN
+        controlViewModel.sendTouchEvent(
+            action = android.view.MotionEvent.ACTION_DOWN,
+            pointerId = pointerId,
+            x = startX,
+            y = startY,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+        )
+        kotlinx.coroutines.delay(50)
+
+        // ACTION_MOVE（插值滑动）
+        val steps = 20
+        for (step in 1..steps) {
+            val interpolatedX = startX + (endX - startX) * step / steps
+            val interpolatedY = startY + (endY - startY) * step / steps
+            controlViewModel.sendTouchEvent(
+                action = android.view.MotionEvent.ACTION_MOVE,
+                pointerId = pointerId,
+                x = interpolatedX,
+                y = interpolatedY,
+                screenWidth = screenWidth,
+                screenHeight = screenHeight,
+            )
+            kotlinx.coroutines.delay(10)
+        }
+
+        // ACTION_UP
+        controlViewModel.sendTouchEvent(
+            action = android.view.MotionEvent.ACTION_UP,
+            pointerId = pointerId,
+            x = endX,
+            y = endY,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+        )
+
+        android.util.Log.d("PatternLock", "Diagonal swipe up completed")
+    } catch (e: Exception) {
+        android.util.Log.w("PatternLock", "Failed to swipe diagonal up: ${e.message}")
+    }
+}
+
+/**
+ * 图案锁区域数据类
+ */
+private data class PatternLockArea(
+    val left: Int,
+    val top: Int,
+    val width: Int,
+    val height: Int,
+)
+
+/**
+ * 图案锁位置缓存管理器（持久化到 SharedPreferences）
+ * 使用设备唯一标识作为 key，重新添加设备也能找到缓存
+ */
+private object PatternLockCacheManager {
+    private const val PREFS_NAME = "pattern_lock_cache"
+    private const val KEY_PREFIX = "pattern_lock_"
+
+    fun save(context: android.content.Context, deviceIdentifier: String, area: PatternLockArea) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = KEY_PREFIX + deviceIdentifier
+        prefs.edit()
+            .putInt("$key.left", area.left)
+            .putInt("$key.top", area.top)
+            .putInt("$key.width", area.width)
+            .putInt("$key.height", area.height)
+            .apply()
+        android.util.Log.d("PatternLock", "Cached position saved for: $deviceIdentifier")
+    }
+
+    fun load(context: android.content.Context, deviceIdentifier: String): PatternLockArea? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = KEY_PREFIX + deviceIdentifier
+        val left = prefs.getInt("$key.left", -1)
+        if (left == -1) return null
+        val top = prefs.getInt("$key.top", 0)
+        val width = prefs.getInt("$key.width", 0)
+        val height = prefs.getInt("$key.height", 0)
+        android.util.Log.d("PatternLock", "Cached position loaded for: $deviceIdentifier")
+        return PatternLockArea(left, top, width, height)
+    }
+
+    fun clear(context: android.content.Context, deviceIdentifier: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val key = KEY_PREFIX + deviceIdentifier
+        prefs.edit()
+            .remove("$key.left")
+            .remove("$key.top")
+            .remove("$key.width")
+            .remove("$key.height")
+            .apply()
+        android.util.Log.d("PatternLock", "Cached position cleared for: $deviceIdentifier")
+    }
+}
+
+/**
+ * 循环等待图案锁出现
+ * 直到检测到图案锁为止
+ */
+private suspend fun waitForPatternLock(
+    controlViewModel: ControlViewModel,
+    screenWidth: Int,
+    screenHeight: Int,
+    context: android.content.Context,
+    pollInterval: Int = 200,
+    sessionId: String = "",
+    useCache: Boolean = true,
+): PatternLockArea {
+    // 如果启用缓存且有持久化缓存，直接使用缓存位置，不再重新检测
+    val cached = if (useCache && sessionId.isNotBlank()) {
+        PatternLockCacheManager.load(context, sessionId)
+    } else null
+    if (cached != null) {
+        android.util.Log.d("PatternLock", "Using cached pattern lock position directly for session: $sessionId")
+        android.widget.Toast.makeText(context, "采用缓存位置，正在输入...", android.widget.Toast.LENGTH_SHORT).show()
+        return cached
+    }
+
+    // 没有缓存位置，进行完整检测循环
+    val maxWaitTime = 30000L // 最多等待30秒
+    val startTime = System.currentTimeMillis()
+
+    while (System.currentTimeMillis() - startTime < maxWaitTime) {
+        val result = tryFindPatternLockArea(controlViewModel, screenWidth, screenHeight)
+        if (result != null) {
+            android.util.Log.d("PatternLock", "Pattern lock detected after ${System.currentTimeMillis() - startTime}ms")
+            // 保存到持久化缓存（按会话ID存储）
+            if (sessionId.isNotBlank()) {
+                PatternLockCacheManager.save(context, sessionId, result)
+            }
+            android.widget.Toast.makeText(context, "已检测到图案密码框，正在输入...", android.widget.Toast.LENGTH_SHORT).show()
+            return result
+        }
+        kotlinx.coroutines.delay(pollInterval.toLong())
+    }
+
+    // 超时，使用默认位置
+    android.util.Log.w("PatternLock", "Timeout waiting for pattern lock, using default position")
+    val defaultWidth = screenWidth / 3
+    val defaultHeight = defaultWidth
+    val defaultLeft = (screenWidth - defaultWidth) / 2
+    val defaultTop = (screenHeight - defaultHeight) / 2 - screenHeight / 8
+    return PatternLockArea(defaultLeft, defaultTop, defaultWidth, defaultHeight)
+}
+
+/**
+ * 尝试查找图案锁区域，找不到返回null
+ */
+private suspend fun tryFindPatternLockArea(
+    controlViewModel: ControlViewModel,
+    screenWidth: Int,
+    screenHeight: Int,
+): PatternLockArea? {
+    return try {
+        val layoutResult = controlViewModel.captureCurrentUiLayout()
+        layoutResult.fold(
+            onSuccess = { snapshot ->
+                val lockPatternNode = snapshot.nodes.find { node ->
+                    node.className.contains("LockPattern", ignoreCase = true) ||
+                        node.resourceId.contains("lockPattern", ignoreCase = true) ||
+                        node.className.contains("PatternView", ignoreCase = true)
+                }
+
+                if (lockPatternNode != null && lockPatternNode.bounds.hasArea()) {
+                    val bounds = lockPatternNode.bounds
+                    PatternLockArea(bounds.left, bounds.top, bounds.width, bounds.height)
+                } else {
+                    null
+                }
+            },
+            onFailure = { null },
+        )
+    } catch (e: Exception) {
+        null
     }
 }
 
